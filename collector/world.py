@@ -14,7 +14,10 @@ from urllib.parse import unquote_plus
 from . import config, net, store
 
 KILL_COLUMNS = {"kill_att": "att", "kill_def": "def", "kill_sup": "sup", "kill_all": "all"}
-PLAYER_HEADER = ["id", "name", "ally", "villages", "points", "rank", "att", "def", "sup", "all"]
+# Stündliche Datei ohne Rang: der Rang verschiebt sich bei fast allen Spielern jede Stunde und würde
+# die Git-Historie aufblähen (11.09.: 9.527 statt 1.473 geänderte Zeilen pro Stunde). Das Tagesarchiv behält ihn.
+PLAYER_HEADER = ["id", "name", "ally", "villages", "points", "att", "def", "sup", "all"]
+DAILY_PLAYER_HEADER = ["id", "name", "ally", "villages", "points", "rank", "att", "def", "sup", "all"]
 ALLY_HEADER = ["id", "name", "tag", "members", "villages", "points", "all_points", "rank"]
 VILLAGE_HEADER = ["id", "name", "x", "y", "player", "points", "bonus"]
 CONQUER_HEADER = ["village_id", "ts", "new_owner", "old_owner", "extra"]
@@ -152,12 +155,12 @@ def update(state, now_utc, now_local):
     validate_counts(state, players, villages, allies)
 
     # Ab hier gilt der Datensatz als gültig: Ablagen schreiben
-    player_rows = []
+    player_rows, daily_player_rows = [], []
     for pid in sorted(players):
         p = players[pid]
-        player_rows.append([pid, p["name"], p["ally"], p["villages"], p["points"], p["rank"],
-                            kills["att"].get(pid, 0), kills["def"].get(pid, 0),
-                            kills["sup"].get(pid, 0), kills["all"].get(pid, 0)])
+        bash = [kills["att"].get(pid, 0), kills["def"].get(pid, 0), kills["sup"].get(pid, 0), kills["all"].get(pid, 0)]
+        player_rows.append([pid, p["name"], p["ally"], p["villages"], p["points"]] + bash)
+        daily_player_rows.append([pid, p["name"], p["ally"], p["villages"], p["points"], p["rank"]] + bash)
     ally_rows = [[aid, a["name"], a["tag"], a["members"], a["villages"], a["points"], a["all_points"], a["rank"]]
                  for aid, a in sorted(allies.items())]
     store.write_csv(store.dpath("latest", "players.csv"), PLAYER_HEADER, player_rows)
@@ -165,7 +168,7 @@ def update(state, now_utc, now_local):
 
     # Tagesarchiv: einmal pro Kalendertag (Serverzeit), Dateien werden danach nie mehr geändert
     day = now_local.date().isoformat()
-    for sub, header, rows in (("players", PLAYER_HEADER, player_rows),
+    for sub, header, rows in (("players", DAILY_PLAYER_HEADER, daily_player_rows),
                               ("allies", ALLY_HEADER, ally_rows),
                               ("villages", VILLAGE_HEADER, sorted(villages))):
         p = store.dpath("daily", sub, f"{day}.csv.gz")
