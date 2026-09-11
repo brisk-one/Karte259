@@ -1,0 +1,101 @@
+{
+ "counts": {
+  "allies": 407,
+  "conquers_total": 2175,
+  "players": 10246,
+  "villages": 29290
+ },
+ "data_last_modified": "Fri, 11 Sep 2026 17:52:53 GMT",
+ "duration_s": 204.4,
+ "errors": [],
+ "history_since_utc": "2026-09-11T18:49:35+00:00",
+ "inaday": {
+  "changed_types": [],
+  "entries": 75,
+  "events": 75,
+  "full_scrape": true,
+  "members": 18,
+  "top_rows": {
+   "conquer": 25,
+   "kill_att": 25,
+   "kill_def": 25,
+   "kill_sup": 25,
+   "loot_res": 25,
+   "loot_vil": 25,
+   "scavenge": 25
+  }
+ },
+ "last_full_scrape_utc": "2026-09-11T18:49:35+00:00",
+ "requests": {
+  "guest": 133,
+  "world": 8
+ },
+ "result": "neu",
+ "run_local": "2026-09-11T20:49:35+02:00",
+ "run_utc": "2026-09-11T18:49:35+00:00",
+ "tribe_ids": [
+  456
+ ],
+ "trigger": "push",
+ "world": {
+  "changed": true,
+  "counts": {
+   "allies": 407,
+   "conquers_total": 2175,
+   "players": 10246,
+   "villages": 29290
+  },
+  "downloads": [
+   {
+    "bytes": 165001,
+    "file": "player",
+    "last_modified": "Fri, 11 Sep 2026 17:52:53 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 9066,
+    "file": "ally",
+    "last_modified": "Fri, 11 Sep 2026 17:53:03 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 405691,
+    "file": "village",
+    "last_modified": "Fri, 11 Sep 2026 17:52:53 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 12204,
+    "file": "kill_att",
+    "last_modified": "Fri, 11 Sep 2026 17:53:03 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 24926,
+    "file": "kill_def",
+    "last_modified": "Fri, 11 Sep 2026 17:52:53 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 3298,
+    "file": "kill_sup",
+    "last_modified": "Fri, 11 Sep 2026 17:52:53 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 31340,
+    "file": "kill_all",
+    "last_modified": "Fri, 11 Sep 2026 17:52:53 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 25358,
+    "file": "conquer",
+    "last_modified": "Fri, 11 Sep 2026 17:52:53 GMT",
+    "status": 200
+   }
+  ],
+  "new_conquers": 2175,
+  "note": null
+ }
+}
