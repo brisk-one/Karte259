@@ -49,6 +49,10 @@ button.tw:hover:not(:disabled){background:linear-gradient(#fff3d3,#e6d0a0)}
 button.tw[aria-pressed="true"]{background:linear-gradient(#a97c33,#8a5a12); color:#f7ecd2; border-color:#3f2100}
 button.tw:disabled{opacity:.45; cursor:not-allowed}
 .scroll{overflow-x:auto}
+.pick{display:inline-flex; align-items:center; gap:5px; font-weight:400}
+.pick span{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:#4a3410; font-weight:700}
+.pick select{font:inherit; font-size:11.5px; padding:1px 4px; max-width:min(320px,52vw);
+  color:var(--ink); background:#fffaf0; border:1px solid var(--frame); border-radius:3px}
 .statusbar{display:flex; flex-wrap:wrap; align-items:center; gap:8px 22px; padding:8px 10px}
 .pill{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:12px; padding:2px 9px;
   border:1px solid var(--frame); border-radius:3px}
@@ -121,7 +125,12 @@ footer a{color:#f0dcb0}
   </section>
 
   <section class="panel" aria-labelledby="h-tribe">
-    <h2 id="h-tribe">Stamm <span class="hint" id="tribe-hint"></span></h2>
+    <h2 id="h-tribe">Stamm
+      <label class="pick"><span>Auswahl</span>
+        <select id="tribe-pick" aria-label="Stamm auswählen"></select>
+      </label>
+      <span class="hint" id="tribe-hint"></span>
+    </h2>
     <div class="scroll" id="tribe"></div>
   </section>
 
@@ -252,26 +261,45 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   winBtns.forEach(b=>b.addEventListener("click",()=>{ if(!b.disabled){ win=b.dataset.w; renderMovers(); } }));
   renderMovers();
 
-  // Stamm
-  const tid=(tribe.tribe_ids||[])[0];
-  const ally=allies.rows.find(a=>a[0]===tid);
-  $("h-tribe").firstChild.textContent = ally? "Stamm "+ally[2]+" · "+ally[1]+" " : "Stamm ";
-  $("tribe-hint").textContent = "Rekorde aus „An einem Tag“ (bester Tag je Kategorie). Spaltenkopf anklicken sortiert.";
-  const rec={}; (tribe.records||[]).forEach(([pid,type,rank,value,date])=>{ (rec[pid]=rec[pid]||{})[type]={rank,value,date}; });
-  const members=players.rows.filter(r=>r[idx.ally]===tid);
-  if(!members.length){ $("tribe").appendChild(el("p","empty","Noch keine Mitgliederdaten.")); }
-  else {
+  // Stamm: jeder Stamm der Welt ist wählbar. Punkte, Dörfer, Bash und Zuwächse liegen für alle vor,
+  // die Rekorde aus „An einem Tag“ nur für die erfassten Stämme und die Weltspitze.
+  const tracked=tribe.tribe_ids||[];
+  const rec={}; ((tribe.inaday_all)||(tribe.records)||[]).forEach(([pid,type,rank,value,date])=>{
+    const e=(rec[pid]=rec[pid]||{});
+    if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
+  });
+  const pick=$("tribe-pick");
+  [...allies.rows].sort((a,b)=>b[5]-a[5]).forEach((a,i)=>{
+    const o=document.createElement("option");
+    o.value=a[0];
+    o.textContent=(i+1)+". "+(a[2]||a[1])+" · "+a[1]+" · "+nf.format(a[3])+" Mitgl. · "+nf.format(a[5])+" Pkt"
+      +(tracked.includes(a[0])? " · Tagesbeste erfasst" : "");
+    pick.appendChild(o);
+  });
+  pick.value = tracked[0] || (allies.rows[0]||[])[0];
+  function renderTribe(){
+    const tid=+pick.value;
+    const ally=allies.rows.find(a=>a[0]===tid);
+    const members=players.rows.filter(r=>r[idx.ally]===tid);
+    const withRec=members.filter(r=>rec[r[idx.id]]).length;
+    $("tribe-hint").textContent = (ally? ally[1]+" · " : "")
+      + (withRec? "Rekorde für "+withRec+" von "+members.length+" Mitgliedern erfasst. " : "Für diesen Stamm liegen noch keine Rekorde vor. ")
+      + "Spaltenkopf anklicken sortiert.";
+    const box=$("tribe"); box.replaceChildren();
+    if(!members.length){ box.appendChild(el("p","empty","Keine Mitglieder mit Daten.")); return; }
     const heads=[["Spieler","l"],["Punkte"],["± 1 h"],["± 24 h"],["Dörfer"],["Bash A"],["Bash V"],["Bash U"]]
       .concat(TYPES.map(([,l])=>[l]));
-    $("tribe").appendChild(table(heads, members.map(r=>{
+    box.appendChild(table(heads, members.map(r=>{
       const R=rec[r[idx.id]]||{};
       return [[r[idx.name],"l name"],[nf.format(r[idx.points]),"",r[idx.points]],
               [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
               [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.att]),"",r[idx.att]],
               [nf.format(r[idx.def]),"",r[idx.def]],[nf.format(r[idx.sup]),"",r[idx.sup]]]
-        .concat(TYPES.map(([t])=>[R[t]? nf.format(R[t].value) : "0", R[t]? "" : "na", R[t]? R[t].value : 0]));
+        .concat(TYPES.map(([t])=>[R[t]? nf.format(R[t].value) : "–", R[t]? "" : "na", R[t]? R[t].value : -1]));
     }), [["Mitglied",1],["Stand jetzt",7],["Rekorde, bester Tag",TYPES.length]], 1));
   }
+  pick.addEventListener("change", renderTribe);
+  renderTribe();
 
   // Weltspitze "An einem Tag" aus dem stündlichen Änderungs-Check
   const top=(tribe.top||[]);

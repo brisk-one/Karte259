@@ -66,6 +66,9 @@ button.chip{font:inherit; font-size:10.5px; font-weight:700; letter-spacing:.08e
 button.chip:hover:not(:disabled){color:var(--text); border-color:var(--dim)}
 button.chip[aria-pressed="true"]{background:var(--accent-dim); color:var(--accent); border-color:rgba(255,159,28,.5)}
 button.chip:disabled{opacity:.35; cursor:not-allowed}
+select{font:inherit; font-size:11px; padding:1px 5px; max-width:min(300px,45vw); color:var(--text);
+  background:#0e141d; border:1px solid var(--line); border-radius:5px; text-transform:none; letter-spacing:0}
+select:hover{border-color:var(--dim)}
 
 table{width:100%; border-collapse:collapse; font-size:12px}
 th,td{padding:3px 6px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--line-soft)}
@@ -172,7 +175,7 @@ footer{margin-top:14px; font-size:11px; color:var(--dim)}
     </div>
 
     <div class="card c6">
-      <h2>Stamm <em id="tribe-name"></em></h2>
+      <h2>Stamm <select id="tribe-pick" aria-label="Stamm auswählen"></select> <em id="tribe-name"></em></h2>
       <div class="scroll" id="tribe"></div>
     </div>
 
@@ -449,21 +452,39 @@ async function load(n){ const r=await fetch("data/"+n+".json",{cache:"no-cache"}
   const note=el("div","row2"); note.append(el("span",null,"Laufzeit gegen 200 s Richtwert"), el("b",null,(st.duration_s||0)+" s"));
   c.appendChild(note);
 
-  // Stamm
-  const tid=(tribe.tribe_ids||[])[0], ally=allyById[tid];
-  $("tribe-name").textContent = ally? ally[2]+" · "+ally[1] : "";
-  const rec={}; (tribe.records||[]).forEach(([pid,type,rank,value,date])=>{ (rec[pid]=rec[pid]||{})[type]={rank,value,date}; });
-  const members=players.rows.filter(r=>r[idx.ally]===tid);
-  if(!members.length) $("tribe").appendChild(el("p","empty","Noch keine Mitgliederdaten."));
-  else $("tribe").appendChild(table(
-    [["Spieler","l"],["Punkte"],["± 1 h"],["± 24 h"],["Dörfer"],["Bash"]].concat(TYPES.slice(0,3).map(([,l])=>[l])),
-    members.map(r=>{
-      const R=rec[r[idx.id]]||{};
-      return [[r[idx.name],"l name"],[nf.format(r[idx.points]),"",r[idx.points]],
-              [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
-              [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.all]),"",r[idx.all]]]
-        .concat(TYPES.slice(0,3).map(([t])=>[R[t]?nf.format(R[t].value):"0", R[t]?"":"na", R[t]?R[t].value:0]));
-    }), 1));
+  // Stamm: alle Stämme wählbar, Rekorde nur wo erfasst
+  const tracked=tribe.tribe_ids||[];
+  const rec={}; ((tribe.inaday_all)||(tribe.records)||[]).forEach(([pid,type,rank,value,date])=>{
+    const e=(rec[pid]=rec[pid]||{});
+    if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
+  });
+  const pick=$("tribe-pick");
+  topAllies.forEach((a,i)=>{
+    const o=document.createElement("option"); o.value=a[0];
+    o.textContent=(i+1)+". "+(a[2]||a[1])+" · "+nf.format(a[3])+" Mitgl. · "+nf.format(a[5])+" Pkt"
+      +(tracked.includes(a[0])? " ·  Tagesbeste erfasst" : "");
+    pick.appendChild(o);
+  });
+  pick.value = tracked[0] || (topAllies[0]||[])[0];
+  function renderTribe(){
+    const tid=+pick.value, ally=allyById[tid];
+    const members=players.rows.filter(r=>r[idx.ally]===tid);
+    const withRec=members.filter(r=>rec[r[idx.id]]).length;
+    $("tribe-name").textContent = (ally? ally[1] : "")+(withRec? " · Rekorde für "+withRec+" von "+members.length : " · keine Rekorde erfasst");
+    const box=$("tribe"); box.replaceChildren();
+    if(!members.length){ box.appendChild(el("p","empty","Keine Mitglieder mit Daten.")); return; }
+    box.appendChild(table(
+      [["Spieler","l"],["Punkte"],["± 1 h"],["± 24 h"],["Dörfer"],["Bash"]].concat(TYPES.slice(0,3).map(([,l])=>[l])),
+      members.map(r=>{
+        const R=rec[r[idx.id]]||{};
+        return [[r[idx.name],"l name"],[nf.format(r[idx.points]),"",r[idx.points]],
+                [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
+                [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.all]),"",r[idx.all]]]
+          .concat(TYPES.slice(0,3).map(([t])=>[R[t]?nf.format(R[t].value):"–", R[t]?"":"na", R[t]?R[t].value:-1]));
+      }), 1));
+  }
+  pick.addEventListener("change", renderTribe);
+  renderTribe();
 
   // Weltspitze
   const byType={}; (tribe.top||[]).forEach(([pid,t,rank,value,date])=>{ (byType[t]=byType[t]||[]).push({pid,rank,value,date}); });
