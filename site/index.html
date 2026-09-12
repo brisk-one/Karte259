@@ -25,7 +25,7 @@ header{background:linear-gradient(#8a5a12,#603000); color:#f4e4bc; border-bottom
 header .wrap{padding-block:12px 14px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 20px}
 header .eyebrow{font-size:11px; color:#e2caa0; margin:0}
 header h1{font-size:24px; margin:0; font-weight:700; letter-spacing:.02em}
-a.tomap{margin-left:auto; font-weight:700; font-size:13px; color:var(--ink); text-decoration:none;
+a.tomap{font-weight:700; font-size:13px; color:var(--ink); text-decoration:none;
   background:linear-gradient(#f6e7bd,#dcc48a); border:1px solid #3f2100; border-radius:3px; padding:5px 12px}
 a.tomap:hover{background:linear-gradient(#fff3d3,#e6d0a0)}
 
@@ -88,7 +88,10 @@ footer a{color:#f0dcb0}
       <p class="eyebrow">Die Stämme · Welt 259 · Datensammler</p>
       <h1>Karte 259</h1>
     </div>
-    <a class="tomap" href="karte.html">Zur Karte &raquo;</a>
+    <span style="margin-left:auto; display:flex; gap:6px; flex-wrap:wrap">
+      <a class="tomap" href="dashboard.html">Lagebild (Entwurf 2)</a>
+      <a class="tomap" href="karte.html">Zur Karte &raquo;</a>
+    </span>
     <dl class="facts">
       <div><dt>Spieler</dt><dd id="f-players">…</dd></div>
       <div><dt>Stämme</dt><dd id="f-allies">…</dd></div>
