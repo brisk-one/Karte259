@@ -23,9 +23,16 @@ Fan-Projekt: sammelt stündlich öffentliche Daten der Welt 259 von [Die Stämme
 
 ```
 python3 -m unittest discover -s tests
-python3 -m collector.run --trigger manual
 python3 -m collector.build_site --out _site
 ```
+
+`collector.run` ruft echte Daten von die-staemme.de ab. Lokal darf er deshalb nur gegen einen eigenen Testserver mit Kunstdaten laufen, adressiert über `K259_BASE_URL`:
+
+```
+K259_BASE_URL=http://127.0.0.1:8765 python3 -m collector.run --trigger manual
+```
+
+Ohne gesetztes `K259_BASE_URL` geht der Lauf an den echten Server. Reguläre Abrufe kommen ausschließlich aus dem stündlichen Workflow auf den GitHub-Runnern.
 
 Nur Python-Standardbibliothek, keine Abhängigkeiten.
 
