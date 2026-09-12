@@ -200,8 +200,8 @@ footer a{color:var(--accent)}
 [data-theme="futuristic"] .facts>div{position:relative; overflow:hidden}
 [data-theme="futuristic"] .facts>div::after,[data-theme="futuristic"] .panel::after{
   content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-  background:linear-gradient(112deg,transparent 18%,rgba(190,245,255,.10) 34%,
-             rgba(255,255,255,.22) 40%,rgba(190,245,255,.08) 46%,transparent 64%);
+  background:linear-gradient(112deg,transparent 22%,rgba(190,245,255,.045) 36%,
+             rgba(255,255,255,.085) 41%,rgba(190,245,255,.035) 46%,transparent 62%);
 }
 [data-theme="futuristic"] .panel{box-shadow:var(--shine), var(--glow)}
 [data-theme="futuristic"] .panel:hover{

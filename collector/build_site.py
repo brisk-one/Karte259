@@ -12,6 +12,7 @@ als Ersatz. Dörfer werden bewusst nicht stündlich ins Repo geschrieben, siehe 
 import argparse
 import csv
 import gzip
+import hashlib
 import io
 import json
 import os
@@ -138,10 +139,37 @@ def village_payload(vrows, source, player_index, data_time=None):
             "source": source, "data_time_utc": data_time, "unknown_players": unknown}
 
 
+def _cache_bust(out_dir):
+    """Hängt an style.css und app.js eine Kennung aus dem Dateiinhalt.
+
+    Ohne sie liefert der Browser nach einer Änderung weiter die alte Fassung aus dem Zwischenspeicher.
+    Die Kennung ändert sich nur, wenn sich die Datei wirklich ändert.
+    """
+    stamps = {}
+    for name in ("style.css", "app.js"):
+        p = os.path.join(out_dir, name)
+        if os.path.exists(p):
+            with open(p, "rb") as f:
+                stamps[name] = hashlib.sha1(f.read()).hexdigest()[:8]
+    if not stamps:
+        return
+    for fn in os.listdir(out_dir):
+        if not fn.endswith(".html"):
+            continue
+        p = os.path.join(out_dir, fn)
+        with open(p, encoding="utf-8") as f:
+            html = f.read()
+        for name, stamp in stamps.items():
+            html = html.replace('"' + name + '"', '"' + name + "?v=" + stamp + '"')
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(html)
+
+
 def build(out_dir):
     if os.path.exists(out_dir):
         shutil.rmtree(out_dir)
     shutil.copytree("site", out_dir)
+    _cache_bust(out_dir)
     ddir = os.path.join(out_dir, "data")
 
     players_path = f"{config.DATA_DIR}/latest/players.csv"

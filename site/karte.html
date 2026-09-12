@@ -81,6 +81,11 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
     <button class="tw" type="button" data-v="d24h">Punktezuwachs 24 h</button>
     <button class="tw" type="button" data-v="d7d">Punktezuwachs 7 Tage</button>
   </div>
+  <div class="grp" id="shape" role="group" aria-label="Darstellung">
+    <b>Dörfer</b>
+    <button class="tw" type="button" data-shape="quad" aria-pressed="true">Quadrate</button>
+    <button class="tw" type="button" data-shape="village">Dorfbilder</button>
+  </div>
   <div class="grp" id="views3" role="group" aria-label="Besiegte Gegner">
     <b>Besiegte Gegner</b>
     <button class="tw" type="button" data-v="bash_all">gesamt</button>
@@ -148,6 +153,11 @@ const BASH_STEPS=[500,2500,10000,30000];
 const BASH_NEW_STEPS=[100,1000,5000,20000];
 const BASH_COLORS=["#ffe066","#ffa726","#c6ff00","#76ff03","#00e676"];
 const isBash = v => v==="bash_all" || v==="bash_new";
+// Ausbaustufen wie im Hilfe-Wiki: 26 bis 299, 300 bis 999, 1.000 bis 2.999, 3.000 bis 8.999,
+// 9.000 bis 10.999, ab 11.000. Die Zeichnung ist eine eigene, schlichte Nachbildung.
+const STAGE_STEPS=[300,1000,3000,9000,11000];
+const stageOf = pts => { let s=0; while(s<STAGE_STEPS.length && pts>=STAGE_STEPS[s]) s++; return s; };
+let shape="quad";
 // Ranglisten "An einem Tag": Farbe nach Weltrang, Stufen wie im Artefakt vom 11.09.2026
 const RANK_STEPS=[10,50,100,500,2500];
 const RANK_COLORS=["#00e676","#76ff03","#c6ff00","#ffeb3b","#fff59d","#9e9e9e"];
@@ -251,6 +261,62 @@ function drawGrid(){
 }
 
 
+
+/** Dorfbild statt Quadrat. Sechs Ausbaustufen wie im Spiel, aber als eigene, schlichte Zeichnung:
+    kleine Hütte, Weiler, Palisade, Wall mit Türmen, Burg, Festung mit Zinnen. */
+function drawVillage(cx2, cy2, r, farbe, stufe){
+  ctx.fillStyle=farbe;
+  ctx.strokeStyle="rgba(0,0,0,.62)";
+  ctx.lineWidth=Math.max(.7, r*0.16);
+  if(stufe<=0){                                   // einzelne Hütte
+    ctx.beginPath();
+    ctx.moveTo(cx2-r*.62, cy2+r*.55); ctx.lineTo(cx2-r*.62, cy2-r*.05);
+    ctx.lineTo(cx2, cy2-r*.72); ctx.lineTo(cx2+r*.62, cy2-r*.05);
+    ctx.lineTo(cx2+r*.62, cy2+r*.55); ctx.closePath();
+    ctx.fill(); if(r>=3) ctx.stroke();
+    return;
+  }
+  if(stufe===1){                                  // Weiler: zwei Dächer
+    for(const dx of [-r*.42, r*.42]){
+      ctx.beginPath();
+      ctx.moveTo(cx2+dx-r*.36, cy2+r*.5); ctx.lineTo(cx2+dx-r*.36, cy2);
+      ctx.lineTo(cx2+dx, cy2-r*.5); ctx.lineTo(cx2+dx+r*.36, cy2);
+      ctx.lineTo(cx2+dx+r*.36, cy2+r*.5); ctx.closePath();
+      ctx.fill(); if(r>=3.5) ctx.stroke();
+    }
+    return;
+  }
+  // ab Stufe 2 ein Ring, dessen Ecken mit der Stufe zunehmen
+  const ecken = stufe>=4? 8 : (stufe>=3? 7 : 6);
+  const rr = r*(stufe>=5? 1 : .92);
+  ctx.beginPath();
+  for(let i=0;i<ecken;i++){
+    const w=(i/ecken)*Math.PI*2 - Math.PI/2;
+    const px=cx2+Math.cos(w)*rr, py=cy2+Math.sin(w)*rr*.86;
+    i? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+  }
+  ctx.closePath(); ctx.fill(); if(r>=3) ctx.stroke();
+  if(stufe>=3){                                   // innerer Hof
+    ctx.fillStyle="rgba(0,0,0,.30)";
+    ctx.beginPath();
+    for(let i=0;i<ecken;i++){
+      const w=(i/ecken)*Math.PI*2 - Math.PI/2;
+      const px=cx2+Math.cos(w)*rr*.5, py=cy2+Math.sin(w)*rr*.44;
+      i? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=farbe;
+  }
+  if(stufe>=5 && r>=4){                           // Zinnen der Festung
+    for(let i=0;i<ecken;i++){
+      const w=(i/ecken)*Math.PI*2 - Math.PI/2;
+      ctx.beginPath();
+      ctx.arc(cx2+Math.cos(w)*rr, cy2+Math.sin(w)*rr*.86, Math.max(.8, r*.17), 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+}
+
 /** Zeichen am Dorf: Bonusdorf, hoher Bestand an besiegten Gegnern, frisch dazugekommene.
     Bewusst drei verschiedene Orte am Quadrat, damit sie sich nicht überlagern:
     Bonus unten links, Bestand als Rahmen, frischer Zuwachs als Funke oben links. */
@@ -319,16 +385,18 @@ function draw(){
   drawGrid();
   const size=scale<2? Math.max(1, scale) : scale*0.84, off=(scale-size)/2;
   const x0=wxAt(-2), x1=wxAt(W+2), y0=wyAt(-2), y1=wyAt(H+2);
+  const alsDorf = shape==="village" && scale>=6;
   for(let b=0;b<buckets.length;b++){
     const list=buckets[b]; if(!list.length) continue;
     ctx.fillStyle=colorList[b];
     for(let k=0;k<list.length;k++){
       const i=list[k], x=vx[i], y=vy[i];
       if(x<x0||x>x1||y<y0||y>y1) continue;
-      ctx.fillRect(sx(x)+off, sy(y)+off, size, size);
+      if(alsDorf) drawVillage(sx(x)+scale/2, sy(y)+scale/2, size*0.62, colorList[b], stageOf(vpts[i]));
+      else ctx.fillRect(sx(x)+off, sy(y)+off, size, size);
     }
   }
-  if(scale>=7){
+  if(scale>=7 && !alsDorf){
     ctx.strokeStyle="rgba(0,0,0,.45)"; ctx.lineWidth=1;
     for(let b=0;b<buckets.length;b++) for(const i of buckets[b]){
       const x=vx[i], y=vy[i];
@@ -592,7 +660,8 @@ function showTip(i, px, py){
   const co=document.createElement("span");
   co.textContent=" ("+vx[i]+"|"+vy[i]+") K"+Math.floor(vy[i]/100)+Math.floor(vx[i]/100);
   head.appendChild(co); tip.appendChild(head);
-  trow("Dorfpunkte", nf.format(vpts[i]));
+  const stufen=["Hütte","Weiler","Palisade","Wall","Burg","Festung"];
+  trow("Dorfpunkte", nf.format(vpts[i])+" · "+stufen[stageOf(vpts[i])]);
   if(vb[i]) trow("Bonus","Bonusdorf");
   const p=vp[i];
   if(p<0){ trow("Besitzer","Barbaren"); }
@@ -836,6 +905,12 @@ window.addEventListener("resize", resize);
 $("zin").addEventListener("click", ()=>zoomAt(W/2,H/2,1.6));
 $("zout").addEventListener("click", ()=>zoomAt(W/2,H/2,1/1.6));
 $("zfit").addEventListener("click", ()=>{ marked=null; userView=false; fitWorld(); draw(); saveUrl(); });
+document.getElementById("shape").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  shape=b.dataset.shape;
+  document.querySelectorAll("#shape button").forEach(x=>x.setAttribute("aria-pressed", String(x.dataset.shape===shape)));
+  draw();
+});
 document.querySelectorAll("#views, #views2, #views3").forEach(g=>g.addEventListener("click", e=>{
   const b=e.target.closest("button"); if(b && !b.disabled) setView(b.dataset.v);
 }));
