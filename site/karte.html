@@ -11,7 +11,7 @@
   --parchment:#f4e4bc; --parchment-2:#eadcb4; --row:#f7edd2;
   --frame:#603000; --frame-soft:#b8a06c; --bar:#c1a264; --bar-2:#d8bd8a;
   --ink:#2b1d06; --ink-2:#5c4415; --muted:#7a6435;
-  --grass:#7c9a4e; --grid:rgba(0,0,0,.20); --grid-major:rgba(0,0,0,.58); --map-label:rgba(0,0,0,.55);
+  --grass:#7c9a4e;
   --good:#2f6b1f; --bad:#9c2b1c;
 }
 *,*::before,*::after{box-sizing:border-box}
@@ -28,45 +28,64 @@ header h1{font-size:17px; margin:0; font-weight:700; letter-spacing:.02em}
 header .eyebrow{font-size:11px; color:#e2caa0}
 header a.back{margin-left:auto; font-size:12px; color:#f0dcb0; font-weight:700}
 
-.bar{display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px;
-  padding:6px clamp(10px,3vw,20px); background:var(--parchment); border-bottom:2px solid var(--frame)}
-.seg{display:inline-flex; gap:3px; flex-wrap:wrap}
+.bar{display:flex; flex-wrap:wrap; align-items:center; gap:5px 14px;
+  padding:5px clamp(10px,3vw,20px); background:var(--parchment); border-bottom:1px solid var(--frame-soft)}
+.bar:last-of-type{border-bottom:2px solid var(--frame)}
+.grp{display:inline-flex; align-items:center; gap:3px; flex-wrap:wrap}
+.grp>b{font-size:11px; font-weight:700; color:var(--muted); margin-right:2px}
 button.tw{font:inherit; font-size:12px; font-weight:700; color:var(--ink); cursor:pointer;
   background:linear-gradient(#f6e7bd,#dcc48a); border:1px solid var(--frame); border-radius:3px; padding:3px 9px}
-button.tw:hover{background:linear-gradient(#fff3d3,#e6d0a0)}
+button.tw:hover:not(:disabled){background:linear-gradient(#fff3d3,#e6d0a0)}
 button.tw[aria-pressed="true"]{background:linear-gradient(#a97c33,#8a5a12); color:#f7ecd2; border-color:#3f2100}
 button.tw:disabled{opacity:.45; cursor:not-allowed; background:var(--parchment-2)}
-.search{display:flex; gap:5px; align-items:center}
-.search input{font:inherit; font-size:12px; padding:3px 6px; width:min(230px,42vw); color:var(--ink);
+button.tw.small{padding:2px 6px; font-size:11px}
+
+.search{display:flex; gap:5px; align-items:center; position:relative}
+.search input{font:inherit; font-size:12px; padding:3px 6px; width:min(220px,40vw); color:var(--ink);
   background:#fffaf0; border:1px solid var(--frame); border-radius:3px}
+.sugg{position:absolute; z-index:20; top:100%; left:0; margin-top:2px; width:min(260px,60vw);
+  background:var(--parchment); border:1px solid var(--frame); border-radius:3px; box-shadow:0 3px 10px rgba(0,0,0,.35);
+  max-height:220px; overflow:auto}
+.sugg div{padding:3px 8px; cursor:pointer; font-size:12px; display:flex; justify-content:space-between; gap:10px}
+.sugg div:hover,.sugg div[aria-selected="true"]{background:var(--bar-2)}
+.sugg .meta{color:var(--muted); font-size:11px}
+
+.pick{display:inline-flex; align-items:center; gap:5px; padding:2px 6px; border:1px solid var(--frame);
+  border-radius:3px; background:var(--row)}
+.pick .tag{font-weight:700; font-size:12px}
+.pick .dot{width:13px; height:13px; border:1px solid rgba(0,0,0,.5); display:inline-block}
+.pick input[type="color"]{width:26px; height:20px; padding:0; border:1px solid var(--frame); background:none; cursor:pointer}
 .stand{font-size:11.5px; color:var(--ink-2); margin-left:auto; text-align:right}
 .stand b{font-weight:700}
 
-.mapwrap{position:relative; flex:1; min-height:0; background:var(--grass); touch-action:none; cursor:grab;
-  border-top:1px solid #3f2100}
+.mapwrap{position:relative; flex:1; min-height:0; background:var(--grass); touch-action:none; cursor:default}
 .mapwrap.drag{cursor:grabbing}
 canvas{display:block; width:100%; height:100%}
 .overlay{position:absolute; inset:auto 0 0 0; display:flex; flex-wrap:wrap; align-items:flex-end;
   justify-content:space-between; gap:8px; padding:9px 10px; pointer-events:none}
 .legend{background:var(--parchment); border:1px solid var(--frame); border-radius:3px;
-  box-shadow:0 2px 6px rgba(0,0,0,.35); font-size:11.5px; max-width:min(430px,93vw); pointer-events:auto}
+  box-shadow:0 2px 6px rgba(0,0,0,.35); font-size:11.5px; max-width:min(460px,93vw); pointer-events:auto}
 .legend summary{font-size:11px; font-weight:700; color:#3f2100; background:linear-gradient(var(--bar-2),var(--bar));
   border-bottom:1px solid var(--frame); padding:3px 8px; cursor:pointer; list-style-position:inside}
 .legend:not([open]) summary{border-bottom:0}
 .legend ul{margin:0; padding:6px 8px; list-style:none; display:flex; flex-wrap:wrap; gap:3px 12px}
 .legend li{display:flex; align-items:center; gap:5px; white-space:nowrap}
 .legend i{width:11px; height:11px; border:1px solid rgba(0,0,0,.45); flex:none}
+.legend .arrows{border-top:1px solid var(--frame-soft); padding:4px 8px; color:var(--ink-2)}
+.legend .arrows b{color:var(--good)} .legend .arrows u{color:var(--bad); text-decoration:none}
 .zoom{display:flex; gap:5px; pointer-events:auto}
 .zoom button{font:inherit; font-weight:700; font-size:15px; width:32px; height:32px; border-radius:3px; cursor:pointer;
   background:linear-gradient(#f6e7bd,#dcc48a); color:var(--ink); border:1px solid var(--frame)}
-.tip{position:absolute; z-index:5; pointer-events:none; display:none; max-width:290px;
+.tip{position:absolute; z-index:5; pointer-events:none; display:none; max-width:300px;
   background:var(--parchment); color:var(--ink); border:1px solid var(--frame); border-radius:3px;
   padding:0 0 5px; font-size:12px; line-height:1.35; box-shadow:0 3px 10px rgba(0,0,0,.4)}
 .tip .th{background:linear-gradient(var(--bar-2),var(--bar)); border-bottom:1px solid var(--frame);
   padding:3px 8px; font-weight:700}
 .tip .th span{font-weight:400; color:#4a3410}
+.tip .sec{margin-top:3px; padding:1px 8px; font-size:10.5px; font-weight:700; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--muted); border-top:1px solid var(--frame-soft)}
 .tip .row{display:flex; gap:10px; justify-content:space-between; padding:1px 8px}
-.tip .row:nth-child(odd){background:rgba(0,0,0,.04)}
+.tip .row:nth-of-type(odd){background:rgba(0,0,0,.04)}
 .tip .k{color:var(--muted)}
 .tip .up{color:var(--good); font-weight:700} .tip .down{color:var(--bad); font-weight:700} .tip .na{color:var(--muted)}
 .msg{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
@@ -85,16 +104,29 @@ canvas{display:block; width:100%; height:100%}
 </header>
 
 <div class="bar">
-  <div class="seg" id="views" role="group" aria-label="Ansicht">
+  <div class="grp" id="views" role="group" aria-label="Ansicht">
+    <b>Ansicht</b>
     <button class="tw" type="button" data-v="tribes" aria-pressed="true">Stämme</button>
-    <button class="tw" type="button" data-v="d1h">Zuwachs 1 h</button>
-    <button class="tw" type="button" data-v="d24h">Zuwachs 24 h</button>
-    <button class="tw" type="button" data-v="d7d">Zuwachs 7 Tage</button>
+    <button class="tw" type="button" data-v="d1h">Punktezuwachs 1 h</button>
+    <button class="tw" type="button" data-v="d24h">Punktezuwachs 24 h</button>
+    <button class="tw" type="button" data-v="d7d">Punktezuwachs 7 Tage</button>
   </div>
-  <form class="search" id="searchform" role="search">
-    <input id="q" type="search" placeholder="500|500, Spieler oder Stamm" aria-label="Suche nach Koordinate, Spieler oder Stamm">
+  <div class="grp" id="views2" role="group" aria-label="Ranglisten An einem Tag">
+    <b>An einem Tag</b>
+    <button class="tw" type="button" data-v="loot_res">Rohstoffe geplündert</button>
+    <button class="tw" type="button" data-v="scavenge">Rohstoffe gesammelt</button>
+    <button class="tw" type="button" data-v="loot_vil">Dörfer geplündert</button>
+  </div>
+</div>
+
+<div class="bar">
+  <form class="search" id="searchform" role="search" autocomplete="off">
+    <input id="q" type="search" placeholder="500|500, Spieler oder Stamm" aria-label="Suche nach Koordinate, Spieler oder Stamm"
+           aria-expanded="false" aria-controls="sugg">
     <button class="tw" type="submit">Suchen</button>
+    <div class="sugg" id="sugg" hidden role="listbox"></div>
   </form>
+  <div class="grp" id="marks" aria-live="polite"></div>
   <p class="stand" id="stand">Lade Kartendaten …</p>
 </div>
 
@@ -106,6 +138,7 @@ canvas{display:block; width:100%; height:100%}
     <details class="legend" id="legend" hidden open>
       <summary id="legend-title">Legende</summary>
       <ul id="legend-items"></ul>
+      <p class="arrows" id="legend-arrows"></p>
     </details>
     <div class="zoom">
       <button type="button" id="zin" title="Näher" aria-label="Näher">+</button>
@@ -121,29 +154,41 @@ const nf1 = new Intl.NumberFormat("de-DE", {maximumFractionDigits:1});
 const dtf = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"});
 const $ = id => document.getElementById(id);
 const fmtTime = s => { if(!s) return "k. A."; const d=new Date(s); return isNaN(d)? s : dtf.format(d)+" Uhr"; };
+const fmtDay = s => { if(!s) return ""; const p=s.split("-"); return p.length===3? p[2]+"."+p[1]+"."+p[0] : s; };
 
 // Farben auf der Grasfläche. Grau für Barbaren wie im Spiel, kräftige Farben für die großen Stämme.
 const GRASS="#7c9a4e", GRID="rgba(0,0,0,.20)", GRID_MAJOR="rgba(0,0,0,.58)", LABEL="rgba(0,0,0,.55)";
 const C_BARB="#7d8468", C_BONUS="#d9c26a", C_OTHER="#c8cbbc", C_NONE="#c8cbbc", C_LOSS="#2979ff";
-const TRIBE_COLORS=["#e53935","#1e88e5","#fdd835","#d81b60","#00bcd4","#fb8c00","#8e24aa","#c6ff00",
-                    "#3949ab","#00e676","#6d4c41","#ff80ab"];
+const C_TRACKED="#1e6fff";          // Stämme, deren Tagesbeste erhoben werden, immer blau
+const TRIBE_COLORS=["#e53935","#fdd835","#d81b60","#00bcd4","#fb8c00","#8e24aa","#c6ff00",
+                    "#3949ab","#00e676","#6d4c41","#ff80ab","#b0bec5"];
+// Reserve für selbst markierte Stämme, in dieser Reihenfolge vergeben
+const EXTRA_COLORS=["#ffffff","#000000","#ff3d00","#76ff03","#18ffff","#f50057","#ffea00","#651fff"];
 // Stufen des prozentualen Punktzuwachses, hergeleitet aus der gemessenen Verteilung vom 12.09.2026:
 // über 1 h wachsen 11,4 % der Spieler überhaupt, über 24 h rund 39 %.
 const GROWTH_COLORS=["#fff7c2","#ffe066","#ffab40","#ff6d00","#d50000"];
 const STEPS={ d1h:[1,2,3,5], d24h:[5,10,15,25], d7d:[10,20,35,60] };
 const VIEW_LABEL={ d1h:"1 Stunde", d24h:"24 Stunden", d7d:"7 Tage" };
+// Ranglisten "An einem Tag": Farbe nach Weltrang, Stufen wie im Artefakt vom 11.09.2026
+const RANK_STEPS=[10,50,100,500,2500];
+const RANK_COLORS=["#d50000","#ff6d00","#ffab40","#ffe066","#fff7c2","#9e9e9e"];
+const INADAY_LABEL={ loot_res:"Rohstoffe geplündert", scavenge:"Rohstoffe gesammelt", loot_vil:"Dörfer geplündert",
+                     kill_att:"Bash Angriff", kill_def:"Bash Verteidigung", kill_sup:"Bash Unterstützung",
+                     conquer:"Dörfer erobert" };
+const isGrowth = v => !!STEPS[v];
+const isRank = v => v==="loot_res" || v==="scavenge" || v==="loot_vil";
 
 const cv=$("c"), ctx=cv.getContext("2d", {alpha:false});
 const wrap=$("mapwrap"), tip=$("tip");
 let W=0, H=0, dpr=1;
-let V=null, P=null, A=null;
+let V=null, P=null, A=null, T=null;
 let N=0, vx=null, vy=null, vp=null, vpts=null, vb=null, vname=null, byXY=null;
-let pIdx={}, allyOf=null, growth={}, refs={}, tagOf=new Map();
-let tribeColor=new Map(), tribeList=[];
+let pIdx={}, allyOf=null, growth={}, arrowOf=null, refs={}, tagOf=new Map(), allyById=new Map();
+let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
+let inaday=new Map();                                      // player_id -> {typ: {rank, value, date}}
+let rankOf={};                                             // Spielerzeile -> Weltrang in der aktiven Rangliste
 let buckets=[], colorList=[];
 let view="tribes", scale=2, cx=500, cy=500, hover=-1, marked=null;
-// Solange der Nutzer den Ausschnitt nicht selbst gewählt hat, passt sich die Karte an jede
-// Größenänderung an und schreibt nichts in die Adresszeile.
 let userView=false, initDone=false;
 const ownView = () => { userView=true; };
 
@@ -154,7 +199,7 @@ function resize(){
   W=Math.max(1, Math.round(r.width)); H=Math.max(1, Math.round(r.height));
   cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  if(!userView && N) fitWorld();   // die Einpassung braucht die endgültige Größe der Fläche
+  if(!userView && N) fitWorld();
   draw();
 }
 const sx = x => (x - cx) * scale + W/2;
@@ -193,28 +238,46 @@ function drawGrid(){
     for(let y=y0;y<=y1;y+=s){ const p=Math.round(sy(y))+.5; ctx.moveTo(0,p); ctx.lineTo(W,p); }
     ctx.stroke();
   }
-  ctx.fillStyle=LABEL;
-  ctx.textBaseline="top";
-  // Kontinentnummer: Hunderter von y, dann Hunderter von x
-  ctx.font="700 13px Verdana,Geneva,sans-serif";
-  ctx.textAlign="left";
+  ctx.fillStyle=LABEL; ctx.textBaseline="top";
+  ctx.font="700 13px Verdana,Geneva,sans-serif"; ctx.textAlign="left";
   const kx0=Math.max(0,Math.floor(wxAt(0)/100)), kx1=Math.min(9,Math.floor(wxAt(W)/100));
   const ky0=Math.max(0,Math.floor(wyAt(0)/100)), ky1=Math.min(9,Math.floor(wyAt(H)/100));
   for(let ky=ky0;ky<=ky1;ky++) for(let kx=kx0;kx<=kx1;kx++){
-    // innerhalb des eigenen Kontinents halten, sonst kleben mehrere Nummern am Bildrand übereinander
     const px=Math.min(Math.max(3, sx(kx*100)+5), sx((kx+1)*100)-28);
     const py=Math.min(Math.max(3, sy(ky*100)+3), sy((ky+1)*100)-16);
     if(px<W-26 && py<H-16 && px>-20 && py>-14) ctx.fillText("K"+ky+""+kx, px, py);
   }
-  // Koordinaten am Rand, sobald das Zehnerraster sichtbar ist
   if(scale>=6){
-    ctx.font="11px Verdana,Geneva,sans-serif";
-    ctx.fillStyle="rgba(0,0,0,.62)";
+    ctx.font="11px Verdana,Geneva,sans-serif"; ctx.fillStyle="rgba(0,0,0,.62)";
     const x0=Math.ceil(wxAt(0)/10)*10, y0=Math.ceil(wyAt(0)/10)*10;
     ctx.textAlign="center";
     for(let x=x0;x<wxAt(W);x+=10) ctx.fillText(String(x), sx(x)+scale/2, 3);
     ctx.textAlign="left";
     for(let y=y0;y<wyAt(H);y+=10) ctx.fillText(String(y), 3, sy(y)+scale/2-6);
+  }
+}
+
+/** Pfeile am oberen rechten Rand des Dorfes: Zuwachs des Spielers, drei Stufen je Richtung. */
+function drawArrows(x0,x1,y0,y1,size){
+  const h=Math.max(2.5, Math.min(5, scale*0.3)), w=h*1.1, gap=h*0.28;
+  ctx.lineWidth=1;
+  for(let i=0;i<N;i++){
+    const a=arrowOf[i]; if(!a) continue;
+    const x=vx[i], y=vy[i];
+    if(x<x0||x>x1||y<y0||y>y1) continue;
+    const n=Math.abs(a), up=a>0;
+    ctx.fillStyle = up? "#00c853" : "#ff1744";
+    ctx.strokeStyle="rgba(0,0,0,.7)";
+    let ty=sy(y)+(scale-size)/2-1;                 // Oberkante des Dorfes
+    const tx=sx(x)+(scale-size)/2+size+1;          // rechts daneben
+    for(let k=0;k<n;k++){
+      ctx.beginPath();
+      if(up){ ctx.moveTo(tx, ty); ctx.lineTo(tx+w, ty); ctx.lineTo(tx+w/2, ty-h); }
+      else  { ctx.moveTo(tx, ty-h); ctx.lineTo(tx+w, ty-h); ctx.lineTo(tx+w/2, ty); }
+      ctx.closePath(); ctx.fill();
+      if(h>=3.5) ctx.stroke();
+      ty -= h+gap;
+    }
   }
 }
 
@@ -224,7 +287,6 @@ function draw(){
   if(!N) return;
   drawGrid();
   const size=scale<2? Math.max(1, scale) : scale*0.84, off=(scale-size)/2;
-  const line=scale>=7;
   const x0=wxAt(-2), x1=wxAt(W+2), y0=wyAt(-2), y1=wyAt(H+2);
   for(let b=0;b<buckets.length;b++){
     const list=buckets[b]; if(!list.length) continue;
@@ -235,7 +297,7 @@ function draw(){
       ctx.fillRect(sx(x)+off, sy(y)+off, size, size);
     }
   }
-  if(line){  // ab mittlerem Zoom bekommen die Dörfer eine Kontur, das wirkt ruhiger
+  if(scale>=7){
     ctx.strokeStyle="rgba(0,0,0,.45)"; ctx.lineWidth=1;
     for(let b=0;b<buckets.length;b++) for(const i of buckets[b]){
       const x=vx[i], y=vy[i];
@@ -243,6 +305,7 @@ function draw(){
       ctx.strokeRect(Math.round(sx(x)+off)+.5, Math.round(sy(y)+off)+.5, Math.round(size)-1, Math.round(size)-1);
     }
   }
+  if(scale>=8 && arrowOf) drawArrows(x0,x1,y0,y1,size);
   if(marked && marked.size){
     ctx.strokeStyle="#ffffff"; ctx.lineWidth=Math.max(1.5, Math.min(2.5, scale/5));
     for(const i of marked){
@@ -266,12 +329,33 @@ function pct(row, key){
   if(before<=0) return d>0? 999 : 0;
   return d/before*100;
 }
-function computeGrowth(){
-  growth={};
-  if(view==="tribes" || !P) return;
-  const key=view.slice(1);
-  P.rows.forEach((r,i)=>{ const v=pct(r,key); if(v!=null) growth[i]=v; });
+function arrowWindow(){                       // Zeitfenster der Pfeile: das der Ansicht, sonst das gröbste vorhandene
+  if(isGrowth(view)) return view.slice(1);
+  return refs["24h"]? "24h" : (refs["1h"]? "1h" : null);
 }
+function computeArrows(){
+  arrowOf=new Int8Array(N);
+  const key=arrowWindow(); if(!key || !P) return;
+  const e=STEPS["d"+key], lvl=new Int8Array(P.rows.length);
+  P.rows.forEach((r,i)=>{
+    const g=pct(r,key); if(g==null) return;
+    lvl[i] = g>e[3]? 3 : g>e[2]? 2 : g>e[1]? 1 : g<-e[3]? -3 : g<-e[2]? -2 : g<-e[1]? -1 : 0;
+  });
+  for(let i=0;i<N;i++) arrowOf[i]= vp[i]>=0? lvl[vp[i]] : 0;
+}
+function computeGrowth(){
+  growth={}; rankOf={};
+  if(isGrowth(view) && P){
+    const key=view.slice(1);
+    P.rows.forEach((r,i)=>{ const v=pct(r,key); if(v!=null) growth[i]=v; });
+  } else if(isRank(view)){
+    P.rows.forEach((r,i)=>{
+      const e=inaday.get(r[pIdx.id]);
+      if(e && e[view]) rankOf[i]=e[view].rank;
+    });
+  }
+}
+function tribeColorOf(id){ return marks.get(id) || tribeColor.get(id); }
 function buildBuckets(){
   const map=new Map();
   const push=(color,i)=>{ let l=map.get(color); if(!l) map.set(color,l=[]); l.push(i); };
@@ -279,7 +363,16 @@ function buildBuckets(){
     for(let i=0;i<N;i++){
       const p=vp[i];
       if(p<0){ push(vb[i]? C_BONUS : C_BARB, i); continue; }
-      push(tribeColor.get(allyOf[p]) || C_OTHER, i);
+      push(tribeColorOf(allyOf[p]) || C_OTHER, i);
+    }
+  } else if(isRank(view)){
+    for(let i=0;i<N;i++){
+      const p=vp[i];
+      if(p<0){ push(C_BARB, i); continue; }
+      const r=rankOf[p];
+      if(r==null){ push(C_NONE, i); continue; }
+      let s=0; while(s<RANK_STEPS.length && r>RANK_STEPS[s]) s++;
+      push(RANK_COLORS[s], i);
     }
   } else {
     const edges=STEPS[view];
@@ -293,8 +386,8 @@ function buildBuckets(){
       push(GROWTH_COLORS[s], i);
     }
   }
-  // unauffällige Farben zuerst zeichnen, damit die auffälligen obenauf liegen
-  const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...GROWTH_COLORS,C_LOSS,...TRIBE_COLORS];
+  const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...GROWTH_COLORS,...RANK_COLORS.slice().reverse(),C_LOSS,
+               ...TRIBE_COLORS,C_TRACKED,...EXTRA_COLORS];
   const keys=[...map.keys()].sort((a,b)=>{
     const ia=order.indexOf(a), ib=order.indexOf(b);
     return (ia<0?99:ia)-(ib<0?99:ib);
@@ -308,27 +401,39 @@ function renderLegend(){
   const add=(color,text)=>{ const li=document.createElement("li"); const i=document.createElement("i");
     i.style.background=color; li.append(i, document.createTextNode(text)); items.appendChild(li); };
   if(view==="tribes"){
-    $("legend-title").textContent="Die "+tribeList.length+" punktstärksten Stämme";
-    tribeList.forEach(a=>add(tribeColor.get(a[0]), a[2]||a[1]));
+    $("legend-title").textContent="Stämme";
+    [...marks.keys()].forEach(id=>add(marks.get(id), (tagOf.get(id)||"?")+" (gewählt)"));
+    (T.tribe_ids||[]).forEach(id=>{ if(!marks.has(id)) add(C_TRACKED, (tagOf.get(id)||"?")+" (erfasst)"); });
+    tribeList.forEach(a=>{ if(!marks.has(a[0]) && !(T.tribe_ids||[]).includes(a[0])) add(tribeColor.get(a[0]), a[2]||a[1]); });
     add(C_OTHER,"übrige Spieler"); add(C_BARB,"Barbaren"); add(C_BONUS,"Bonusdörfer");
+  } else if(isRank(view)){
+    $("legend-title").textContent=INADAY_LABEL[view]+" · Platz in der Weltrangliste";
+    add(RANK_COLORS[0],"Platz 1 bis 10");
+    for(let s=1;s<RANK_STEPS.length;s++) add(RANK_COLORS[s], "bis Platz "+nf.format(RANK_STEPS[s]));
+    add(RANK_COLORS[RANK_STEPS.length],"dahinter");
+    add(C_NONE,"kein Wert erfasst"); add(C_BARB,"Barbaren");
   } else {
     const e=STEPS[view];
     $("legend-title").textContent="Punktezuwachs des Spielers über "+VIEW_LABEL[view]+", in Prozent seiner Punkte";
-    add(C_LOSS,"Verlust");
-    add(C_NONE,"kein Zuwachs");
+    add(C_LOSS,"Verlust"); add(C_NONE,"kein Zuwachs");
     add(GROWTH_COLORS[0],"bis "+e[0]+" %");
     for(let s=1;s<e.length;s++) add(GROWTH_COLORS[s], "über "+e[s-1]+" bis "+e[s]+" %");
     add(GROWTH_COLORS[e.length],"über "+e[e.length-1]+" %");
     add(C_BARB,"Barbaren");
   }
+  const key=arrowWindow(), e=key? STEPS["d"+key] : null;
+  $("legend-arrows").innerHTML = key
+    ? "Pfeile am Dorf, Zuwachs über "+VIEW_LABEL["d"+key]+": <b>&#9650;</b> ab "+e[1]+" %, <b>&#9650;&#9650;</b> ab "+e[2]
+      +" %, <b>&#9650;&#9650;&#9650;</b> ab "+e[3]+" %, <u>&#9660;</u> entsprechend bei Verlust. Sichtbar ab mittlerem Zoom."
+    : "Pfeile für den Zuwachs erscheinen, sobald ein Vergleichsstand vorliegt.";
   const box=$("legend");
-  if(box.hidden){ box.hidden=false; box.open = innerWidth>=640; }  // auf dem Handy zunächst zugeklappt
+  if(box.hidden){ box.hidden=false; box.open = wrap.clientWidth>=560; }  // auf schmalen Schirmen zugeklappt
 }
 
 function setView(v){
   view=v;
-  document.querySelectorAll("#views button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
-  computeGrowth(); buildBuckets(); renderLegend(); draw(); saveUrl();
+  document.querySelectorAll("#views button, #views2 button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
+  computeGrowth(); computeArrows(); buildBuckets(); renderLegend(); draw(); saveUrl();
 }
 
 /* ---------- Tooltip ---------- */
@@ -348,20 +453,24 @@ function trow(k, v, cls){
   const b=document.createElement("span"); if(cls) b.className=cls; b.textContent=v;
   d.append(a,b); tip.appendChild(d);
 }
+function tsec(text){
+  const d=document.createElement("div"); d.className="sec"; d.textContent=text; tip.appendChild(d);
+}
 function showTip(i, px, py){
   tip.replaceChildren();
   const head=document.createElement("div"); head.className="th";
   head.textContent=vname[i]||"Dorf";
-  const co=document.createElement("span"); co.textContent=" ("+vx[i]+"|"+vy[i]+") K"+Math.floor(vy[i]/100)+Math.floor(vx[i]/100);
+  const co=document.createElement("span");
+  co.textContent=" ("+vx[i]+"|"+vy[i]+") K"+Math.floor(vy[i]/100)+Math.floor(vx[i]/100);
   head.appendChild(co); tip.appendChild(head);
   trow("Dorfpunkte", nf.format(vpts[i]));
   if(vb[i]) trow("Bonus","Bonusdorf");
   const p=vp[i];
   if(p<0){ trow("Besitzer","Barbaren"); }
   else{
-    const r=P.rows[p];
+    const r=P.rows[p], aid=allyOf[p];
     trow("Spieler", r[pIdx.name]);
-    trow("Stamm", allyOf[p]? (tagOf.get(allyOf[p])||"?") : "ohne Stamm");
+    trow("Stamm", aid? (tagOf.get(aid)||"?") : "ohne Stamm");
     trow("Punkte", nf.format(r[pIdx.points])+" · "+nf.format(r[pIdx.villages])+" Dörfer");
     ["1h","24h","7d"].forEach(k=>{
       if(!refs[k]) return;
@@ -371,16 +480,95 @@ function showTip(i, px, py){
       const txt=(d>0?"+":"")+nf.format(d)+(g!=null&&g<999? " ("+(g>0?"+":"")+nf1.format(g)+" %)" : "");
       trow("Zuwachs "+(k==="7d"?"7 Tage":k.replace("h"," h")), txt, d>0?"up":(d<0?"down":"na"));
     });
+    tsec("Besiegte Gegner");
+    trow("Gesamt", nf.format(r[pIdx.all]));
+    trow("Angriff", nf.format(r[pIdx.att]));
+    trow("Verteidigung", nf.format(r[pIdx.def]));
+    trow("Unterstützung", nf.format(r[pIdx.sup]));
+    const e=inaday.get(r[pIdx.id]);
+    if(e){
+      tsec("Bester Tag (An einem Tag)");
+      ["loot_res","scavenge","loot_vil","conquer","kill_att","kill_def","kill_sup"].forEach(t=>{
+        const v=e[t]; if(!v) return;
+        trow(INADAY_LABEL[t], nf.format(v.value)+" · Platz "+nf.format(v.rank)+(v.date? " am "+fmtDay(v.date) : ""));
+      });
+    }
   }
   tip.style.display="block";
   const r=wrap.getBoundingClientRect(), tw=tip.offsetWidth, th=tip.offsetHeight;
   let left=px+14, top=py+14;
   if(left+tw>r.width-8) left=px-tw-14;
-  if(top+th>r.height-8) top=py-th-14;
+  if(top+th>r.height-8) top=Math.max(4, r.height-th-8);
   tip.style.left=Math.max(4,left)+"px"; tip.style.top=Math.max(4,top)+"px";
 }
 
-/* ---------- Suche ---------- */
+/* ---------- Stamm markieren ---------- */
+function nextColor(){
+  const used=new Set([...marks.values(), ...tribeColor.values()]);
+  return EXTRA_COLORS.find(c=>!used.has(c)) || EXTRA_COLORS[marks.size % EXTRA_COLORS.length];
+}
+function addMark(id, color){
+  if(!id || marks.has(id)) return;
+  marks.set(id, color || nextColor());
+  renderMarks(); buildBuckets(); renderLegend(); draw();
+}
+function renderMarks(){
+  const box=$("marks"); box.replaceChildren();
+  if(!marks.size) return;
+  const label=document.createElement("b"); label.textContent="Markiert"; box.appendChild(label);
+  for(const [id,color] of marks){
+    const wrap2=document.createElement("span"); wrap2.className="pick";
+    const dot=document.createElement("span"); dot.className="dot"; dot.style.background=color;
+    const tag=document.createElement("span"); tag.className="tag"; tag.textContent=tagOf.get(id)||("Stamm "+id);
+    const cnt=document.createElement("span"); cnt.className="meta";
+    const a=allyById.get(id); if(a) cnt.textContent=nf.format(a[4])+" Dörfer";
+    const inp=document.createElement("input"); inp.type="color"; inp.value=color;
+    inp.title="Farbe für "+(tagOf.get(id)||id);
+    inp.addEventListener("input", ()=>{ marks.set(id, inp.value); dot.style.background=inp.value;
+      buildBuckets(); renderLegend(); draw(); });
+    const del=document.createElement("button"); del.type="button"; del.className="tw small"; del.textContent="×";
+    del.title="Markierung entfernen";
+    del.addEventListener("click", ()=>{ marks.delete(id); renderMarks(); buildBuckets(); renderLegend(); draw(); });
+    wrap2.append(dot, tag, cnt, inp, del);
+    box.appendChild(wrap2);
+  }
+}
+
+/* ---------- Suche mit Vorschlägen ---------- */
+function suggestions(qRaw){
+  const q=qRaw.trim().toLowerCase();
+  if(q.length<2) return [];
+  const out=[];
+  for(const a of A.rows){
+    const tag=(a[2]||""), name=(a[1]||"");
+    if(tag.toLowerCase().includes(q) || name.toLowerCase().includes(q))
+      out.push({kind:"ally", id:a[0], label:tag||name, meta:name+" · "+nf.format(a[3])+" Mitglieder · "+nf.format(a[4])+" Dörfer", sort:-a[5]});
+    if(out.length>40) break;
+  }
+  for(let i=0;i<P.rows.length && out.length<=60;i++){
+    const r=P.rows[i];
+    if(r[pIdx.name].toLowerCase().includes(q))
+      out.push({kind:"player", id:r[pIdx.id], label:r[pIdx.name],
+                meta:nf.format(r[pIdx.points])+" Punkte · "+(allyOf[i]? (tagOf.get(allyOf[i])||"") : "ohne Stamm"),
+                sort:-r[pIdx.points]});
+  }
+  return out.sort((a,b)=>a.sort-b.sort).slice(0,10);
+}
+function renderSuggestions(){
+  const box=$("sugg"), list=suggestions($("q").value);
+  box.replaceChildren();
+  if(!list.length){ box.hidden=true; $("q").setAttribute("aria-expanded","false"); return; }
+  list.forEach(s=>{
+    const d=document.createElement("div"); d.setAttribute("role","option");
+    const l=document.createElement("span");
+    l.textContent=(s.kind==="ally"? "Stamm " : "")+s.label;
+    const m=document.createElement("span"); m.className="meta"; m.textContent=s.meta;
+    d.append(l,m);
+    d.addEventListener("mousedown", e=>{ e.preventDefault(); $("q").value=s.label; box.hidden=true; search(s.label); });
+    box.appendChild(d);
+  });
+  box.hidden=false; $("q").setAttribute("aria-expanded","true");
+}
 function search(qRaw){
   const q=qRaw.trim(); marked=null;
   if(!q){ showStand(); draw(); return; }
@@ -395,9 +583,11 @@ function search(qRaw){
     const pi=P.rows.indexOf(player);
     for(let i=0;i<N;i++) if(vp[i]===pi) set.add(i);
     label=player[pIdx.name];
+    if(allyOf[pi]) addMark(allyOf[pi]);          // Stamm des Spielers gleich mit markieren
   } else if(ally){
     for(let i=0;i<N;i++) if(vp[i]>=0 && allyOf[vp[i]]===ally[0]) set.add(i);
     label=(ally[2]||ally[1]);
+    addMark(ally[0]);
   }
   if(!set.size){ $("stand").textContent="Nichts gefunden zu „"+q+"“"; return; }
   marked=set; ownView();
@@ -417,13 +607,18 @@ function saveUrl(){
     const p=new URLSearchParams();
     if(userView){ p.set("c", Math.round(cx)+"|"+Math.round(cy)); p.set("z", scale.toFixed(2)); }
     if(view!=="tribes") p.set("v", view);
+    if(marks.size) p.set("m", [...marks].map(([id,c])=>id+"-"+c.replace("#","")).join(","));
     const q=p.toString();
     history.replaceState(null,"", q? "?"+q : location.pathname);
   }, 400);
 }
 function readUrl(){
   const p=new URLSearchParams(location.search);
-  const v=p.get("v"); if(v && STEPS[v]) view=v;
+  const v=p.get("v"); if(v && (STEPS[v]||isRank(v))) view=v;
+  (p.get("m")||"").split(",").filter(Boolean).forEach(s=>{
+    const [id,c]=s.split("-");
+    if(/^\d+$/.test(id) && /^[0-9a-fA-F]{6}$/.test(c||"")) marks.set(+id, "#"+c);
+  });
   const c=(p.get("c")||"").match(/^(\d{1,3})[|,](\d{1,3})$/);
   const z=parseFloat(p.get("z")), r=parseFloat(p.get("r"));
   if(c){
@@ -439,7 +634,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
 
 (async function(){
   resize();
-  try{ [V,P,A]=await Promise.all([load("villages"),load("players"),load("allies")]); }
+  try{ [V,P,A,T]=await Promise.all([load("villages"),load("players"),load("allies"),load("tribe")]); }
   catch(e){
     $("msg").hidden=false;
     $("msg").textContent="Die Kartendaten konnten nicht geladen werden ("+e.message+"). Der Sammler schreibt sie bei jedem Lauf neu.";
@@ -457,30 +652,48 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   });
   allyOf=new Int32Array(P.rows.length);
   P.rows.forEach((r,i)=>{ allyOf[i]=r[pIdx.ally]||0; });
-  A.rows.forEach(a=>tagOf.set(a[0], a[2]||a[1]));
+  A.rows.forEach(a=>{ tagOf.set(a[0], a[2]||a[1]); allyById.set(a[0], a); });
 
-  tribeList=[...A.rows].sort((a,b)=>b[5]-a[5]).slice(0, TRIBE_COLORS.length);
+  // Werte aus "An einem Tag": erfasste Stämme und die Weltspitze je Kategorie
+  ((T.inaday_all)||(T.records)||[]).forEach(([pid,type,rank,value,date])=>{
+    let e=inaday.get(pid); if(!e) inaday.set(pid, e={});
+    if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
+  });
+
+  // Die erfassten Stämme immer blau, danach die punktstärksten Stämme aus der Palette
+  const tracked=new Set(T.tribe_ids||[]);
+  tracked.forEach(id=>tribeColor.set(id, C_TRACKED));
+  tribeList=[...A.rows].filter(a=>!tracked.has(a[0])).sort((a,b)=>b[5]-a[5]).slice(0, TRIBE_COLORS.length);
   tribeList.forEach((a,i)=>tribeColor.set(a[0], TRIBE_COLORS[i]));
 
   document.querySelectorAll("#views button").forEach(b=>{
     const v=b.dataset.v;
     if(v!=="tribes" && !refs[v.slice(1)]){ b.disabled=true; b.title="Noch kein Vergleichsstand für dieses Zeitfenster"; }
   });
+  const rankCount={};
+  inaday.forEach(e=>{ for(const t in e) rankCount[t]=(rankCount[t]||0)+1; });
+  document.querySelectorAll("#views2 button").forEach(b=>{
+    const n=rankCount[b.dataset.v]||0;
+    b.title = n? n+" Spieler mit erfasstem Wert" : "Für diese Rangliste liegen noch keine Werte vor";
+    if(!n) b.disabled=true;
+  });
 
-  if(readUrl()) ownView();   // Ausschnitt aus der Adresszeile zählt als eigene Wahl
-  resize();                  // sonst: an die Fläche einpassen, sobald sie steht
-  if(view!=="tribes" && !refs[view.slice(1)]) view="tribes";
+  if(readUrl()) ownView();
+  resize();
+  if(isGrowth(view) && !refs[view.slice(1)]) view="tribes";
+  renderMarks();
   setView(view);
   initDone=true;
   new ResizeObserver(resize).observe(wrap);
-
   showStand();
+  // Der Browser stellt den Zustand von <details> nach dem Laden wieder her, deshalb erst danach setzen
+  requestAnimationFrame(()=>{ $("legend").open = wrap.clientWidth>=560; });
 })();
 
 function showStand(){
   if(!V) return;
   const src = V.source==="cache" ? "aktueller Lauf"
-    : (V.source||"").startsWith("daily:") ? "Tagesarchiv vom "+V.source.slice(6).split("-").reverse().join(".")
+    : (V.source||"").startsWith("daily:") ? "Tagesarchiv vom "+fmtDay(V.source.slice(6))
     : "unbekannt";
   const b=document.createElement("b");
   b.textContent = V.data_time_utc? fmtTime(V.data_time_utc) : src;
@@ -493,8 +706,14 @@ window.addEventListener("resize", resize);
 $("zin").addEventListener("click", ()=>zoomAt(W/2,H/2,1.6));
 $("zout").addEventListener("click", ()=>zoomAt(W/2,H/2,1/1.6));
 $("zfit").addEventListener("click", ()=>{ marked=null; userView=false; fitWorld(); draw(); saveUrl(); });
-$("views").addEventListener("click", e=>{ const b=e.target.closest("button"); if(b && !b.disabled) setView(b.dataset.v); });
-$("searchform").addEventListener("submit", e=>{ e.preventDefault(); search($("q").value); });
+document.querySelectorAll("#views, #views2").forEach(g=>g.addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(b && !b.disabled) setView(b.dataset.v);
+}));
+$("searchform").addEventListener("submit", e=>{ e.preventDefault(); $("sugg").hidden=true; search($("q").value); });
+$("q").addEventListener("input", renderSuggestions);
+$("q").addEventListener("focus", renderSuggestions);
+$("q").addEventListener("blur", ()=>setTimeout(()=>{ $("sugg").hidden=true; }, 150));
+$("q").addEventListener("keydown", e=>{ if(e.key==="Escape") $("sugg").hidden=true; });
 
 const pts=new Map();
 let dragging=false, lastX=0, lastY=0, moved=0, pinch=0;
@@ -508,7 +727,7 @@ wrap.addEventListener("pointerdown", e=>{
 wrap.addEventListener("pointermove", e=>{
   if(pts.has(e.pointerId)) pts.set(e.pointerId,[e.clientX,e.clientY]);
   const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
-  if(pts.size===2){                       // zwei Finger: Pinch-Zoom
+  if(pts.size===2){
     const [a,b]=[...pts.values()];
     const d=Math.hypot(a[0]-b[0], a[1]-b[1]);
     if(pinch) zoomAt((a[0]+b[0])/2-r.left, (a[1]+b[1])/2-r.top, d/pinch);

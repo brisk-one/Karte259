@@ -53,6 +53,19 @@ class VillageSource(unittest.TestCase):
         self.assertEqual((source, len(rows)), ("cache", 3))
 
 
+class InADayTop(unittest.TestCase):
+    """Die Spitze der Ranglisten wird aus dem stündlichen Änderungs-Check aufgehoben."""
+
+    def test_top_zeilen_werden_geschrieben(self):
+        from collector import inaday
+        rows = [{"player_id": 5, "name": "A", "rank": 1, "value": 900, "date": "2026-09-11"},
+                {"player_id": 0, "name": "?", "rank": 2, "value": 800, "date": None}]
+        out = [[r["player_id"], r["name"], "loot_res", r["rank"], r["value"], r["date"] or ""]
+               for r in rows if r["player_id"]]
+        self.assertEqual(out, [[5, "A", "loot_res", 1, 900, "2026-09-11"]])
+        self.assertEqual(inaday.TOP_HEADER, ["player_id", "name", "type", "rank", "value", "date"])
+
+
 class VillagePayload(unittest.TestCase):
     def setUp(self):
         from collector import world

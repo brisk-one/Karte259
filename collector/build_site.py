@@ -160,9 +160,16 @@ def build(out_dir):
 
     records = store.read_csv(store.dpath("inaday", "tribe_latest.csv"))
     events = store.read_csv(store.dpath("inaday", "events.csv"))
+    top = store.read_csv(store.dpath("inaday", "top_latest.csv"))
+    rec_rows = [[int(r["player_id"]), r["type"], int(r["rank"]), int(r["value"]), r["date"]] for r in records]
+    top_rows = [[int(r["player_id"]), r["type"], int(r["rank"]), int(r["value"]), r["date"]] for r in top]
+    # Die Karte braucht beides in einem Zugriff: Mitglieder der erfassten Stämme und die Weltspitze.
+    seen = {(r[0], r[1]) for r in rec_rows}
     _dump(os.path.join(ddir, "tribe.json"), {
         "tribe_ids": config.TRIBE_IDS,
-        "records": [[int(r["player_id"]), r["type"], int(r["rank"]), int(r["value"]), r["date"]] for r in records],
+        "records": rec_rows,
+        "top": top_rows,
+        "inaday_all": rec_rows + [r for r in top_rows if (r[0], r[1]) not in seen],
         "events": events[-200:],
     })
 

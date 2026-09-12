@@ -20,6 +20,7 @@ from urllib.parse import quote_plus
 from . import config, net, store
 
 LATEST_HEADER = ["player_id", "name", "type", "rank", "value", "date"]
+TOP_HEADER = ["player_id", "name", "type", "rank", "value", "date"]
 EVENTS_HEADER = ["detected_utc", "player_id", "name", "type", "old_value", "new_value", "rank", "date"]
 ID_RE = re.compile(r"[?&;]id=(\d+)")
 DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})")
@@ -199,6 +200,7 @@ def update(state, now_utc, now_local, members):
     today = now_local.date()
     summary = {"changed_types": [], "full_scrape": False, "errors": [], "top_rows": {}}
     save_samples = not st.get("samples_saved")
+    top_all = []   # Seite 1 jeder Kategorie wird ohnehin geladen, also auch aufheben (keine Mehrlast)
 
     for t in config.INADAY_TYPES:
         try:
@@ -214,10 +216,20 @@ def update(state, now_utc, now_local, members):
             _save_debug(f"unparsed_{t}_page1.html", html)
             continue
         summary["top_rows"][t] = len(rows)
+        for r in rows:
+            if r["player_id"]:
+                top_all.append([r["player_id"], r["name"], t, r["rank"], r["value"], r["date"] or ""])
         sig = signature(rows)
         if sigs.get(t) and sigs[t] != sig:
             summary["changed_types"].append(t)
         sigs[t] = sig
+
+    # Weltweite Spitze je Kategorie festhalten. Ohne diese Ablage gäbe es Ranglistenwerte nur für die
+    # Mitglieder der erfassten Stämme, zu wenig für eine Auswertung über die ganze Welt.
+    if top_all:
+        store.write_csv(store.dpath("inaday", "top_latest.csv"), TOP_HEADER,
+                        sorted(top_all, key=lambda r: (r[2], r[3])))
+        summary["top_saved"] = len(top_all)
 
     last_full = st.get("last_full_scrape_utc")
     too_old = (not last_full) or (now_utc - datetime.fromisoformat(last_full)
