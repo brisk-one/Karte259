@@ -148,14 +148,16 @@ label.pick{display:inline-flex; align-items:center; gap:5px; font-weight:400}
 label.pick>span{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700}
 
 /* ---------- Tabellen ---------- */
-table{width:100%; border-collapse:collapse; font-size:11.5px}
-th,td{padding:3px 6px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--edge-line)}
+/* Kopfzeile wie in der Rangliste des Spiels: jede Spalte ein eigenes umrandetes Kästchen mit
+   schmalem Spalt dazwischen. Die Datenzeilen bleiben ohne senkrechte Linien, ihr Streifen liegt
+   auf der Zeile und läuft deshalb durch die Spalten hindurch. */
+table{width:100%; border-collapse:separate; border-spacing:2px 0; font-size:11.5px}
+th,td{padding:3px 6px; text-align:right; white-space:nowrap}
+td{border-bottom:1px solid var(--edge-line)}
 td.name{padding-right:10px}
-/* Spalten wie in der Rangliste des Spiels durch senkrechte Linien getrennt */
-th+th,td+td{border-left:1px solid var(--edge-line)}
 th{font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--head-ink); font-weight:700;
-  background:var(--head); border-bottom:1px solid var(--edge); position:sticky; top:0; z-index:1}
-th+th{border-left:1px solid var(--edge-soft)}
+  background:var(--head); border:1px solid var(--edge); border-radius:2px;
+  position:sticky; top:0; z-index:1}
 [data-theme="classic"] th{text-shadow:0 1px 0 rgba(255,255,255,.35)}
 th.sortable{cursor:pointer; user-select:none}
 th.sortable:hover{color:var(--accent)}
@@ -170,7 +172,8 @@ td.name{font-weight:700}
 td.rank{color:var(--muted)}
 .up{color:var(--good); font-weight:700} .down{color:var(--bad); font-weight:700} .na{color:var(--muted)}
 .group th{font-size:9.5px; letter-spacing:.12em; background:var(--head); color:var(--head-ink);
-  text-align:left; position:static}
+  text-align:center; position:static; padding-block:2px}
+.group th:empty{background:none; border-color:transparent}
 .empty{padding:10px 12px; color:var(--muted); font-size:12px}
 .pill{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:11.5px; padding:2px 9px;
   border:1px solid var(--edge); border-radius:999px; background:var(--panel-2)}
