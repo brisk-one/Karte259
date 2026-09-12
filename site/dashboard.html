@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lagebild · Welt 259</title>
+<title>Dashboard · Welt 259</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b0e14'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23ff9f1c'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <style>
@@ -17,6 +17,8 @@
 .chartbox svg{display:block; width:100%; height:auto}
 .barrow{font-size:11px}
 .note{font-size:11px; color:var(--muted); padding:0 11px 8px}
+.facts .who{font-size:11.5px; font-weight:600; color:var(--ink-2); line-height:1.2}
+.facts>div{min-width:168px}
 </style>
 </head>
 <body>
@@ -35,11 +37,11 @@
   </div>
 
   <dl class="facts" id="facts" style="margin-top:10px">
-    <div><dt>Spieler</dt><dd id="k-players">…</dd></div>
-    <div><dt>Dörfer</dt><dd id="k-villages">…</dd></div>
-    <div><dt>Punkte</dt><dd id="k-points" class="accent-num">…</dd><dd class="delta" id="k-points-d"></dd></div>
-    <div><dt>Besiegte Gegner</dt><dd id="k-bash">…</dd><dd class="delta" id="k-bash-d"></dd></div>
-    <div><dt>Wachsende Spieler</dt><dd id="k-active">…</dd><dd class="delta" id="k-active-d"></dd></div>
+    <div><dt>Meister Punktezuwachs</dt><dd class="accent-num" id="k1v">…</dd><dd class="who" id="k1n"></dd></div>
+    <div><dt>Meiste besiegte Gegner dazu</dt><dd class="accent-num" id="k2v">…</dd><dd class="who" id="k2n"></dd></div>
+    <div><dt>Meiste Dörfer geplündert</dt><dd class="accent-num" id="k3v">…</dd><dd class="who" id="k3n"></dd></div>
+    <div><dt>Meiste Rohstoffe geplündert</dt><dd class="accent-num" id="k4v">…</dd><dd class="who" id="k4n"></dd></div>
+    <div><dt>Meiste Rohstoffe gesammelt</dt><dd class="accent-num" id="k5v">…</dd><dd class="who" id="k5n"></dd></div>
   </dl>
 
   <div class="grid" style="margin-top:10px">
@@ -95,7 +97,7 @@
 
 <script src="app.js"></script>
 <script>
-buildAppbar("dashboard", "Lagebild");
+buildAppbar("dashboard", "Dashboard");
 
 const TYPES=[["loot_res","Rohstoffe geplündert"],["scavenge","Rohstoffe gesammelt"],["loot_vil","Dörfer geplündert"],
              ["kill_att","Bash Angriff"],["kill_def","Bash Verteidigung"],["kill_sup","Bash Unterstützung"],
@@ -113,26 +115,64 @@ function txt(s, x, y, cls, anchor, size){
     fill:cls==="dim"? "var(--muted)" : "var(--ink)"});
   t.textContent=s; return t;
 }
-/** Waagerechte Balken mit Namen: die klarste Form für eine Rangfolge. */
+/** Gemeinsame Verläufe und Leuchtfilter. Einmal je Diagramm angelegt. */
+function defs(s, farben){
+  const d=svgEl("defs");
+  farben.forEach((c,i)=>{
+    const g=svgEl("linearGradient",{id:"g"+i, x1:"0", y1:"0", x2:"1", y2:"0"});
+    g.append(svgEl("stop",{offset:"0%","stop-color":c,"stop-opacity":".92"}),
+             svgEl("stop",{offset:"55%","stop-color":c,"stop-opacity":".45"}),
+             svgEl("stop",{offset:"100%","stop-color":c,"stop-opacity":".12"}));
+    d.appendChild(g);
+    const gl=svgEl("linearGradient",{id:"s"+i, x1:"0", y1:"0", x2:"0", y2:"1"});
+    gl.append(svgEl("stop",{offset:"0%","stop-color":"#ffffff","stop-opacity":".55"}),
+              svgEl("stop",{offset:"45%","stop-color":"#ffffff","stop-opacity":".07"}),
+              svgEl("stop",{offset:"100%","stop-color":"#000000","stop-opacity":".18"}));
+    d.appendChild(gl);
+  });
+  const f=svgEl("filter",{id:"glow", x:"-30%", y:"-60%", width:"170%", height:"240%"});
+  f.appendChild(svgEl("feGaussianBlur",{stdDeviation:"2.6", result:"b"}));
+  const m=svgEl("feMerge");
+  m.append(svgEl("feMergeNode",{in:"b"}), svgEl("feMergeNode",{in:"SourceGraphic"}));
+  f.appendChild(m); d.appendChild(f);
+  s.appendChild(d);
+}
+
+/** Waagerechte Balken mit Namen. Der Balken läuft von kräftig nach durchsichtig aus, darüber
+    liegt ein heller Grat, am Ende ein Leuchtpunkt. */
 function barsH(id, items, color, unit){
   const s=clear(id);
-  const W=520, H=300, L=118, R=54, T=6, B=6;
-  if(!items.length){ s.appendChild(txt("keine Werte im Bereich", W/2, H/2, "dim", "middle", 12)); return; }
+  const W=520, L=124, R=62, T=8, B=6;
+  if(!items.length){
+    s.setAttribute("viewBox","0 0 "+W+" 70");
+    s.appendChild(txt("keine Werte im Bereich", W/2, 38, "dim", "middle", 12));
+    return;
+  }
+  const farben=[...new Set(items.map(it=>typeof color==="function"? color(it) : color))];
+  defs(s, farben);
   const max=Math.max(...items.map(i=>Math.abs(i.value)))||1;
-  const h=Math.min(20, (H-T-B)/items.length), gap=Math.min(5, h*0.28);
+  const h=Math.max(15, Math.min(22, 300/items.length)), gap=Math.max(4, h*0.3);
   items.forEach((it,i)=>{
-    const y=T+i*h, bw=Math.max(1, (Math.abs(it.value)/max)*(W-L-R));
+    const c=typeof color==="function"? color(it) : color;
+    const ci=farben.indexOf(c);
+    const y=T+i*h, bh=h-gap, bw=Math.max(2, (Math.abs(it.value)/max)*(W-L-R));
     const g=svgEl("g");
-    g.appendChild(svgEl("rect",{x:L, y:y+gap/2, width:bw, height:h-gap, rx:2,
-      fill:typeof color==="function"? color(it) : color, opacity:.92}));
-    const nm=txt(it.label, L-6, y+h/2+3.5, null, "end", 11); g.appendChild(nm);
-    const vl=txt((it.value>0?"+":"")+nf.format(it.value)+(unit||""), L+bw+5, y+h/2+3.5, "dim", "start", 10.5);
-    g.appendChild(vl);
+    g.appendChild(svgEl("rect",{x:L, y:y+gap/2, width:W-L-R, height:bh, rx:3,
+      fill:"currentColor", opacity:".05"}));                       // Bahn
+    g.appendChild(svgEl("rect",{x:L, y:y+gap/2, width:bw, height:bh, rx:3, fill:"url(#g"+ci+")"}));
+    g.appendChild(svgEl("rect",{x:L, y:y+gap/2, width:bw, height:bh, rx:3, fill:"url(#s"+ci+")"}));
+    g.appendChild(svgEl("line",{x1:L+1, y1:y+gap/2+0.6, x2:L+bw-1, y2:y+gap/2+0.6,
+      stroke:"#ffffff", "stroke-opacity":".38", "stroke-width":"1"}));   // Grat
+    g.appendChild(svgEl("rect",{x:L+bw-2, y:y+gap/2, width:2.4, height:bh, rx:1.2,
+      fill:c, filter:"url(#glow)"}));                                    // Leuchtpunkt
+    g.appendChild(txt(it.label, L-8, y+h/2+3.5, null, "end", 11));
+    g.appendChild(txt((it.value>0?"+":"")+nf.format(it.value)+(unit||""), L+bw+7, y+h/2+3.5, "dim", "start", 10.5));
     const ti=svgEl("title"); ti.textContent=it.title||it.label; g.appendChild(ti);
     s.appendChild(g);
   });
-  s.setAttribute("viewBox", "0 0 "+W+" "+Math.max(60, T+items.length*h+B));
+  s.setAttribute("viewBox","0 0 "+W+" "+(T+items.length*h+B));
 }
+
 /** Gestapelte Balken, hier Angriff, Verteidigung und Unterstützung nebeneinander. */
 function barsStacked(id, items, parts){
   const s=clear(id);
@@ -218,25 +258,33 @@ function render(){
   const dBash=rowsInScope.reduce((s,i)=>s+(all[i][bashK.att]||0)+(all[i][bashK.def]||0)+(all[i][bashK.sup]||0),0);
   const wachsend=rowsInScope.filter(i=>(all[i][k]||0)>0).length;
 
-  $("k-players").textContent=nf.format(rowsInScope.length);
-  $("k-villages").textContent=nf.format(sumVill);
-  $("k-points").textContent=nf.format(sumPoints);
-  $("k-bash").textContent=nf.format(sumBash);
-  $("k-active").textContent=nf.format(wachsend);
-  const setD=(id,v)=>{ const e=$(id); e.className="delta "+(v>0?"up":v<0?"down":"na");
-    e.textContent=(v>0?"+":"")+nf.format(v)+" in "+winLabel(); };
-  setD("k-points-d", dPoints); setD("k-bash-d", dBash);
-  $("k-active-d").className="delta na";
-  $("k-active-d").textContent=rowsInScope.length? Math.round(wachsend/rowsInScope.length*100)+" % der Spieler" : "";
+  const setKPI=(n, wert, wer, einheit)=>{
+    $("k"+n+"v").textContent = wert==null? "–" : nf.format(wert)+(einheit||"");
+    $("k"+n+"n").textContent = wer || "niemand im Bereich";
+  };
+  const bestOf=(fn)=>{
+    let bi=-1, bv=0;
+    rowsInScope.forEach(i=>{ const v=fn(i); if(v!=null && v>bv){ bv=v; bi=i; } });
+    return bi<0? [null,null] : [bv, all[bi][idx.name]+(allyTag[all[bi][idx.ally]]? " · "+allyTag[all[bi][idx.ally]] : "")];
+  };
+  setKPI(1, ...bestOf(i=>all[i][k]));
+  setKPI(2, ...bestOf(i=>(all[i][bashK.att]||0)+(all[i][bashK.def]||0)+(all[i][bashK.sup]||0)));
+  const rekord=(t)=>bestOf(i=>{ const e=inadayBest[all[i][idx.id]]; return e&&e[t]? e[t].value : null; });
+  setKPI(3, ...rekord("loot_vil"));
+  setKPI(4, ...rekord("loot_res"));
+  setKPI(5, ...rekord("scavenge"));
 
   const name=i=>all[i][idx.name];
   const withDelta=rowsInScope.filter(i=>all[i][k]!=null);
 
-  const up=withDelta.filter(i=>all[i][k]>0).sort((a,b)=>all[b][k]-all[a][k]).slice(0,14);
+  const grenze = rowsInScope.length<=25? rowsInScope.length : 16;   // kleine Stämme vollständig zeigen
+  const klein = rowsInScope.length<=25;
+  const up=withDelta.filter(i=>klein? all[i][k]>=0 : all[i][k]>0)
+    .sort((a,b)=>all[b][k]-all[a][k]).slice(0,grenze);
   barsH("ch-up", up.map(i=>({label:name(i), value:all[i][k], color:C.up,
     title:name(i)+" · "+nf.format(all[i][idx.points])+" Punkte · "+(allyTag[all[i][idx.ally]]||"ohne Stamm")})), C.up);
 
-  const down=withDelta.filter(i=>all[i][k]<0).sort((a,b)=>all[a][k]-all[b][k]).slice(0,14);
+  const down=withDelta.filter(i=>all[i][k]<0).sort((a,b)=>all[a][k]-all[b][k]).slice(0,grenze);
   barsH("ch-down", down.map(i=>({label:name(i), value:all[i][k],
     title:name(i)+" · "+nf.format(all[i][idx.points])+" Punkte"})), C.down);
   $("down-note").textContent = down.length? down.length+" Spieler mit Verlust" : "niemand hat verloren";
@@ -244,13 +292,14 @@ function render(){
   const bash=rowsInScope.map(i=>({label:name(i),
       att:all[i][bashK.att]||0, def:all[i][bashK.def]||0, sup:all[i][bashK.sup]||0}))
     .map(o=>({...o, total:o.att+o.def+o.sup})).filter(o=>o.total>0)
-    .sort((a,b)=>b.total-a.total).slice(0,14);
+    .sort((a,b)=>b.total-a.total).slice(0,grenze);
   barsStacked("ch-bash", bash, [["att",C.att],["def",C.def],["sup",C.sup]]);
-  // Die Dateien mit den besiegten Gegnern erneuert der Server seltener als die Punkte, im
-  // Stundenfenster stehen deshalb oft alle Werte auf null.
+  // Der Server berechnet die Kampfwerte nur etwa alle drei Stunden neu, dann aber gebündelt.
+  // In zwei von drei Stundenfenstern steht deshalb überall null.
   $("bash-note").textContent = bash.length? ""
-    : "Der Server hat in diesem Zeitfenster keine neuen Werte für besiegte Gegner geliefert. "
-      + "Diese Dateien werden seltener erneuert als die Punkte, über 24 Stunden erscheinen sie.";
+    : "In diesem Zeitfenster hat der Server keine neu berechneten Kampfwerte geliefert. "
+      + "Sie erscheinen gebündelt etwa alle drei Stunden, deshalb zeigt ein Stundenfenster meist nichts. "
+      + "Über 12 oder 24 Stunden ist das Bild vollständig.";
   const bl=$("bash-legend"); bl.replaceChildren();
   [["Angriff",C.att],["Verteidigung",C.def],["Unterstützung",C.sup]].forEach(([t,c])=>{
     const sp=el("span"); const i2=el("i"); i2.style.background=c; sp.append(i2, document.createTextNode(t)); bl.appendChild(sp); });
@@ -260,7 +309,7 @@ function render(){
     const o=byTribe.get(a)||{d:0,n:0}; o.d+=(all[i][k]||0); o.n++; byTribe.set(a,o); });
   const tribes=[...byTribe].map(([a,o])=>({label:(allyTag[a]||"?"), value:o.d,
       title:(allyById[a]? allyById[a][1] : "")+" · "+o.n+" Mitglieder im Bereich"}))
-    .sort((x,y)=>y.value-x.value).slice(0,14);
+    .sort((x,y)=>y.value-x.value).slice(0,grenze);
   barsH("ch-tribes", tribes, it=>it.value>=0? C.up : C.down);
 
   const stufen=win==="1h"? [1,2,3,5] : win==="24h"? [5,10,15,25] : [10,20,35,60];

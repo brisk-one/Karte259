@@ -25,7 +25,7 @@
   </section>
 
   <section class="panel" aria-labelledby="h-movers">
-    <h2 id="h-movers">Größter Punktezuwachs
+    <h2 id="h-movers">Spielerrangliste <span class="hint" id="movers-hint"></span>
       <span class="right" id="win" role="group" aria-label="Zeitfenster">
         <button class="tw" type="button" data-w="1h">1 Stunde</button>
         <button class="tw" type="button" data-w="24h">24 Stunden</button>
@@ -52,11 +52,6 @@
       <span class="hint" id="kont-hint">Alle Spieler mit mindestens einem Dorf in den genannten Kontinenten.</span>
     </h2>
     <div class="scroll" id="neighbors"></div>
-  </section>
-
-  <section class="panel" aria-labelledby="h-top">
-    <h2 id="h-top">Weltspitze „An einem Tag“ <span class="right" id="toptype" role="group" aria-label="Kategorie"></span></h2>
-    <div class="scroll" id="top"></div>
   </section>
 
   <section class="panel" aria-labelledby="h-runs">
@@ -105,8 +100,40 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
   const F=players.fields, idx=Object.fromEntries(F.map((f,i)=>[f,i]));
   const allyTag={}; allies.rows.forEach(a=>{ allyTag[a[0]]=a[2]; });
   const refs=players.refs_utc||{};
+  const tracked=tribe.tribe_ids||[];
+  const rec={}; ((tribe.inaday_all)||(tribe.records)||[]).forEach(([pid,type,rank,value,date])=>{
+    const e=(rec[pid]=rec[pid]||{});
+    if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
+  });
 
-  /* Größter Punktezuwachs */
+
+  /* Beide Ranglisten teilen sich denselben Aufbau: Stand jetzt, besiegte Gegner, bester Tag.
+     Dadurch sehen Spielerrangliste und Stammesliste gleich aus und lassen sich gleich sortieren. */
+  const REK=[["loot_res","Rohst. gepl."],["scavenge","Rohst. ges."],["loot_vil","Dörfer gepl."],["conquer","Erobert"]];
+  function spaltenKopf(winKey){
+    return [["#","rank"],["Spieler","l"],["Stamm","l"],
+            ["Punkte","",1],["± "+winLabel(winKey),"",1],["Dörfer","",1],
+            ["Bash","",1],["Angr.","",1],["Vert.","",1],["Unt.","",1]]
+      .concat(REK.map(([,l])=>[l,"",1]));
+  }
+  function spaltenGruppen(){
+    return [["",3],["Stand jetzt",3],["Besiegte Gegner",4],["Bester Tag (An einem Tag)",REK.length]];
+  }
+  function zeile(i, n, winKey){
+    const r=players.rows[i], R=rec[r[idx.id]]||{}, k=idx["d"+winKey+"_points"];
+    return [[String(n),"rank",n],[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],
+            [nf.format(r[idx.points]),"",r[idx.points]],[signed(r[k]),"",r[k]],
+            [nf.format(r[idx.villages]),"",r[idx.villages]],
+            [nf.format(r[idx.all]),"",r[idx.all]],[nf.format(r[idx.att]),"",r[idx.att]],
+            [nf.format(r[idx.def]),"",r[idx.def]],[nf.format(r[idx.sup]),"",r[idx.sup]]]
+      .concat(REK.map(([t])=>{
+        const v=R[t];
+        return v? [nf.format(v.value)+" ", "", v.value] : ["–","na",null];
+      }));
+  }
+  function winLabel(w){ return w==="7d"? "7 Tage" : w.replace("h"," h"); }
+
+  /* Spielerrangliste */
   const winBtns=[...document.querySelectorAll("#win button")];
   winBtns.forEach(b=>{ b.disabled=!refs[b.dataset.w]; });
   let win = refs["24h"]? "24h" : (refs["1h"]? "1h" : null);
@@ -114,27 +141,18 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
     winBtns.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.w===win)));
     const box=$("movers"); box.replaceChildren();
     if(!win){ box.appendChild(el("p","empty","Noch keine Vergleichswerte.")); return; }
-    const k=idx["d"+win+"_points"], bashK=["att","def","sup"].map(f=>idx["d"+win+"_"+f]);
-    const top=players.rows.filter(r=>r[k]!=null).sort((a,b)=>b[k]-a[k]).slice(0,25);
-    box.appendChild(table([["#","rank"],["Spieler","l"],["Stamm","l"],["Punkte","",1],["Zuwachs","",1],
-                           ["Dörfer ±","",1],["Bash ±","",1]],
-      top.map((r,i)=>{
-        const bash=bashK.reduce((s,j)=>s+(r[j]||0),0);
-        return [[String(i+1),"rank",i+1],[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],
-                [nf.format(r[idx.points]),"",r[idx.points]],[signed(r[k]),"",r[k]],
-                [signed(r[idx["d"+win+"_villages"]]),"",r[idx["d"+win+"_villages"]]],[signed(bash),"",bash]];
-      }), {sort:4}));
-    box.appendChild(el("p","empty","Vergleich mit dem Stand vom "+fmtTime(refs[win])+"."));
+    const k=idx["d"+win+"_points"];
+    const top=players.rows.map((r,i)=>i).filter(i=>players.rows[i][k]!=null)
+      .sort((x,y)=>players.rows[y][k]-players.rows[x][k]).slice(0,100);
+    box.appendChild(table(spaltenKopf(win), top.map((i,n)=>zeile(i,n+1,win)),
+      {groups:spaltenGruppen(), sort:4}));
+    $("movers-hint").textContent="die 100 Spieler mit dem größten Zuwachs über "+winLabel(win)
+      +", Vergleich mit dem Stand vom "+fmtTime(refs[win])+". Jede Spalte ist sortierbar.";
   }
   winBtns.forEach(b=>b.addEventListener("click",()=>{ if(!b.disabled){ win=b.dataset.w; renderMovers(); } }));
   renderMovers();
 
   /* Stamm: jeder Stamm der Welt wählbar */
-  const tracked=tribe.tribe_ids||[];
-  const rec={}; ((tribe.inaday_all)||(tribe.records)||[]).forEach(([pid,type,rank,value,date])=>{
-    const e=(rec[pid]=rec[pid]||{});
-    if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
-  });
   const pick=$("tribe-pick");
   [...allies.rows].sort((a,b)=>b[5]-a[5]).forEach((a,i)=>{
     const o=document.createElement("option"); o.value=a[0];
@@ -145,22 +163,15 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
   pick.value = tracked[0] || (allies.rows[0]||[])[0];
   function renderTribe(){
     const tid=+pick.value, ally=allies.rows.find(a=>a[0]===tid);
-    const members=players.rows.filter(r=>r[idx.ally]===tid);
-    const withRec=members.filter(r=>rec[r[idx.id]]).length;
+    const members=players.rows.map((r,i)=>i).filter(i=>players.rows[i][idx.ally]===tid)
+      .sort((x,y)=>players.rows[y][idx.points]-players.rows[x][idx.points]);
+    const withRec=members.filter(i=>rec[players.rows[i][idx.id]]).length;
     $("tribe-hint").textContent=(ally? ally[1]+" · ":"")
       +(withRec? "Rekorde für "+withRec+" von "+members.length+" Mitgliedern." : "Für diesen Stamm liegen noch keine Rekorde vor.");
     const box=$("tribe"); box.replaceChildren();
     if(!members.length){ box.appendChild(el("p","empty","Keine Mitglieder mit Daten.")); return; }
-    const cols=[["Spieler","l"],["Punkte","",1],["± 1 h","",1],["± 24 h","",1],["Dörfer","",1],
-                ["Bash A","",1],["Bash V","",1],["Bash U","",1]].concat(TYPES.map(([,l])=>[l,"",1]));
-    box.appendChild(table(cols, members.map(r=>{
-      const R=rec[r[idx.id]]||{};
-      return [[r[idx.name],"l name"],[nf.format(r[idx.points]),"",r[idx.points]],
-              [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
-              [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.att]),"",r[idx.att]],
-              [nf.format(r[idx.def]),"",r[idx.def]],[nf.format(r[idx.sup]),"",r[idx.sup]]]
-        .concat(TYPES.map(([t])=>[R[t]? nf.format(R[t].value):"–", R[t]? "":"na", R[t]? R[t].value:null]));
-    }), {groups:[["Mitglied",1],["Stand jetzt",7],["Rekorde, bester Tag",TYPES.length]], sort:1}));
+    box.appendChild(table(spaltenKopf(win), members.map((i,n)=>zeile(i,n+1,win)),
+      {groups:spaltenGruppen(), sort:3}));
   }
   pick.addEventListener("change", renderTribe);
   renderTribe();
@@ -199,27 +210,6 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
   $("kont").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); showNeighbors(); } });
   const kParam=new URLSearchParams(location.search).get("k");
   if(kParam){ $("kont").value=kParam; showNeighbors(); }
-
-  /* Weltspitze „An einem Tag“ */
-  const byType={}; ((tribe.top)||[]).forEach(([pid,t,rank,value,date])=>{ (byType[t]=byType[t]||[]).push({pid,rank,value,date}); });
-  const nameById={}; players.rows.forEach(r=>{ nameById[r[idx.id]]=[r[idx.name], allyTag[r[idx.ally]]||""]; });
-  const avail=TYPES.map(([t])=>t).filter(t=>byType[t]&&byType[t].length);
-  if(!avail.length) $("top").appendChild(el("p","empty","Die Spitze der Ranglisten wird ab dem nächsten Lauf gespeichert."));
-  else {
-    let tt=avail[0]; const seg=$("toptype");
-    avail.forEach(t=>{ const b=el("button","tw",TYPE_LONG[t]||t); b.type="button"; b.dataset.t=t;
-      b.addEventListener("click",()=>{ tt=t; renderTop(); }); seg.appendChild(b); });
-    function renderTop(){
-      [...seg.children].forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.t===tt)));
-      const box=$("top"); box.replaceChildren();
-      box.appendChild(table([["Rang","",1],["Spieler","l"],["Stamm","l"],["Wert","",1],["Datum","l",1]],
-        byType[tt].map(e=>{ const n=nameById[e.pid]||["Spieler "+e.pid,""];
-          return [[nf.format(e.rank),"rank",e.rank],[n[0],"l name"],[n[1],"l"],[nf.format(e.value),"",e.value],
-                  [fmtDay(e.date),"l",(e.date||"").replace(/-/g,"")]]; }),
-        {sort:0, dir:"asc"}));
-    }
-    renderTop();
-  }
 
   /* Letzte Läufe */
   const runs=(meta.runs||[]).slice(-12).reverse();

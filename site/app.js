@@ -44,9 +44,10 @@ function applyTheme(name) {
   document.documentElement.dataset.theme = name;
   const b = $("theme-toggle");
   if (b) {
-    const t = THEMES[name];
-    b.innerHTML = t.icon + "<span>" + t.label + "</span>";
-    b.title = "Zur Fassung " + THEMES[t.next].label + " wechseln";
+    // Der Knopf nennt die Fassung, zu der er wechselt, nicht die gerade sichtbare.
+    const ziel = THEMES[THEMES[name].next];
+    b.innerHTML = ziel.icon + "<span>" + ziel.label + "</span>";
+    b.title = "Zur Fassung " + ziel.label + " wechseln";
     b.setAttribute("aria-label", b.title);
   }
   document.dispatchEvent(new CustomEvent("themechange", {detail: name}));
@@ -63,7 +64,7 @@ function toggleTheme() {
 }
 
 /* ---------- Kopfzeile ---------- */
-const PAGES = [["./", "Punkteübersicht", "index"], ["dashboard.html", "Lagebild", "dashboard"],
+const PAGES = [["./", "Punkteübersicht", "index"], ["dashboard.html", "Dashboard", "dashboard"],
                ["karte.html", "Karte", "karte"]];
 function buildAppbar(current, title) {
   const bar = $("appbar");
