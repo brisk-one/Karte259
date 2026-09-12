@@ -1,107 +1,76 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="classic">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
 <title>Karte · Welt 259</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
 <style>
-/* Gestaltung angelehnt an die Oberfläche von Die Stämme: Pergament, braune Rahmen, Grasfläche. */
-:root{
-  --parchment:#f4e4bc; --parchment-2:#eadcb4; --row:#f7edd2;
-  --frame:#603000; --frame-soft:#b8a06c; --bar:#c1a264; --bar-2:#d8bd8a;
-  --ink:#2b1d06; --ink-2:#5c4415; --muted:#7a6435;
-  --grass:#7c9a4e;
-  --good:#2f6b1f; --bad:#9c2b1c;
-}
-*,*::before,*::after{box-sizing:border-box}
-[hidden]{display:none !important}   /* sonst gewinnt display:flex gegen das hidden-Attribut */
-html,body{height:100%}
-body{margin:0; background:#3b2a12; color:var(--ink);
-  font:13px/1.45 Verdana,Geneva,"DejaVu Sans",sans-serif;
-  display:flex; flex-direction:column; overflow:hidden}
-a{color:var(--frame)}
-
-header{background:linear-gradient(#8a5a12,#603000); color:#f4e4bc; border-bottom:2px solid #2f1800;
-  padding:7px clamp(10px,3vw,20px); display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 16px}
-header h1{font-size:17px; margin:0; font-weight:700; letter-spacing:.02em}
-header .eyebrow{font-size:11px; color:#e2caa0}
-header a.back{margin-left:auto; font-size:12px; color:#f0dcb0; font-weight:700}
-
+/* Nur was die Karte zusätzlich braucht. Farben und Formen kommen aus style.css. */
+body{display:flex; flex-direction:column; overflow:hidden; background-attachment:scroll}
 .bar{display:flex; flex-wrap:wrap; align-items:center; gap:5px 14px;
-  padding:5px clamp(10px,3vw,20px); background:var(--parchment); border-bottom:1px solid var(--frame-soft)}
-.bar:last-of-type{border-bottom:2px solid var(--frame)}
+  padding:5px clamp(10px,3vw,18px); background:var(--panel); border-bottom:1px solid var(--edge-soft)}
+.bar:last-of-type{border-bottom:1px solid var(--edge)}
 .grp{display:inline-flex; align-items:center; gap:3px; flex-wrap:wrap}
-.grp>b{font-size:11px; font-weight:700; color:var(--muted); margin-right:2px}
-button.tw{font:inherit; font-size:12px; font-weight:700; color:var(--ink); cursor:pointer;
-  background:linear-gradient(#f6e7bd,#dcc48a); border:1px solid var(--frame); border-radius:3px; padding:3px 9px}
-button.tw:hover:not(:disabled){background:linear-gradient(#fff3d3,#e6d0a0)}
-button.tw[aria-pressed="true"]{background:linear-gradient(#a97c33,#8a5a12); color:#f7ecd2; border-color:#3f2100}
-button.tw:disabled{opacity:.45; cursor:not-allowed; background:var(--parchment-2)}
+.grp>b{font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-right:2px}
 button.tw.small{padding:2px 6px; font-size:11px}
-
 .search{display:flex; gap:5px; align-items:center; position:relative}
-.search input{font:inherit; font-size:12px; padding:3px 6px; width:min(220px,40vw); color:var(--ink);
-  background:#fffaf0; border:1px solid var(--frame); border-radius:3px}
-.sugg{position:absolute; z-index:20; top:100%; left:0; margin-top:2px; width:min(260px,60vw);
-  background:var(--parchment); border:1px solid var(--frame); border-radius:3px; box-shadow:0 3px 10px rgba(0,0,0,.35);
-  max-height:220px; overflow:auto}
+.search input{width:min(220px,40vw)}
+.sugg{position:absolute; z-index:20; top:100%; left:0; margin-top:2px; width:min(280px,62vw);
+  background:var(--panel-solid); border:1px solid var(--edge); border-radius:var(--radius);
+  box-shadow:0 4px 14px rgba(0,0,0,.45); max-height:230px; overflow:auto}
 .sugg div{padding:3px 8px; cursor:pointer; font-size:12px; display:flex; justify-content:space-between; gap:10px}
-.sugg div:hover,.sugg div[aria-selected="true"]{background:var(--bar-2)}
+.sugg div:hover{background:var(--row-hover)}
 .sugg .meta{color:var(--muted); font-size:11px}
-
-.pick{display:inline-flex; align-items:center; gap:5px; padding:2px 6px; border:1px solid var(--frame);
-  border-radius:3px; background:var(--row)}
-.pick .tag{font-weight:700; font-size:12px}
-.pick .dot{width:13px; height:13px; border:1px solid rgba(0,0,0,.5); display:inline-block}
-.pick input[type="color"]{width:26px; height:20px; padding:0; border:1px solid var(--frame); background:none; cursor:pointer}
+.mark{display:inline-flex; align-items:center; gap:5px; padding:1px 6px; border:1px solid var(--edge);
+  border-radius:var(--radius); background:var(--panel-2)}
+.mark .tag{font-weight:700; font-size:12px}
+.mark .meta{font-size:10.5px; color:var(--muted)}
+.mark .dot{width:13px; height:13px; border:1px solid rgba(0,0,0,.45); display:inline-block}
+.mark input[type="color"]{width:26px; height:20px; padding:0; border:1px solid var(--edge); background:none; cursor:pointer}
 .stand{font-size:11.5px; color:var(--ink-2); margin-left:auto; text-align:right}
 .stand b{font-weight:700}
-
-.mapwrap{position:relative; flex:1; min-height:0; background:var(--grass); touch-action:none; cursor:default}
+.mapwrap{position:relative; flex:1; min-height:0; background:var(--map-bg); touch-action:none; cursor:default}
 .mapwrap.drag{cursor:grabbing}
-canvas{display:block; width:100%; height:100%}
+canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
+#ov{pointer-events:none}
 .overlay{position:absolute; inset:auto 0 0 0; display:flex; flex-wrap:wrap; align-items:flex-end;
-  justify-content:space-between; gap:8px; padding:9px 10px; pointer-events:none}
-.legend{background:var(--parchment); border:1px solid var(--frame); border-radius:3px;
-  box-shadow:0 2px 6px rgba(0,0,0,.35); font-size:11.5px; max-width:min(460px,93vw); pointer-events:auto}
-.legend summary{font-size:11px; font-weight:700; color:#3f2100; background:linear-gradient(var(--bar-2),var(--bar));
-  border-bottom:1px solid var(--frame); padding:3px 8px; cursor:pointer; list-style-position:inside}
+  justify-content:space-between; gap:8px; padding:9px 10px; pointer-events:none; z-index:3}
+.legend{background:var(--panel-solid); border:1px solid var(--edge); border-radius:var(--radius);
+  box-shadow:0 2px 8px rgba(0,0,0,.4); font-size:11.5px; max-width:min(470px,93vw); pointer-events:auto}
+.legend summary{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--head-ink); background:var(--head); border-bottom:1px solid var(--edge-soft);
+  padding:3px 8px; cursor:pointer; list-style-position:inside}
 .legend:not([open]) summary{border-bottom:0}
 .legend ul{margin:0; padding:6px 8px; list-style:none; display:flex; flex-wrap:wrap; gap:3px 12px}
 .legend li{display:flex; align-items:center; gap:5px; white-space:nowrap}
-.legend i{width:11px; height:11px; border:1px solid rgba(0,0,0,.45); flex:none}
-.legend .arrows{border-top:1px solid var(--frame-soft); padding:4px 8px; color:var(--ink-2)}
+.legend i{width:11px; height:11px; border:1px solid var(--map-edge); flex:none}
+.legend .arrows{border-top:1px solid var(--edge-line); padding:4px 8px; color:var(--ink-2); margin:0}
 .legend .arrows b{color:var(--good)} .legend .arrows u{color:var(--bad); text-decoration:none}
 .zoom{display:flex; gap:5px; pointer-events:auto}
-.zoom button{font:inherit; font-weight:700; font-size:15px; width:32px; height:32px; border-radius:3px; cursor:pointer;
-  background:linear-gradient(#f6e7bd,#dcc48a); color:var(--ink); border:1px solid var(--frame)}
-.tip{position:absolute; z-index:5; pointer-events:none; display:none; max-width:300px;
-  background:var(--parchment); color:var(--ink); border:1px solid var(--frame); border-radius:3px;
-  padding:0 0 5px; font-size:12px; line-height:1.35; box-shadow:0 3px 10px rgba(0,0,0,.4)}
-.tip .th{background:linear-gradient(var(--bar-2),var(--bar)); border-bottom:1px solid var(--frame);
-  padding:3px 8px; font-weight:700}
-.tip .th span{font-weight:400; color:#4a3410}
-.tip .sec{margin-top:3px; padding:1px 8px; font-size:10.5px; font-weight:700; letter-spacing:.04em;
-  text-transform:uppercase; color:var(--muted); border-top:1px solid var(--frame-soft)}
-.tip .row{display:flex; gap:10px; justify-content:space-between; padding:1px 8px}
-.tip .row:nth-of-type(odd){background:rgba(0,0,0,.04)}
+.zoom button{font:inherit; font-weight:700; font-size:15px; width:32px; height:32px; cursor:pointer;
+  background:var(--btn); color:var(--ink); border:1px solid var(--edge); border-radius:var(--radius);
+  box-shadow:var(--shine)}
+.tip{position:absolute; z-index:5; pointer-events:none; display:none; width:max-content; max-width:min(360px,92vw);
+  background:var(--panel-solid); color:var(--ink); border:1px solid var(--edge); border-radius:var(--radius);
+  padding:0 0 5px; font-size:12px; line-height:1.35; box-shadow:0 4px 14px rgba(0,0,0,.45)}
+.tip .th{background:var(--head); border-bottom:1px solid var(--edge-soft); padding:3px 9px; font-weight:700;
+  color:var(--head-ink)}
+.tip .th span{font-weight:400; opacity:.85}
+.tip .sec{margin-top:3px; padding:2px 9px 1px; font-size:9.5px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border-top:1px solid var(--edge-line)}
+.tip .row{display:flex; gap:14px; justify-content:space-between; padding:1px 9px; white-space:nowrap}
+.tip .row:nth-of-type(even){background:var(--row-alt)}
 .tip .k{color:var(--muted)}
 .tip .up{color:var(--good); font-weight:700} .tip .down{color:var(--bad); font-weight:700} .tip .na{color:var(--muted)}
 .msg{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
-  color:#22300f; background:rgba(244,228,188,.9); font-size:13px; padding:24px}
-@media (max-width:640px){
-  header h1{font-size:15px} .stand{width:100%; text-align:left; margin-left:0}
-  .legend{font-size:11px}
-}
+  color:var(--ink); background:var(--panel-solid); opacity:.94; font-size:13px; padding:24px; z-index:4}
+@media (max-width:640px){ .stand{width:100%; text-align:left; margin-left:0} .legend{font-size:11px} }
 </style>
 </head>
 <body>
-<header>
-  <p class="eyebrow">Welt 259</p>
-  <h1>Karte</h1>
-  <a class="back" href="./">&laquo; Zurück zur Punkteübersicht</a>
-</header>
+<header class="appbar" id="appbar"></header>
 
 <div class="bar">
   <div class="grp" id="views" role="group" aria-label="Ansicht">
@@ -132,6 +101,7 @@ canvas{display:block; width:100%; height:100%}
 
 <div class="mapwrap" id="mapwrap">
   <canvas id="c"></canvas>
+  <canvas id="ov"></canvas>
   <div class="msg" id="msg" hidden></div>
   <div class="tip" id="tip"></div>
   <div class="overlay">
@@ -148,17 +118,13 @@ canvas{display:block; width:100%; height:100%}
   </div>
 </div>
 
+<script src="app.js"></script>
 <script>
-const nf = new Intl.NumberFormat("de-DE");
-const nf1 = new Intl.NumberFormat("de-DE", {maximumFractionDigits:1});
-const dtf = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"});
-const $ = id => document.getElementById(id);
-const fmtTime = s => { if(!s) return "k. A."; const d=new Date(s); return isNaN(d)? s : dtf.format(d)+" Uhr"; };
-const fmtDay = s => { if(!s) return ""; const p=s.split("-"); return p.length===3? p[2]+"."+p[1]+"."+p[0] : s; };
+buildAppbar("karte", "Karte");
 
-// Farben auf der Grasfläche. Grau für Barbaren wie im Spiel, kräftige Farben für die großen Stämme.
-const GRASS="#7c9a4e", GRID="rgba(0,0,0,.20)", GRID_MAJOR="rgba(0,0,0,.58)", LABEL="rgba(0,0,0,.55)";
-const C_BARB="#7d8468", C_BONUS="#d9c26a", C_OTHER="#c8cbbc", C_NONE="#c8cbbc", C_LOSS="#d50000";
+/* Farben je Fassung. Beim Umschalten werden sie neu gelesen, damit die Karte mitzieht. */
+let GRASS, GRID, GRID_MAJOR, LABEL, C_BARB, C_BONUS, C_OTHER, C_NONE, EDGE;
+const C_LOSS="#d50000";
 const C_TRACKED="#1e6fff";          // Stämme, deren Tagesbeste erhoben werden, immer blau
 const TRIBE_COLORS=["#e53935","#fdd835","#d81b60","#00bcd4","#fb8c00","#8e24aa","#c6ff00",
                     "#3949ab","#00e676","#6d4c41","#ff80ab","#b0bec5"];
@@ -166,7 +132,7 @@ const TRIBE_COLORS=["#e53935","#fdd835","#d81b60","#00bcd4","#fb8c00","#8e24aa",
 const EXTRA_COLORS=["#ffffff","#000000","#ff3d00","#76ff03","#18ffff","#f50057","#ffea00","#651fff"];
 // Stufen des prozentualen Punktzuwachses, hergeleitet aus der gemessenen Verteilung vom 12.09.2026:
 // über 1 h wachsen 11,4 % der Spieler überhaupt, über 24 h rund 39 %.
-// wenig Zuwachs gelb, viel Zuwachs grün, Verlust rot. Alle Töne heller und satter als die Grasfläche.
+// wenig Zuwachs gelb, viel Zuwachs grün, Verlust rot.
 const GROWTH_COLORS=["#fff59d","#ffeb3b","#c6ff00","#76ff03","#00e676"];
 const STEPS={ d1h:[1,2,3,5], d24h:[5,10,15,25], d7d:[10,20,35,60] };
 const VIEW_LABEL={ d1h:"1 Stunde", d24h:"24 Stunden", d7d:"7 Tage" };
@@ -176,10 +142,21 @@ const RANK_COLORS=["#00e676","#76ff03","#c6ff00","#ffeb3b","#fff59d","#9e9e9e"];
 const INADAY_LABEL={ loot_res:"Rohstoffe geplündert", scavenge:"Rohstoffe gesammelt", loot_vil:"Dörfer geplündert",
                      kill_att:"Bash Angriff", kill_def:"Bash Verteidigung", kill_sup:"Bash Unterstützung",
                      conquer:"Dörfer erobert" };
+// kurze Fassung für die Detailinfo, damit jede Zeile einzeilig bleibt
+const INADAY_SHORT={ loot_res:"Rohst. gepl.", scavenge:"Rohst. ges.", loot_vil:"Dörfer gepl.",
+                     kill_att:"Bash Angriff", kill_def:"Bash Vert.", kill_sup:"Bash Unt.", conquer:"Erobert" };
+function readColors(){
+  const cs=getComputedStyle(document.documentElement);
+  const v=n=>cs.getPropertyValue(n).trim();
+  GRASS=v("--map-bg"); GRID=v("--map-grid"); GRID_MAJOR=v("--map-grid-major"); LABEL=v("--map-label");
+  C_BARB=v("--map-barb"); C_BONUS=v("--map-bonus"); C_OTHER=v("--map-other"); C_NONE=C_OTHER; EDGE=v("--map-edge");
+}
+readColors();
 const isGrowth = v => !!STEPS[v];
 const isRank = v => v==="loot_res" || v==="scavenge" || v==="loot_vil";
 
 const cv=$("c"), ctx=cv.getContext("2d", {alpha:false});
+const ov=$("ov"), octx=ov.getContext("2d");
 const wrap=$("mapwrap"), tip=$("tip");
 let W=0, H=0, dpr=1;
 let V=null, P=null, A=null, T=null;
@@ -199,7 +176,9 @@ function resize(){
   const r=wrap.getBoundingClientRect();
   W=Math.max(1, Math.round(r.width)); H=Math.max(1, Math.round(r.height));
   cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+  ov.width=cv.width; ov.height=cv.height;
   ctx.setTransform(dpr,0,0,dpr,0,0);
+  octx.setTransform(dpr,0,0,dpr,0,0);
   if(!userView && N) fitWorld();
   draw();
 }
@@ -307,18 +286,29 @@ function draw(){
     }
   }
   if(scale>=8 && arrowOf) drawArrows(x0,x1,y0,y1,size);
+  drawOverlay();
+}
+
+/** Zeiger und Suchtreffer liegen auf einer eigenen Ebene. Beim Bewegen der Maus wird nur sie
+    neu gezeichnet, nicht die ganze Karte mit ihren rund 29.500 Feldern. */
+function drawOverlay(){
+  octx.clearRect(0,0,W,H);
+  if(!N) return;
+  const size=scale<2? Math.max(1, scale) : scale*0.84, off=(scale-size)/2;
+  const x0=wxAt(-2), x1=wxAt(W+2), y0=wyAt(-2), y1=wyAt(H+2);
   if(marked && marked.size){
-    ctx.strokeStyle="#ffffff"; ctx.lineWidth=Math.max(1.5, Math.min(2.5, scale/5));
+    octx.strokeStyle="#ffffff"; octx.lineWidth=Math.max(1.5, Math.min(2.5, scale/5));
     for(const i of marked){
       const x=vx[i], y=vy[i]; if(x<x0||x>x1||y<y0||y>y1) continue;
-      ctx.strokeRect(sx(x)+off-1.5, sy(y)+off-1.5, size+3, size+3);
+      octx.strokeRect(sx(x)+off-1.5, sy(y)+off-1.5, size+3, size+3);
     }
   }
   if(hover>=0){
-    ctx.strokeStyle="#000000"; ctx.lineWidth=2;
-    ctx.strokeRect(sx(vx[hover])+off-2, sy(vy[hover])+off-2, size+4, size+4);
-    ctx.strokeStyle="#ffffff"; ctx.lineWidth=1;
-    ctx.strokeRect(sx(vx[hover])+off-1, sy(vy[hover])+off-1, size+2, size+2);
+    const bx=sx(vx[hover])+off, by=sy(vy[hover])+off, s2=Math.max(size,4);
+    octx.strokeStyle="#000000"; octx.lineWidth=3;
+    octx.strokeRect(bx-2.5, by-2.5, s2+5, s2+5);
+    octx.strokeStyle="#ffffff"; octx.lineWidth=1.5;
+    octx.strokeRect(bx-2.5, by-2.5, s2+5, s2+5);
   }
 }
 
@@ -465,14 +455,21 @@ function setView(v){
 
 /* ---------- Tooltip ---------- */
 function hit(px,py){
-  const x=Math.round(wxAt(px)), y=Math.round(wyAt(py));
-  if(scale<1.5){
-    for(let r=0;r<=1;r++) for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
-      const i=byXY.get((x+dx)*1000+(y+dy)); if(i!=null) return i;
-    }
-    return -1;
+  const wx=wxAt(px), wy=wyAt(py), x=Math.round(wx), y=Math.round(wy);
+  const direkt=byXY.get(x*1000+y);
+  if(direkt!=null) return direkt;
+  // Nichts genau unter dem Zeiger: das nächstgelegene Dorf im Umkreis nehmen. Ohne das wirkt die
+  // Karte hakelig, weil zwischen den Quadraten Lücken liegen.
+  const reichweite = scale>=8? 1 : (scale>=3? 1 : 2);
+  const grenze = scale>=8? 0.75 : 1.4;
+  let best=-1, bestD=Infinity;
+  for(let dy=-reichweite;dy<=reichweite;dy++) for(let dx=-reichweite;dx<=reichweite;dx++){
+    const i=byXY.get((x+dx)*1000+(y+dy));
+    if(i==null) continue;
+    const d=Math.hypot(vx[i]-wx, vy[i]-wy);
+    if(d<bestD){ bestD=d; best=i; }
   }
-  const i=byXY.get(x*1000+y); return i==null? -1 : i;
+  return bestD<=grenze? best : -1;
 }
 function trow(k, v, cls){
   const d=document.createElement("div"); d.className="row";
@@ -517,7 +514,7 @@ function showTip(i, px, py){
       tsec("Bester Tag (An einem Tag)");
       ["loot_res","scavenge","loot_vil","conquer","kill_att","kill_def","kill_sup"].forEach(t=>{
         const v=e[t]; if(!v) return;
-        trow(INADAY_LABEL[t], nf.format(v.value)+" · Platz "+nf.format(v.rank)+(v.date? " am "+fmtDay(v.date) : ""));
+        trow(INADAY_SHORT[t], nf.format(v.value)+" · Rang "+nf.format(v.rank)+(v.date? " ("+fmtDay(v.date)+")" : ""));
       });
     }
   }
@@ -729,6 +726,7 @@ function showStand(){
 }
 
 /* ---------- Bedienung ---------- */
+document.addEventListener("themechange", ()=>{ readColors(); if(N){ buildBuckets(); renderLegend(); } draw(); });
 window.addEventListener("resize", resize);
 $("zin").addEventListener("click", ()=>zoomAt(W/2,H/2,1.6));
 $("zout").addEventListener("click", ()=>zoomAt(W/2,H/2,1/1.6));
@@ -772,7 +770,7 @@ wrap.addEventListener("pointermove", e=>{
   }
   if(e.pointerType!=="mouse") return;
   const i=hit(px,py);
-  if(i!==hover){ hover=i; draw(); }
+  if(i!==hover){ hover=i; drawOverlay(); }
   if(i>=0) showTip(i,px,py); else tip.style.display="none";
 });
 function endPointer(e){
@@ -782,13 +780,13 @@ function endPointer(e){
   dragging=false; wrap.classList.remove("drag");
   if(moved<6 && e.pointerType!=="mouse"){
     const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
-    const i=hit(px,py); hover=i; draw();
+    const i=hit(px,py); hover=i; drawOverlay();
     if(i>=0) showTip(i,px,py); else tip.style.display="none";
   }
 }
 wrap.addEventListener("pointerup", endPointer);
 wrap.addEventListener("pointercancel", endPointer);
-wrap.addEventListener("pointerleave", e=>{ endPointer(e); tip.style.display="none"; if(hover>=0){ hover=-1; draw(); } });
+wrap.addEventListener("pointerleave", e=>{ endPointer(e); tip.style.display="none"; if(hover>=0){ hover=-1; drawOverlay(); } });
 wrap.addEventListener("wheel", e=>{
   e.preventDefault();
   const r=wrap.getBoundingClientRect();

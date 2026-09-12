@@ -1,0 +1,175 @@
+/* Gemeinsame Gestaltung aller drei Seiten.
+   Zwei Fassungen, umschaltbar über data-theme am <html>:
+   classic     Oberfläche von Die Stämme, Pergament und braune Rahmen
+   futuristic  dunkles Lagebild, poliertes Metall mit blauem Schimmer und Bernstein als Leitfarbe
+   Jede Seite nutzt dieselben Klassen, deshalb wirkt der Umschalter überall gleich. */
+
+/* ---------- classic ---------- */
+:root, [data-theme="classic"]{
+  --bg:#3b2a12;
+  --bg-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%233b2a12'/%3E%3Cpath d='M0 20h40M20 0v40' stroke='%2345331a' stroke-width='1'/%3E%3C/svg%3E");
+  --panel:linear-gradient(#f4e4bc,#f4e4bc);
+  --panel-solid:#f4e4bc;
+  --panel-2:#eadcb4;
+  --row:#f7edd2; --row-alt:#efe0b8; --row-hover:#fff6dc;
+  --edge:#603000; --edge-soft:#c9b483; --edge-line:#ddcea5;
+  --head:linear-gradient(#d8bd8a,#c1a264); --head-ink:#3f2100;
+  --ink:#2b1d06; --ink-2:#5c4415; --muted:#7a6435;
+  --accent:#8a5a12; --accent-ink:#f7ecd2; --accent-soft:rgba(138,90,18,.14);
+  --good:#2f6b1f; --good-bg:#dfeccd; --bad:#9c2b1c; --bad-bg:#f2ddd6;
+  --btn:linear-gradient(#f6e7bd,#dcc48a); --btn-hover:linear-gradient(#fff3d3,#e6d0a0);
+  --btn-on:linear-gradient(#a97c33,#8a5a12);
+  --bar:linear-gradient(#8a5a12,#603000); --bar-ink:#f4e4bc; --bar-dim:#e2caa0; --bar-edge:#2f1800;
+  --field:#fffaf0;
+  --shine:none; --glow:none; --title-fill:var(--bar-ink);
+  --font:13px/1.45 Verdana,Geneva,"DejaVu Sans",sans-serif;
+  --radius:3px;
+  /* Kartenflächen */
+  --map-bg:#7c9a4e; --map-grid:rgba(0,0,0,.20); --map-grid-major:rgba(0,0,0,.58); --map-label:rgba(0,0,0,.55);
+  --map-barb:#7d8468; --map-bonus:#d9c26a; --map-other:#c8cbbc; --map-edge:rgba(0,0,0,.45);
+}
+
+/* ---------- futuristic ---------- */
+[data-theme="futuristic"]{
+  --bg:#070a10;
+  --bg-image:radial-gradient(1100px 520px at 12% -12%, rgba(255,159,28,.13), transparent 62%),
+             radial-gradient(900px 460px at 88% -6%, rgba(77,217,255,.10), transparent 62%),
+             linear-gradient(180deg,#080c14,#05070c);
+  --panel:linear-gradient(157deg,#121b2a 0%,#0d1421 46%,#0a1019 100%);
+  --panel-solid:#0e1622;
+  --panel-2:#0b121d;
+  --row:transparent; --row-alt:rgba(125,170,220,.035); --row-hover:rgba(120,190,255,.10);
+  --edge:rgba(132,178,228,.26); --edge-soft:rgba(132,178,228,.16); --edge-line:rgba(132,178,228,.12);
+  --head:linear-gradient(180deg,rgba(150,200,255,.13),rgba(150,200,255,.03)); --head-ink:#cfe4fb;
+  --ink:#dfeafa; --ink-2:#a9c1dc; --muted:#7d95b2;
+  --accent:#ff9f1c; --accent-ink:#0b1018; --accent-soft:rgba(255,159,28,.15);
+  --good:#5ce6a5; --good-bg:rgba(92,230,165,.14); --bad:#ff6b81; --bad-bg:rgba(255,107,129,.14);
+  --btn:linear-gradient(180deg,rgba(150,200,255,.14),rgba(150,200,255,.04));
+  --btn-hover:linear-gradient(180deg,rgba(160,210,255,.24),rgba(150,200,255,.08));
+  --btn-on:linear-gradient(180deg,#ffb545,#ff8f00);
+  --bar:linear-gradient(180deg,#101a29,#0a1220); --bar-ink:#e6f1ff; --bar-dim:#8fa9c6;
+  --bar-edge:rgba(132,178,228,.22);
+  --field:rgba(10,16,26,.85);
+  /* der polierte Schimmer: heller Streifen oben, dunkle Kante unten */
+  --shine:inset 0 1px 0 rgba(214,236,255,.20), inset 0 -1px 0 rgba(0,0,0,.55),
+          inset 1px 0 0 rgba(160,205,255,.07), inset -1px 0 0 rgba(160,205,255,.07);
+  --glow:0 0 18px rgba(120,190,255,.10);
+  --title-fill:linear-gradient(180deg,#f2f8ff 10%,#9dc6f0 92%);
+  --font:13px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
+  --radius:9px;
+  --map-bg:#0b1220; --map-grid:rgba(140,190,240,.10); --map-grid-major:rgba(150,205,255,.30);
+  --map-label:rgba(175,210,245,.55);
+  --map-barb:#39485e; --map-bonus:#c99a35; --map-other:#8fb0d4; --map-edge:rgba(0,0,0,.55);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%}
+body{margin:0; background:var(--bg); background-image:var(--bg-image); background-attachment:fixed;
+  color:var(--ink); font:var(--font); font-variant-numeric:tabular-nums}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+.wrap{max-width:1500px; margin-inline:auto; padding-inline:clamp(8px,2vw,18px)}
+
+/* ---------- Kopfzeile, auf allen Seiten gleich hoch ---------- */
+.appbar{background:var(--bar); border-bottom:1px solid var(--bar-edge); box-shadow:var(--glow)}
+[data-theme="classic"] .appbar{border-bottom-width:2px}
+.appbar .wrap{min-height:52px; display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; padding-block:7px}
+.appbar h1{margin:0; font-size:19px; font-weight:700; letter-spacing:.04em; color:var(--bar-ink);
+  background:var(--title-fill); -webkit-background-clip:text; background-clip:text}
+[data-theme="futuristic"] .appbar h1{color:transparent; text-shadow:0 0 22px rgba(130,195,255,.25)}
+.appbar .world{font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--bar-dim)}
+.appbar nav{margin-left:auto; display:flex; gap:5px; flex-wrap:wrap; align-items:center}
+.appbar nav a{font-size:11.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--bar-dim); text-decoration:none; border:1px solid var(--bar-edge); border-radius:var(--radius);
+  padding:4px 11px; background:var(--btn); box-shadow:var(--shine)}
+[data-theme="classic"] .appbar nav a{color:var(--ink); border-color:#3f2100}
+.appbar nav a:hover{background:var(--btn-hover)}
+.appbar nav a.on{background:var(--btn-on); color:var(--accent-ink); border-color:var(--accent)}
+[data-theme="classic"] .appbar nav a.on{color:var(--accent-ink)}
+#theme-toggle{margin-left:4px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  font:inherit; font-size:11.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--bar-dim); background:var(--btn); border:1px solid var(--bar-edge);
+  border-radius:var(--radius); padding:4px 10px; box-shadow:var(--shine)}
+[data-theme="classic"] #theme-toggle{color:var(--ink); border-color:#3f2100}
+#theme-toggle:hover{background:var(--btn-hover)}
+#theme-toggle svg{width:14px; height:14px; flex:none}
+
+/* ---------- Kacheln mit Kennzahlen ---------- */
+.facts{display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:0}
+.facts>div{display:grid; gap:1px; background:var(--panel); color:var(--ink); border:1px solid var(--edge);
+  border-radius:var(--radius); padding:5px 12px 6px; min-width:130px; box-shadow:var(--shine)}
+.facts dt{font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); font-weight:700}
+.facts dd{margin:0; font-size:19px; font-weight:700; line-height:1.15}
+[data-theme="futuristic"] .facts dd{text-shadow:0 0 16px rgba(130,195,255,.28)}
+.facts .delta{font-size:11.5px; font-weight:700}
+
+/* ---------- Panels ---------- */
+main.wrap{padding-block:12px 30px; display:grid; gap:12px}
+.grid{display:grid; gap:10px; grid-template-columns:repeat(12,1fr)}
+.panel{background:var(--panel); border:1px solid var(--edge); border-radius:var(--radius);
+  box-shadow:var(--shine), var(--glow); min-width:0; position:relative; overflow:hidden}
+[data-theme="futuristic"] .panel::before{content:""; position:absolute; inset:0 0 auto 0; height:1px;
+  background:linear-gradient(90deg,transparent,rgba(190,225,255,.55),transparent)}
+.panel>h2{margin:0; font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--head-ink); padding:6px 11px; background:var(--head); border-bottom:1px solid var(--edge-soft);
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px}
+.panel>h2 .hint,.panel>h2 em{font-weight:400; font-size:11px; color:var(--muted); letter-spacing:.02em;
+  text-transform:none; font-style:normal}
+.panel>h2 .right{margin-left:auto; display:inline-flex; gap:4px; flex-wrap:wrap; align-items:center}
+.body{padding:9px 11px 11px}
+.scroll{overflow:auto; max-height:min(460px,64vh)}
+.scroll::-webkit-scrollbar{width:9px; height:9px}
+.scroll::-webkit-scrollbar-thumb{background:var(--edge-soft); border-radius:5px}
+.c3{grid-column:span 3} .c4{grid-column:span 4} .c5{grid-column:span 5}
+.c6{grid-column:span 6} .c7{grid-column:span 7} .c8{grid-column:span 8} .c12{grid-column:span 12}
+@media (max-width:1100px){ .c3,.c4,.c5{grid-column:span 6} .c6,.c7,.c8{grid-column:span 12} }
+@media (max-width:640px){ .c3,.c4,.c5,.c6{grid-column:span 12} }
+
+/* ---------- Bedienelemente ---------- */
+button.tw,.tw{font:inherit; font-size:11.5px; font-weight:700; color:var(--ink); cursor:pointer;
+  background:var(--btn); border:1px solid var(--edge); border-radius:var(--radius); padding:3px 9px;
+  box-shadow:var(--shine)}
+button.tw:hover:not(:disabled){background:var(--btn-hover)}
+button.tw[aria-pressed="true"]{background:var(--btn-on); color:var(--accent-ink); border-color:var(--accent)}
+button.tw:disabled{opacity:.4; cursor:not-allowed}
+select,input[type="text"],input[type="search"]{font:inherit; font-size:11.5px; padding:2px 6px; color:var(--ink);
+  background:var(--field); border:1px solid var(--edge); border-radius:var(--radius); max-width:min(320px,52vw)}
+label.pick{display:inline-flex; align-items:center; gap:5px; font-weight:400}
+label.pick>span{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700}
+
+/* ---------- Tabellen ---------- */
+table{width:100%; border-collapse:collapse; font-size:12px}
+th,td{padding:3px 8px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--edge-line)}
+th{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700;
+  background:var(--panel-2); border-bottom:1px solid var(--edge-soft); position:sticky; top:0; z-index:1}
+th.sortable{cursor:pointer; user-select:none}
+th.sortable:hover{color:var(--accent)}
+th.sortable::after{content:"\2195"; opacity:.35; margin-left:4px; font-size:9px}
+th[aria-sort="descending"]::after{content:"\25BC"; opacity:.95; color:var(--accent)}
+th[aria-sort="ascending"]::after{content:"\25B2"; opacity:.95; color:var(--accent)}
+th.l,td.l{text-align:left}
+tbody tr:nth-child(odd){background:var(--row)}
+tbody tr:nth-child(even){background:var(--row-alt)}
+tbody tr:hover td{background:var(--row-hover)}
+td.name{font-weight:700}
+td.rank{color:var(--muted)}
+.up{color:var(--good); font-weight:700} .down{color:var(--bad); font-weight:700} .na{color:var(--muted)}
+.group th{font-size:9.5px; letter-spacing:.12em; background:var(--head); color:var(--head-ink);
+  text-align:left; position:static}
+.empty{padding:10px 12px; color:var(--muted); font-size:12px}
+.pill{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:11.5px; padding:2px 9px;
+  border:1px solid var(--edge); border-radius:999px; background:var(--panel-2)}
+.pill.ok{color:var(--good)} .pill.err{color:var(--bad)}
+.pill i{width:7px; height:7px; border-radius:50%; background:currentColor}
+[data-theme="futuristic"] .pill i{box-shadow:0 0 9px currentColor}
+.rows{display:grid; gap:6px}
+.row2{display:grid; grid-template-columns:1fr auto; gap:3px 10px; font-size:11.5px}
+.row2 span{color:var(--muted)} .row2 b{font-weight:700}
+.meter{height:5px; background:var(--edge-line); border-radius:3px; overflow:hidden; margin-top:4px}
+.meter i{display:block; height:100%; background:linear-gradient(90deg,var(--accent),#ffd88a)}
+.legendrow{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:11px; color:var(--muted); margin-top:7px}
+.legendrow i{width:9px; height:9px; border-radius:2px; display:inline-block; margin-right:5px}
+footer{color:var(--muted); font-size:11px; border-top:1px solid var(--edge-line); padding-block:12px 22px;
+  margin-top:6px}
+footer a{color:var(--accent)}

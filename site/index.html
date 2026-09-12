@@ -1,122 +1,32 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="classic">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Karte 259</title>
+<title>Punkteübersicht · Welt 259</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
-<style>
-/* Gestaltung angelehnt an die Oberfläche von Die Stämme: Pergament, braune Rahmen, schmale Tabellen. */
-:root{
-  --parchment:#f4e4bc; --parchment-2:#eadcb4; --row:#f7edd2; --row-alt:#efe0b8;
-  --frame:#603000; --frame-soft:#b8a06c; --bar:#c1a264; --bar-2:#d8bd8a;
-  --ink:#2b1d06; --ink-2:#5c4415; --muted:#7a6435;
-  --good:#2f6b1f; --good-bg:#dfeccd; --bad:#9c2b1c; --bad-bg:#f2ddd6;
-}
-*,*::before,*::after{box-sizing:border-box}
-[hidden]{display:none !important}
-body{margin:0; background:#3b2a12 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%233b2a12'/%3E%3Cpath d='M0 20h40M20 0v40' stroke='%2345331a' stroke-width='1'/%3E%3C/svg%3E");
-  color:var(--ink); font:13px/1.45 Verdana,Geneva,"DejaVu Sans",sans-serif}
-a{color:var(--frame)}
-:focus-visible{outline:2px solid #8a5a12; outline-offset:1px}
-.wrap{max-width:1180px; margin-inline:auto; padding-inline:clamp(8px,2vw,18px)}
-
-header{background:linear-gradient(#8a5a12,#603000); color:#f4e4bc; border-bottom:2px solid #2f1800}
-header .wrap{padding-block:12px 14px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 20px}
-header .eyebrow{font-size:11px; color:#e2caa0; margin:0}
-header h1{font-size:24px; margin:0; font-weight:700; letter-spacing:.02em}
-a.tomap{font-weight:700; font-size:13px; color:var(--ink); text-decoration:none;
-  background:linear-gradient(#f6e7bd,#dcc48a); border:1px solid #3f2100; border-radius:3px; padding:5px 12px}
-a.tomap:hover{background:linear-gradient(#fff3d3,#e6d0a0)}
-
-.facts{display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:10px 0 0; width:100%}
-.facts div{display:grid; background:var(--parchment); color:var(--ink);   /* sonst erbt die Kachel das Beige der Kopfzeile */
-  border:1px solid var(--frame); border-radius:3px; padding:3px 10px 4px; min-width:118px}
-.facts dt{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700}
-.facts dd{margin:0; font-size:17px; font-weight:700}
-.stamp{font-size:11.5px; color:#e2caa0; margin:8px 0 0; width:100%}
-
-main.wrap{padding-block:14px 30px; display:grid; gap:16px}
-.panel{background:var(--parchment); border:1px solid var(--frame); border-radius:3px}
-.panel>h2{margin:0; font-size:13px; font-weight:700; color:#3f2100; padding:4px 10px;
-  background:linear-gradient(var(--bar-2),var(--bar)); border-bottom:1px solid var(--frame);
-  display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px}
-.panel>h2 .hint{font-weight:400; font-size:11px; color:#4a3410}
-.panel>h2 .seg{margin-left:auto; display:inline-flex; gap:3px}
-button.tw{font:inherit; font-size:11.5px; font-weight:700; color:var(--ink); cursor:pointer;
-  background:linear-gradient(#f6e7bd,#dcc48a); border:1px solid var(--frame); border-radius:3px; padding:2px 8px}
-button.tw:hover:not(:disabled){background:linear-gradient(#fff3d3,#e6d0a0)}
-button.tw[aria-pressed="true"]{background:linear-gradient(#a97c33,#8a5a12); color:#f7ecd2; border-color:#3f2100}
-button.tw:disabled{opacity:.45; cursor:not-allowed}
-.scroll{overflow-x:auto}
-.pick{display:inline-flex; align-items:center; gap:5px; font-weight:400}
-.pick span{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:#4a3410; font-weight:700}
-.pick select,.pick input{font:inherit; font-size:11.5px; padding:1px 4px; max-width:min(320px,52vw);
-  color:var(--ink); background:#fffaf0; border:1px solid var(--frame); border-radius:3px}
-.pick input{width:110px}
-.statusbar{display:flex; flex-wrap:wrap; align-items:center; gap:8px 22px; padding:8px 10px}
-.pill{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:12px; padding:2px 9px;
-  border:1px solid var(--frame); border-radius:3px}
-.pill.ok{background:var(--good-bg); color:var(--good)} .pill.err{background:var(--bad-bg); color:var(--bad)}
-.pill i{width:8px; height:8px; border-radius:50%; background:currentColor}
-.kv{display:grid} .kv span{font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); font-weight:700}
-.kv b{font-weight:700}
-.errors{margin:0; padding:0 12px 10px 28px; color:var(--bad); font-size:12px}
-
-table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; font-size:12px}
-th,td{padding:3px 8px; text-align:right; border-bottom:1px solid #ddceA5; white-space:nowrap}
-th{font-size:11px; font-weight:700; color:#3f2100; background:var(--parchment-2);
-  border-bottom:1px solid var(--frame); vertical-align:bottom; position:sticky; top:0}
-th.l,td.l{text-align:left}
-th[data-sort]{cursor:pointer; user-select:none}
-th[data-sort]:hover{background:var(--bar-2)}
-th[data-sort]::after{content:"\2195"; opacity:.35; margin-left:4px; font-size:10px}
-th[aria-sort="descending"]::after{content:"\25BC"; opacity:.9}
-th[aria-sort="ascending"]::after{content:"\25B2"; opacity:.9}
-tbody tr:nth-child(odd){background:var(--row)}
-tbody tr:nth-child(even){background:var(--row-alt)}
-tbody tr:hover td{background:#fff6dc}
-td.name{font-weight:700}
-.up{color:var(--good); font-weight:700} .down{color:var(--bad); font-weight:700} .na{color:var(--muted)}
-.group th{font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:#4a3410;
-  background:linear-gradient(var(--bar-2),var(--bar)); text-align:left; position:static}
-.empty{padding:10px 12px; color:var(--muted)}
-footer{color:#d8c49a; font-size:11.5px; border-top:1px solid #5a4423; padding-block:12px 22px}
-footer a{color:#f0dcb0}
-@media (max-width:640px){ header h1{font-size:19px} .facts div{min-width:100px} }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <div class="wrap">
-    <div>
-      <p class="eyebrow">Die Stämme · Welt 259 · Datensammler</p>
-      <h1>Karte 259</h1>
-    </div>
-    <span style="margin-left:auto; display:flex; gap:6px; flex-wrap:wrap">
-      <a class="tomap" href="dashboard.html">Lagebild (Entwurf 2)</a>
-      <a class="tomap" href="karte.html">Zur Karte &raquo;</a>
-    </span>
-    <dl class="facts">
-      <div><dt>Spieler</dt><dd id="f-players">…</dd></div>
-      <div><dt>Stämme</dt><dd id="f-allies">…</dd></div>
-      <div><dt>Dörfer</dt><dd id="f-villages">…</dd></div>
-      <div><dt>Historie seit</dt><dd id="f-since">…</dd></div>
-    </dl>
-    <p class="stamp" id="stamp">Lade Daten …</p>
-  </div>
-</header>
+<header class="appbar" id="appbar"></header>
 
 <main class="wrap">
+  <dl class="facts" id="facts">
+    <div><dt>Spieler</dt><dd id="f-players">…</dd></div>
+    <div><dt>Stämme</dt><dd id="f-allies">…</dd></div>
+    <div><dt>Dörfer</dt><dd id="f-villages">…</dd></div>
+    <div><dt>Historie seit</dt><dd id="f-since">…</dd></div>
+  </dl>
+
   <section class="panel" aria-labelledby="h-status">
-    <h2 id="h-status">Sammler <span class="hint">läuft stündlich bei GitHub, Läufe können sich um einige Minuten verspäten</span></h2>
-    <div class="statusbar" id="statusbar"></div>
-    <ul class="errors" id="errors" hidden></ul>
+    <h2 id="h-status">Sammler <span class="hint" id="stamp">lädt …</span></h2>
+    <div class="body" id="statusbar" style="display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center"></div>
+    <ul class="empty" id="errors" hidden></ul>
   </section>
 
   <section class="panel" aria-labelledby="h-movers">
     <h2 id="h-movers">Größter Punktezuwachs
-      <span class="seg" id="win" role="group" aria-label="Zeitfenster">
+      <span class="right" id="win" role="group" aria-label="Zeitfenster">
         <button class="tw" type="button" data-w="1h">1 Stunde</button>
         <button class="tw" type="button" data-w="24h">24 Stunden</button>
         <button class="tw" type="button" data-w="7d">7 Tage</button>
@@ -127,9 +37,7 @@ footer a{color:#f0dcb0}
 
   <section class="panel" aria-labelledby="h-tribe">
     <h2 id="h-tribe">Stamm
-      <label class="pick"><span>Auswahl</span>
-        <select id="tribe-pick" aria-label="Stamm auswählen"></select>
-      </label>
+      <label class="pick"><span>Auswahl</span><select id="tribe-pick" aria-label="Stamm auswählen"></select></label>
       <span class="hint" id="tribe-hint"></span>
     </h2>
     <div class="scroll" id="tribe"></div>
@@ -138,8 +46,8 @@ footer a{color:#f0dcb0}
   <section class="panel" aria-labelledby="h-neighbors">
     <h2 id="h-neighbors">Nachbarschaft
       <label class="pick"><span>Kontinente</span>
-        <input id="kont" type="text" inputmode="numeric" placeholder="z. B. 44, 45" aria-label="Kontinentnummern, durch Komma getrennt">
-      </label>
+        <input id="kont" type="text" inputmode="numeric" placeholder="z. B. 44, 45" style="width:110px"
+               aria-label="Kontinentnummern, durch Komma getrennt"></label>
       <button class="tw" type="button" id="kont-go">Anzeigen</button>
       <span class="hint" id="kont-hint">Alle Spieler mit mindestens einem Dorf in den genannten Kontinenten.</span>
     </h2>
@@ -147,87 +55,34 @@ footer a{color:#f0dcb0}
   </section>
 
   <section class="panel" aria-labelledby="h-top">
-    <h2 id="h-top">Weltspitze „An einem Tag“
-      <span class="seg" id="toptype" role="group" aria-label="Kategorie"></span>
-    </h2>
+    <h2 id="h-top">Weltspitze „An einem Tag“ <span class="right" id="toptype" role="group" aria-label="Kategorie"></span></h2>
     <div class="scroll" id="top"></div>
   </section>
 
   <section class="panel" aria-labelledby="h-runs">
-    <h2 id="h-runs">Letzte Läufe <span class="hint">Nachweis für Takt und Last: Abrufe je Lauf bei Weltdaten und Ranglisten</span></h2>
+    <h2 id="h-runs">Letzte Läufe <span class="hint">Nachweis für Takt und Last</span></h2>
     <div class="scroll" id="runs"></div>
   </section>
+
+  <footer>Fan-Projekt mit öffentlichen Daten von die-staemme.de. Kein Angebot von InnoGames.
+    Quelltext auf <a href="https://github.com/brisk-one/Karte259">GitHub</a>.</footer>
 </main>
 
-<footer class="wrap">Fan-Projekt mit öffentlichen Daten von die-staemme.de (Weltdaten und Gastzugang). Kein Angebot von InnoGames.
-Quelltext auf <a href="https://github.com/brisk-one/Karte259">GitHub</a>.</footer>
-
+<script src="app.js"></script>
 <script>
-const nf = new Intl.NumberFormat("de-DE");
-const dtf = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"});
-const TYPES = [["loot_vil","Dörfer gepl."],["loot_res","Rohst. gepl."],["scavenge","Gesammelt"],
+buildAppbar("index", "Punkteübersicht");
+
+const TYPES = [["loot_vil","Dörfer gepl."],["loot_res","Rohst. geplündert"],["scavenge","Rohst. gesammelt"],
                ["kill_att","Bash Angr."],["kill_def","Bash Vert."],["kill_sup","Bash Unt."],["conquer","Erobert"]];
 const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplündert", scavenge:"Rohstoffe gesammelt",
-                   kill_att:"Bash Angriff", kill_def:"Bash Verteidigung", kill_sup:"Bash Unterstützung", conquer:"Dörfer erobert"};
-const $ = id => document.getElementById(id);
-function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
-function fmtTime(s){ if(!s) return "k. A."; const d=new Date(s); return isNaN(d)? s : dtf.format(d)+" Uhr"; }
-function fmtDay(s){ if(!s) return ""; const p=String(s).split("-"); return p.length===3? p[2]+"."+p[1]+"."+p[0] : s; }
-function signed(v){ if(v==null) return el("span","na","–"); return el("span", v>0?"up":(v<0?"down":"na"), (v>0?"+":"")+nf.format(v)); }
-
-/* Tabelle mit Sortierung: jede Zelle darf einen Sortierwert mitbringen ([inhalt, klasse, sortwert]). */
-function table(headers, rows, groups, sortCol, sortDir){
-  const t=el("table"), th=el("thead");
-  if(groups){ const g=el("tr","group"); groups.forEach(([label,span])=>{ const c=el("th",null,label); c.colSpan=span; g.appendChild(c); }); th.appendChild(g); }
-  const hr=el("tr");
-  headers.forEach(([label,cls],i)=>{
-    const c=el("th",cls||null,label);
-    c.dataset.sort=String(i); c.tabIndex=0;
-    c.addEventListener("click",()=>sortBy(t,i));
-    c.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); sortBy(t,i); } });
-    hr.appendChild(c);
-  });
-  th.appendChild(hr); t.appendChild(th);
-  const tb=el("tbody");
-  rows.forEach(cells=>{
-    const tr=el("tr");
-    cells.forEach(([content,cls,sortValue])=>{
-      const td=el("td",cls||null);
-      if(content instanceof Node) td.appendChild(content); else td.textContent=content;
-      td.dataset.v = sortValue!=null? sortValue : (content instanceof Node? content.textContent : content);
-      tr.appendChild(td);
-    });
-    tb.appendChild(tr);
-  });
-  t.appendChild(tb);
-  if(sortCol!=null) sortBy(t, sortCol, sortDir || "desc");
-  return t;
-}
-function sortBy(t, col, force){
-  const ths=[...t.tHead.rows[t.tHead.rows.length-1].cells];
-  const cur=ths[col].getAttribute("aria-sort");
-  const dir = force || (cur==="descending" ? "asc" : "desc");
-  ths.forEach(c=>c.removeAttribute("aria-sort"));
-  ths[col].setAttribute("aria-sort", dir==="asc"? "ascending" : "descending");
-  const num = s => { const v=parseFloat(String(s).replace(/\./g,"").replace(",",".").replace(/[^\d,.\-]/g,"")); return isNaN(v)? null : v; };
-  const rows=[...t.tBodies[0].rows];
-  rows.sort((a,b)=>{
-    const x=a.cells[col].dataset.v, y=b.cells[col].dataset.v;
-    const nx=num(x), ny=num(y);
-    let c;
-    if(nx!=null && ny!=null) c = nx-ny;
-    else c = String(x).localeCompare(String(y), "de", {numeric:true, sensitivity:"base"});
-    return dir==="asc"? c : -c;
-  });
-  rows.forEach(r=>t.tBodies[0].appendChild(r));
-}
-
-async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-cache"}); if(!r.ok) throw new Error(name+": HTTP "+r.status); return r.json(); }
+                   kill_att:"Bash Angriff", kill_def:"Bash Verteidigung", kill_sup:"Bash Unterstützung",
+                   conquer:"Dörfer erobert"};
 
 (async function(){
   let meta, players, allies, tribe;
-  try { [meta, players, allies, tribe] = await Promise.all(["meta","players","allies","tribe"].map(load)); }
-  catch(e){ $("stamp").textContent="Daten konnten nicht geladen werden: "+e.message; return; }
+  try { [meta, players, allies, tribe] = await Promise.all(["meta","players","allies","tribe"].map(loadData)); }
+  catch(e){ $("stamp").textContent = "Daten konnten nicht geladen werden: "+e.message; return; }
+
   const st=meta.status||{}, counts=st.counts||{};
   $("f-players").textContent = counts.players!=null? nf.format(counts.players) : "k. A.";
   $("f-allies").textContent = counts.allies!=null? nf.format(counts.allies) : "k. A.";
@@ -235,46 +90,46 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   $("f-since").textContent = fmtTime(st.history_since_utc);
   $("stamp").textContent = "Weltdaten vom "+fmtTime(st.data_last_modified)+" · letzter Lauf "+fmtTime(st.run_utc);
 
-  // Sammler
-  const sb=$("statusbar"), ok=!(st.errors&&st.errors.length);
+  const ok=!(st.errors&&st.errors.length);
+  const sb=$("statusbar");
   const pill=el("span","pill "+(ok?"ok":"err")); pill.appendChild(el("i"));
   pill.appendChild(document.createTextNode(ok?"Läuft":"Fehler im letzten Lauf")); sb.appendChild(pill);
   [["Letzter Lauf", fmtTime(st.run_utc)+" ("+(st.result||"k. A.")+")"],
-   ["Weltdaten", st.world&&st.world.changed? "neu geladen" : "unverändert"],
-   ["Abrufe", "Weltdaten "+((st.requests||{}).world||0)+", Ranglisten "+((st.requests||{}).guest||0)],
-   ["Tagesbeste zuletzt voll erhoben", fmtTime(st.last_full_scrape_utc)]]
-   .forEach(([k,v])=>{ const d=el("div","kv"); d.appendChild(el("span",null,k)); d.appendChild(el("b",null,v)); sb.appendChild(d); });
+   ["Weltdaten", st.world&&st.world.changed? "neu geladen":"unverändert"],
+   ["Abrufe", "Welt "+((st.requests||{}).world||0)+" · Rangliste "+((st.requests||{}).guest||0)],
+   ["Tagesbeste zuletzt voll", fmtTime(st.last_deep_scrape_utc || st.last_full_scrape_utc)]]
+   .forEach(([k,v])=>{ const d=el("div","rows"); const r=el("div","row2");
+     r.append(el("span",null,k), el("b",null,v)); d.appendChild(r); sb.appendChild(d); });
   if(!ok){ const ul=$("errors"); st.errors.forEach(x=>ul.appendChild(el("li",null,x))); ul.hidden=false; }
 
   const F=players.fields, idx=Object.fromEntries(F.map((f,i)=>[f,i]));
   const allyTag={}; allies.rows.forEach(a=>{ allyTag[a[0]]=a[2]; });
   const refs=players.refs_utc||{};
 
-  // Größter Punktezuwachs
+  /* Größter Punktezuwachs */
   const winBtns=[...document.querySelectorAll("#win button")];
   winBtns.forEach(b=>{ b.disabled=!refs[b.dataset.w]; });
   let win = refs["24h"]? "24h" : (refs["1h"]? "1h" : null);
   function renderMovers(){
     winBtns.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.w===win)));
     const box=$("movers"); box.replaceChildren();
-    if(!win){ box.appendChild(el("p","empty","Noch keine Vergleichswerte. Der erste Zuwachs ist nach dem zweiten stündlichen Lauf sichtbar.")); return; }
-    const k="d"+win+"_points", bashK=["att","def","sup"].map(f=>idx["d"+win+"_"+f]);
-    const top=players.rows.filter(r=>r[idx[k]]!=null).sort((a,b)=>b[idx[k]]-a[idx[k]]).slice(0,20);
-    box.appendChild(table([["#"],["Spieler","l"],["Stamm","l"],["Punkte"],["Zuwachs"],["Dörfer ±"],["Bash ±"]],
+    if(!win){ box.appendChild(el("p","empty","Noch keine Vergleichswerte.")); return; }
+    const k=idx["d"+win+"_points"], bashK=["att","def","sup"].map(f=>idx["d"+win+"_"+f]);
+    const top=players.rows.filter(r=>r[k]!=null).sort((a,b)=>b[k]-a[k]).slice(0,25);
+    box.appendChild(table([["#","rank"],["Spieler","l"],["Stamm","l"],["Punkte","",1],["Zuwachs","",1],
+                           ["Dörfer ±","",1],["Bash ±","",1]],
       top.map((r,i)=>{
         const bash=bashK.reduce((s,j)=>s+(r[j]||0),0);
-        return [[String(i+1),"na",i+1],[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],
-                [nf.format(r[idx.points]),"",r[idx.points]],[signed(r[idx[k]]),"",r[idx[k]]],
+        return [[String(i+1),"rank",i+1],[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],
+                [nf.format(r[idx.points]),"",r[idx.points]],[signed(r[k]),"",r[k]],
                 [signed(r[idx["d"+win+"_villages"]]),"",r[idx["d"+win+"_villages"]]],[signed(bash),"",bash]];
-      }), null, 4));
-    const note=el("p","empty","Vergleich mit dem Stand vom "+fmtTime(refs[win])+". Spaltenkopf anklicken sortiert.");
-    box.appendChild(note);
+      }), {sort:4}));
+    box.appendChild(el("p","empty","Vergleich mit dem Stand vom "+fmtTime(refs[win])+"."));
   }
   winBtns.forEach(b=>b.addEventListener("click",()=>{ if(!b.disabled){ win=b.dataset.w; renderMovers(); } }));
   renderMovers();
 
-  // Stamm: jeder Stamm der Welt ist wählbar. Punkte, Dörfer, Bash und Zuwächse liegen für alle vor,
-  // die Rekorde aus „An einem Tag“ nur für die erfassten Stämme und die Weltspitze.
+  /* Stamm: jeder Stamm der Welt wählbar */
   const tracked=tribe.tribe_ids||[];
   const rec={}; ((tribe.inaday_all)||(tribe.records)||[]).forEach(([pid,type,rank,value,date])=>{
     const e=(rec[pid]=rec[pid]||{});
@@ -282,105 +137,95 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   });
   const pick=$("tribe-pick");
   [...allies.rows].sort((a,b)=>b[5]-a[5]).forEach((a,i)=>{
-    const o=document.createElement("option");
-    o.value=a[0];
+    const o=document.createElement("option"); o.value=a[0];
     o.textContent=(i+1)+". "+(a[2]||a[1])+" · "+a[1]+" · "+nf.format(a[3])+" Mitgl. · "+nf.format(a[5])+" Pkt"
       +(tracked.includes(a[0])? " · Tagesbeste erfasst" : "");
     pick.appendChild(o);
   });
   pick.value = tracked[0] || (allies.rows[0]||[])[0];
   function renderTribe(){
-    const tid=+pick.value;
-    const ally=allies.rows.find(a=>a[0]===tid);
+    const tid=+pick.value, ally=allies.rows.find(a=>a[0]===tid);
     const members=players.rows.filter(r=>r[idx.ally]===tid);
     const withRec=members.filter(r=>rec[r[idx.id]]).length;
-    $("tribe-hint").textContent = (ally? ally[1]+" · " : "")
-      + (withRec? "Rekorde für "+withRec+" von "+members.length+" Mitgliedern erfasst. " : "Für diesen Stamm liegen noch keine Rekorde vor. ")
-      + "Spaltenkopf anklicken sortiert.";
+    $("tribe-hint").textContent=(ally? ally[1]+" · ":"")
+      +(withRec? "Rekorde für "+withRec+" von "+members.length+" Mitgliedern." : "Für diesen Stamm liegen noch keine Rekorde vor.");
     const box=$("tribe"); box.replaceChildren();
     if(!members.length){ box.appendChild(el("p","empty","Keine Mitglieder mit Daten.")); return; }
-    const heads=[["Spieler","l"],["Punkte"],["± 1 h"],["± 24 h"],["Dörfer"],["Bash A"],["Bash V"],["Bash U"]]
-      .concat(TYPES.map(([,l])=>[l]));
-    box.appendChild(table(heads, members.map(r=>{
+    const cols=[["Spieler","l"],["Punkte","",1],["± 1 h","",1],["± 24 h","",1],["Dörfer","",1],
+                ["Bash A","",1],["Bash V","",1],["Bash U","",1]].concat(TYPES.map(([,l])=>[l,"",1]));
+    box.appendChild(table(cols, members.map(r=>{
       const R=rec[r[idx.id]]||{};
       return [[r[idx.name],"l name"],[nf.format(r[idx.points]),"",r[idx.points]],
               [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
               [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.att]),"",r[idx.att]],
               [nf.format(r[idx.def]),"",r[idx.def]],[nf.format(r[idx.sup]),"",r[idx.sup]]]
-        .concat(TYPES.map(([t])=>[R[t]? nf.format(R[t].value) : "–", R[t]? "" : "na", R[t]? R[t].value : -1]));
-    }), [["Mitglied",1],["Stand jetzt",7],["Rekorde, bester Tag",TYPES.length]], 1));
+        .concat(TYPES.map(([t])=>[R[t]? nf.format(R[t].value):"–", R[t]? "":"na", R[t]? R[t].value:null]));
+    }), {groups:[["Mitglied",1],["Stand jetzt",7],["Rekorde, bester Tag",TYPES.length]], sort:1}));
   }
   pick.addEventListener("change", renderTribe);
   renderTribe();
 
-  // Nachbarschaft: Spieler nach Kontinent. Die Dorfdaten werden erst geladen, wenn sie gebraucht werden.
+  /* Nachbarschaft nach Kontinent */
   let villages=null;
   async function showNeighbors(){
     const nums=[...new Set(($("kont").value.match(/\d{1,2}/g)||[]).map(Number))].filter(n=>n>=0&&n<=99);
     const box=$("neighbors"); box.replaceChildren();
     if(!nums.length){ box.appendChild(el("p","empty","Kontinentnummern eingeben, zum Beispiel 44, 45.")); return; }
     box.appendChild(el("p","empty","Lade Dorfdaten …"));
-    if(!villages){ try{ villages=await load("villages"); } catch(e){ box.replaceChildren(el("p","empty","Dorfdaten nicht verfügbar: "+e.message)); return; } }
-    const want=new Set(nums);
-    const perPlayer=new Map();     // Spielerzeile -> Dörfer in den gewählten Kontinenten
+    if(!villages){ try{ villages=await loadData("villages"); }
+      catch(e){ box.replaceChildren(el("p","empty","Dorfdaten nicht verfügbar: "+e.message)); return; } }
+    const want=new Set(nums), perPlayer=new Map();
     villages.rows.forEach(r=>{
       const p=r[1]; if(p<0) return;
       const x=Math.floor(r[0]/1000), y=r[0]%1000;
       if(!want.has(Math.floor(y/100)*10+Math.floor(x/100))) return;
-      perPlayer.set(p, (perPlayer.get(p)||0)+1);
+      perPlayer.set(p,(perPlayer.get(p)||0)+1);
     });
     box.replaceChildren();
     if(!perPlayer.size){ box.appendChild(el("p","empty","Keine Dörfer in diesen Kontinenten.")); return; }
-    const rows=[...perPlayer].map(([pi,n])=>{
-      const r=players.rows[pi];
-      return [[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],[nf.format(n),"",n],
-              [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.points]),"",r[idx.points]],
-              [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
-              [nf.format(r[idx.all]),"",r[idx.all]],[nf.format(r[idx.att]),"",r[idx.att]],[nf.format(r[idx.def]),"",r[idx.def]]];
-    });
-    box.appendChild(table([["Spieler","l"],["Stamm","l"],["Dörfer hier"],["Dörfer gesamt"],["Punkte"],
-                           ["± 1 h"],["± 24 h"],["Bash"],["Bash A"],["Bash V"]], rows, null, 4));
-    $("kont-hint").textContent = nf.format(perPlayer.size)+" Spieler in K"+nums.join(", K")
-      +" · Stand "+(villages.source==="cache"? "aktueller Lauf" : "Tagesarchiv vom "+fmtDay((villages.source||"").slice(6)))
-      +" · Spaltenkopf anklicken sortiert.";
+    box.appendChild(table([["Spieler","l"],["Stamm","l"],["Dörfer hier","",1],["Dörfer gesamt","",1],
+                           ["Punkte","",1],["± 1 h","",1],["± 24 h","",1],["Bash","",1],["Bash A","",1],["Bash V","",1]],
+      [...perPlayer].map(([pi,n])=>{
+        const r=players.rows[pi];
+        return [[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],[nf.format(n),"",n],
+                [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.points]),"",r[idx.points]],
+                [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
+                [nf.format(r[idx.all]),"",r[idx.all]],[nf.format(r[idx.att]),"",r[idx.att]],[nf.format(r[idx.def]),"",r[idx.def]]];
+      }), {sort:4}));
+    $("kont-hint").textContent=nf.format(perPlayer.size)+" Spieler in K"+nums.join(", K")
+      +" · Stand "+(villages.source==="cache"? "aktueller Lauf" : "Tagesarchiv vom "+fmtDay((villages.source||"").slice(6)));
   }
   $("kont-go").addEventListener("click", showNeighbors);
   $("kont").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); showNeighbors(); } });
   const kParam=new URLSearchParams(location.search).get("k");
   if(kParam){ $("kont").value=kParam; showNeighbors(); }
 
-  // Weltspitze "An einem Tag" aus dem stündlichen Änderungs-Check
-  const top=(tribe.top||[]);
-  const byType={}; top.forEach(([pid,t,rank,value,date])=>{ (byType[t]=byType[t]||[]).push({pid,rank,value,date}); });
+  /* Weltspitze „An einem Tag“ */
+  const byType={}; ((tribe.top)||[]).forEach(([pid,t,rank,value,date])=>{ (byType[t]=byType[t]||[]).push({pid,rank,value,date}); });
   const nameById={}; players.rows.forEach(r=>{ nameById[r[idx.id]]=[r[idx.name], allyTag[r[idx.ally]]||""]; });
   const avail=TYPES.map(([t])=>t).filter(t=>byType[t]&&byType[t].length);
-  if(!avail.length){
-    $("top").appendChild(el("p","empty","Die Spitze der Ranglisten wird ab dem nächsten Sammellauf gespeichert."));
-  } else {
-    let tt=avail[0];
-    const seg=$("toptype");
-    avail.forEach(t=>{
-      const b=el("button","tw",TYPE_LONG[t]||t); b.type="button"; b.dataset.t=t;
-      b.addEventListener("click",()=>{ tt=t; renderTop(); });
-      seg.appendChild(b);
-    });
+  if(!avail.length) $("top").appendChild(el("p","empty","Die Spitze der Ranglisten wird ab dem nächsten Lauf gespeichert."));
+  else {
+    let tt=avail[0]; const seg=$("toptype");
+    avail.forEach(t=>{ const b=el("button","tw",TYPE_LONG[t]||t); b.type="button"; b.dataset.t=t;
+      b.addEventListener("click",()=>{ tt=t; renderTop(); }); seg.appendChild(b); });
     function renderTop(){
       [...seg.children].forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.t===tt)));
       const box=$("top"); box.replaceChildren();
-      box.appendChild(table([["Platz"],["Spieler","l"],["Stamm","l"],["Wert"],["Datum","l"]],
-        byType[tt].map(e=>{
-          const n=nameById[e.pid]||["Spieler "+e.pid,""];
-          return [[nf.format(e.rank),"",e.rank],[n[0],"l name"],[n[1],"l"],[nf.format(e.value),"",e.value],
-                  [fmtDay(e.date),"l",e.date||""]];
-        }), null, 0, "asc"));   // Platz 1 zuerst
+      box.appendChild(table([["Rang","",1],["Spieler","l"],["Stamm","l"],["Wert","",1],["Datum","l",1]],
+        byType[tt].map(e=>{ const n=nameById[e.pid]||["Spieler "+e.pid,""];
+          return [[nf.format(e.rank),"rank",e.rank],[n[0],"l name"],[n[1],"l"],[nf.format(e.value),"",e.value],
+                  [fmtDay(e.date),"l",(e.date||"").replace(/-/g,"")]]; }),
+        {sort:0, dir:"asc"}));
     }
     renderTop();
   }
 
-  // Läufe
+  /* Letzte Läufe */
   const runs=(meta.runs||[]).slice(-12).reverse();
-  $("runs").appendChild(table([["Zeit","l"],["Anlass","l"],["Ergebnis","l"],["Weltdaten","l"],["Abrufe W"],["Abrufe R"],["Dauer"],["Fehler","l"]],
-    runs.map(r=>[[fmtTime(r.run_utc),"l",r.run_utc],[r.trigger,"l"],[r.result,"l"],
+  $("runs").appendChild(table([["Zeit","l",1],["Anlass","l"],["Ergebnis","l"],["Weltdaten","l"],
+                               ["Abrufe W","",1],["Abrufe R","",1],["Dauer","",1],["Fehler","l"]],
+    runs.map(r=>[[fmtTime(r.run_utc),"l",(r.run_utc||"").replace(/\D/g,"")],[r.trigger,"l"],[r.result,"l"],
                  [r.world_changed==="1"?"neu":"unverändert","l"],[r.world_requests,"",r.world_requests],
                  [r.guest_requests,"",r.guest_requests],[r.duration_s+" s","",r.duration_s],[r.errors||"","l"]])));
 })();
