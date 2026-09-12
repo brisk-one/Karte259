@@ -5,86 +5,90 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Karte 259</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@700&family=Source+Sans+3:wght@400;600;700&display=swap">
 <style>
+/* Gestaltung angelehnt an die Oberfläche von Die Stämme: Pergament, braune Rahmen, schmale Tabellen. */
 :root{
-  --ground:#eff2ea; --surface:#fbfcf9; --ink:#1a2016; --ink-2:#4a5544; --muted:#65705f;
-  --line:#d7ddcf; --line-strong:#b9c2af; --hover:#f1f4ec;
-  --band:#416729; --band-ink:#ffffff; --band-dim:#d9e6cf;
-  --band-grid:rgba(255,255,255,.08); --band-grid-major:rgba(255,255,255,.17);
-  --accent:#2a4fc4; --chip:#1a2016; --chip-ink:#fbfcf9;
-  --good:#2f7d32; --good-bg:#e3f1e1; --bad:#b3261e; --bad-bg:#fbe4e2; --up:#2f7d32; --down:#b3261e;
-  --focus:#2a4fc4;
-}
-@media (prefers-color-scheme: dark){
-  :root{
-    --ground:#0f140f; --surface:#182018; --ink:#e4e9de; --ink-2:#aab4a3; --muted:#869281;
-    --line:#2b352a; --line-strong:#3d4a3b; --hover:#1f281f;
-    --band:#2b461b; --band-ink:#eef2e9; --band-dim:#b9c9ad;
-    --band-grid:rgba(255,255,255,.05); --band-grid-major:rgba(255,255,255,.11);
-    --accent:#8fb0ff; --chip:#e4e9de; --chip-ink:#111611;
-    --good:#8fd18f; --good-bg:#1c2e1c; --bad:#ff9b92; --bad-bg:#3a1c1a; --up:#8fd18f; --down:#ff9b92;
-    --focus:#8fb0ff;
-  }
+  --parchment:#f4e4bc; --parchment-2:#eadcb4; --row:#f7edd2; --row-alt:#efe0b8;
+  --frame:#603000; --frame-soft:#b8a06c; --bar:#c1a264; --bar-2:#d8bd8a;
+  --ink:#2b1d06; --ink-2:#5c4415; --muted:#7a6435;
+  --good:#2f6b1f; --good-bg:#dfeccd; --bad:#9c2b1c; --bad-bg:#f2ddd6;
 }
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0; background:var(--ground); color:var(--ink); font:16px/1.5 "Source Sans 3","Source Sans Pro","Segoe UI",system-ui,sans-serif}
-.wrap{max-width:1120px; margin-inline:auto; padding-inline:clamp(16px,4vw,40px)}
-h1,h2{margin:0; text-wrap:balance}
-p{margin:0}
-:focus-visible{outline:2px solid var(--focus); outline-offset:2px}
-.band{background-color:var(--band); color:var(--band-ink);
-  background-image:linear-gradient(var(--band-grid-major) 1px,transparent 1px),linear-gradient(90deg,var(--band-grid-major) 1px,transparent 1px),linear-gradient(var(--band-grid) 1px,transparent 1px),linear-gradient(90deg,var(--band-grid) 1px,transparent 1px);
-  background-size:120px 120px,120px 120px,24px 24px,24px 24px}
-.band .wrap{padding-block:24px 26px; display:grid; gap:12px}
-.eyebrow{font-size:.78rem; letter-spacing:.12em; text-transform:uppercase; color:var(--band-dim); font-weight:600}
-h1{font-family:"Grenze Gotisch",Georgia,serif; font-size:clamp(2.4rem,7vw,3.6rem); line-height:.95; font-weight:700}
-.facts{display:flex; flex-wrap:wrap; gap:8px 28px; margin:0}
-.facts div{display:grid}
-.facts dt{font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--band-dim); font-weight:600}
-.facts dd{margin:0; font-size:1.15rem; font-weight:600}
-.stamp{font-size:.88rem; color:var(--band-dim)}
-a.tomap{display:inline-block; margin-top:2px; padding:5px 12px; border-radius:6px; font-weight:700; font-size:.95rem;
-  color:var(--band); background:var(--band-dim); text-decoration:none; border:1px solid rgba(0,0,0,.15)}
-a.tomap:hover{background:#fff}
-main.wrap{padding-block:26px 48px; display:grid; grid-template-columns:minmax(0,1fr); gap:34px}
-section{min-width:0}
-h2{font-size:1.25rem; font-weight:700}
-.head{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 18px; margin-bottom:12px}
-.hint{font-size:.88rem; color:var(--muted)}
-.panel{background:var(--surface); border:1px solid var(--line); border-radius:8px}
+[hidden]{display:none !important}
+body{margin:0; background:#3b2a12 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%233b2a12'/%3E%3Cpath d='M0 20h40M20 0v40' stroke='%2345331a' stroke-width='1'/%3E%3C/svg%3E");
+  color:var(--ink); font:13px/1.45 Verdana,Geneva,"DejaVu Sans",sans-serif}
+a{color:var(--frame)}
+:focus-visible{outline:2px solid #8a5a12; outline-offset:1px}
+.wrap{max-width:1180px; margin-inline:auto; padding-inline:clamp(8px,2vw,18px)}
+
+header{background:linear-gradient(#8a5a12,#603000); color:#f4e4bc; border-bottom:2px solid #2f1800}
+header .wrap{padding-block:12px 14px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 20px}
+header .eyebrow{font-size:11px; color:#e2caa0; margin:0}
+header h1{font-size:24px; margin:0; font-weight:700; letter-spacing:.02em}
+a.tomap{margin-left:auto; font-weight:700; font-size:13px; color:var(--ink); text-decoration:none;
+  background:linear-gradient(#f6e7bd,#dcc48a); border:1px solid #3f2100; border-radius:3px; padding:5px 12px}
+a.tomap:hover{background:linear-gradient(#fff3d3,#e6d0a0)}
+
+.facts{display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:10px 0 0; width:100%}
+.facts div{display:grid; background:var(--parchment); color:var(--ink);   /* sonst erbt die Kachel das Beige der Kopfzeile */
+  border:1px solid var(--frame); border-radius:3px; padding:3px 10px 4px; min-width:118px}
+.facts dt{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700}
+.facts dd{margin:0; font-size:17px; font-weight:700}
+.stamp{font-size:11.5px; color:#e2caa0; margin:8px 0 0; width:100%}
+
+main.wrap{padding-block:14px 30px; display:grid; gap:16px}
+.panel{background:var(--parchment); border:1px solid var(--frame); border-radius:3px}
+.panel>h2{margin:0; font-size:13px; font-weight:700; color:#3f2100; padding:4px 10px;
+  background:linear-gradient(var(--bar-2),var(--bar)); border-bottom:1px solid var(--frame);
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px}
+.panel>h2 .hint{font-weight:400; font-size:11px; color:#4a3410}
+.panel>h2 .seg{margin-left:auto; display:inline-flex; gap:3px}
+button.tw{font:inherit; font-size:11.5px; font-weight:700; color:var(--ink); cursor:pointer;
+  background:linear-gradient(#f6e7bd,#dcc48a); border:1px solid var(--frame); border-radius:3px; padding:2px 8px}
+button.tw:hover:not(:disabled){background:linear-gradient(#fff3d3,#e6d0a0)}
+button.tw[aria-pressed="true"]{background:linear-gradient(#a97c33,#8a5a12); color:#f7ecd2; border-color:#3f2100}
+button.tw:disabled{opacity:.45; cursor:not-allowed}
 .scroll{overflow-x:auto}
-.statusbar{display:flex; flex-wrap:wrap; align-items:center; gap:10px 26px; padding:12px 16px}
-.pill{display:inline-flex; align-items:center; gap:7px; font-weight:700; font-size:.9rem; padding:3px 10px; border-radius:999px}
-.pill.ok{background:var(--good-bg); color:var(--good)}
-.pill.err{background:var(--bad-bg); color:var(--bad)}
+.statusbar{display:flex; flex-wrap:wrap; align-items:center; gap:8px 22px; padding:8px 10px}
+.pill{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:12px; padding:2px 9px;
+  border:1px solid var(--frame); border-radius:3px}
+.pill.ok{background:var(--good-bg); color:var(--good)} .pill.err{background:var(--bad-bg); color:var(--bad)}
 .pill i{width:8px; height:8px; border-radius:50%; background:currentColor}
-.kv{display:grid} .kv span{font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600} .kv b{font-weight:600}
-.errors{margin:0; padding:0 16px 12px 34px; color:var(--bad); font-size:.92rem}
-table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums}
-th,td{padding:6px 10px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap}
-th{font-size:.8rem; font-weight:600; color:var(--ink-2); border-bottom-color:var(--line-strong); vertical-align:bottom}
+.kv{display:grid} .kv span{font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); font-weight:700}
+.kv b{font-weight:700}
+.errors{margin:0; padding:0 12px 10px 28px; color:var(--bad); font-size:12px}
+
+table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; font-size:12px}
+th,td{padding:3px 8px; text-align:right; border-bottom:1px solid #ddceA5; white-space:nowrap}
+th{font-size:11px; font-weight:700; color:#3f2100; background:var(--parchment-2);
+  border-bottom:1px solid var(--frame); vertical-align:bottom; position:sticky; top:0}
 th.l,td.l{text-align:left}
-tbody tr:last-child td{border-bottom:0}
-tbody tr:hover td{background:var(--hover)}
-td.name{font-weight:600}
-.up{color:var(--up)} .down{color:var(--down)} .na{color:var(--muted)}
-.seg{display:inline-flex; gap:4px; flex-wrap:wrap}
-.seg button{font:inherit; font-size:.88rem; font-weight:600; color:var(--ink-2); background:var(--surface); border:1px solid var(--line-strong); border-radius:6px; padding:4px 10px; cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--chip); color:var(--chip-ink); border-color:var(--chip)}
-.seg button:disabled{opacity:.45; cursor:not-allowed}
-.empty{padding:14px 16px; color:var(--muted)}
-.group th{font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line); text-align:left}
-footer{font-size:.84rem; color:var(--muted); border-top:1px solid var(--line); padding-block:16px 28px}
+th[data-sort]{cursor:pointer; user-select:none}
+th[data-sort]:hover{background:var(--bar-2)}
+th[data-sort]::after{content:"\2195"; opacity:.35; margin-left:4px; font-size:10px}
+th[aria-sort="descending"]::after{content:"\25BC"; opacity:.9}
+th[aria-sort="ascending"]::after{content:"\25B2"; opacity:.9}
+tbody tr:nth-child(odd){background:var(--row)}
+tbody tr:nth-child(even){background:var(--row-alt)}
+tbody tr:hover td{background:#fff6dc}
+td.name{font-weight:700}
+.up{color:var(--good); font-weight:700} .down{color:var(--bad); font-weight:700} .na{color:var(--muted)}
+.group th{font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:#4a3410;
+  background:linear-gradient(var(--bar-2),var(--bar)); text-align:left; position:static}
+.empty{padding:10px 12px; color:var(--muted)}
+footer{color:#d8c49a; font-size:11.5px; border-top:1px solid #5a4423; padding-block:12px 22px}
+footer a{color:#f0dcb0}
+@media (max-width:640px){ header h1{font-size:19px} .facts div{min-width:100px} }
 </style>
 </head>
 <body>
-<header class="band">
+<header>
   <div class="wrap">
-    <p class="eyebrow">Die Stämme · Welt 259 · Datensammler</p>
-    <h1>Karte 259</h1>
+    <div>
+      <p class="eyebrow">Die Stämme · Welt 259 · Datensammler</p>
+      <h1>Karte 259</h1>
+    </div>
+    <a class="tomap" href="karte.html">Zur Karte &raquo;</a>
     <dl class="facts">
       <div><dt>Spieler</dt><dd id="f-players">…</dd></div>
       <div><dt>Stämme</dt><dd id="f-allies">…</dd></div>
@@ -92,58 +96,106 @@ footer{font-size:.84rem; color:var(--muted); border-top:1px solid var(--line); p
       <div><dt>Historie seit</dt><dd id="f-since">…</dd></div>
     </dl>
     <p class="stamp" id="stamp">Lade Daten …</p>
-    <p><a class="tomap" href="karte.html">Zur Karte der Welt 259 &raquo;</a></p>
   </div>
 </header>
 
 <main class="wrap">
-  <section aria-labelledby="h-status">
-    <div class="head"><h2 id="h-status">Sammler</h2><p class="hint">Läuft stündlich bei GitHub, Läufe können sich um einige Minuten verspäten.</p></div>
-    <div class="panel">
-      <div class="statusbar" id="statusbar"></div>
-      <ul class="errors" id="errors" hidden></ul>
-    </div>
+  <section class="panel" aria-labelledby="h-status">
+    <h2 id="h-status">Sammler <span class="hint">läuft stündlich bei GitHub, Läufe können sich um einige Minuten verspäten</span></h2>
+    <div class="statusbar" id="statusbar"></div>
+    <ul class="errors" id="errors" hidden></ul>
   </section>
 
-  <section aria-labelledby="h-movers">
-    <div class="head">
-      <h2 id="h-movers">Größter Punktezuwachs</h2>
-      <div class="seg" id="win" role="group" aria-label="Zeitfenster">
-        <button type="button" data-w="1h">1 Stunde</button>
-        <button type="button" data-w="24h">24 Stunden</button>
-        <button type="button" data-w="7d">7 Tage</button>
-      </div>
-    </div>
-    <div class="panel scroll" id="movers"></div>
+  <section class="panel" aria-labelledby="h-movers">
+    <h2 id="h-movers">Größter Punktezuwachs
+      <span class="seg" id="win" role="group" aria-label="Zeitfenster">
+        <button class="tw" type="button" data-w="1h">1 Stunde</button>
+        <button class="tw" type="button" data-w="24h">24 Stunden</button>
+        <button class="tw" type="button" data-w="7d">7 Tage</button>
+      </span>
+    </h2>
+    <div class="scroll" id="movers"></div>
   </section>
 
-  <section aria-labelledby="h-tribe">
-    <div class="head"><h2 id="h-tribe">Stamm</h2><p class="hint" id="tribe-hint"></p></div>
-    <div class="panel scroll" id="tribe"></div>
+  <section class="panel" aria-labelledby="h-tribe">
+    <h2 id="h-tribe">Stamm <span class="hint" id="tribe-hint"></span></h2>
+    <div class="scroll" id="tribe"></div>
   </section>
 
-  <section aria-labelledby="h-runs">
-    <div class="head"><h2 id="h-runs">Letzte Läufe</h2><p class="hint">Nachweis für Takt und Last: Abrufe je Lauf bei Weltdaten und Ranglisten.</p></div>
-    <div class="panel scroll" id="runs"></div>
+  <section class="panel" aria-labelledby="h-top">
+    <h2 id="h-top">Weltspitze „An einem Tag“
+      <span class="seg" id="toptype" role="group" aria-label="Kategorie"></span>
+    </h2>
+    <div class="scroll" id="top"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-runs">
+    <h2 id="h-runs">Letzte Läufe <span class="hint">Nachweis für Takt und Last: Abrufe je Lauf bei Weltdaten und Ranglisten</span></h2>
+    <div class="scroll" id="runs"></div>
   </section>
 </main>
 
-<footer class="wrap">Fan-Projekt mit öffentlichen Daten von die-staemme.de (Weltdaten und Gastzugang). Kein Angebot von InnoGames.</footer>
+<footer class="wrap">Fan-Projekt mit öffentlichen Daten von die-staemme.de (Weltdaten und Gastzugang). Kein Angebot von InnoGames.
+Quelltext auf <a href="https://github.com/brisk-one/Karte259">GitHub</a>.</footer>
 
 <script>
 const nf = new Intl.NumberFormat("de-DE");
 const dtf = new Intl.DateTimeFormat("de-DE", {timeZone:"Europe/Berlin", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"});
-const TYPES = [["loot_vil","Dörfer gepl."],["loot_res","Rohst. gepl."],["scavenge","Gesammelt"],["kill_att","Bash Angr."],["kill_def","Bash Vert."],["kill_sup","Bash Unt."],["conquer","Erobert"]];
+const TYPES = [["loot_vil","Dörfer gepl."],["loot_res","Rohst. gepl."],["scavenge","Gesammelt"],
+               ["kill_att","Bash Angr."],["kill_def","Bash Vert."],["kill_sup","Bash Unt."],["conquer","Erobert"]];
+const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplündert", scavenge:"Rohstoffe gesammelt",
+                   kill_att:"Bash Angriff", kill_def:"Bash Verteidigung", kill_sup:"Bash Unterstützung", conquer:"Dörfer erobert"};
 const $ = id => document.getElementById(id);
 function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
 function fmtTime(s){ if(!s) return "k. A."; const d=new Date(s); return isNaN(d)? s : dtf.format(d)+" Uhr"; }
-function signed(v){ if(v==null) return el("span","na",""); const s=el("span", v>0?"up":(v<0?"down":"na"), (v>0?"+":"")+nf.format(v)); return s; }
-function table(headers, rows, groups){
-  const t=el("table"); const th=el("thead");
+function fmtDay(s){ if(!s) return ""; const p=String(s).split("-"); return p.length===3? p[2]+"."+p[1]+"."+p[0] : s; }
+function signed(v){ if(v==null) return el("span","na","–"); return el("span", v>0?"up":(v<0?"down":"na"), (v>0?"+":"")+nf.format(v)); }
+
+/* Tabelle mit Sortierung: jede Zelle darf einen Sortierwert mitbringen ([inhalt, klasse, sortwert]). */
+function table(headers, rows, groups, defaultSort){
+  const t=el("table"), th=el("thead");
   if(groups){ const g=el("tr","group"); groups.forEach(([label,span])=>{ const c=el("th",null,label); c.colSpan=span; g.appendChild(c); }); th.appendChild(g); }
-  const hr=el("tr"); headers.forEach(([label,cls])=>hr.appendChild(el("th",cls||null,label))); th.appendChild(hr); t.appendChild(th);
-  const tb=el("tbody"); rows.forEach(cells=>{ const tr=el("tr"); cells.forEach(([content,cls])=>{ const td=el("td",cls||null); if(content instanceof Node) td.appendChild(content); else td.textContent=content; tr.appendChild(td); }); tb.appendChild(tr); }); t.appendChild(tb);
+  const hr=el("tr");
+  headers.forEach(([label,cls],i)=>{
+    const c=el("th",cls||null,label);
+    c.dataset.sort=String(i); c.tabIndex=0;
+    c.addEventListener("click",()=>sortBy(t,i));
+    c.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); sortBy(t,i); } });
+    hr.appendChild(c);
+  });
+  th.appendChild(hr); t.appendChild(th);
+  const tb=el("tbody");
+  rows.forEach(cells=>{
+    const tr=el("tr");
+    cells.forEach(([content,cls,sortValue])=>{
+      const td=el("td",cls||null);
+      if(content instanceof Node) td.appendChild(content); else td.textContent=content;
+      td.dataset.v = sortValue!=null? sortValue : (content instanceof Node? content.textContent : content);
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+  if(defaultSort!=null) sortBy(t, Math.abs(defaultSort), defaultSort<0? "asc" : "desc");
   return t;
+}
+function sortBy(t, col, force){
+  const ths=[...t.tHead.rows[t.tHead.rows.length-1].cells];
+  const cur=ths[col].getAttribute("aria-sort");
+  const dir = force || (cur==="descending" ? "asc" : "desc");
+  ths.forEach(c=>c.removeAttribute("aria-sort"));
+  ths[col].setAttribute("aria-sort", dir==="asc"? "ascending" : "descending");
+  const num = s => { const v=parseFloat(String(s).replace(/\./g,"").replace(",",".").replace(/[^\d,.\-]/g,"")); return isNaN(v)? null : v; };
+  const rows=[...t.tBodies[0].rows];
+  rows.sort((a,b)=>{
+    const x=a.cells[col].dataset.v, y=b.cells[col].dataset.v;
+    const nx=num(x), ny=num(y);
+    let c;
+    if(nx!=null && ny!=null) c = nx-ny;
+    else c = String(x).localeCompare(String(y), "de", {numeric:true, sensitivity:"base"});
+    return dir==="asc"? c : -c;
+  });
+  rows.forEach(r=>t.tBodies[0].appendChild(r));
 }
 
 async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-cache"}); if(!r.ok) throw new Error(name+": HTTP "+r.status); return r.json(); }
@@ -152,27 +204,29 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   let meta, players, allies, tribe;
   try { [meta, players, allies, tribe] = await Promise.all(["meta","players","allies","tribe"].map(load)); }
   catch(e){ $("stamp").textContent="Daten konnten nicht geladen werden: "+e.message; return; }
-  const st=meta.status||{}; const counts=st.counts||{};
+  const st=meta.status||{}, counts=st.counts||{};
   $("f-players").textContent = counts.players!=null? nf.format(counts.players) : "k. A.";
   $("f-allies").textContent = counts.allies!=null? nf.format(counts.allies) : "k. A.";
   $("f-villages").textContent = counts.villages!=null? nf.format(counts.villages) : "k. A.";
   $("f-since").textContent = fmtTime(st.history_since_utc);
   $("stamp").textContent = "Weltdaten vom "+fmtTime(st.data_last_modified)+" · letzter Lauf "+fmtTime(st.run_utc);
 
-  // Status
-  const sb=$("statusbar"); const ok=!(st.errors&&st.errors.length);
-  const pill=el("span","pill "+(ok?"ok":"err")); pill.appendChild(el("i")); pill.appendChild(document.createTextNode(ok?"Läuft":"Fehler im letzten Lauf")); sb.appendChild(pill);
-  [["Letzter Lauf", fmtTime(st.run_utc)+" ("+(st.result||"k. A.")+")"],["Weltdaten", st.world&&st.world.changed? "neu geladen" : "unverändert"],
+  // Sammler
+  const sb=$("statusbar"), ok=!(st.errors&&st.errors.length);
+  const pill=el("span","pill "+(ok?"ok":"err")); pill.appendChild(el("i"));
+  pill.appendChild(document.createTextNode(ok?"Läuft":"Fehler im letzten Lauf")); sb.appendChild(pill);
+  [["Letzter Lauf", fmtTime(st.run_utc)+" ("+(st.result||"k. A.")+")"],
+   ["Weltdaten", st.world&&st.world.changed? "neu geladen" : "unverändert"],
    ["Abrufe", "Weltdaten "+((st.requests||{}).world||0)+", Ranglisten "+((st.requests||{}).guest||0)],
-   ["Tagesbeste zuletzt voll erhoben", fmtTime(st.last_full_scrape_utc)]].forEach(([k,v])=>{ const d=el("div","kv"); d.appendChild(el("span",null,k)); d.appendChild(el("b",null,v)); sb.appendChild(d); });
+   ["Tagesbeste zuletzt voll erhoben", fmtTime(st.last_full_scrape_utc)]]
+   .forEach(([k,v])=>{ const d=el("div","kv"); d.appendChild(el("span",null,k)); d.appendChild(el("b",null,v)); sb.appendChild(d); });
   if(!ok){ const ul=$("errors"); st.errors.forEach(x=>ul.appendChild(el("li",null,x))); ul.hidden=false; }
 
-  // Spieler-Index
   const F=players.fields, idx=Object.fromEntries(F.map((f,i)=>[f,i]));
   const allyTag={}; allies.rows.forEach(a=>{ allyTag[a[0]]=a[2]; });
   const refs=players.refs_utc||{};
 
-  // Zuwachs
+  // Größter Punktezuwachs
   const winBtns=[...document.querySelectorAll("#win button")];
   winBtns.forEach(b=>{ b.disabled=!refs[b.dataset.w]; });
   let win = refs["24h"]? "24h" : (refs["1h"]? "1h" : null);
@@ -180,12 +234,17 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
     winBtns.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.w===win)));
     const box=$("movers"); box.replaceChildren();
     if(!win){ box.appendChild(el("p","empty","Noch keine Vergleichswerte. Der erste Zuwachs ist nach dem zweiten stündlichen Lauf sichtbar.")); return; }
-    const k="d"+win+"_points";
+    const k="d"+win+"_points", bashK=["att","def","sup"].map(f=>idx["d"+win+"_"+f]);
     const top=players.rows.filter(r=>r[idx[k]]!=null).sort((a,b)=>b[idx[k]]-a[idx[k]]).slice(0,20);
-    const bashK=["att","def","sup"].map(f=>idx["d"+win+"_"+f]);
     box.appendChild(table([["#"],["Spieler","l"],["Stamm","l"],["Punkte"],["Zuwachs"],["Dörfer ±"],["Bash ±"]],
-      top.map((r,i)=>[[String(i+1),"na"],[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],[nf.format(r[idx.points])],[signed(r[idx[k]])],[signed(r[idx["d"+win+"_villages"]])],[signed(bashK.reduce((s,j)=>s+(r[j]||0),0))]])));
-    const note=el("p","hint","Vergleich mit Stand vom "+fmtTime(refs[win])); note.style.padding="8px 12px"; box.appendChild(note);
+      top.map((r,i)=>{
+        const bash=bashK.reduce((s,j)=>s+(r[j]||0),0);
+        return [[String(i+1),"na",i+1],[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],
+                [nf.format(r[idx.points]),"",r[idx.points]],[signed(r[idx[k]]),"",r[idx[k]]],
+                [signed(r[idx["d"+win+"_villages"]]),"",r[idx["d"+win+"_villages"]]],[signed(bash),"",bash]];
+      }), null, 4));
+    const note=el("p","empty","Vergleich mit dem Stand vom "+fmtTime(refs[win])+". Spaltenkopf anklicken sortiert.");
+    box.appendChild(note);
   }
   winBtns.forEach(b=>b.addEventListener("click",()=>{ if(!b.disabled){ win=b.dataset.w; renderMovers(); } }));
   renderMovers();
@@ -193,24 +252,58 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   // Stamm
   const tid=(tribe.tribe_ids||[])[0];
   const ally=allies.rows.find(a=>a[0]===tid);
-  $("h-tribe").textContent = ally? "Stamm "+ally[2]+" · "+ally[1] : "Stamm";
-  $("tribe-hint").textContent = "Rekorde aus „An einem Tag“ (bester Tag je Kategorie).";
+  $("h-tribe").firstChild.textContent = ally? "Stamm "+ally[2]+" · "+ally[1]+" " : "Stamm ";
+  $("tribe-hint").textContent = "Rekorde aus „An einem Tag“ (bester Tag je Kategorie). Spaltenkopf anklicken sortiert.";
   const rec={}; (tribe.records||[]).forEach(([pid,type,rank,value,date])=>{ (rec[pid]=rec[pid]||{})[type]={rank,value,date}; });
-  const members=players.rows.filter(r=>r[idx.ally]===tid).sort((a,b)=>b[idx.points]-a[idx.points]);
+  const members=players.rows.filter(r=>r[idx.ally]===tid);
   if(!members.length){ $("tribe").appendChild(el("p","empty","Noch keine Mitgliederdaten.")); }
   else {
-    const heads=[["Spieler","l"],["Punkte"],["± 1 h"],["± 24 h"],["Dörfer"],["Bash A"],["Bash V"],["Bash U"]].concat(TYPES.map(([,l])=>[l]));
+    const heads=[["Spieler","l"],["Punkte"],["± 1 h"],["± 24 h"],["Dörfer"],["Bash A"],["Bash V"],["Bash U"]]
+      .concat(TYPES.map(([,l])=>[l]));
     $("tribe").appendChild(table(heads, members.map(r=>{
       const R=rec[r[idx.id]]||{};
-      return [[r[idx.name],"l name"],[nf.format(r[idx.points])],[signed(r[idx.d1h_points])],[signed(r[idx.d24h_points])],[nf.format(r[idx.villages])],
-        [nf.format(r[idx.att])],[nf.format(r[idx.def])],[nf.format(r[idx.sup])]].concat(TYPES.map(([t])=>[R[t]? nf.format(R[t].value) : "0", R[t]? "" : "na"]));
-    }), [["Mitglied",1],["Stand jetzt",7],["Rekorde, bester Tag",TYPES.length]]));
+      return [[r[idx.name],"l name"],[nf.format(r[idx.points]),"",r[idx.points]],
+              [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
+              [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.att]),"",r[idx.att]],
+              [nf.format(r[idx.def]),"",r[idx.def]],[nf.format(r[idx.sup]),"",r[idx.sup]]]
+        .concat(TYPES.map(([t])=>[R[t]? nf.format(R[t].value) : "0", R[t]? "" : "na", R[t]? R[t].value : 0]));
+    }), [["Mitglied",1],["Stand jetzt",7],["Rekorde, bester Tag",TYPES.length]], 1));
+  }
+
+  // Weltspitze "An einem Tag" aus dem stündlichen Änderungs-Check
+  const top=(tribe.top||[]);
+  const byType={}; top.forEach(([pid,t,rank,value,date])=>{ (byType[t]=byType[t]||[]).push({pid,rank,value,date}); });
+  const nameById={}; players.rows.forEach(r=>{ nameById[r[idx.id]]=[r[idx.name], allyTag[r[idx.ally]]||""]; });
+  const avail=TYPES.map(([t])=>t).filter(t=>byType[t]&&byType[t].length);
+  if(!avail.length){
+    $("top").appendChild(el("p","empty","Die Spitze der Ranglisten wird ab dem nächsten Sammellauf gespeichert."));
+  } else {
+    let tt=avail[0];
+    const seg=$("toptype");
+    avail.forEach(t=>{
+      const b=el("button","tw",TYPE_LONG[t]||t); b.type="button"; b.dataset.t=t;
+      b.addEventListener("click",()=>{ tt=t; renderTop(); });
+      seg.appendChild(b);
+    });
+    function renderTop(){
+      [...seg.children].forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.t===tt)));
+      const box=$("top"); box.replaceChildren();
+      box.appendChild(table([["Platz"],["Spieler","l"],["Stamm","l"],["Wert"],["Datum","l"]],
+        byType[tt].map(e=>{
+          const n=nameById[e.pid]||["Spieler "+e.pid,""];
+          return [[nf.format(e.rank),"",e.rank],[n[0],"l name"],[n[1],"l"],[nf.format(e.value),"",e.value],
+                  [fmtDay(e.date),"l",e.date||""]];
+        }), null, -0));
+    }
+    renderTop();
   }
 
   // Läufe
   const runs=(meta.runs||[]).slice(-12).reverse();
   $("runs").appendChild(table([["Zeit","l"],["Anlass","l"],["Ergebnis","l"],["Weltdaten","l"],["Abrufe W"],["Abrufe R"],["Dauer"],["Fehler","l"]],
-    runs.map(r=>[[fmtTime(r.run_utc),"l"],[r.trigger,"l"],[r.result,"l"],[r.world_changed==="1"?"neu":"unverändert","l"],[r.world_requests],[r.guest_requests],[r.duration_s+" s"],[r.errors||"","l"]])));
+    runs.map(r=>[[fmtTime(r.run_utc),"l",r.run_utc],[r.trigger,"l"],[r.result,"l"],
+                 [r.world_changed==="1"?"neu":"unverändert","l"],[r.world_requests,"",r.world_requests],
+                 [r.guest_requests,"",r.guest_requests],[r.duration_s+" s","",r.duration_s],[r.errors||"","l"]])));
 })();
 </script>
 </body>

@@ -100,7 +100,7 @@ canvas{display:block; width:100%; height:100%}
 <header>
   <p class="eyebrow">Welt 259</p>
   <h1>Karte</h1>
-  <a class="back" href="./">&laquo; Zurück zum Sammler</a>
+  <a class="back" href="./">&laquo; Zurück zur Punkteübersicht</a>
 </header>
 
 <div class="bar">
@@ -158,7 +158,7 @@ const fmtDay = s => { if(!s) return ""; const p=s.split("-"); return p.length===
 
 // Farben auf der Grasfläche. Grau für Barbaren wie im Spiel, kräftige Farben für die großen Stämme.
 const GRASS="#7c9a4e", GRID="rgba(0,0,0,.20)", GRID_MAJOR="rgba(0,0,0,.58)", LABEL="rgba(0,0,0,.55)";
-const C_BARB="#7d8468", C_BONUS="#d9c26a", C_OTHER="#c8cbbc", C_NONE="#c8cbbc", C_LOSS="#2979ff";
+const C_BARB="#7d8468", C_BONUS="#d9c26a", C_OTHER="#c8cbbc", C_NONE="#c8cbbc", C_LOSS="#d50000";
 const C_TRACKED="#1e6fff";          // Stämme, deren Tagesbeste erhoben werden, immer blau
 const TRIBE_COLORS=["#e53935","#fdd835","#d81b60","#00bcd4","#fb8c00","#8e24aa","#c6ff00",
                     "#3949ab","#00e676","#6d4c41","#ff80ab","#b0bec5"];
@@ -166,12 +166,13 @@ const TRIBE_COLORS=["#e53935","#fdd835","#d81b60","#00bcd4","#fb8c00","#8e24aa",
 const EXTRA_COLORS=["#ffffff","#000000","#ff3d00","#76ff03","#18ffff","#f50057","#ffea00","#651fff"];
 // Stufen des prozentualen Punktzuwachses, hergeleitet aus der gemessenen Verteilung vom 12.09.2026:
 // über 1 h wachsen 11,4 % der Spieler überhaupt, über 24 h rund 39 %.
-const GROWTH_COLORS=["#fff7c2","#ffe066","#ffab40","#ff6d00","#d50000"];
+// wenig Zuwachs gelb, viel Zuwachs grün, Verlust rot. Alle Töne heller und satter als die Grasfläche.
+const GROWTH_COLORS=["#fff59d","#ffeb3b","#c6ff00","#76ff03","#00e676"];
 const STEPS={ d1h:[1,2,3,5], d24h:[5,10,15,25], d7d:[10,20,35,60] };
 const VIEW_LABEL={ d1h:"1 Stunde", d24h:"24 Stunden", d7d:"7 Tage" };
 // Ranglisten "An einem Tag": Farbe nach Weltrang, Stufen wie im Artefakt vom 11.09.2026
 const RANK_STEPS=[10,50,100,500,2500];
-const RANK_COLORS=["#d50000","#ff6d00","#ffab40","#ffe066","#fff7c2","#9e9e9e"];
+const RANK_COLORS=["#00e676","#76ff03","#c6ff00","#ffeb3b","#fff59d","#9e9e9e"];
 const INADAY_LABEL={ loot_res:"Rohstoffe geplündert", scavenge:"Rohstoffe gesammelt", loot_vil:"Dörfer geplündert",
                      kill_att:"Bash Angriff", kill_def:"Bash Verteidigung", kill_sup:"Bash Unterstützung",
                      conquer:"Dörfer erobert" };
