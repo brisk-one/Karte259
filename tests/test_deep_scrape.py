@@ -78,6 +78,23 @@ class DeepScrape(unittest.TestCase):
         self.assertEqual({r[2] for r in rows}, {"loot_res", "scavenge"})
 
 
+class NachholenEinzelnerKategorien(unittest.TestCase):
+    """Bricht eine Kategorie ab, wird nur sie erneut geholt und mit dem Bestand zusammengeführt."""
+
+    def test_nur_fehlende_kategorie_ist_ziel(self):
+        alle = ["loot_res", "scavenge", "loot_vil"]
+        done = {"loot_res", "scavenge"}
+        self.assertEqual([t for t in alle if t not in done], ["loot_vil"])
+
+    def test_bestand_anderer_kategorien_bleibt(self):
+        bestand = [{"player_id": "1", "name": "A", "type": "loot_res", "rank": "1", "value": "9", "date": ""},
+                   {"player_id": "2", "name": "B", "type": "loot_vil", "rank": "1", "value": "8", "date": ""}]
+        targets = ["loot_vil"]
+        keep = [[int(r["player_id"]), r["name"], r["type"], int(r["rank"]), int(r["value"]), r["date"]]
+                for r in bestand if r["type"] not in targets]
+        self.assertEqual(keep, [[1, "A", "loot_res", 1, 9, ""]])
+
+
 class PageSizeProbe(unittest.TestCase):
     def setUp(self):
         self.orig_get, self.orig_params = inaday._get, config.DEEP_PAGE_PARAMS

@@ -301,24 +301,31 @@ def update(state, now_utc, now_local, members):
 
     # Vollständige Erhebung der Kategorien ohne Entsprechung in den Weltdaten. Die Rangliste wird
     # einmal täglich neu berechnet, deshalb genügt ein Durchgang pro Tag.
-    # Ein vollständiger Durchgang je DEEP_MAX_AGE_H Stunden. Blieb einer unvollständig, wird er
-    # frühestens nach DEEP_RETRY_H wiederholt, damit ein Abbruch nicht bis zum nächsten Tag stehen bleibt.
+    # Ein vollständiger Durchgang je DEEP_MAX_AGE_H Stunden. Kategorien, die dabei abgebrochen sind,
+    # werden gezielt nachgeholt (frühestens nach DEEP_RETRY_H), statt bis zum nächsten Tag zu fehlen.
     last_ok, last_try = st.get("last_deep_scrape_utc"), st.get("last_deep_try_utc")
     age = lambda s: (now_utc - datetime.fromisoformat(s)) if s else None
-    deep_due = ((not last_ok) or age(last_ok) >= timedelta(hours=config.DEEP_MAX_AGE_H)) \
-        and ((not last_try) or age(last_try) >= timedelta(hours=config.DEEP_RETRY_H))
-    if config.DEEP_TYPES and deep_due and (summary["changed_types"] or not last_ok):
+    done = set(st.get("deep_complete_types") or [])
+    missing = [t for t in config.DEEP_TYPES if t not in done]
+    turn_due = (not last_ok) or age(last_ok) >= timedelta(hours=config.DEEP_MAX_AGE_H)
+    retry_ok = (not last_try) or age(last_try) >= timedelta(hours=config.DEEP_RETRY_H)
+    targets = config.DEEP_TYPES if (turn_due and (summary["changed_types"] or not last_ok)) else missing
+    if config.DEEP_TYPES and targets and retry_ok:
         st["last_deep_try_utc"] = store.iso(now_utc)
         try:
-            rows, pages, note = deep_scrape(state, now_local, config.DEEP_TYPES)
+            rows, pages, note = deep_scrape(state, now_local, targets)
             if rows:
-                store.write_csv(store.dpath("inaday", "deep_latest.csv"), TOP_HEADER,
-                                sorted(rows, key=lambda r: (r[2], r[3])))
-                if all(v.get("complete") for v in note.values()):
+                path = store.dpath("inaday", "deep_latest.csv")
+                keep = [[int(r["player_id"]), r["name"], r["type"], int(r["rank"]), int(r["value"]), r["date"]]
+                        for r in store.read_csv(path) if r["type"] not in targets]
+                store.write_csv(path, TOP_HEADER, sorted(keep + rows, key=lambda r: (r[2], r[3])))
+                done = (done - set(targets)) | {t for t, v in note.items() if v.get("complete")}
+                st["deep_complete_types"] = sorted(done)
+                if done >= set(config.DEEP_TYPES):
                     st["last_deep_scrape_utc"] = store.iso(now_utc)
                 summary.update(deep_rows=len(rows), deep_pages=pages, deep_note=note,
-                               deep_page_size=st.get("page_size"),
-                               deep_complete=all(v.get("complete") for v in note.values()))
+                               deep_targets=targets, deep_page_size=st.get("page_size"),
+                               deep_complete=sorted(done))
         except Exception as e:
             summary["errors"].append(f"Tiefenerhebung: {e}")
 
