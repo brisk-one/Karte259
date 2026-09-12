@@ -155,7 +155,7 @@ function fmtDay(s){ if(!s) return ""; const p=String(s).split("-"); return p.len
 function signed(v){ if(v==null) return el("span","na","–"); return el("span", v>0?"up":(v<0?"down":"na"), (v>0?"+":"")+nf.format(v)); }
 
 /* Tabelle mit Sortierung: jede Zelle darf einen Sortierwert mitbringen ([inhalt, klasse, sortwert]). */
-function table(headers, rows, groups, defaultSort){
+function table(headers, rows, groups, sortCol, sortDir){
   const t=el("table"), th=el("thead");
   if(groups){ const g=el("tr","group"); groups.forEach(([label,span])=>{ const c=el("th",null,label); c.colSpan=span; g.appendChild(c); }); th.appendChild(g); }
   const hr=el("tr");
@@ -179,7 +179,7 @@ function table(headers, rows, groups, defaultSort){
     tb.appendChild(tr);
   });
   t.appendChild(tb);
-  if(defaultSort!=null) sortBy(t, Math.abs(defaultSort), defaultSort<0? "asc" : "desc");
+  if(sortCol!=null) sortBy(t, sortCol, sortDir || "desc");
   return t;
 }
 function sortBy(t, col, force){
@@ -296,7 +296,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
           const n=nameById[e.pid]||["Spieler "+e.pid,""];
           return [[nf.format(e.rank),"",e.rank],[n[0],"l name"],[n[1],"l"],[nf.format(e.value),"",e.value],
                   [fmtDay(e.date),"l",e.date||""]];
-        }), null, -0));
+        }), null, 0, "asc"));   // Platz 1 zuerst
     }
     renderTop();
   }

@@ -308,7 +308,7 @@ function barChart(items){
 }
 
 /* ---------- Tabellen mit Sortierung ---------- */
-function table(headers, rows, defaultSort){
+function table(headers, rows, sortCol, sortDir){
   const t=el("table"), th=el("thead"), hr=el("tr");
   headers.forEach(([label,cls],i)=>{
     const c=el("th",cls||null,label); c.tabIndex=0;
@@ -329,7 +329,7 @@ function table(headers, rows, defaultSort){
     tb.appendChild(tr);
   });
   t.appendChild(tb);
-  if(defaultSort!=null) sortBy(t, Math.abs(defaultSort), defaultSort<0?"asc":"desc");
+  if(sortCol!=null) sortBy(t, sortCol, sortDir || "desc");
   return t;
 }
 function sortBy(t,col,force){
@@ -480,7 +480,7 @@ async function load(n){ const r=await fetch("data/"+n+".json",{cache:"no-cache"}
       box.appendChild(table([["Platz"],["Spieler","l"],["Stamm","l"],["Wert"],["Datum","l"]],
         byType[tt].map(e=>{ const n=nameById[e.pid]||["Spieler "+e.pid,""];
           return [[nf.format(e.rank),"rank",e.rank],[n[0],"l name"],[n[1],"l"],[nf.format(e.value),"",e.value],[fmtDay(e.date),"l",e.date||""]]; }),
-        -0));
+        0, "asc"));   // Platz 1 zuerst
     }
     renderTop();
   }
