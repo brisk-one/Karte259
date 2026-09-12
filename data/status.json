@@ -6,7 +6,7 @@
   "villages": 29973
  },
  "data_last_modified": "Sat, 12 Sep 2026 18:52:54 GMT",
- "duration_s": 14.2,
+ "duration_s": 10.8,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
@@ -35,74 +35,27 @@
  "last_full_scrape_utc": "2026-09-12T00:32:13+00:00",
  "requests": {
   "guest": 7,
-  "world": 8
+  "world": 1
  },
- "result": "neu",
- "run_local": "2026-09-12T21:14:51+02:00",
- "run_utc": "2026-09-12T19:14:51+00:00",
+ "result": "unverändert",
+ "run_local": "2026-09-12T21:17:35+02:00",
+ "run_utc": "2026-09-12T19:17:35+00:00",
  "tribe_ids": [
   456
  ],
  "trigger": "push",
  "world": {
-  "changed": true,
-  "counts": {
-   "allies": 415,
-   "conquers_total": 2473,
-   "players": 10151,
-   "villages": 29973
-  },
+  "changed": false,
+  "counts": null,
   "downloads": [
    {
-    "bytes": 163850,
+    "bytes": 0,
     "file": "player",
     "last_modified": "Sat, 12 Sep 2026 18:52:54 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 9275,
-    "file": "ally",
-    "last_modified": "Sat, 12 Sep 2026 18:47:11 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 412719,
-    "file": "village",
-    "last_modified": "Sat, 12 Sep 2026 18:47:12 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 13082,
-    "file": "kill_att",
-    "last_modified": "Sat, 12 Sep 2026 18:53:02 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 26702,
-    "file": "kill_def",
-    "last_modified": "Sat, 12 Sep 2026 18:47:12 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 3558,
-    "file": "kill_sup",
-    "last_modified": "Sat, 12 Sep 2026 18:53:02 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 33275,
-    "file": "kill_all",
-    "last_modified": "Sat, 12 Sep 2026 18:47:12 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 28899,
-    "file": "conquer",
-    "last_modified": "Sat, 12 Sep 2026 18:53:02 GMT",
-    "status": 200
+    "status": 304
    }
   ],
-  "new_conquers": 0,
-  "note": null
+  "new_conquers": null,
+  "note": "Server hat seit dem letzten Lauf keine neuen Weltdaten erzeugt (304)"
  }
 }
