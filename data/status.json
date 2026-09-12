@@ -1,12 +1,12 @@
 {
  "counts": {
   "allies": 413,
-  "conquers_total": 2338,
+  "conquers_total": 2336,
   "players": 10031,
   "villages": 29559
  },
- "data_last_modified": "Sat, 12 Sep 2026 08:52:54 GMT",
- "duration_s": 17.6,
+ "data_last_modified": "Sat, 12 Sep 2026 08:53:02 GMT",
+ "duration_s": 17.1,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
@@ -31,25 +31,25 @@
   "world": 8
  },
  "result": "neu",
- "run_local": "2026-09-12T11:03:21+02:00",
- "run_utc": "2026-09-12T09:03:21+00:00",
+ "run_local": "2026-09-12T11:10:00+02:00",
+ "run_utc": "2026-09-12T09:10:00+00:00",
  "tribe_ids": [
   456
  ],
- "trigger": "schedule",
+ "trigger": "push",
  "world": {
   "changed": true,
   "counts": {
    "allies": 413,
-   "conquers_total": 2338,
+   "conquers_total": 2336,
    "players": 10031,
    "villages": 29559
   },
   "downloads": [
    {
-    "bytes": 161960,
+    "bytes": 161962,
     "file": "player",
-    "last_modified": "Sat, 12 Sep 2026 08:52:54 GMT",
+    "last_modified": "Sat, 12 Sep 2026 08:53:02 GMT",
     "status": 200
    },
    {
@@ -59,9 +59,9 @@
     "status": 200
    },
    {
-    "bytes": 406737,
+    "bytes": 406734,
     "file": "village",
-    "last_modified": "Sat, 12 Sep 2026 08:53:02 GMT",
+    "last_modified": "Sat, 12 Sep 2026 08:52:54 GMT",
     "status": 200
    },
    {
@@ -73,7 +73,7 @@
    {
     "bytes": 25549,
     "file": "kill_def",
-    "last_modified": "Sat, 12 Sep 2026 08:52:54 GMT",
+    "last_modified": "Sat, 12 Sep 2026 08:47:11 GMT",
     "status": 200
    },
    {
@@ -85,17 +85,17 @@
    {
     "bytes": 32020,
     "file": "kill_all",
-    "last_modified": "Sat, 12 Sep 2026 08:47:11 GMT",
+    "last_modified": "Sat, 12 Sep 2026 08:53:02 GMT",
     "status": 200
    },
    {
-    "bytes": 27289,
+    "bytes": 27260,
     "file": "conquer",
-    "last_modified": "Sat, 12 Sep 2026 08:53:02 GMT",
+    "last_modified": "Sat, 12 Sep 2026 08:47:11 GMT",
     "status": 200
    }
   ],
-  "new_conquers": 10,
+  "new_conquers": 0,
   "note": null
  }
 }
