@@ -4,21 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard · Welt 259</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b0e14'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23ff9f1c'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b0e14'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%2322d3ee'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <style>
 .scopebar{display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; padding:7px 11px;
   background:var(--panel); border:1px solid var(--edge); border-radius:var(--radius); box-shadow:var(--shine)}
 .scopebar>b{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
-.kpi{display:flex; align-items:flex-end; justify-content:space-between; gap:8px}
-.kpi .v{font-size:clamp(21px,2.5vw,30px); line-height:1.05; font-weight:700}
-.kpi .d{font-size:12px; font-weight:700}
 .chartbox{padding:8px 10px 10px}
 .chartbox svg{display:block; width:100%; height:auto}
-.barrow{font-size:11px}
 .note{font-size:11px; color:var(--muted); padding:0 11px 8px}
 .facts .who{font-size:11.5px; font-weight:600; color:var(--ink-2); line-height:1.2}
-.facts>div{min-width:168px}
+.facts>div{min-width:172px}
+/* Kontinente als Raster, so angeordnet wie auf der Karte */
+.kgrid{display:grid; grid-template-columns:repeat(10,1fr); gap:2px; width:min(330px,90vw)}
+.kgrid button{font:inherit; font-size:9px; font-weight:700; line-height:1; padding:0; aspect-ratio:1;
+  color:var(--muted); background:var(--panel-2); border:1px solid var(--edge-line);
+  border-radius:2px; cursor:pointer}
+.kgrid button:hover:not(:disabled){border-color:var(--accent); color:var(--ink)}
+.kgrid button[aria-pressed="true"]{background:var(--btn-on); color:var(--accent-ink); border-color:var(--accent)}
+.kgrid button:disabled{opacity:.2; cursor:default}
+.kwrap{display:flex; flex-wrap:wrap; gap:12px 18px; align-items:flex-start; padding:9px 11px 4px}
+.klegend{font-size:11px; color:var(--muted); max-width:340px; margin:0}
 </style>
 </head>
 <body>
@@ -37,7 +43,7 @@
   </div>
 
   <dl class="facts" id="facts" style="margin-top:10px">
-    <div><dt>Meister Punktezuwachs</dt><dd class="accent-num" id="k1v">…</dd><dd class="who" id="k1n"></dd></div>
+    <div><dt>Größter Punktezuwachs</dt><dd class="accent-num" id="k1v">…</dd><dd class="who" id="k1n"></dd></div>
     <div><dt>Meiste besiegte Gegner dazu</dt><dd class="accent-num" id="k2v">…</dd><dd class="who" id="k2n"></dd></div>
     <div><dt>Meiste Dörfer geplündert</dt><dd class="accent-num" id="k3v">…</dd><dd class="who" id="k3n"></dd></div>
     <div><dt>Meiste Rohstoffe geplündert</dt><dd class="accent-num" id="k4v">…</dd><dd class="who" id="k4n"></dd></div>
@@ -45,15 +51,44 @@
   </dl>
 
   <div class="grid" style="margin-top:10px">
-    <section class="panel c6" aria-labelledby="h-up">
-      <h2 id="h-up">Größter Punktezuwachs
-        <span class="right" id="win" role="group" aria-label="Zeitfenster">
-          <button class="tw" type="button" data-w="1h">1 h</button>
-          <button class="tw" type="button" data-w="24h">24 h</button>
+    <section class="panel c12" aria-label="Zeitfenster">
+      <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; padding:7px 11px">
+        <b style="font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)">Zeitfenster</b>
+        <span id="win" role="group" aria-label="Zeitfenster" style="display:inline-flex; gap:4px; flex-wrap:wrap">
+          <button class="tw" type="button" data-w="1h">1 Stunde</button>
+          <button class="tw" type="button" data-w="12h">12 Stunden</button>
+          <button class="tw" type="button" data-w="24h">24 Stunden</button>
           <button class="tw" type="button" data-w="7d">7 Tage</button>
         </span>
+        <span class="hint" id="win-note" style="color:var(--muted); font-size:11px"></span>
+      </div>
+    </section>
+
+    <section class="panel c4" aria-labelledby="h-off">
+      <h2 id="h-off">Besiegte Gegner dazu · Angriff</h2>
+      <div class="chartbox"><svg id="ch-off" viewBox="0 0 520 300"></svg></div>
+    </section>
+
+    <section class="panel c4" aria-labelledby="h-def">
+      <h2 id="h-def">Besiegte Gegner dazu · Verteidigung</h2>
+      <div class="chartbox"><svg id="ch-def" viewBox="0 0 520 300"></svg></div>
+    </section>
+
+    <section class="panel c4" aria-labelledby="h-both">
+      <h2 id="h-both">Besiegte Gegner dazu · insgesamt</h2>
+      <div class="chartbox"><svg id="ch-both" viewBox="0 0 520 300"></svg></div>
+      <p class="legendrow" style="padding:0 11px 6px" id="both-legend"></p>
+      <p class="note" id="both-note"></p>
+    </section>
+
+    <section class="panel c6" aria-labelledby="h-points">
+      <h2 id="h-points">Größter Punktezuwachs
+        <span class="right" id="pmode" role="group" aria-label="Anzeige">
+          <button class="tw" type="button" data-m="sum">Meiste Punkte</button>
+          <button class="tw" type="button" data-m="delta" aria-pressed="true">Meister Zuwachs</button>
+        </span>
       </h2>
-      <div class="chartbox"><svg id="ch-up" viewBox="0 0 520 300"></svg></div>
+      <div class="chartbox"><svg id="ch-points" viewBox="0 0 520 300"></svg></div>
     </section>
 
     <section class="panel c6" aria-labelledby="h-down">
@@ -61,16 +96,21 @@
       <div class="chartbox"><svg id="ch-down" viewBox="0 0 520 300"></svg></div>
     </section>
 
-    <section class="panel c6" aria-labelledby="h-bash">
-      <h2 id="h-bash">Meiste besiegte Gegner <em>im Zeitfenster, nach Art</em></h2>
-      <div class="chartbox"><svg id="ch-bash" viewBox="0 0 520 300"></svg></div>
-      <p class="legendrow" style="padding:0 11px 4px" id="bash-legend"></p>
-      <p class="note" id="bash-note"></p>
-    </section>
-
-    <section class="panel c6" aria-labelledby="h-tribes">
-      <h2 id="h-tribes">Stämme nach Punktezuwachs <em>im Bereich</em></h2>
-      <div class="chartbox"><svg id="ch-tribes" viewBox="0 0 520 300"></svg></div>
+    <section class="panel c12" aria-labelledby="h-series">
+      <h2 id="h-series">Entwicklung der stärksten Stämme
+        <span class="right" id="smode" role="group" aria-label="Reihe">
+          <button class="tw" type="button" data-s="points" aria-pressed="true">Punkte</button>
+          <button class="tw" type="button" data-s="att">Gegner Angriff</button>
+          <button class="tw" type="button" data-s="def">Gegner Verteidigung</button>
+          <button class="tw" type="button" data-s="all">Gegner insgesamt</button>
+        </span>
+      </h2>
+      <div class="kwrap">
+        <div class="kgrid" id="kgrid" role="group" aria-label="Kontinente wählen"></div>
+        <p class="klegend" id="klegend"></p>
+      </div>
+      <div class="chartbox"><svg id="ch-series" viewBox="0 0 1100 320"></svg></div>
+      <p class="legendrow" style="padding:0 11px 10px" id="series-legend"></p>
     </section>
 
     <section class="panel c4" aria-labelledby="h-dist">
@@ -102,134 +142,191 @@ buildAppbar("dashboard", "Dashboard");
 const TYPES=[["loot_res","Rohstoffe geplündert"],["scavenge","Rohstoffe gesammelt"],["loot_vil","Dörfer geplündert"],
              ["kill_att","Bash Angriff"],["kill_def","Bash Verteidigung"],["kill_sup","Bash Unterstützung"],
              ["conquer","Dörfer erobert"]];
-const C = {up:"#4ade80", down:"#f87171", att:"#ff9f1c", def:"#4dd9ff", sup:"#a78bfa", bar:"#ff9f1c"};
-
-let players, allies, meta, tribe, villages=null;
-let idx={}, allyTag={}, allyById={}, refs={}, win="24h";
-let scope={kind:"world", tribe:null, konts:[]}, rowsInScope=[], inadayBest={};
-
-/* ---------- Diagramme ---------- */
-function clear(id){ const s=$(id); s.replaceChildren(); return s; }
-function txt(s, x, y, cls, anchor, size){
-  const t=svgEl("text",{x,y,"text-anchor":anchor||"start","font-size":size||11,
-    fill:cls==="dim"? "var(--muted)" : "var(--ink)"});
-  t.textContent=s; return t;
+const LINE_COLORS=["#22d3ee","#34e5b0","#7dd3fc","#c084fc","#ffd166","#ff8fa3","#4ade80","#f59e0b",
+                   "#60a5fa","#f472b6"];
+let C={};
+function readColors(){
+  const cs=getComputedStyle(document.documentElement), v=n=>cs.getPropertyValue(n).trim();
+  C={up:v("--good"), down:v("--bad"), acc:v("--accent"), att:"#ff9f1c", def:"#22d3ee", sup:"#c084fc",
+     dim:v("--muted"), ink:v("--ink"), line:v("--edge-line")};
 }
-/** Gemeinsame Verläufe und Leuchtfilter. Einmal je Diagramm angelegt. */
-function defs(s, farben){
+readColors();
+
+let players, allies, meta, tribe, villages=null, series=null;
+let idx={}, allyTag={}, allyById={}, refs={}, win="24h", pmode="delta", smode="points";
+let scope={kind:"world"}, rowsInScope=[], inadayBest={};
+let kontOf=new Map(), tribeKont=new Map();
+let kSel=new Set([66,56]);
+
+/* ---------- Bausteine der Diagramme ---------- */
+function clear(id){ const s=$(id); s.replaceChildren(); return s; }
+function txt(t,x,y,cls,anchor,size){
+  const e=svgEl("text",{x,y,"text-anchor":anchor||"start","font-size":size||11,
+    fill:cls==="dim"? C.dim : C.ink});
+  e.textContent=t; return e;
+}
+/** Verläufe und Leuchtfilter je Diagramm. Der Balken läuft nach rechts aus, darüber ein heller Grat. */
+function defs(s, farben, prefix){
   const d=svgEl("defs");
   farben.forEach((c,i)=>{
-    const g=svgEl("linearGradient",{id:"g"+i, x1:"0", y1:"0", x2:"1", y2:"0"});
-    g.append(svgEl("stop",{offset:"0%","stop-color":c,"stop-opacity":".92"}),
-             svgEl("stop",{offset:"55%","stop-color":c,"stop-opacity":".45"}),
-             svgEl("stop",{offset:"100%","stop-color":c,"stop-opacity":".12"}));
+    const g=svgEl("linearGradient",{id:prefix+"g"+i, x1:"0", y1:"0", x2:"1", y2:"0"});
+    g.append(svgEl("stop",{offset:"0%","stop-color":c,"stop-opacity":".95"}),
+             svgEl("stop",{offset:"58%","stop-color":c,"stop-opacity":".42"}),
+             svgEl("stop",{offset:"100%","stop-color":c,"stop-opacity":".10"}));
     d.appendChild(g);
-    const gl=svgEl("linearGradient",{id:"s"+i, x1:"0", y1:"0", x2:"0", y2:"1"});
-    gl.append(svgEl("stop",{offset:"0%","stop-color":"#ffffff","stop-opacity":".55"}),
-              svgEl("stop",{offset:"45%","stop-color":"#ffffff","stop-opacity":".07"}),
-              svgEl("stop",{offset:"100%","stop-color":"#000000","stop-opacity":".18"}));
-    d.appendChild(gl);
+    const v=svgEl("linearGradient",{id:prefix+"v"+i, x1:"0", y1:"0", x2:"0", y2:"1"});
+    v.append(svgEl("stop",{offset:"0%","stop-color":c,"stop-opacity":".20"}),
+             svgEl("stop",{offset:"62%","stop-color":c,"stop-opacity":".05"}),
+             svgEl("stop",{offset:"100%","stop-color":c,"stop-opacity":"0"}));
+    d.appendChild(v);
+    const sh=svgEl("linearGradient",{id:prefix+"s"+i, x1:"0", y1:"0", x2:"0", y2:"1"});
+    sh.append(svgEl("stop",{offset:"0%","stop-color":"#ffffff","stop-opacity":".5"}),
+              svgEl("stop",{offset:"48%","stop-color":"#ffffff","stop-opacity":".06"}),
+              svgEl("stop",{offset:"100%","stop-color":"#000000","stop-opacity":".2"}));
+    d.appendChild(sh);
   });
-  const f=svgEl("filter",{id:"glow", x:"-30%", y:"-60%", width:"170%", height:"240%"});
-  f.appendChild(svgEl("feGaussianBlur",{stdDeviation:"2.6", result:"b"}));
-  const m=svgEl("feMerge");
-  m.append(svgEl("feMergeNode",{in:"b"}), svgEl("feMergeNode",{in:"SourceGraphic"}));
+  const f=svgEl("filter",{id:prefix+"glow", x:"-40%", y:"-70%", width:"180%", height:"260%"});
+  f.appendChild(svgEl("feGaussianBlur",{stdDeviation:"2.4", result:"b"}));
+  const m=svgEl("feMerge"); m.append(svgEl("feMergeNode",{in:"b"}), svgEl("feMergeNode",{in:"SourceGraphic"}));
   f.appendChild(m); d.appendChild(f);
   s.appendChild(d);
 }
-
-/** Waagerechte Balken mit Namen. Der Balken läuft von kräftig nach durchsichtig aus, darüber
-    liegt ein heller Grat, am Ende ein Leuchtpunkt. */
-function barsH(id, items, color, unit){
-  const s=clear(id);
-  const W=520, L=124, R=62, T=8, B=6;
+function barsH(id, items, color, opts){
+  opts=opts||{};
+  const s=clear(id), W=520, L=opts.left||118, R=64, T=8, B=6;
   if(!items.length){
     s.setAttribute("viewBox","0 0 "+W+" 70");
-    s.appendChild(txt("keine Werte im Bereich", W/2, 38, "dim", "middle", 12));
+    s.appendChild(txt(opts.leer||"keine Werte im Bereich", W/2, 38, "dim", "middle", 12));
     return;
   }
   const farben=[...new Set(items.map(it=>typeof color==="function"? color(it) : color))];
-  defs(s, farben);
+  defs(s, farben, id);
   const max=Math.max(...items.map(i=>Math.abs(i.value)))||1;
   const h=Math.max(15, Math.min(22, 300/items.length)), gap=Math.max(4, h*0.3);
   items.forEach((it,i)=>{
-    const c=typeof color==="function"? color(it) : color;
-    const ci=farben.indexOf(c);
-    const y=T+i*h, bh=h-gap, bw=Math.max(2, (Math.abs(it.value)/max)*(W-L-R));
+    const c=typeof color==="function"? color(it) : color, ci=farben.indexOf(c);
+    const y=T+i*h, bh=h-gap, bw=Math.max(2,(Math.abs(it.value)/max)*(W-L-R));
     const g=svgEl("g");
-    g.appendChild(svgEl("rect",{x:L, y:y+gap/2, width:W-L-R, height:bh, rx:3,
-      fill:"currentColor", opacity:".05"}));                       // Bahn
-    g.appendChild(svgEl("rect",{x:L, y:y+gap/2, width:bw, height:bh, rx:3, fill:"url(#g"+ci+")"}));
-    g.appendChild(svgEl("rect",{x:L, y:y+gap/2, width:bw, height:bh, rx:3, fill:"url(#s"+ci+")"}));
-    g.appendChild(svgEl("line",{x1:L+1, y1:y+gap/2+0.6, x2:L+bw-1, y2:y+gap/2+0.6,
-      stroke:"#ffffff", "stroke-opacity":".38", "stroke-width":"1"}));   // Grat
-    g.appendChild(svgEl("rect",{x:L+bw-2, y:y+gap/2, width:2.4, height:bh, rx:1.2,
-      fill:c, filter:"url(#glow)"}));                                    // Leuchtpunkt
+    g.appendChild(svgEl("rect",{x:L,y:y+gap/2,width:W-L-R,height:bh,rx:3,fill:C.line,opacity:".55"}));
+    g.appendChild(svgEl("rect",{x:L,y:y+gap/2,width:bw,height:bh,rx:3,fill:"url(#"+id+"g"+ci+")"}));
+    g.appendChild(svgEl("rect",{x:L,y:y+gap/2,width:bw,height:bh,rx:3,fill:"url(#"+id+"s"+ci+")"}));
+    g.appendChild(svgEl("line",{x1:L+1,y1:y+gap/2+.6,x2:L+bw-1,y2:y+gap/2+.6,
+      stroke:"#ffffff","stroke-opacity":".4","stroke-width":"1"}));
+    g.appendChild(svgEl("rect",{x:L+bw-2,y:y+gap/2,width:2.4,height:bh,rx:1.2,fill:c,filter:"url(#"+id+"glow)"}));
     g.appendChild(txt(it.label, L-8, y+h/2+3.5, null, "end", 11));
-    g.appendChild(txt((it.value>0?"+":"")+nf.format(it.value)+(unit||""), L+bw+7, y+h/2+3.5, "dim", "start", 10.5));
+    g.appendChild(txt((opts.signed&&it.value>0?"+":"")+nf.format(it.value), L+bw+7, y+h/2+3.5, "dim", "start", 10.5));
     const ti=svgEl("title"); ti.textContent=it.title||it.label; g.appendChild(ti);
     s.appendChild(g);
   });
   s.setAttribute("viewBox","0 0 "+W+" "+(T+items.length*h+B));
 }
-
-/** Gestapelte Balken, hier Angriff, Verteidigung und Unterstützung nebeneinander. */
 function barsStacked(id, items, parts){
-  const s=clear(id);
-  const W=520, L=118, R=60, T=6;
-  if(!items.length){ s.appendChild(txt("keine Werte im Bereich", W/2, 40, "dim", "middle", 12));
-    s.setAttribute("viewBox","0 0 520 80"); return; }
+  const s=clear(id), W=520, L=118, R=64, T=8;
+  if(!items.length){
+    s.setAttribute("viewBox","0 0 520 70");
+    s.appendChild(txt("keine Werte im Bereich", 260, 38, "dim", "middle", 12)); return;
+  }
+  defs(s, parts.map(p=>p[1]), id);
   const max=Math.max(...items.map(i=>i.total))||1;
-  const h=Math.min(20, 260/items.length), gap=Math.min(5, h*0.28);
+  const h=Math.max(15, Math.min(22, 300/items.length)), gap=Math.max(4, h*0.3);
   items.forEach((it,i)=>{
-    const y=T+i*h; let x=L;
-    parts.forEach(([key,color])=>{
+    const y=T+i*h, bh=h-gap; let x=L;
+    s.appendChild(svgEl("rect",{x:L,y:y+gap/2,width:W-L-R,height:bh,rx:3,fill:C.line,opacity:".55"}));
+    parts.forEach(([key,color],pi)=>{
       const w=(it[key]/max)*(W-L-R);
       if(w>0.4){
-        const r=svgEl("rect",{x, y:y+gap/2, width:w, height:h-gap, fill:color, opacity:.92});
+        const r=svgEl("rect",{x,y:y+gap/2,width:w,height:bh,fill:"url(#"+id+"g"+pi+")"});
         const ti=svgEl("title"); ti.textContent=it.label+" · "+key+": "+nf.format(it[key]);
         r.appendChild(ti); s.appendChild(r);
+        s.appendChild(svgEl("rect",{x,y:y+gap/2,width:w,height:bh,fill:"url(#"+id+"s"+pi+")"}));
       }
       x+=w;
     });
-    s.appendChild(txt(it.label, L-6, y+h/2+3.5, null, "end", 11));
-    s.appendChild(txt("+"+nf.format(it.total), x+5, y+h/2+3.5, "dim", "start", 10.5));
+    s.appendChild(svgEl("rect",{x:x-2,y:y+gap/2,width:2.4,height:bh,rx:1.2,
+      fill:parts[parts.length-1][1],filter:"url(#"+id+"glow)"}));
+    s.appendChild(txt(it.label, L-8, y+h/2+3.5, null, "end", 11));
+    s.appendChild(txt("+"+nf.format(it.total), x+7, y+h/2+3.5, "dim", "start", 10.5));
   });
-  s.setAttribute("viewBox","0 0 "+W+" "+Math.max(60, T+items.length*h+6));
+  s.setAttribute("viewBox","0 0 "+W+" "+(T+items.length*h+6));
 }
-/** Säulen für die Verteilung. */
 function columns(id, items){
-  const s=clear(id);
-  const W=400, H=230, L=34, R=8, T=10, B=44;
-  const max=Math.max(...items.map(i=>i.value))||1;
-  const bw=(W-L-R)/items.length;
+  const s=clear(id), W=400, H=230, L=36, R=8, T=12, B=46;
+  defs(s, items.map(i=>i.color), id);
+  const max=Math.max(...items.map(i=>i.value))||1, bw=(W-L-R)/items.length;
   items.forEach((it,i)=>{
-    const bh=(it.value/max)*(H-T-B), x=L+i*bw+bw*0.15, y=H-B-bh;
-    s.appendChild(svgEl("rect",{x, y, width:bw*0.7, height:Math.max(1,bh), rx:2, fill:it.color||C.bar, opacity:.92}));
-    s.appendChild(txt(nf.format(it.value), x+bw*0.35, y-3, "dim", "middle", 9.5));
-    const lb=txt(it.label, x+bw*0.35, H-B+13, "dim", "middle", 9.5);
-    lb.setAttribute("transform","rotate(-32 "+(x+bw*0.35)+" "+(H-B+13)+")");
+    const bh=(it.value/max)*(H-T-B), x=L+i*bw+bw*0.16, y=H-B-bh, w=bw*0.68;
+    s.appendChild(svgEl("rect",{x,y,width:w,height:Math.max(1,bh),rx:2,fill:it.color,opacity:".85"}));
+    s.appendChild(svgEl("rect",{x,y,width:w,height:Math.max(1,bh),rx:2,fill:"url(#"+id+"s"+i+")"}));
+    s.appendChild(svgEl("line",{x1:x,y1:y+.6,x2:x+w,y2:y+.6,stroke:"#fff","stroke-opacity":".5"}));
+    s.appendChild(txt(nf.format(it.value), x+w/2, y-4, "dim", "middle", 9.5));
+    const lb=txt(it.label, x+w/2, H-B+13, "dim", "middle", 9.5);
+    lb.setAttribute("transform","rotate(-32 "+(x+w/2)+" "+(H-B+13)+")");
     s.appendChild(lb);
   });
-  s.appendChild(svgEl("line",{x1:L, y1:H-B, x2:W-R, y2:H-B, stroke:"var(--edge-soft)"}));
+  s.appendChild(svgEl("line",{x1:L,y1:H-B,x2:W-R,y2:H-B,stroke:C.line}));
+}
+/** Linien mit schattierter Fläche darunter, eine je Stamm. */
+function lines(id, times, reihen){
+  const s=clear(id), W=1100, H=320, L=74, R=16, T=14, B=30;
+  if(!times.length || !reihen.length){
+    s.setAttribute("viewBox","0 0 "+W+" 80");
+    s.appendChild(txt("keine Daten für diese Auswahl", W/2, 44, "dim", "middle", 12)); return;
+  }
+  s.setAttribute("viewBox","0 0 "+W+" "+H);
+  defs(s, reihen.map(r=>r.color), id);
+  const alle=reihen.flatMap(r=>r.values).filter(v=>v!=null);
+  const min=Math.min(...alle), max=Math.max(...alle), spanne=(max-min)||1;
+  const lo=min-spanne*0.12, hi=max+spanne*0.12;
+  const X=i=>L+(times.length<2? 0 : (i/(times.length-1))*(W-L-R));
+  const Y=v=>T+(1-(v-lo)/(hi-lo))*(H-T-B);
+  for(let g=0; g<=4; g++){
+    const y=T+(g/4)*(H-T-B);
+    s.appendChild(svgEl("line",{x1:L,y1:y,x2:W-R,y2:y,stroke:C.line}));
+    s.appendChild(txt(nf.format(Math.round(hi-(g/4)*(hi-lo))), L-8, y+4, "dim", "end", 10));
+  }
+  const step=Math.max(1, Math.ceil(times.length/10));
+  times.forEach((t,i)=>{ if(i%step && i!==times.length-1) return;
+    s.appendChild(txt(hmf.format(new Date(t)), X(i), H-10, "dim", "middle", 10)); });
+  reihen.forEach((r,ri)=>{
+    const pts=r.values.map((v,i)=>[X(i), Y(v)]);
+    const d="M"+pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join("L");
+    s.appendChild(svgEl("path",{d:d+"L"+X(times.length-1)+","+(H-B)+"L"+L+","+(H-B)+"Z",
+      fill:"url(#"+id+"v"+ri+")"}));
+    s.appendChild(svgEl("path",{d, fill:"none", stroke:r.color, "stroke-width":"2.1",
+      "stroke-linejoin":"round", "stroke-linecap":"round", filter:"url(#"+id+"glow)"}));
+    const last=pts[pts.length-1];
+    const c=svgEl("circle",{cx:last[0], cy:last[1], r:"3", fill:r.color, filter:"url(#"+id+"glow)"});
+    const ti=svgEl("title"); ti.textContent=r.label+": "+nf.format(r.values[r.values.length-1]);
+    c.appendChild(ti); s.appendChild(c);
+  });
 }
 
 /* ---------- Bereich ---------- */
 function inScope(i){
-  const r=players.rows[i];
-  if(scope.kind==="tribe") return r[idx.ally]===scope.tribe;
+  if(scope.kind==="tribe") return players.rows[i][idx.ally]===scope.tribe;
   if(scope.kind==="kont") return scope.set.has(i);
   return true;
+}
+async function ensureVillages(){
+  if(!villages) villages=await loadData("villages");
+  if(kontOf.size) return;
+  villages.rows.forEach(r=>{
+    const p=r[1]; if(p<0) return;
+    const k=Math.floor((r[0]%1000)/100)*10+Math.floor(Math.floor(r[0]/1000)/100);
+    let set=kontOf.get(p); if(!set) kontOf.set(p, set=new Set());
+    set.add(k);
+    const a=players.rows[p][idx.ally];
+    if(a){ let t=tribeKont.get(a); if(!t) tribeKont.set(a, t=new Set()); t.add(k); }
+  });
 }
 async function applyScope(){
   const tid=+$("sc-tribe").value||0;
   const nums=[...new Set(($("sc-kont").value.match(/\d{1,2}/g)||[]).map(Number))].filter(n=>n>=0&&n<=99);
   if(nums.length){
-    if(!villages){ $("scope-info").textContent="lade Dorfdaten …"; villages=await loadData("villages"); }
+    $("scope-info").textContent="lade Dorfdaten …";
+    await ensureVillages();
     const want=new Set(nums), set=new Set();
-    villages.rows.forEach(r=>{ const p=r[1]; if(p<0) return;
-      const x=Math.floor(r[0]/1000), y=r[0]%1000;
-      if(want.has(Math.floor(y/100)*10+Math.floor(x/100))) set.add(p); });
+    kontOf.forEach((ks,p)=>{ for(const k of ks) if(want.has(k)){ set.add(p); break; } });
     scope={kind:"kont", konts:nums, set};
     $("scope-info").textContent="Kontinente K"+nums.join(", K");
   } else if(tid){
@@ -244,92 +341,128 @@ async function applyScope(){
   render();
 }
 
+/* ---------- Kontinent-Raster, angeordnet wie auf der Karte ---------- */
+async function buildKGrid(){
+  await ensureVillages();
+  const box=$("kgrid"); box.replaceChildren();
+  const belegt=new Set();
+  kontOf.forEach(ks=>ks.forEach(k=>belegt.add(k)));
+  for(let y=0;y<10;y++) for(let x=0;x<10;x++){
+    const k=y*10+x;
+    const b=document.createElement("button");
+    b.type="button"; b.textContent=k<10? "0"+k : String(k); b.dataset.k=k;
+    b.title="Kontinent K"+(k<10? "0"+k : k);
+    if(!belegt.has(k)) b.disabled=true;
+    b.setAttribute("aria-pressed", String(kSel.has(k)));
+    b.addEventListener("click",()=>{
+      if(kSel.has(k)) kSel.delete(k); else kSel.add(k);
+      b.setAttribute("aria-pressed", String(kSel.has(k)));
+      renderSeries();
+    });
+    box.appendChild(b);
+  }
+}
+
 /* ---------- Aufbau ---------- */
+function winLabel(w){ return w==="7d"? "7 Tage" : w.replace("h"," h"); }
 function render(){
   const all=players.rows;
   rowsInScope=[];
   for(let i=0;i<all.length;i++) if(inScope(i)) rowsInScope.push(i);
-  const k=idx["d"+win+"_points"], kv=idx["d"+win+"_villages"];
-  const bashK={att:idx["d"+win+"_att"], def:idx["d"+win+"_def"], sup:idx["d"+win+"_sup"]};
-  const sumPoints=rowsInScope.reduce((s,i)=>s+all[i][idx.points],0);
-  const sumBash=rowsInScope.reduce((s,i)=>s+all[i][idx.all],0);
-  const sumVill=rowsInScope.reduce((s,i)=>s+all[i][idx.villages],0);
-  const dPoints=rowsInScope.reduce((s,i)=>s+(all[i][k]||0),0);
-  const dBash=rowsInScope.reduce((s,i)=>s+(all[i][bashK.att]||0)+(all[i][bashK.def]||0)+(all[i][bashK.sup]||0),0);
-  const wachsend=rowsInScope.filter(i=>(all[i][k]||0)>0).length;
-
-  const setKPI=(n, wert, wer, einheit)=>{
-    $("k"+n+"v").textContent = wert==null? "–" : nf.format(wert)+(einheit||"");
-    $("k"+n+"n").textContent = wer || "niemand im Bereich";
-  };
-  const bestOf=(fn)=>{
-    let bi=-1, bv=0;
-    rowsInScope.forEach(i=>{ const v=fn(i); if(v!=null && v>bv){ bv=v; bi=i; } });
-    return bi<0? [null,null] : [bv, all[bi][idx.name]+(allyTag[all[bi][idx.ally]]? " · "+allyTag[all[bi][idx.ally]] : "")];
-  };
-  setKPI(1, ...bestOf(i=>all[i][k]));
-  setKPI(2, ...bestOf(i=>(all[i][bashK.att]||0)+(all[i][bashK.def]||0)+(all[i][bashK.sup]||0)));
-  const rekord=(t)=>bestOf(i=>{ const e=inadayBest[all[i][idx.id]]; return e&&e[t]? e[t].value : null; });
-  setKPI(3, ...rekord("loot_vil"));
-  setKPI(4, ...rekord("loot_res"));
-  setKPI(5, ...rekord("scavenge"));
-
+  const k=idx["d"+win+"_points"];
+  const bk={att:idx["d"+win+"_att"], def:idx["d"+win+"_def"], sup:idx["d"+win+"_sup"]};
   const name=i=>all[i][idx.name];
-  const withDelta=rowsInScope.filter(i=>all[i][k]!=null);
+  const stamm=i=>allyTag[all[i][idx.ally]]||"ohne Stamm";
 
-  const grenze = rowsInScope.length<=25? rowsInScope.length : 16;   // kleine Stämme vollständig zeigen
-  const klein = rowsInScope.length<=25;
-  const up=withDelta.filter(i=>klein? all[i][k]>=0 : all[i][k]>0)
-    .sort((a,b)=>all[b][k]-all[a][k]).slice(0,grenze);
-  barsH("ch-up", up.map(i=>({label:name(i), value:all[i][k], color:C.up,
-    title:name(i)+" · "+nf.format(all[i][idx.points])+" Punkte · "+(allyTag[all[i][idx.ally]]||"ohne Stamm")})), C.up);
+  const setKPI=(n,wert,wer)=>{ $("k"+n+"v").textContent = wert==null? "–" : nf.format(wert);
+    $("k"+n+"n").textContent = wer || "niemand im Bereich"; };
+  const bestOf=fn=>{ let bi=-1,bv=0;
+    rowsInScope.forEach(i=>{ const v=fn(i); if(v!=null && v>bv){ bv=v; bi=i; } });
+    return bi<0? [null,null] : [bv, name(bi)+" · "+stamm(bi)]; };
+  setKPI(1, ...bestOf(i=>all[i][k]));
+  setKPI(2, ...bestOf(i=>(all[i][bk.att]||0)+(all[i][bk.def]||0)+(all[i][bk.sup]||0)));
+  const rekord=t=>bestOf(i=>{ const e=inadayBest[all[i][idx.id]]; return e&&e[t]? e[t].value : null; });
+  setKPI(3, ...rekord("loot_vil")); setKPI(4, ...rekord("loot_res")); setKPI(5, ...rekord("scavenge"));
 
-  const down=withDelta.filter(i=>all[i][k]<0).sort((a,b)=>all[a][k]-all[b][k]).slice(0,grenze);
-  barsH("ch-down", down.map(i=>({label:name(i), value:all[i][k],
-    title:name(i)+" · "+nf.format(all[i][idx.points])+" Punkte"})), C.down);
-  $("down-note").textContent = down.length? down.length+" Spieler mit Verlust" : "niemand hat verloren";
+  const grenze = rowsInScope.length<=25? rowsInScope.length : 14;
+  const topBash=(feld,farbe,ziel)=>{
+    const items=rowsInScope.map(i=>({i, v:all[i][feld]||0})).filter(o=>o.v>0)
+      .sort((a,b)=>b.v-a.v).slice(0,grenze)
+      .map(o=>({label:name(o.i), value:o.v, title:name(o.i)+" · "+stamm(o.i)}));
+    barsH(ziel, items, farbe, {signed:true, leer:"keine neuen Kampfwerte im Zeitfenster"});
+  };
+  topBash(bk.att, C.att, "ch-off");
+  topBash(bk.def, C.def, "ch-def");
 
-  const bash=rowsInScope.map(i=>({label:name(i),
-      att:all[i][bashK.att]||0, def:all[i][bashK.def]||0, sup:all[i][bashK.sup]||0}))
+  const beide=rowsInScope.map(i=>({label:name(i), att:all[i][bk.att]||0, def:all[i][bk.def]||0, sup:all[i][bk.sup]||0}))
     .map(o=>({...o, total:o.att+o.def+o.sup})).filter(o=>o.total>0)
     .sort((a,b)=>b.total-a.total).slice(0,grenze);
-  barsStacked("ch-bash", bash, [["att",C.att],["def",C.def],["sup",C.sup]]);
-  // Der Server berechnet die Kampfwerte nur etwa alle drei Stunden neu, dann aber gebündelt.
-  // In zwei von drei Stundenfenstern steht deshalb überall null.
-  $("bash-note").textContent = bash.length? ""
-    : "In diesem Zeitfenster hat der Server keine neu berechneten Kampfwerte geliefert. "
-      + "Sie erscheinen gebündelt etwa alle drei Stunden, deshalb zeigt ein Stundenfenster meist nichts. "
-      + "Über 12 oder 24 Stunden ist das Bild vollständig.";
-  const bl=$("bash-legend"); bl.replaceChildren();
+  barsStacked("ch-both", beide, [["att",C.att],["def",C.def],["sup",C.sup]]);
+  const bl=$("both-legend"); bl.replaceChildren();
   [["Angriff",C.att],["Verteidigung",C.def],["Unterstützung",C.sup]].forEach(([t,c])=>{
     const sp=el("span"); const i2=el("i"); i2.style.background=c; sp.append(i2, document.createTextNode(t)); bl.appendChild(sp); });
+  $("both-note").textContent = beide.length? ""
+    : "Der Server rechnet die Kampfwerte etwa alle drei Stunden neu. Über 24 Stunden ist das Bild vollständig.";
 
-  const byTribe=new Map();
-  rowsInScope.forEach(i=>{ const a=all[i][idx.ally]; if(!a) return;
-    const o=byTribe.get(a)||{d:0,n:0}; o.d+=(all[i][k]||0); o.n++; byTribe.set(a,o); });
-  const tribes=[...byTribe].map(([a,o])=>({label:(allyTag[a]||"?"), value:o.d,
-      title:(allyById[a]? allyById[a][1] : "")+" · "+o.n+" Mitglieder im Bereich"}))
-    .sort((x,y)=>y.value-x.value).slice(0,grenze);
-  barsH("ch-tribes", tribes, it=>it.value>=0? C.up : C.down);
+  renderPoints();
 
-  const stufen=win==="1h"? [1,2,3,5] : win==="24h"? [5,10,15,25] : [10,20,35,60];
-  const eimer=[{label:"Verlust",value:0,color:C.down},{label:"0 %",value:0,color:"var(--muted)"}]
-    .concat(stufen.map((e,j)=>({label:(j? "über "+stufen[j-1] : "bis "+e)+(j? " bis "+e:"")+" %", value:0, color:C.up})))
+  const withDelta=rowsInScope.filter(i=>all[i][k]!=null);
+  const down=withDelta.filter(i=>all[i][k]<0).sort((a,b)=>all[a][k]-all[b][k]).slice(0,grenze);
+  barsH("ch-down", down.map(i=>({label:name(i), value:all[i][k], title:name(i)+" · "+stamm(i)})),
+    C.down, {signed:true, leer:"niemand hat verloren"});
+  $("down-note").textContent = down.length? down.length+" Spieler mit Verlust" : "";
+
+  const stufen=win==="1h"? [1,2,3,5] : win==="12h"? [3,6,10,18] : win==="24h"? [5,10,15,25] : [10,20,35,60];
+  const eimer=[{label:"Verlust",value:0,color:C.down},{label:"0 %",value:0,color:C.dim}]
+    .concat(stufen.map(e=>({label:"bis "+e+" %", value:0, color:C.up})))
     .concat([{label:"über "+stufen[stufen.length-1]+" %", value:0, color:C.up}]);
   withDelta.forEach(i=>{
     const d=all[i][k], now=all[i][idx.points], before=now-d;
     const g=before>0? d/before*100 : (d>0? 999 : 0);
-    if(g<0) eimer[0].value++;
-    else if(g===0) eimer[1].value++;
-    else { let sIdx=0; while(sIdx<stufen.length && g>stufen[sIdx]) sIdx++; eimer[2+sIdx].value++; }
+    if(g<0) eimer[0].value++; else if(g===0) eimer[1].value++;
+    else { let sI=0; while(sI<stufen.length && g>stufen[sI]) sI++; eimer[2+sI].value++; }
   });
   columns("ch-dist", eimer);
 
   renderInaday();
+  renderSeries();
   renderTable();
 }
-function winLabel(){ return win==="7d"? "7 Tagen" : win.replace("h"," h"); }
-
+function renderPoints(){
+  const all=players.rows, k=idx["d"+win+"_points"];
+  const grenze = rowsInScope.length<=25? rowsInScope.length : 14;
+  const feld = pmode==="sum"? idx.points : k;
+  const items=rowsInScope.map(i=>({i, v:all[i][feld]})).filter(o=>o.v!=null && o.v>0)
+    .sort((a,b)=>b.v-a.v).slice(0,grenze)
+    .map(o=>({label:all[o.i][idx.name], value:o.v,
+              title:all[o.i][idx.name]+" · "+(allyTag[all[o.i][idx.ally]]||"ohne Stamm")}));
+  barsH("ch-points", items, pmode==="sum"? C.acc : C.up, {signed:pmode!=="sum"});
+  document.querySelectorAll("#pmode button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.m===pmode)));
+  $("h-points").firstChild.textContent = pmode==="sum"? "Spieler nach Punkten " : "Größter Punktezuwachs ";
+}
+function renderSeries(){
+  document.querySelectorAll("#smode button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.s===smode)));
+  if(!series || !series.times || !series.times.length){
+    lines("ch-series", [], []);
+    $("klegend").textContent="Der Verlauf entsteht aus der Historie und erscheint nach einigen Läufen.";
+    return;
+  }
+  const gewaehlt=[...kSel].sort((a,b)=>a-b);
+  let liste=series.tribes;
+  if(gewaehlt.length && tribeKont.size){
+    liste=liste.filter(t=>{ const ks=tribeKont.get(t.id); return ks && gewaehlt.some(k=>ks.has(k)); });
+  }
+  liste=liste.slice(0,10);
+  const reihen=liste.map((t,i)=>({label:t.tag, color:LINE_COLORS[i%LINE_COLORS.length], values:t[smode]||t.points}));
+  lines("ch-series", series.times, reihen);
+  const lg=$("series-legend"); lg.replaceChildren();
+  reihen.forEach(r=>{ const sp=el("span"); const i2=el("i"); i2.style.background=r.color;
+    sp.append(i2, document.createTextNode(r.label)); lg.appendChild(sp); });
+  $("klegend").textContent = gewaehlt.length
+    ? "Die zehn stärksten Stämme mit Dörfern in K"+gewaehlt.join(", K")
+      + ". Die Linie zeigt die Gesamtwerte des Stammes, nicht nur seine Dörfer dort."
+    : "Ohne Auswahl gelten alle Kontinente. Ein Feld anklicken wählt aus oder ab.";
+}
 function renderInaday(){
   const seg=$("inaday-type");
   if(!seg.children.length){
@@ -338,26 +471,21 @@ function renderInaday(){
       b.addEventListener("click",()=>{ seg.dataset.on=t; renderInaday(); }); seg.appendChild(b); });
     seg.dataset.on=(TYPES.find(([t])=>Object.values(inadayBest).some(e=>e[t]))||["loot_res"])[0];
   }
-  const t=seg.dataset.on;
+  const t=seg.dataset.on, all=players.rows;
   [...seg.children].forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.t===t)));
-  const all=players.rows;
-  const items=rowsInScope.map(i=>({i, e:(inadayBest[all[i][idx.id]]||{})[t]}).valueOf())
-    .filter(o=>o.e).sort((a,b)=>a.e.rank-b.e.rank).slice(0,12)
+  const items=rowsInScope.map(i=>({i, e:(inadayBest[all[i][idx.id]]||{})[t]})).filter(o=>o.e)
+    .sort((a,b)=>a.e.rank-b.e.rank).slice(0,12)
     .map(o=>({label:all[o.i][idx.name], value:o.e.value,
               title:all[o.i][idx.name]+" · Rang "+nf.format(o.e.rank)+" · "+fmtDay(o.e.date)}));
-  const s=clear("ch-inaday");
-  if(!items.length){ s.setAttribute("viewBox","0 0 700 60");
-    s.appendChild(txt("Für diesen Bereich liegen keine Werte vor", 350, 34, "dim", "middle", 12)); }
-  else { barsH("ch-inaday", items, C.bar); }
+  barsH("ch-inaday", items, C.acc, {leer:"für diesen Bereich keine Werte"});
   const n=rowsInScope.filter(i=>(inadayBest[all[i][idx.id]]||{})[t]).length;
   $("inaday-note").textContent=n+" von "+nf.format(rowsInScope.length)+" Spielern im Bereich haben einen erfassten Wert.";
 }
-
 function renderTable(){
   const all=players.rows, k=idx["d"+win+"_points"];
   const box=$("table"); box.replaceChildren();
   const rows=rowsInScope.slice().sort((a,b)=>all[b][idx.points]-all[a][idx.points]).slice(0,400);
-  box.appendChild(table([["#","rank"],["Spieler","l"],["Stamm","l"],["Punkte","",1],["± "+winLabel(),"",1],
+  box.appendChild(table([["#","rank"],["Spieler","l"],["Stamm","l"],["Punkte","",1],["± "+winLabel(win),"",1],
                          ["Dörfer","",1],["Bash","",1],["Angriff","",1],["Verteidigung","",1]],
     rows.map((i,n)=>{
       const r=all[i];
@@ -373,13 +501,13 @@ function renderTable(){
 (async function(){
   try{ [meta,players,allies,tribe]=await Promise.all(["meta","players","allies","tribe"].map(loadData)); }
   catch(e){ $("live-text").textContent="Daten nicht erreichbar"; $("live").classList.add("err"); return; }
+  try{ series=await loadData("series"); }catch(e){ series=null; }
   idx=Object.fromEntries(players.fields.map((f,i)=>[f,i]));
   allies.rows.forEach(a=>{ allyTag[a[0]]=a[2]||a[1]; allyById[a[0]]=a; });
   refs=players.refs_utc||{};
   const st=meta.status||{}, ok=!(st.errors&&st.errors.length);
   $("live").className="pill "+(ok?"ok":"err");
   $("live-text").textContent=(ok?"Sammler läuft":"Fehler im letzten Lauf")+" · Stand "+fmtTime(st.data_last_modified);
-
   ((tribe.inaday_all)||[]).forEach(([pid,type,rank,value,date])=>{
     const e=(inadayBest[pid]=inadayBest[pid]||{});
     if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
@@ -388,26 +516,31 @@ function renderTable(){
   const sel=$("sc-tribe");
   [...allies.rows].sort((a,b)=>b[5]-a[5]).forEach((a,i)=>{
     const o=document.createElement("option"); o.value=a[0];
-    o.textContent=(i+1)+". "+(a[2]||a[1])+" · "+nf.format(a[3])+" Mitgl.";
-    sel.appendChild(o);
+    o.textContent=(i+1)+". "+(a[2]||a[1])+" · "+nf.format(a[3])+" Mitgl."; sel.appendChild(o);
   });
 
   const wb=[...document.querySelectorAll("#win button")];
   wb.forEach(b=>{ b.disabled=!refs[b.dataset.w]; });
-  win = refs["24h"]? "24h" : (refs["1h"]? "1h" : "24h");
+  win = refs["24h"]? "24h" : (refs["12h"]? "12h" : "1h");
   wb.forEach(b=>{ b.setAttribute("aria-pressed", String(b.dataset.w===win));
     b.addEventListener("click",()=>{ if(b.disabled) return; win=b.dataset.w;
       wb.forEach(x=>x.setAttribute("aria-pressed", String(x.dataset.w===win))); render(); }); });
+  $("win-note").textContent="gilt für die Kennzahlen und die Balken auf dieser Seite";
 
+  document.querySelectorAll("#pmode button").forEach(b=>b.addEventListener("click",()=>{ pmode=b.dataset.m; renderPoints(); }));
+  document.querySelectorAll("#smode button").forEach(b=>b.addEventListener("click",()=>{ smode=b.dataset.s; renderSeries(); }));
   $("sc-go").addEventListener("click", applyScope);
   $("sc-world").addEventListener("click", ()=>{ $("sc-tribe").value=""; $("sc-kont").value=""; applyScope(); });
   $("sc-kont").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); applyScope(); } });
   $("sc-tribe").addEventListener("change", ()=>{ $("sc-kont").value=""; applyScope(); });
+  document.addEventListener("themechange", ()=>{ readColors(); render(); });
 
   const q=new URLSearchParams(location.search);
   if(q.get("k")) $("sc-kont").value=q.get("k");
   if(q.get("t")) $("sc-tribe").value=q.get("t");
   await applyScope();
+  await buildKGrid();
+  renderSeries();
 })();
 </script>
 </body>

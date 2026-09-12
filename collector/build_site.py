@@ -68,6 +68,43 @@ def _dump(path, obj):
         json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
 
 
+def tribe_series(versions, players_path, ally_names, top_ids, max_points=56):
+    """Punkte und besiegte Gegner je Stamm über die Zeit, aus der Git-Historie von players.csv.
+
+    Je Datenzeitpunkt nur ein Stand, damit mehrere Läufe mit denselben Weltdaten die Linie nicht
+    verdoppeln. Ohne diese Reihe gäbe es auf der Seite nur Momentaufnahmen und keinen Verlauf.
+    """
+    seen, chosen = set(), []
+    for commit, t in versions:                      # versions: neueste zuerst
+        if t in seen:
+            continue
+        seen.add(t)
+        chosen.append((commit, t))
+        if len(chosen) >= max_points:
+            break
+    chosen.reverse()
+    times, data = [], {tid: {"points": [], "att": [], "def": [], "all": []} for tid in top_ids}
+    for commit, t in chosen:
+        try:
+            rows = _csv_at(commit, players_path)
+        except Exception:
+            continue
+        agg = {tid: [0, 0, 0, 0] for tid in top_ids}
+        for r in rows:
+            tid = int(r["ally"])
+            a = agg.get(tid)
+            if a is None:
+                continue
+            a[0] += int(r["points"]); a[1] += int(r["att"]); a[2] += int(r["def"]); a[3] += int(r["all"])
+        times.append(_iso(t))
+        for tid in top_ids:
+            a = agg[tid]
+            d = data[tid]
+            d["points"].append(a[0]); d["att"].append(a[1]); d["def"].append(a[2]); d["all"].append(a[3])
+    return {"times": times,
+            "tribes": [{"id": tid, "tag": ally_names.get(tid, str(tid)), **data[tid]} for tid in top_ids]}
+
+
 def village_rows():
     """Dörfer als Zeilen nach world.VILLAGE_HEADER plus Herkunft.
 
@@ -157,6 +194,16 @@ def build(out_dir):
         "fields": ally_fields,
         "rows": [[int(a["id"]), a["name"], a["tag"]] + [int(a[f]) for f in ally_fields[3:]] for a in allies],
     })
+
+    # Zeitverlauf der stärksten Stämme, damit die Seite Linien zeigen kann statt nur Momentaufnahmen
+    series = {"times": [], "tribes": []}
+    try:
+        top_ids = [int(a["id"]) for a in sorted(allies, key=lambda a: -int(a["points"]))[:30]]
+        names = {int(a["id"]): (a["tag"] or a["name"]) for a in allies}
+        series = tribe_series(versions, players_path, names, top_ids)
+    except Exception as e:
+        series = {"times": [], "tribes": [], "error": repr(e)}
+    _dump(os.path.join(ddir, "series.json"), series)
 
     records = store.read_csv(store.dpath("inaday", "tribe_latest.csv"))
     events = store.read_csv(store.dpath("inaday", "events.csv"))

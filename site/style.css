@@ -30,40 +30,42 @@
   --map-edge:rgba(0,0,0,.45);
 }
 
-/* ---------- futuristic ---------- */
+/* ---------- futuristic ----------
+   Vorbild: technische Lagebilder mit tiefem Blauschwarz, Cyan als Leitfarbe, glänzenden
+   Beschriftungen und schmalen Kanten. Bernstein bleibt als Warnfarbe. */
 [data-theme="futuristic"]{
-  --bg:#070a10;
-  --bg-image:radial-gradient(1100px 520px at 12% -12%, rgba(255,159,28,.13), transparent 62%),
-             radial-gradient(900px 460px at 88% -6%, rgba(77,217,255,.10), transparent 62%),
-             linear-gradient(180deg,#080c14,#05070c);
-  /* poliertes Metall: heller Anriss oben links, kühler Abfall nach unten rechts */
-  --panel:linear-gradient(158deg,rgba(198,226,255,.10) 0%,rgba(120,170,220,.03) 22%,transparent 45%),
-          linear-gradient(178deg,#131d2d 0%,#0d1522 52%,#090f19 100%);
-  --panel-solid:#0f1826;
-  --panel-2:rgba(150,200,255,.05);
-  --row:transparent; --row-alt:rgba(125,170,220,.04); --row-hover:rgba(120,190,255,.11);
-  --edge:rgba(160,212,255,.46); --edge-soft:rgba(160,212,255,.26); --edge-line:rgba(160,212,255,.15);
-  --head:linear-gradient(180deg,rgba(150,200,255,.13),rgba(150,200,255,.03)); --head-ink:#cfe4fb;
-  --ink:#dfeafa; --ink-2:#a9c1dc; --muted:#7d95b2;
-  --accent:#ff9f1c; --accent-ink:#0b1018; --accent-soft:rgba(255,159,28,.15);
-  --good:#5ce6a5; --good-bg:rgba(92,230,165,.14); --bad:#ff6b81; --bad-bg:rgba(255,107,129,.14);
-  --btn:linear-gradient(180deg,rgba(150,200,255,.14),rgba(150,200,255,.04));
-  --btn-hover:linear-gradient(180deg,rgba(160,210,255,.24),rgba(150,200,255,.08));
-  --btn-on:linear-gradient(180deg,#ffb545,#ff8f00);
-  --bar:linear-gradient(180deg,#101a29,#0a1220); --bar-ink:#e6f1ff; --bar-dim:#8fa9c6;
-  --bar-edge:rgba(132,178,228,.22);
-  --field:rgba(10,16,26,.85);
-  /* der polierte Schimmer: heller Grat oben, dunkle Kante unten, kühler Rand ringsum */
-  --shine:inset 0 1px 0 rgba(226,242,255,.30), inset 0 -1px 0 rgba(0,0,0,.6),
-          inset 1px 0 0 rgba(170,215,255,.10), inset -1px 0 0 rgba(170,215,255,.10),
-          0 0 0 1px rgba(120,175,235,.07);
-  --glow:0 6px 20px rgba(0,0,0,.5), 0 0 22px rgba(110,185,255,.09);
-  --title-fill:linear-gradient(180deg,#f2f8ff 10%,#9dc6f0 92%);
+  --bg:#04070d;
+  --bg-image:radial-gradient(1200px 560px at 14% -14%, rgba(34,211,238,.16), transparent 62%),
+             radial-gradient(1000px 480px at 86% -8%, rgba(56,132,255,.13), transparent 62%),
+             radial-gradient(700px 380px at 50% 108%, rgba(20,184,166,.10), transparent 60%),
+             linear-gradient(180deg,#050912,#03060b);
+  --panel:linear-gradient(158deg,rgba(160,236,255,.10) 0%,rgba(60,150,200,.035) 24%,transparent 46%),
+          linear-gradient(178deg,#0c1a28 0%,#08131f 55%,#050c15 100%);
+  --panel-solid:#0a1622;
+  --panel-2:rgba(45,212,238,.07);
+  --row:transparent; --row-alt:rgba(90,200,235,.045); --row-hover:rgba(45,212,238,.13);
+  --edge:rgba(72,214,246,.42); --edge-soft:rgba(72,214,246,.24); --edge-line:rgba(72,214,246,.14);
+  --head:linear-gradient(100deg,rgba(34,211,238,.30),rgba(34,211,238,.06) 62%,transparent);
+  --head-ink:#c9f6ff;
+  --ink:#dff2fb; --ink-2:#9fc9e0; --muted:#6f93ac;
+  --accent:#22d3ee; --accent-ink:#03121a; --accent-soft:rgba(34,211,238,.16);
+  --warn:#ff9f1c;
+  --good:#34e5b0; --good-bg:rgba(52,229,176,.14); --bad:#ff6b81; --bad-bg:rgba(255,107,129,.14);
+  --btn:linear-gradient(180deg,rgba(72,214,246,.16),rgba(72,214,246,.04));
+  --btn-hover:linear-gradient(180deg,rgba(90,225,255,.28),rgba(72,214,246,.09));
+  --btn-on:linear-gradient(180deg,#4fe3fb,#12b6d8);
+  --bar:linear-gradient(180deg,#0a1826,#050d16); --bar-ink:#eafcff; --bar-dim:#7fb6cf;
+  --bar-edge:rgba(72,214,246,.28);
+  --field:rgba(5,12,20,.85);
+  --shine:inset 0 1px 0 rgba(210,248,255,.34), inset 0 -1px 0 rgba(0,0,0,.65),
+          inset 1px 0 0 rgba(120,225,255,.12), inset -1px 0 0 rgba(120,225,255,.12);
+  --glow:0 8px 26px rgba(0,0,0,.6), 0 0 26px rgba(34,211,238,.12);
+  --title-fill:linear-gradient(180deg,#ffffff 6%,#a8ecff 52%,#4fc9e8 96%);
   --font:13px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
-  --radius:9px;
-  --map-bg:#0b1220; --map-grid:rgba(140,190,240,.10); --map-grid-major:rgba(150,205,255,.30);
-  --map-label:rgba(175,210,245,.55);
-  --map-barb:#3c4a5e; --map-bonus:#c99a35; --map-other:#c0392b; --map-none:#6f8296;
+  --radius:8px;
+  --map-bg:#071018; --map-grid:rgba(72,214,246,.10); --map-grid-major:rgba(72,214,246,.28);
+  --map-label:rgba(150,225,250,.55);
+  --map-barb:#33465c; --map-bonus:#c99a35; --map-other:#c0392b; --map-none:#5f7d92;
   --map-edge:rgba(0,0,0,.55);
 }
 
@@ -187,58 +189,64 @@ footer{color:var(--muted); font-size:11px; border-top:1px solid var(--edge-line)
 footer a{color:var(--accent)}
 
 /* ---------- Feinschliff der Fassung futuristic ---------- */
-/* Panels bekommen ein feines Messraster, einen Lichtreflex über die Kante und Eckwinkel wie
-   auf einem technischen Display. */
+/* Messraster im Panel, Lichtreflex über die Fläche, Eckwinkel wie auf einem technischen Display. */
 [data-theme="futuristic"] .facts>div,[data-theme="futuristic"] .panel{
   background-image:
-    linear-gradient(158deg,rgba(198,226,255,.11) 0%,rgba(120,170,220,.03) 20%,transparent 44%),
-    repeating-linear-gradient(0deg,rgba(150,200,255,.045) 0 1px,transparent 1px 22px),
-    repeating-linear-gradient(90deg,rgba(150,200,255,.045) 0 1px,transparent 1px 22px),
-    linear-gradient(178deg,#131d2d 0%,#0d1522 52%,#090f19 100%);
+    linear-gradient(158deg,rgba(160,236,255,.11) 0%,rgba(60,150,200,.03) 20%,transparent 44%),
+    repeating-linear-gradient(0deg,rgba(72,214,246,.05) 0 1px,transparent 1px 24px),
+    repeating-linear-gradient(90deg,rgba(72,214,246,.05) 0 1px,transparent 1px 24px),
+    linear-gradient(178deg,#0c1a28 0%,#08131f 55%,#050c15 100%);
 }
 [data-theme="futuristic"] .facts>div{position:relative; overflow:hidden}
 [data-theme="futuristic"] .facts>div::after,[data-theme="futuristic"] .panel::after{
   content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-  background:linear-gradient(112deg,transparent 20%,rgba(214,238,255,.13) 36%,
-             rgba(255,255,255,.26) 41%,rgba(214,238,255,.10) 46%,transparent 64%);
+  background:linear-gradient(112deg,transparent 18%,rgba(190,245,255,.10) 34%,
+             rgba(255,255,255,.22) 40%,rgba(190,245,255,.08) 46%,transparent 64%);
 }
-/* Eckwinkel oben rechts und unten links */
-[data-theme="futuristic"] .panel>h2::after{
-  content:""; position:absolute; top:5px; right:8px; width:14px; height:8px;
-  border-top:1px solid rgba(170,215,255,.55); border-right:1px solid rgba(170,215,255,.55);
-  border-top-right-radius:3px;
-}
-[data-theme="futuristic"] .panel{
-  box-shadow:var(--shine), var(--glow), 0 0 0 1px rgba(120,180,240,.06);
-}
+[data-theme="futuristic"] .panel{box-shadow:var(--shine), var(--glow)}
 [data-theme="futuristic"] .panel:hover{
-  box-shadow:var(--shine), 0 8px 26px rgba(0,0,0,.55), 0 0 26px rgba(120,190,255,.16);
+  box-shadow:var(--shine), 0 10px 30px rgba(0,0,0,.62), 0 0 30px rgba(34,211,238,.22);
+  border-color:rgba(90,228,255,.62);
 }
-[data-theme="futuristic"] .scopebar{
-  background-image:linear-gradient(158deg,rgba(198,226,255,.10),transparent 40%),
-    linear-gradient(178deg,#131d2d,#0b1220);
-}
-/* Der Verlauf färbt den Text, die Fläche zeichnet ::before dahinter. */
+
+/* Kachelkopf als angeschrägter Balken, Beschriftung mit Glanzverlauf. */
 [data-theme="futuristic"] .panel>h2{
-  position:relative; background:linear-gradient(180deg,#f4f9ff 15%,#a8cdf0 95%);
-  color:transparent; background-clip:text; -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;
+  position:relative; border-bottom:0; padding:7px 13px 6px;
+  background:linear-gradient(180deg,#f6feff 4%,#a6ecff 46%,#39b8dd 96%);
+  color:transparent; background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 10px rgba(72,214,246,.35));
 }
 [data-theme="futuristic"] .panel>h2::before{
   content:""; position:absolute; inset:0; z-index:-1;
-  background:linear-gradient(180deg,rgba(150,200,255,.13),rgba(150,200,255,.02));
-  border-bottom:1px solid var(--edge-soft);
+  background:linear-gradient(100deg,rgba(34,211,238,.34),rgba(34,211,238,.07) 58%,transparent);
+  border-bottom:1px solid rgba(72,214,246,.45);
+  clip-path:polygon(0 0, calc(100% - 18px) 0, 100% 100%, 0 100%);
 }
-[data-theme="futuristic"] .panel>h2{border-bottom:0}
+[data-theme="futuristic"] .panel>h2::after{
+  content:""; position:absolute; top:6px; right:9px; width:16px; height:9px;
+  border-top:1px solid rgba(120,235,255,.7); border-right:1px solid rgba(120,235,255,.7);
+  border-top-right-radius:3px;
+}
 /* Alles, was in der Überschrift sitzt, bekommt seine normale Schriftfarbe zurück. */
-[data-theme="futuristic"] .panel>h2 *{-webkit-text-fill-color:initial}
+[data-theme="futuristic"] .panel>h2 *{-webkit-text-fill-color:initial; filter:none}
 [data-theme="futuristic"] .panel>h2 .hint,[data-theme="futuristic"] .panel>h2 em{
   color:var(--muted); -webkit-text-fill-color:var(--muted);
 }
 [data-theme="futuristic"] .panel>h2 button.tw{color:var(--ink); -webkit-text-fill-color:var(--ink)}
 [data-theme="futuristic"] .panel>h2 button.tw[aria-pressed="true"]{
   color:var(--accent-ink); -webkit-text-fill-color:var(--accent-ink)}
-[data-theme="futuristic"] th{background:rgba(150,200,255,.06); backdrop-filter:blur(2px)}
-[data-theme="futuristic"] .kpi-big{text-shadow:0 0 22px rgba(140,200,255,.35)}
-[data-theme="futuristic"] .accent-num{color:var(--accent); text-shadow:0 0 20px rgba(255,159,28,.45)}
+
+[data-theme="futuristic"] th{background:rgba(34,211,238,.09); backdrop-filter:blur(2px);
+  text-shadow:0 0 10px rgba(72,214,246,.35)}
+[data-theme="futuristic"] .facts dd{text-shadow:0 0 20px rgba(72,214,246,.45)}
+[data-theme="futuristic"] .facts>div{border-color:rgba(72,214,246,.40)}
+[data-theme="futuristic"] .accent-num{font-size:24px; letter-spacing:-.01em;
+  background:linear-gradient(180deg,#ffffff 8%,#8ee9ff 55%,#2bb8de 98%);
+  color:transparent; background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 12px rgba(72,214,246,.5))}
 [data-theme="classic"] .accent-num{color:var(--accent)}
+[data-theme="futuristic"] .appbar h1{filter:drop-shadow(0 0 14px rgba(72,214,246,.45))}
+[data-theme="futuristic"] .scopebar{
+  background-image:linear-gradient(158deg,rgba(160,236,255,.10),transparent 40%),
+    linear-gradient(178deg,#0c1a28,#060f1a);
+}
