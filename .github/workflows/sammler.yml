@@ -24,7 +24,9 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Der tägliche Durchgang durch die vollständigen Ranglisten dauert je nach Seitengröße
+    # bis zu rund 25 Minuten (Notbremse bei 500 Seiten je Kategorie).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:

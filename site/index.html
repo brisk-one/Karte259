@@ -51,8 +51,9 @@ button.tw:disabled{opacity:.45; cursor:not-allowed}
 .scroll{overflow-x:auto}
 .pick{display:inline-flex; align-items:center; gap:5px; font-weight:400}
 .pick span{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:#4a3410; font-weight:700}
-.pick select{font:inherit; font-size:11.5px; padding:1px 4px; max-width:min(320px,52vw);
+.pick select,.pick input{font:inherit; font-size:11.5px; padding:1px 4px; max-width:min(320px,52vw);
   color:var(--ink); background:#fffaf0; border:1px solid var(--frame); border-radius:3px}
+.pick input{width:110px}
 .statusbar{display:flex; flex-wrap:wrap; align-items:center; gap:8px 22px; padding:8px 10px}
 .pill{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:12px; padding:2px 9px;
   border:1px solid var(--frame); border-radius:3px}
@@ -132,6 +133,17 @@ footer a{color:#f0dcb0}
       <span class="hint" id="tribe-hint"></span>
     </h2>
     <div class="scroll" id="tribe"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-neighbors">
+    <h2 id="h-neighbors">Nachbarschaft
+      <label class="pick"><span>Kontinente</span>
+        <input id="kont" type="text" inputmode="numeric" placeholder="z. B. 44, 45" aria-label="Kontinentnummern, durch Komma getrennt">
+      </label>
+      <button class="tw" type="button" id="kont-go">Anzeigen</button>
+      <span class="hint" id="kont-hint">Alle Spieler mit mindestens einem Dorf in den genannten Kontinenten.</span>
+    </h2>
+    <div class="scroll" id="neighbors"></div>
   </section>
 
   <section class="panel" aria-labelledby="h-top">
@@ -300,6 +312,42 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   }
   pick.addEventListener("change", renderTribe);
   renderTribe();
+
+  // Nachbarschaft: Spieler nach Kontinent. Die Dorfdaten werden erst geladen, wenn sie gebraucht werden.
+  let villages=null;
+  async function showNeighbors(){
+    const nums=[...new Set(($("kont").value.match(/\d{1,2}/g)||[]).map(Number))].filter(n=>n>=0&&n<=99);
+    const box=$("neighbors"); box.replaceChildren();
+    if(!nums.length){ box.appendChild(el("p","empty","Kontinentnummern eingeben, zum Beispiel 44, 45.")); return; }
+    box.appendChild(el("p","empty","Lade Dorfdaten …"));
+    if(!villages){ try{ villages=await load("villages"); } catch(e){ box.replaceChildren(el("p","empty","Dorfdaten nicht verfügbar: "+e.message)); return; } }
+    const want=new Set(nums);
+    const perPlayer=new Map();     // Spielerzeile -> Dörfer in den gewählten Kontinenten
+    villages.rows.forEach(r=>{
+      const p=r[1]; if(p<0) return;
+      const x=Math.floor(r[0]/1000), y=r[0]%1000;
+      if(!want.has(Math.floor(y/100)*10+Math.floor(x/100))) return;
+      perPlayer.set(p, (perPlayer.get(p)||0)+1);
+    });
+    box.replaceChildren();
+    if(!perPlayer.size){ box.appendChild(el("p","empty","Keine Dörfer in diesen Kontinenten.")); return; }
+    const rows=[...perPlayer].map(([pi,n])=>{
+      const r=players.rows[pi];
+      return [[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],[nf.format(n),"",n],
+              [nf.format(r[idx.villages]),"",r[idx.villages]],[nf.format(r[idx.points]),"",r[idx.points]],
+              [signed(r[idx.d1h_points]),"",r[idx.d1h_points]],[signed(r[idx.d24h_points]),"",r[idx.d24h_points]],
+              [nf.format(r[idx.all]),"",r[idx.all]],[nf.format(r[idx.att]),"",r[idx.att]],[nf.format(r[idx.def]),"",r[idx.def]]];
+    });
+    box.appendChild(table([["Spieler","l"],["Stamm","l"],["Dörfer hier"],["Dörfer gesamt"],["Punkte"],
+                           ["± 1 h"],["± 24 h"],["Bash"],["Bash A"],["Bash V"]], rows, null, 4));
+    $("kont-hint").textContent = nf.format(perPlayer.size)+" Spieler in K"+nums.join(", K")
+      +" · Stand "+(villages.source==="cache"? "aktueller Lauf" : "Tagesarchiv vom "+fmtDay((villages.source||"").slice(6)))
+      +" · Spaltenkopf anklicken sortiert.";
+  }
+  $("kont-go").addEventListener("click", showNeighbors);
+  $("kont").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); showNeighbors(); } });
+  const kParam=new URLSearchParams(location.search).get("k");
+  if(kParam){ $("kont").value=kParam; showNeighbors(); }
 
   // Weltspitze "An einem Tag" aus dem stündlichen Änderungs-Check
   const top=(tribe.top||[]);

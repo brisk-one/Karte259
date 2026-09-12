@@ -161,6 +161,7 @@ def build(out_dir):
     records = store.read_csv(store.dpath("inaday", "tribe_latest.csv"))
     events = store.read_csv(store.dpath("inaday", "events.csv"))
     top = store.read_csv(store.dpath("inaday", "top_latest.csv"))
+    deep = store.read_csv(store.dpath("inaday", "deep_latest.csv"))
     rec_rows = [[int(r["player_id"]), r["type"], int(r["rank"]), int(r["value"]), r["date"]] for r in records]
     top_rows = [[int(r["player_id"]), r["type"], int(r["rank"]), int(r["value"]), r["date"]] for r in top]
     # Die Karte braucht beides in einem Zugriff: Mitglieder der erfassten Stämme und die Weltspitze.
@@ -173,6 +174,16 @@ def build(out_dir):
         "events": events[-200:],
     })
 
+    # Die vollständigen Ranglisten sind zu groß für tribe.json und werden erst geladen,
+    # wenn jemand eine Ranglisten-Ansicht öffnet.
+    deep_rows = [[int(r["player_id"]), r["type"], int(r["rank"]), int(r["value"]), r["date"]] for r in deep]
+    if deep_rows:
+        types = sorted({r[1] for r in deep_rows})
+        _dump(os.path.join(ddir, "inaday.json"), {
+            "types": types, "rows": deep_rows,
+            "counts": {t: sum(1 for r in deep_rows if r[1] == t) for t in types},
+        })
+
     status = store.load_json(store.dpath("status.json"), {}) or {}
     runs = store.read_csv(store.dpath("runs.csv"))
     _dump(os.path.join(ddir, "meta.json"), {
@@ -182,7 +193,7 @@ def build(out_dir):
         "world": config.WORLD,
     })
     return {"players": len(rows), "refs": sorted(refs), "allies": len(allies),
-            "records": len(records), "villages": villages}
+            "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages}
 
 
 def main(argv=None):

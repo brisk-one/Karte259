@@ -408,7 +408,8 @@ function renderLegend(){
     tribeList.forEach(a=>{ if(!marks.has(a[0]) && !(T.tribe_ids||[]).includes(a[0])) add(tribeColor.get(a[0]), a[2]||a[1]); });
     add(C_OTHER,"übrige Spieler"); add(C_BARB,"Barbaren"); add(C_BONUS,"Bonusdörfer");
   } else if(isRank(view)){
-    $("legend-title").textContent=INADAY_LABEL[view]+" · Platz in der Weltrangliste";
+    const n=deepCounts[view] || [...inaday.values()].filter(e=>e[view]).length;
+    $("legend-title").textContent=INADAY_LABEL[view]+" · Platz in der Weltrangliste · "+nf.format(n)+" Spieler erfasst";
     add(RANK_COLORS[0],"Platz 1 bis 10");
     for(let s=1;s<RANK_STEPS.length;s++) add(RANK_COLORS[s], "bis Platz "+nf.format(RANK_STEPS[s]));
     add(RANK_COLORS[RANK_STEPS.length],"dahinter");
@@ -431,10 +432,35 @@ function renderLegend(){
   if(box.hidden){ box.hidden=false; box.open = wrap.clientWidth>=560; }  // auf schmalen Schirmen zugeklappt
 }
 
+// Die vollständigen Ranglisten sind groß und werden erst geholt, wenn sie gebraucht werden.
+let deepLoaded=false, deepLoading=null;
+async function ensureDeep(){
+  if(deepLoaded) return;
+  if(!deepLoading) deepLoading=(async()=>{
+    try{
+      const d=await load("inaday");
+      (d.rows||[]).forEach(([pid,type,rank,value,date])=>{
+        let e=inaday.get(pid); if(!e) inaday.set(pid, e={});
+        if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
+      });
+      deepCounts=d.counts||{};
+    }catch(e){ /* Datei fehlt, solange noch kein Durchgang gelaufen ist */ }
+    deepLoaded=true;
+  })();
+  return deepLoading;
+}
+let deepCounts={};
+
 function setView(v){
   view=v;
   document.querySelectorAll("#views button, #views2 button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
-  computeGrowth(); computeArrows(); buildBuckets(); renderLegend(); draw(); saveUrl();
+  const apply=()=>{ computeGrowth(); computeArrows(); buildBuckets(); renderLegend(); draw(); saveUrl(); };
+  if(isRank(v) && !deepLoaded){
+    $("stand").textContent="Lade vollständige Rangliste …";
+    ensureDeep().then(()=>{ apply(); showStand(); });
+    return;
+  }
+  apply();
 }
 
 /* ---------- Tooltip ---------- */
@@ -675,8 +701,8 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   inaday.forEach(e=>{ for(const t in e) rankCount[t]=(rankCount[t]||0)+1; });
   document.querySelectorAll("#views2 button").forEach(b=>{
     const n=rankCount[b.dataset.v]||0;
-    b.title = n? n+" Spieler mit erfasstem Wert" : "Für diese Rangliste liegen noch keine Werte vor";
-    if(!n) b.disabled=true;
+    b.title = n? n+" Spieler mit erfasstem Wert (vollständige Liste wird beim Umschalten geladen)"
+               : "Wird beim Umschalten geladen, falls schon ein Durchgang gelaufen ist";
   });
 
   if(readUrl()) ownView();

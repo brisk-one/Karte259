@@ -26,12 +26,14 @@ ID_RE = re.compile(r"[?&;]id=(\d+)")
 DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})")
 
 
-def page_url(type_, offset=0, name=None):
+def page_url(type_, offset=0, name=None, extra=None):
     u = f"{config.BASE_URL}/guest.php?screen=ranking&mode=in_a_day&type={type_}"
     if offset:
         u += f"&offset={offset}"
     if name is not None:
         u += "&name=" + quote_plus(name)
+    if extra:
+        u += "&" + "&".join(f"{k}={v}" for k, v in extra.items())
     return u
 
 
@@ -193,6 +195,69 @@ def _save_debug(name, html):
         f.write(html)
 
 
+def probe_page_size(state, type_, base_len):
+    """Prüft einmalig, ob die Rangliste mehr als die üblichen Zeilen je Seite liefert.
+
+    Kostet einen Abruf je Kandidat und wird nur einmal gemacht; das Ergebnis steht in state.json.
+    Greift ein Kandidat, sinkt die Zahl der Seitenaufrufe entsprechend.
+    """
+    st = state.setdefault("inaday", {})
+    if st.get("page_size"):
+        return st["page_size"], st.get("page_param")
+    today = datetime.now().date()
+    ref = parse_ranking(_get(page_url(type_)), today)
+    best, param = base_len, None
+    for p in config.DEEP_PAGE_PARAMS:
+        try:
+            rows = parse_ranking(_get(page_url(type_, extra={p: config.DEEP_PAGE_TRY})), today)
+        except net.FetchError:
+            continue
+        # Mehr Zeilen zählen nur, wenn der Anfang der Liste unverändert ist. Sonst hat der Parameter
+        # etwas anderes bewirkt als eine größere Seite, und die Daten wären still falsch.
+        same_start = ref and rows and rows[0]["rank"] == ref[0]["rank"] and rows[0]["player_id"] == ref[0]["player_id"]
+        if len(rows) > best and same_start:
+            best, param = len(rows), p
+            break
+    st["page_size"], st["page_param"] = best, param
+    return best, param
+
+
+def deep_scrape(state, now_local, types):
+    """Blättert die angegebenen Ranglisten vollständig durch und gibt alle Zeilen zurück.
+
+    Abbruch, sobald eine Seite leer ist, weniger als eine volle Seite liefert oder die Notbremse greift.
+    """
+    today = now_local.date()
+    out, pages, note = [], 0, {}
+    for t in types:
+        first = parse_ranking(_get(page_url(t)), today)
+        pages += 1
+        if not first:
+            note[t] = "keine Zeilen"
+            continue
+        size, param = probe_page_size(state, t, len(first))
+        extra = {param: config.DEEP_PAGE_TRY} if param else None
+        rows = first
+        if param:                      # größere Seite möglich, also Seite 1 damit erneut holen
+            rows = parse_ranking(_get(page_url(t, extra=extra)), today)
+            pages += 1
+        seen, offset = set(), 0
+        while True:
+            for r in rows:
+                if r["player_id"] and (r["player_id"], t) not in seen:
+                    seen.add((r["player_id"], t))
+                    out.append([r["player_id"], r["name"], t, r["rank"], r["value"], r["date"] or ""])
+            if len(rows) < size or pages >= config.DEEP_MAX_PAGES:
+                break
+            offset += len(rows)
+            rows = parse_ranking(_get(page_url(t, offset=offset, extra=extra)), today)
+            pages += 1
+            if not rows:
+                break
+        note[t] = len(seen)
+    return out, pages, note
+
+
 def update(state, now_utc, now_local, members):
     """members: Liste von (player_id, name) der erfassten Stämme."""
     st = state.setdefault("inaday", {})
@@ -230,6 +295,22 @@ def update(state, now_utc, now_local, members):
         store.write_csv(store.dpath("inaday", "top_latest.csv"), TOP_HEADER,
                         sorted(top_all, key=lambda r: (r[2], r[3])))
         summary["top_saved"] = len(top_all)
+
+    # Vollständige Erhebung der Kategorien ohne Entsprechung in den Weltdaten. Die Rangliste wird
+    # einmal täglich neu berechnet, deshalb genügt ein Durchgang pro Tag.
+    last_deep = st.get("last_deep_scrape_utc")
+    deep_due = (not last_deep) or (now_utc - datetime.fromisoformat(last_deep) >= timedelta(hours=config.DEEP_MAX_AGE_H))
+    if config.DEEP_TYPES and deep_due and (summary["changed_types"] or not last_deep):
+        try:
+            rows, pages, note = deep_scrape(state, now_local, config.DEEP_TYPES)
+            if rows:
+                store.write_csv(store.dpath("inaday", "deep_latest.csv"), TOP_HEADER,
+                                sorted(rows, key=lambda r: (r[2], r[3])))
+                st["last_deep_scrape_utc"] = store.iso(now_utc)
+                summary.update(deep_rows=len(rows), deep_pages=pages, deep_note=note,
+                               deep_page_size=st.get("page_size"))
+        except Exception as e:
+            summary["errors"].append(f"Tiefenerhebung: {e}")
 
     last_full = st.get("last_full_scrape_utc")
     too_old = (not last_full) or (now_utc - datetime.fromisoformat(last_full)
