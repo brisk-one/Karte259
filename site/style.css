@@ -198,10 +198,13 @@ footer a{color:var(--accent)}
     linear-gradient(178deg,#0c1a28 0%,#08131f 55%,#050c15 100%);
 }
 [data-theme="futuristic"] .facts>div{position:relative; overflow:hidden}
+[data-theme="futuristic"] .facts>div::after{
+  background:linear-gradient(112deg,transparent 30%,rgba(255,255,255,.022) 41%,transparent 54%);
+}
 [data-theme="futuristic"] .facts>div::after,[data-theme="futuristic"] .panel::after{
   content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-  background:linear-gradient(112deg,transparent 22%,rgba(190,245,255,.045) 36%,
-             rgba(255,255,255,.085) 41%,rgba(190,245,255,.035) 46%,transparent 62%);
+  background:linear-gradient(112deg,transparent 26%,rgba(190,245,255,.018) 37%,
+             rgba(255,255,255,.034) 41%,rgba(190,245,255,.014) 45%,transparent 58%);
 }
 [data-theme="futuristic"] .panel{box-shadow:var(--shine), var(--glow)}
 [data-theme="futuristic"] .panel:hover{
