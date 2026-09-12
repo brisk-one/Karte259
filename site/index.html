@@ -46,6 +46,9 @@ h1{font-family:"Grenze Gotisch",Georgia,serif; font-size:clamp(2.4rem,7vw,3.6rem
 .facts dt{font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--band-dim); font-weight:600}
 .facts dd{margin:0; font-size:1.15rem; font-weight:600}
 .stamp{font-size:.88rem; color:var(--band-dim)}
+a.tomap{display:inline-block; margin-top:2px; padding:5px 12px; border-radius:6px; font-weight:700; font-size:.95rem;
+  color:var(--band); background:var(--band-dim); text-decoration:none; border:1px solid rgba(0,0,0,.15)}
+a.tomap:hover{background:#fff}
 main.wrap{padding-block:26px 48px; display:grid; grid-template-columns:minmax(0,1fr); gap:34px}
 section{min-width:0}
 h2{font-size:1.25rem; font-weight:700}
@@ -89,6 +92,7 @@ footer{font-size:.84rem; color:var(--muted); border-top:1px solid var(--line); p
       <div><dt>Historie seit</dt><dd id="f-since">…</dd></div>
     </dl>
     <p class="stamp" id="stamp">Lade Daten …</p>
+    <p><a class="tomap" href="karte.html">Zur Karte der Welt 259 &raquo;</a></p>
   </div>
 </header>
 
@@ -124,7 +128,7 @@ footer{font-size:.84rem; color:var(--muted); border-top:1px solid var(--line); p
   </section>
 </main>
 
-<footer class="wrap">Fan-Projekt mit öffentlichen Daten von die-staemme.de (Weltdaten und Gastzugang). Kein Angebot von InnoGames. Die Karte folgt als nächster Ausbauschritt.</footer>
+<footer class="wrap">Fan-Projekt mit öffentlichen Daten von die-staemme.de (Weltdaten und Gastzugang). Kein Angebot von InnoGames.</footer>
 
 <script>
 const nf = new Intl.NumberFormat("de-DE");

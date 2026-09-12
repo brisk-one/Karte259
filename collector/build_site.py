@@ -4,9 +4,14 @@ Zuwächse (1 h, 24 h, 7 Tage) entstehen aus der Git-Historie von data/latest/pla
 Als Vergleich dient jeweils der jüngste Stand, dessen Datenzeitpunkt mindestens so alt ist wie das
 Zeitfenster (abzüglich einer kleinen Toleranz). Maßgeblich ist der Erzeugungszeitpunkt der Weltdaten
 (Last-Modified aus state.json desselben Commits), nicht der Zeitpunkt des Sammellaufs.
+
+Die Dorfdaten der Karte kommen aus dem Rohdaten-Cache desselben Laufs. Hat der Server keine neuen
+Daten erzeugt, ist der Cache leer (jeder Runner startet frisch); dann dient das jüngste Tagesarchiv
+als Ersatz. Dörfer werden bewusst nicht stündlich ins Repo geschrieben, siehe HUB.
 """
 import argparse
 import csv
+import gzip
 import io
 import json
 import os
@@ -15,7 +20,7 @@ import subprocess
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from . import config, store
+from . import config, net, store, world
 
 WINDOWS = [("1h", 3600, 600), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
 DELTA_FIELDS = ["points", "villages", "att", "def", "sup"]
@@ -63,6 +68,39 @@ def _dump(path, obj):
         json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
 
 
+def village_rows():
+    """Dörfer als Zeilen nach world.VILLAGE_HEADER plus Herkunft.
+
+    Reihenfolge der Quellen: Rohdaten-Cache des laufenden Sammellaufs (frisch), sonst jüngstes
+    Tagesarchiv. Ohne beides (None, None).
+    """
+    raw = store.load_raw("village")
+    if raw:
+        return world.parse_villages(net.maybe_gunzip(raw).decode("utf-8", errors="replace")), "cache"
+    d = store.dpath("daily", "villages")
+    days = sorted(f[:-7] for f in os.listdir(d) if f.endswith(".csv.gz")) if os.path.isdir(d) else []
+    if not days:
+        return None, None
+    with gzip.open(os.path.join(d, f"{days[-1]}.csv.gz"), "rt", encoding="utf-8", newline="") as f:
+        rows = [[int(r["id"]), r["name"], int(r["x"]), int(r["y"]),
+                 int(r["player"]), int(r["points"]), int(r["bonus"])] for r in csv.DictReader(f)]
+    return rows, f"daily:{days[-1]}"
+
+
+def village_payload(vrows, source, player_index, data_time=None):
+    """Kompakte Kartendaten: eine Zeile je Dorf, Koordinate als x*1000+y, Spieler als Zeilennummer
+    in players.json (-1 für Barbaren und für Spieler, die dort fehlen, etwa nach einer Löschung)."""
+    rows, unknown = [], 0
+    for _vid, name, x, y, pid, points, bonus in vrows:
+        p = player_index.get(pid, -1)
+        if pid and p < 0:
+            unknown += 1
+        rows.append([x * 1000 + y, p, points, bonus, name])
+    rows.sort(key=lambda r: r[0])
+    return {"fields": ["xy", "p", "pts", "b", "name"], "rows": rows,
+            "source": source, "data_time_utc": data_time, "unknown_players": unknown}
+
+
 def build(out_dir):
     if os.path.exists(out_dir):
         shutil.rmtree(out_dir)
@@ -99,6 +137,20 @@ def build(out_dir):
         "refs_utc": {k: _iso(v[0]) for k, v in refs.items()},
     })
 
+    # Karte: eigene Datei, damit die Statusseite die rund 300 KB nicht mitladen muss.
+    # Ein Fehler hier darf den übrigen Seitenbau nicht verhindern.
+    villages = {"count": 0, "source": None}
+    try:
+        vrows, vsource = village_rows()
+        if vrows:
+            payload = village_payload(vrows, vsource, {r[0]: i for i, r in enumerate(rows)},
+                                      _iso(newest) if newest and vsource == "cache" else None)
+            _dump(os.path.join(ddir, "villages.json"), payload)
+            villages = {"count": len(payload["rows"]), "source": vsource,
+                        "unknown_players": payload["unknown_players"]}
+    except Exception as e:  # Karte fehlt, Statusseite bleibt nutzbar
+        villages = {"count": 0, "source": None, "error": repr(e)}
+
     allies = store.read_csv(store.dpath("latest", "allies.csv"))
     ally_fields = ["id", "name", "tag", "members", "villages", "points", "all_points", "rank"]
     _dump(os.path.join(ddir, "allies.json"), {
@@ -122,7 +174,8 @@ def build(out_dir):
         "runs": runs[-48:],
         "world": config.WORLD,
     })
-    return {"players": len(rows), "refs": sorted(refs), "allies": len(allies), "records": len(records)}
+    return {"players": len(rows), "refs": sorted(refs), "allies": len(allies),
+            "records": len(records), "villages": villages}
 
 
 def main(argv=None):
