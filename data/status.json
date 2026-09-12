@@ -6,7 +6,7 @@
   "villages": 29574
  },
  "data_last_modified": "Sat, 12 Sep 2026 09:52:53 GMT",
- "duration_s": 12.2,
+ "duration_s": 13.4,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
@@ -31,12 +31,12 @@
   "world": 1
  },
  "result": "unverändert",
- "run_local": "2026-09-12T12:03:50+02:00",
- "run_utc": "2026-09-12T10:03:50+00:00",
+ "run_local": "2026-09-12T12:05:06+02:00",
+ "run_utc": "2026-09-12T10:05:06+00:00",
  "tribe_ids": [
   456
  ],
- "trigger": "schedule",
+ "trigger": "push",
  "world": {
   "changed": false,
   "counts": null,
