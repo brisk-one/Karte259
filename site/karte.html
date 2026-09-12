@@ -77,8 +77,14 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
     <b>Ansicht</b>
     <button class="tw" type="button" data-v="tribes" aria-pressed="true">Stämme</button>
     <button class="tw" type="button" data-v="d1h">Punktezuwachs 1 h</button>
+    <button class="tw" type="button" data-v="d12h">Punktezuwachs 12 h</button>
     <button class="tw" type="button" data-v="d24h">Punktezuwachs 24 h</button>
     <button class="tw" type="button" data-v="d7d">Punktezuwachs 7 Tage</button>
+  </div>
+  <div class="grp" id="views3" role="group" aria-label="Besiegte Gegner">
+    <b>Besiegte Gegner</b>
+    <button class="tw" type="button" data-v="bash_all">gesamt</button>
+    <button class="tw" type="button" data-v="bash_new">zuletzt dazu</button>
   </div>
   <div class="grp" id="views2" role="group" aria-label="Ranglisten An einem Tag">
     <b>An einem Tag</b>
@@ -134,8 +140,14 @@ const EXTRA_COLORS=["#ffffff","#000000","#ff3d00","#76ff03","#18ffff","#f50057",
 // über 1 h wachsen 11,4 % der Spieler überhaupt, über 24 h rund 39 %.
 // wenig Zuwachs gelb, viel Zuwachs grün, Verlust rot.
 const GROWTH_COLORS=["#fff59d","#ffeb3b","#c6ff00","#76ff03","#00e676"];
-const STEPS={ d1h:[1,2,3,5], d24h:[5,10,15,25], d7d:[10,20,35,60] };
-const VIEW_LABEL={ d1h:"1 Stunde", d24h:"24 Stunden", d7d:"7 Tage" };
+const STEPS={ d1h:[1,2,3,5], d12h:[3,6,10,18], d24h:[5,10,15,25], d7d:[10,20,35,60] };
+const VIEW_LABEL={ d1h:"1 Stunde", d12h:"12 Stunden", d24h:"24 Stunden", d7d:"7 Tage" };
+// Besiegte Gegner. Grau heißt keine, danach gelb über orange nach grün, weil es keine negativen Werte gibt.
+// Stufen aus der Verteilung vom 12.09.2026: 58 % der Spieler haben null, p90 liegt bei 3.108.
+const BASH_STEPS=[500,2500,10000,30000];
+const BASH_NEW_STEPS=[100,1000,5000,20000];
+const BASH_COLORS=["#ffe066","#ffa726","#c6ff00","#76ff03","#00e676"];
+const isBash = v => v==="bash_all" || v==="bash_new";
 // Ranglisten "An einem Tag": Farbe nach Weltrang, Stufen wie im Artefakt vom 11.09.2026
 const RANK_STEPS=[10,50,100,500,2500];
 const RANK_COLORS=["#00e676","#76ff03","#c6ff00","#ffeb3b","#fff59d","#9e9e9e"];
@@ -149,7 +161,8 @@ function readColors(){
   const cs=getComputedStyle(document.documentElement);
   const v=n=>cs.getPropertyValue(n).trim();
   GRASS=v("--map-bg"); GRID=v("--map-grid"); GRID_MAJOR=v("--map-grid-major"); LABEL=v("--map-label");
-  C_BARB=v("--map-barb"); C_BONUS=v("--map-bonus"); C_OTHER=v("--map-other"); C_NONE=C_OTHER; EDGE=v("--map-edge");
+  C_BARB=v("--map-barb"); C_BONUS=C_BARB;          // Bonusdörfer tragen ein Zeichen, keine eigene Farbe
+  C_OTHER=v("--map-other"); C_NONE=v("--map-none"); EDGE=v("--map-edge");
 }
 readColors();
 const isGrowth = v => !!STEPS[v];
@@ -161,7 +174,7 @@ const wrap=$("mapwrap"), tip=$("tip");
 let W=0, H=0, dpr=1;
 let V=null, P=null, A=null, T=null;
 let N=0, vx=null, vy=null, vp=null, vpts=null, vb=null, vname=null, byXY=null;
-let pIdx={}, allyOf=null, growth={}, arrowOf=null, refs={}, tagOf=new Map(), allyById=new Map();
+let pIdx={}, allyOf=null, growth={}, arrowOf=null, bashOf=null, bashNewOf=null, refs={}, tagOf=new Map(), allyById=new Map();
 let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
 let inaday=new Map();                                      // player_id -> {typ: {rank, value, date}}
 let rankOf={};                                             // Spielerzeile -> Weltrang in der aktiven Rangliste
@@ -237,10 +250,48 @@ function drawGrid(){
   }
 }
 
+
+/** Zeichen am Dorf: Bonusdorf, hoher Bestand an besiegten Gegnern, frisch dazugekommene.
+    Bewusst drei verschiedene Orte am Quadrat, damit sie sich nicht überlagern:
+    Bonus unten links, Bestand als Rahmen, frischer Zuwachs als Funke oben links. */
+function drawMarks(x0,x1,y0,y1,size){
+  const off=(scale-size)/2;
+  const r=Math.max(1.6, Math.min(3.4, scale*0.19));
+  for(let i=0;i<N;i++){
+    const x=vx[i], y=vy[i];
+    if(x<x0||x>x1||y<y0||y>y1) continue;
+    const bx=sx(x)+off, by=sy(y)+off;
+    if(vb[i]){                                   // Bonusdorf: kleine Raute unten links
+      ctx.fillStyle="#f2d16b"; ctx.strokeStyle="rgba(0,0,0,.65)"; ctx.lineWidth=1;
+      const cx2=bx+r*0.9, cy2=by+size-r*0.9;
+      ctx.beginPath();
+      ctx.moveTo(cx2, cy2-r); ctx.lineTo(cx2+r, cy2); ctx.lineTo(cx2, cy2+r); ctx.lineTo(cx2-r, cy2);
+      ctx.closePath(); ctx.fill(); if(r>=2.4) ctx.stroke();
+    }
+    const b=bashOf? bashOf[i] : 0;
+    if(b){                                       // viele besiegte Gegner: leuchtender Rahmen
+      ctx.strokeStyle = b>=3? "#ff3d00" : "#ffb300";
+      ctx.lineWidth = b>=3? 2 : 1.5;
+      ctx.strokeRect(bx-1, by-1, size+2, size+2);
+    }
+    const n=bashNewOf? bashNewOf[i] : 0;
+    if(n>=2){                                    // frisch dazugekommen: Funke oben links
+      const fx=bx-1, fy=by-1, a=Math.max(2.2, Math.min(4.5, scale*0.26));
+      ctx.fillStyle = n>=3? "#ffffff" : "#ffd54f";
+      ctx.beginPath();
+      ctx.moveTo(fx, fy-a); ctx.lineTo(fx+a*0.32, fy-a*0.32); ctx.lineTo(fx+a, fy);
+      ctx.lineTo(fx+a*0.32, fy+a*0.32); ctx.lineTo(fx, fy+a); ctx.lineTo(fx-a*0.32, fy+a*0.32);
+      ctx.lineTo(fx-a, fy); ctx.lineTo(fx-a*0.32, fy-a*0.32);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+}
+
 /** Pfeile am oberen rechten Rand des Dorfes: Zuwachs des Spielers, drei Stufen je Richtung. */
 function drawArrows(x0,x1,y0,y1,size){
   const h=Math.max(2.5, Math.min(5, scale*0.3)), w=h*1.1, gap=h*0.28;
   ctx.lineWidth=1;
+  if(!arrowOf) return;
   for(let i=0;i<N;i++){
     const a=arrowOf[i]; if(!a) continue;
     const x=vx[i], y=vy[i];
@@ -285,6 +336,7 @@ function draw(){
       ctx.strokeRect(Math.round(sx(x)+off)+.5, Math.round(sy(y)+off)+.5, Math.round(size)-1, Math.round(size)-1);
     }
   }
+  if(scale>=7) drawMarks(x0,x1,y0,y1,size);
   if(scale>=8 && arrowOf) drawArrows(x0,x1,y0,y1,size);
   drawOverlay();
 }
@@ -320,19 +372,37 @@ function pct(row, key){
   if(before<=0) return d>0? 999 : 0;
   return d/before*100;
 }
-function arrowWindow(){                       // Zeitfenster der Pfeile: das der Ansicht, sonst das gröbste vorhandene
+function arrowWindow(){
+  // Über eine Stunde bewegt sich zu wenig, als dass Pfeile etwas aussagen würden. Deshalb 24 Stunden,
+  // ersatzweise 12; in einer Zuwachs-Ansicht gilt deren Fenster.
   if(isGrowth(view)) return view.slice(1);
-  return refs["24h"]? "24h" : (refs["1h"]? "1h" : null);
+  return refs["24h"]? "24h" : (refs["12h"]? "12h" : null);
 }
 function computeArrows(){
-  arrowOf=new Int8Array(N);
-  const key=arrowWindow(); if(!key || !P) return;
-  const e=STEPS["d"+key], lvl=new Int8Array(P.rows.length);
+  arrowOf=new Int8Array(N); bashOf=new Int8Array(N); bashNewOf=new Int8Array(N);
+  if(!P) return;
+  const key=arrowWindow();
+  const lvl=new Int8Array(P.rows.length), bl=new Int8Array(P.rows.length), bn=new Int8Array(P.rows.length);
+  const bashKey=refs["1h"]? "1h" : (refs["12h"]? "12h" : null);
   P.rows.forEach((r,i)=>{
-    const g=pct(r,key); if(g==null) return;
-    lvl[i] = g>e[3]? 3 : g>e[2]? 2 : g>e[1]? 1 : g<-e[3]? -3 : g<-e[2]? -2 : g<-e[1]? -1 : 0;
+    if(key){
+      const e=STEPS["d"+key], g=pct(r,key);
+      if(g!=null) lvl[i] = g>e[3]? 3 : g>e[2]? 2 : g>e[1]? 1 : g<-e[3]? -3 : g<-e[2]? -2 : g<-e[1]? -1 : 0;
+    }
+    // Zeichen für besiegte Gegner: gesamt ab der oberen Spitze, frischer Zuwachs immer
+    const all=r[pIdx.all]||0;
+    bl[i] = all>BASH_STEPS[3]? 3 : all>BASH_STEPS[2]? 2 : 0;
+    if(bashKey){
+      const d=(r[pIdx["d"+bashKey+"_att"]]||0)+(r[pIdx["d"+bashKey+"_def"]]||0)+(r[pIdx["d"+bashKey+"_sup"]]||0);
+      bn[i] = d>BASH_NEW_STEPS[2]? 3 : d>BASH_NEW_STEPS[1]? 2 : d>0? 1 : 0;
+    }
   });
-  for(let i=0;i<N;i++) arrowOf[i]= vp[i]>=0? lvl[vp[i]] : 0;
+  for(let i=0;i<N;i++){
+    const p=vp[i];
+    arrowOf[i]= p>=0? lvl[p] : 0;
+    bashOf[i]= p>=0? bl[p] : 0;
+    bashNewOf[i]= p>=0? bn[p] : 0;
+  }
 }
 function computeGrowth(){
   growth={}; rankOf={};
@@ -345,6 +415,13 @@ function computeGrowth(){
       if(e && e[view]) rankOf[i]=e[view].rank;
     });
   }
+}
+function bashValue(p){
+  const r=P.rows[p];
+  if(view==="bash_all") return r[pIdx.all]||0;
+  const k=refs["1h"]? "1h" : (refs["12h"]? "12h" : null);
+  if(!k) return 0;
+  return (r[pIdx["d"+k+"_att"]]||0)+(r[pIdx["d"+k+"_def"]]||0)+(r[pIdx["d"+k+"_sup"]]||0);
 }
 function tribeColorOf(id){ return marks.get(id) || tribeColor.get(id); }
 function buildBuckets(){
@@ -365,6 +442,16 @@ function buildBuckets(){
       let s=0; while(s<RANK_STEPS.length && r>RANK_STEPS[s]) s++;
       push(RANK_COLORS[s], i);
     }
+  } else if(isBash(view)){
+    const steps = view==="bash_all"? BASH_STEPS : BASH_NEW_STEPS;
+    for(let i=0;i<N;i++){
+      const p=vp[i];
+      if(p<0){ push(C_BARB, i); continue; }
+      const v=bashValue(p);
+      if(!v){ push(C_NONE, i); continue; }
+      let s=0; while(s<steps.length && v>steps[s]) s++;
+      push(BASH_COLORS[s], i);
+    }
   } else {
     const edges=STEPS[view];
     for(let i=0;i<N;i++){
@@ -377,7 +464,7 @@ function buildBuckets(){
       push(GROWTH_COLORS[s], i);
     }
   }
-  const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...GROWTH_COLORS,...RANK_COLORS.slice().reverse(),C_LOSS,
+  const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...GROWTH_COLORS,...BASH_COLORS,...RANK_COLORS.slice().reverse(),C_LOSS,
                ...TRIBE_COLORS,C_TRACKED,...EXTRA_COLORS];
   const keys=[...map.keys()].sort((a,b)=>{
     const ia=order.indexOf(a), ib=order.indexOf(b);
@@ -397,6 +484,16 @@ function renderLegend(){
     (T.tribe_ids||[]).forEach(id=>{ if(!marks.has(id)) add(C_TRACKED, (tagOf.get(id)||"?")+" (erfasst)"); });
     tribeList.forEach(a=>{ if(!marks.has(a[0]) && !(T.tribe_ids||[]).includes(a[0])) add(tribeColor.get(a[0]), a[2]||a[1]); });
     add(C_OTHER,"übrige Spieler"); add(C_BARB,"Barbaren"); add(C_BONUS,"Bonusdörfer");
+  } else if(isBash(view)){
+    const steps = view==="bash_all"? BASH_STEPS : BASH_NEW_STEPS;
+    const fenster = refs["1h"]? "1 Stunde" : (refs["12h"]? "12 Stunden" : "");
+    $("legend-title").textContent = view==="bash_all"
+      ? "Besiegte Gegner insgesamt" : "Besiegte Gegner in den letzten "+fenster;
+    add(C_NONE,"keine");
+    add(BASH_COLORS[0],"bis "+nf.format(steps[0]));
+    for(let s=1;s<steps.length;s++) add(BASH_COLORS[s], "über "+nf.format(steps[s-1])+" bis "+nf.format(steps[s]));
+    add(BASH_COLORS[steps.length],"über "+nf.format(steps[steps.length-1]));
+    add(C_BARB,"Barbaren");
   } else if(isRank(view)){
     const n=deepCounts[view] || [...inaday.values()].filter(e=>e[view]).length;
     $("legend-title").textContent=INADAY_LABEL[view]+" · Platz in der Weltrangliste · "+nf.format(n)+" Spieler erfasst";
@@ -414,10 +511,14 @@ function renderLegend(){
     add(C_BARB,"Barbaren");
   }
   const key=arrowWindow(), e=key? STEPS["d"+key] : null;
-  $("legend-arrows").innerHTML = key
-    ? "Pfeile am Dorf, Zuwachs über "+VIEW_LABEL["d"+key]+": <b>&#9650;</b> ab "+e[1]+" %, <b>&#9650;&#9650;</b> ab "+e[2]
-      +" %, <b>&#9650;&#9650;&#9650;</b> ab "+e[3]+" %, <u>&#9660;</u> entsprechend bei Verlust. Sichtbar ab mittlerem Zoom."
-    : "Pfeile für den Zuwachs erscheinen, sobald ein Vergleichsstand vorliegt.";
+  const teile=[];
+  teile.push(key
+    ? "Pfeile rechts oben, Punktezuwachs über "+VIEW_LABEL["d"+key]+": <b>&#9650;</b> ab "+e[1]+" %, <b>&#9650;&#9650;</b> ab "+e[2]
+      +" %, <b>&#9650;&#9650;&#9650;</b> ab "+e[3]+" %, <u>&#9660;</u> entsprechend bei Verlust."
+    : "Pfeile für den Punktezuwachs erscheinen ab zwölf Stunden Historie.");
+  teile.push("Rahmen um das Dorf: viele besiegte Gegner (gelb ab "+nf.format(BASH_STEPS[2])
+    +", rot ab "+nf.format(BASH_STEPS[3])+"). Funke links oben: zuletzt dazugekommen. Raute links unten: Bonusdorf.");
+  $("legend-arrows").innerHTML = teile.join(" ") + " Zeichen erscheinen ab mittlerem Zoom.";
   const box=$("legend");
   if(box.hidden){ box.hidden=false; box.open = wrap.clientWidth>=560; }  // auf schmalen Schirmen zugeklappt
 }
@@ -443,7 +544,7 @@ let deepCounts={};
 
 function setView(v){
   view=v;
-  document.querySelectorAll("#views button, #views2 button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
+  document.querySelectorAll("#views button, #views2 button, #views3 button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
   const apply=()=>{ computeGrowth(); computeArrows(); buildBuckets(); renderLegend(); draw(); saveUrl(); };
   if(isRank(v) && !deepLoaded){
     $("stand").textContent="Lade vollständige Rangliste …";
@@ -496,7 +597,7 @@ function showTip(i, px, py){
     trow("Spieler", r[pIdx.name]);
     trow("Stamm", aid? (tagOf.get(aid)||"?") : "ohne Stamm");
     trow("Punkte", nf.format(r[pIdx.points])+" · "+nf.format(r[pIdx.villages])+" Dörfer");
-    ["1h","24h","7d"].forEach(k=>{
+    ["1h","12h","24h","7d"].forEach(k=>{
       if(!refs[k]) return;
       const d=r[pIdx["d"+k+"_points"]];
       if(d==null) return;
@@ -638,7 +739,7 @@ function saveUrl(){
 }
 function readUrl(){
   const p=new URLSearchParams(location.search);
-  const v=p.get("v"); if(v && (STEPS[v]||isRank(v))) view=v;
+  const v=p.get("v"); if(v && (STEPS[v]||isRank(v)||isBash(v))) view=v;
   (p.get("m")||"").split(",").filter(Boolean).forEach(s=>{
     const [id,c]=s.split("-");
     if(/^\d+$/.test(id) && /^[0-9a-fA-F]{6}$/.test(c||"")) marks.set(+id, "#"+c);
@@ -731,7 +832,7 @@ window.addEventListener("resize", resize);
 $("zin").addEventListener("click", ()=>zoomAt(W/2,H/2,1.6));
 $("zout").addEventListener("click", ()=>zoomAt(W/2,H/2,1/1.6));
 $("zfit").addEventListener("click", ()=>{ marked=null; userView=false; fitWorld(); draw(); saveUrl(); });
-document.querySelectorAll("#views, #views2").forEach(g=>g.addEventListener("click", e=>{
+document.querySelectorAll("#views, #views2, #views3").forEach(g=>g.addEventListener("click", e=>{
   const b=e.target.closest("button"); if(b && !b.disabled) setView(b.dataset.v);
 }));
 $("searchform").addEventListener("submit", e=>{ e.preventDefault(); $("sugg").hidden=true; search($("q").value); });

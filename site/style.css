@@ -26,7 +26,8 @@
   --radius:3px;
   /* Kartenflächen */
   --map-bg:#7c9a4e; --map-grid:rgba(0,0,0,.20); --map-grid-major:rgba(0,0,0,.58); --map-label:rgba(0,0,0,.55);
-  --map-barb:#7d8468; --map-bonus:#d9c26a; --map-other:#c8cbbc; --map-edge:rgba(0,0,0,.45);
+  --map-barb:#8d9482; --map-bonus:#d9c26a; --map-other:#a4372c; --map-none:#c8cbbc;
+  --map-edge:rgba(0,0,0,.45);
 }
 
 /* ---------- futuristic ---------- */
@@ -35,11 +36,13 @@
   --bg-image:radial-gradient(1100px 520px at 12% -12%, rgba(255,159,28,.13), transparent 62%),
              radial-gradient(900px 460px at 88% -6%, rgba(77,217,255,.10), transparent 62%),
              linear-gradient(180deg,#080c14,#05070c);
-  --panel:linear-gradient(157deg,#121b2a 0%,#0d1421 46%,#0a1019 100%);
-  --panel-solid:#0e1622;
-  --panel-2:#0b121d;
-  --row:transparent; --row-alt:rgba(125,170,220,.035); --row-hover:rgba(120,190,255,.10);
-  --edge:rgba(132,178,228,.26); --edge-soft:rgba(132,178,228,.16); --edge-line:rgba(132,178,228,.12);
+  /* poliertes Metall: heller Anriss oben links, kühler Abfall nach unten rechts */
+  --panel:linear-gradient(158deg,rgba(198,226,255,.10) 0%,rgba(120,170,220,.03) 22%,transparent 45%),
+          linear-gradient(178deg,#131d2d 0%,#0d1522 52%,#090f19 100%);
+  --panel-solid:#0f1826;
+  --panel-2:rgba(150,200,255,.05);
+  --row:transparent; --row-alt:rgba(125,170,220,.04); --row-hover:rgba(120,190,255,.11);
+  --edge:rgba(150,205,255,.34); --edge-soft:rgba(150,205,255,.20); --edge-line:rgba(150,205,255,.13);
   --head:linear-gradient(180deg,rgba(150,200,255,.13),rgba(150,200,255,.03)); --head-ink:#cfe4fb;
   --ink:#dfeafa; --ink-2:#a9c1dc; --muted:#7d95b2;
   --accent:#ff9f1c; --accent-ink:#0b1018; --accent-soft:rgba(255,159,28,.15);
@@ -50,16 +53,18 @@
   --bar:linear-gradient(180deg,#101a29,#0a1220); --bar-ink:#e6f1ff; --bar-dim:#8fa9c6;
   --bar-edge:rgba(132,178,228,.22);
   --field:rgba(10,16,26,.85);
-  /* der polierte Schimmer: heller Streifen oben, dunkle Kante unten */
-  --shine:inset 0 1px 0 rgba(214,236,255,.20), inset 0 -1px 0 rgba(0,0,0,.55),
-          inset 1px 0 0 rgba(160,205,255,.07), inset -1px 0 0 rgba(160,205,255,.07);
-  --glow:0 0 18px rgba(120,190,255,.10);
+  /* der polierte Schimmer: heller Grat oben, dunkle Kante unten, kühler Rand ringsum */
+  --shine:inset 0 1px 0 rgba(226,242,255,.30), inset 0 -1px 0 rgba(0,0,0,.6),
+          inset 1px 0 0 rgba(170,215,255,.10), inset -1px 0 0 rgba(170,215,255,.10),
+          0 0 0 1px rgba(120,175,235,.07);
+  --glow:0 6px 20px rgba(0,0,0,.5), 0 0 22px rgba(110,185,255,.09);
   --title-fill:linear-gradient(180deg,#f2f8ff 10%,#9dc6f0 92%);
   --font:13px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
   --radius:9px;
   --map-bg:#0b1220; --map-grid:rgba(140,190,240,.10); --map-grid-major:rgba(150,205,255,.30);
   --map-label:rgba(175,210,245,.55);
-  --map-barb:#39485e; --map-bonus:#c99a35; --map-other:#8fb0d4; --map-edge:rgba(0,0,0,.55);
+  --map-barb:#3c4a5e; --map-bonus:#c99a35; --map-other:#c0392b; --map-none:#6f8296;
+  --map-edge:rgba(0,0,0,.55);
 }
 
 *,*::before,*::after{box-sizing:border-box}
@@ -173,3 +178,37 @@ td.rank{color:var(--muted)}
 footer{color:var(--muted); font-size:11px; border-top:1px solid var(--edge-line); padding-block:12px 22px;
   margin-top:6px}
 footer a{color:var(--accent)}
+
+/* ---------- Feinschliff der Fassung futuristic ---------- */
+[data-theme="futuristic"] .facts>div,[data-theme="futuristic"] .panel{
+  backdrop-filter:saturate(115%);
+}
+[data-theme="futuristic"] .facts>div::after,[data-theme="futuristic"] .panel::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(200deg,rgba(255,255,255,.055),transparent 38%);
+}
+[data-theme="futuristic"] .facts>div{position:relative; overflow:hidden}
+/* Der Verlauf färbt den Text, die Fläche zeichnet ::before dahinter. */
+[data-theme="futuristic"] .panel>h2{
+  position:relative; background:linear-gradient(180deg,#f4f9ff 15%,#a8cdf0 95%);
+  color:transparent; background-clip:text; -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+[data-theme="futuristic"] .panel>h2::before{
+  content:""; position:absolute; inset:0; z-index:-1;
+  background:linear-gradient(180deg,rgba(150,200,255,.13),rgba(150,200,255,.02));
+  border-bottom:1px solid var(--edge-soft);
+}
+[data-theme="futuristic"] .panel>h2{border-bottom:0}
+/* Alles, was in der Überschrift sitzt, bekommt seine normale Schriftfarbe zurück. */
+[data-theme="futuristic"] .panel>h2 *{-webkit-text-fill-color:initial}
+[data-theme="futuristic"] .panel>h2 .hint,[data-theme="futuristic"] .panel>h2 em{
+  color:var(--muted); -webkit-text-fill-color:var(--muted);
+}
+[data-theme="futuristic"] .panel>h2 button.tw{color:var(--ink); -webkit-text-fill-color:var(--ink)}
+[data-theme="futuristic"] .panel>h2 button.tw[aria-pressed="true"]{
+  color:var(--accent-ink); -webkit-text-fill-color:var(--accent-ink)}
+[data-theme="futuristic"] th{background:rgba(150,200,255,.06); backdrop-filter:blur(2px)}
+[data-theme="futuristic"] .kpi-big{text-shadow:0 0 22px rgba(140,200,255,.35)}
+[data-theme="futuristic"] .accent-num{color:var(--accent); text-shadow:0 0 20px rgba(255,159,28,.45)}
+[data-theme="classic"] .accent-num{color:var(--accent)}
