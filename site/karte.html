@@ -52,17 +52,21 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .zoom button{font:inherit; font-weight:700; font-size:15px; width:32px; height:32px; cursor:pointer;
   background:var(--btn); color:var(--ink); border:1px solid var(--edge); border-radius:var(--radius);
   box-shadow:var(--shine)}
-.tip{position:absolute; z-index:5; pointer-events:none; display:none; width:max-content; max-width:min(360px,92vw);
+/* Aufbau wie das Kontextmenü im Spiel: schmaler Rahmen, Titelbalken, links die Bezeichnung,
+   rechts der Wert, Zeilen abwechselnd hinterlegt. */
+.tip{position:absolute; z-index:5; pointer-events:none; display:none; width:max-content; max-width:min(380px,92vw);
   background:var(--panel-solid); color:var(--ink); border:1px solid var(--edge); border-radius:var(--radius);
-  padding:0 0 5px; font-size:12px; line-height:1.35; box-shadow:0 4px 14px rgba(0,0,0,.45)}
-.tip .th{background:var(--head); border-bottom:1px solid var(--edge-soft); padding:3px 9px; font-weight:700;
+  padding:0 0 3px; font-size:12px; line-height:1.4; box-shadow:0 4px 16px rgba(0,0,0,.5)}
+[data-theme="classic"] .tip{border-width:2px; border-color:#3f2100}
+.tip .th{background:var(--head); border-bottom:1px solid var(--edge); padding:3px 9px; font-weight:700;
   color:var(--head-ink)}
 .tip .th span{font-weight:400; opacity:.85}
-.tip .sec{margin-top:3px; padding:2px 9px 1px; font-size:9.5px; font-weight:700; letter-spacing:.1em;
-  text-transform:uppercase; color:var(--muted); border-top:1px solid var(--edge-line)}
-.tip .row{display:flex; gap:14px; justify-content:space-between; padding:1px 9px; white-space:nowrap}
+.tip .sec{padding:3px 9px 1px; font-size:9.5px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border-top:1px solid var(--edge-soft); margin-top:2px}
+.tip .row{display:flex; gap:20px; justify-content:space-between; padding:1.5px 9px; white-space:nowrap}
 .tip .row:nth-of-type(even){background:var(--row-alt)}
-.tip .k{color:var(--muted)}
+.tip .row>span:last-child{font-weight:600}
+.tip .k{color:var(--muted); font-weight:400}
 .tip .up{color:var(--good); font-weight:700} .tip .down{color:var(--bad); font-weight:700} .tip .na{color:var(--muted)}
 .msg{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
   color:var(--ink); background:var(--panel-solid); opacity:.94; font-size:13px; padding:24px; z-index:4}
@@ -667,9 +671,10 @@ function showTip(i, px, py){
   if(p<0){ trow("Besitzer","Barbaren"); }
   else{
     const r=P.rows[p], aid=allyOf[p];
-    trow("Spieler", r[pIdx.name]);
-    trow("Stamm", aid? (tagOf.get(aid)||"?") : "ohne Stamm");
-    trow("Punkte", nf.format(r[pIdx.points])+" · "+nf.format(r[pIdx.villages])+" Dörfer");
+    trow("Besitzer", r[pIdx.name]+" ("+nf.format(r[pIdx.points])+" Punkte)");
+    const av=aid? allyById.get(aid) : null;
+    trow("Stamm", aid? ((tagOf.get(aid)||"?")+(av? " ("+nf.format(av[5])+" Punkte)" : "")) : "ohne Stamm");
+    trow("Dörfer", nf.format(r[pIdx.villages]));
     ["1h","12h","24h","7d"].forEach(k=>{
       if(!refs[k]) return;
       const d=r[pIdx["d"+k+"_points"]];
