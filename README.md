@@ -4,7 +4,7 @@ Fan-Projekt: sammelt stündlich öffentliche Daten der Welt 259 von [Die Stämme
 
 ## Was passiert
 
-- GitHub Actions startet den Sammler stündlich (Minute 17, UTC), zusätzlich bei Code-Änderungen und per Hand.
+- GitHub Actions startet den Sammler stündlich (Minute 55, UTC, kurz nach der Serveraktualisierung), zusätzlich bei Code-Änderungen und per Hand.
 - **Weltdaten** (`/map/*.txt.gz`: player, ally, village, kill_att, kill_def, kill_sup, kill_all, conquer): Zuerst wird `player.txt.gz` bedingt abgefragt. Nur wenn der Server neue Daten erzeugt hat, werden die übrigen Dateien geladen, geprüft und abgelegt.
 - **Rangliste „An einem Tag“** (Gastzugang): stündlich ein Änderungs-Check über Seite 1 jeder Kategorie (7 Abrufe). Die Mitglieder der erfassten Stämme werden nur bei einer Änderung oder spätestens nach 24 Stunden vollständig erhoben.
 - Ergebnisse landen in `data/`, die Seite wird über GitHub Pages veröffentlicht.
