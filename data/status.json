@@ -6,11 +6,19 @@
   "villages": 29574
  },
  "data_last_modified": "Sat, 12 Sep 2026 09:52:53 GMT",
- "duration_s": 13.4,
+ "duration_s": 857.2,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
   "changed_types": [],
+  "deep_note": {
+   "loot_res": 5299,
+   "loot_vil": 750,
+   "scavenge": 6436
+  },
+  "deep_page_size": 25,
+  "deep_pages": 500,
+  "deep_rows": 12485,
   "entries": null,
   "events": null,
   "full_scrape": false,
@@ -25,14 +33,15 @@
    "scavenge": 25
   }
  },
+ "last_deep_scrape_utc": "2026-09-12T10:21:14+00:00",
  "last_full_scrape_utc": "2026-09-12T00:32:13+00:00",
  "requests": {
-  "guest": 7,
+  "guest": 511,
   "world": 1
  },
  "result": "unverändert",
- "run_local": "2026-09-12T12:05:06+02:00",
- "run_utc": "2026-09-12T10:05:06+00:00",
+ "run_local": "2026-09-12T12:21:14+02:00",
+ "run_utc": "2026-09-12T10:21:14+00:00",
  "tribe_ids": [
   456
  ],
