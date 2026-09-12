@@ -6,7 +6,7 @@
   "villages": 30111
  },
  "data_last_modified": "Sat, 12 Sep 2026 22:47:12 GMT",
- "duration_s": 14.2,
+ "duration_s": 10.8,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
@@ -35,74 +35,27 @@
  "last_full_scrape_utc": "2026-09-12T22:03:11+00:00",
  "requests": {
   "guest": 7,
-  "world": 8
+  "world": 1
  },
- "result": "neu",
- "run_local": "2026-09-13T01:03:12+02:00",
- "run_utc": "2026-09-12T23:03:12+00:00",
+ "result": "unverändert",
+ "run_local": "2026-09-13T01:22:08+02:00",
+ "run_utc": "2026-09-12T23:22:08+00:00",
  "tribe_ids": [
   456
  ],
- "trigger": "schedule",
+ "trigger": "push",
  "world": {
-  "changed": true,
-  "counts": {
-   "allies": 416,
-   "conquers_total": 2535,
-   "players": 10197,
-   "villages": 30111
-  },
+  "changed": false,
+  "counts": null,
   "downloads": [
    {
-    "bytes": 164816,
+    "bytes": 0,
     "file": "player",
     "last_modified": "Sat, 12 Sep 2026 22:47:12 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 9250,
-    "file": "ally",
-    "last_modified": "Sat, 12 Sep 2026 22:53:02 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 415184,
-    "file": "village",
-    "last_modified": "Sat, 12 Sep 2026 22:47:12 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 13227,
-    "file": "kill_att",
-    "last_modified": "Sat, 12 Sep 2026 22:52:53 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 27088,
-    "file": "kill_def",
-    "last_modified": "Sat, 12 Sep 2026 22:47:12 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 3720,
-    "file": "kill_sup",
-    "last_modified": "Sat, 12 Sep 2026 22:52:53 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 33681,
-    "file": "kill_all",
-    "last_modified": "Sat, 12 Sep 2026 22:53:02 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 29609,
-    "file": "conquer",
-    "last_modified": "Sat, 12 Sep 2026 22:52:53 GMT",
-    "status": 200
+    "status": 304
    }
   ],
-  "new_conquers": 17,
-  "note": null
+  "new_conquers": null,
+  "note": "Server hat seit dem letzten Lauf keine neuen Weltdaten erzeugt (304)"
  }
 }
