@@ -39,7 +39,7 @@
              radial-gradient(1000px 480px at 86% -8%, rgba(56,132,255,.13), transparent 62%),
              radial-gradient(700px 380px at 50% 108%, rgba(20,184,166,.10), transparent 60%),
              linear-gradient(180deg,#050912,#03060b);
-  --panel:linear-gradient(158deg,rgba(160,236,255,.10) 0%,rgba(60,150,200,.035) 24%,transparent 46%),
+  --panel:linear-gradient(158deg,rgba(160,236,255,.035) 0%,rgba(60,150,200,.012) 22%,transparent 42%),
           linear-gradient(178deg,#0c1a28 0%,#08131f 55%,#050c15 100%);
   --panel-solid:#0a1622;
   --panel-2:rgba(45,212,238,.07);
@@ -192,19 +192,19 @@ footer a{color:var(--accent)}
 /* Messraster im Panel, Lichtreflex über die Fläche, Eckwinkel wie auf einem technischen Display. */
 [data-theme="futuristic"] .facts>div,[data-theme="futuristic"] .panel{
   background-image:
-    linear-gradient(158deg,rgba(160,236,255,.11) 0%,rgba(60,150,200,.03) 20%,transparent 44%),
+    linear-gradient(158deg,rgba(160,236,255,.035) 0%,rgba(60,150,200,.010) 20%,transparent 42%),
     repeating-linear-gradient(0deg,rgba(72,214,246,.05) 0 1px,transparent 1px 24px),
     repeating-linear-gradient(90deg,rgba(72,214,246,.05) 0 1px,transparent 1px 24px),
     linear-gradient(178deg,#0c1a28 0%,#08131f 55%,#050c15 100%);
 }
 [data-theme="futuristic"] .facts>div{position:relative; overflow:hidden}
 [data-theme="futuristic"] .facts>div::after{
-  background:linear-gradient(112deg,transparent 30%,rgba(255,255,255,.022) 41%,transparent 54%);
+  background:linear-gradient(112deg,transparent 34%,rgba(255,255,255,.010) 41%,transparent 50%);
 }
 [data-theme="futuristic"] .facts>div::after,[data-theme="futuristic"] .panel::after{
   content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-  background:linear-gradient(112deg,transparent 26%,rgba(190,245,255,.018) 37%,
-             rgba(255,255,255,.034) 41%,rgba(190,245,255,.014) 45%,transparent 58%);
+  background:linear-gradient(112deg,transparent 30%,rgba(190,245,255,.008) 38%,
+             rgba(255,255,255,.016) 41%,rgba(190,245,255,.006) 44%,transparent 54%);
 }
 [data-theme="futuristic"] .panel{box-shadow:var(--shine), var(--glow)}
 [data-theme="futuristic"] .panel:hover{
@@ -250,6 +250,6 @@ footer a{color:var(--accent)}
 [data-theme="classic"] .accent-num{color:var(--accent)}
 [data-theme="futuristic"] .appbar h1{filter:drop-shadow(0 0 14px rgba(72,214,246,.45))}
 [data-theme="futuristic"] .scopebar{
-  background-image:linear-gradient(158deg,rgba(160,236,255,.10),transparent 40%),
+  background-image:linear-gradient(158deg,rgba(160,236,255,.035),transparent 38%),
     linear-gradient(178deg,#0c1a28,#060f1a);
 }
