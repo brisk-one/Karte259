@@ -30,6 +30,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Rohdaten des letzten Laufs mitnehmen. Ohne sie faellt die Karte bei einem Lauf ohne neue
+      # Weltdaten auf das Tagesarchiv zurueck, obwohl frischere Daten schon einmal da waren.
+      - uses: actions/cache@v6
+        with:
+          path: .cache
+          key: rohdaten-${{ github.run_id }}
+          restore-keys: rohdaten-
+
       - name: Tests
         run: python3 -m unittest discover -s tests -v
 
