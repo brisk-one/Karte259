@@ -59,7 +59,13 @@
  },
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
-  "last_deep_scrape_utc": "2026-09-12T10:21:14+00:00",
+  "deep_complete_types": [
+   "loot_res",
+   "loot_vil",
+   "scavenge"
+  ],
+  "last_deep_scrape_utc": "2026-09-12T12:49:38+00:00",
+  "last_deep_try_utc": "2026-09-12T12:49:38+00:00",
   "last_full_scrape_utc": "2026-09-12T00:32:13+00:00",
   "page_param": null,
   "page_size": 25,
