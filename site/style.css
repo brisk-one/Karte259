@@ -11,9 +11,9 @@
   --panel:linear-gradient(#f4e4bc,#f4e4bc);
   --panel-solid:#f4e4bc;
   --panel-2:#eadcb4;
-  --row:#f7edd2; --row-alt:#efe0b8; --row-hover:#fff6dc;
-  --edge:#603000; --edge-soft:#c9b483; --edge-line:#ddcea5;
-  --head:linear-gradient(#d8bd8a,#c1a264); --head-ink:#3f2100;
+  --row:#f5eed6; --row-alt:#ece0be; --row-hover:#fffbe8;
+  --edge:#7d510f; --edge-soft:#b79a68; --edge-line:#d8c9a2;
+  --head:linear-gradient(#dfcb9d,#cdb383); --head-ink:#2b1d06;
   --ink:#2b1d06; --ink-2:#5c4415; --muted:#7a6435;
   --accent:#8a5a12; --accent-ink:#f7ecd2; --accent-soft:rgba(138,90,18,.14);
   --good:#2f6b1f; --good-bg:#dfeccd; --bad:#9c2b1c; --bad-bg:#f2ddd6;
@@ -151,12 +151,12 @@ label.pick>span{font-size:10px; letter-spacing:.1em; text-transform:uppercase; c
 /* Kopfzeile wie in der Rangliste des Spiels: jede Spalte ein eigenes umrandetes Kästchen mit
    schmalem Spalt dazwischen. Die Datenzeilen bleiben ohne senkrechte Linien, ihr Streifen liegt
    auf der Zeile und läuft deshalb durch die Spalten hindurch. */
-table{width:100%; border-collapse:separate; border-spacing:2px 0; font-size:11.5px}
+table{width:100%; border-collapse:separate; border-spacing:3px 0; font-size:11.5px}
 th,td{padding:3px 6px; text-align:right; white-space:nowrap}
 td{border-bottom:1px solid var(--edge-line)}
 td.name{padding-right:10px}
 th{font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--head-ink); font-weight:700;
-  background:var(--head); border:1px solid var(--edge); border-radius:2px;
+  background:var(--head); border:1px solid var(--edge); border-radius:2px; padding:4px 8px;
   position:sticky; top:0; z-index:1}
 [data-theme="classic"] th{text-shadow:0 1px 0 rgba(255,255,255,.35)}
 th.sortable{cursor:pointer; user-select:none}
@@ -171,9 +171,11 @@ tbody tr:hover td{background:var(--row-hover)}
 td.name{font-weight:700}
 td.rank{color:var(--muted)}
 .up{color:var(--good); font-weight:700} .down{color:var(--bad); font-weight:700} .na{color:var(--muted)}
+/* Die Gruppenzeile bekommt über einen Schatten in Flächenfarbe Luft nach unten, damit ihre
+   Kästchen nicht an denen der Spaltenzeile kleben. */
 .group th{font-size:9.5px; letter-spacing:.12em; background:var(--head); color:var(--head-ink);
-  text-align:center; position:static; padding-block:2px}
-.group th:empty{background:none; border-color:transparent}
+  text-align:center; position:static; padding:3px 8px; box-shadow:0 3px 0 var(--panel-solid)}
+.group th:empty{background:none; border-color:transparent; box-shadow:none}
 .empty{padding:10px 12px; color:var(--muted); font-size:12px}
 .pill{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:11.5px; padding:2px 9px;
   border:1px solid var(--edge); border-radius:999px; background:var(--panel-2)}

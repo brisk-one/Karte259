@@ -30,6 +30,15 @@
 .kgrid button:disabled{opacity:.2; cursor:default}
 .kwrap{display:flex; flex-wrap:wrap; gap:12px 18px; align-items:flex-start; padding:9px 11px 4px}
 .klegend{font-size:11px; color:var(--muted); max-width:340px; margin:0}
+/* kleine Einzelbilder je Stamm, damit sich schwache Linien nicht im Bündel verlieren */
+.trellis{display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:8px;
+  padding:2px 11px 12px}
+.trellis figure{margin:0; border:1px solid var(--edge-line); border-radius:var(--radius);
+  background:var(--panel-2); padding:5px 7px 3px}
+.trellis figcaption{display:flex; justify-content:space-between; align-items:baseline; gap:6px;
+  font-size:11px; font-weight:700; margin-bottom:2px}
+.trellis figcaption span{font-weight:400; font-size:10.5px; color:var(--muted)}
+.trellis svg{display:block; width:100%; height:52px}
 </style>
 </head>
 <body>
@@ -115,7 +124,8 @@
         <p class="klegend" id="klegend"></p>
       </div>
       <div class="chartbox"><svg id="ch-series" viewBox="0 0 1100 320"></svg></div>
-      <p class="legendrow" style="padding:0 11px 10px" id="series-legend"></p>
+      <p class="legendrow" style="padding:0 11px 8px" id="series-legend"></p>
+      <div class="trellis" id="trellis"></div>
     </section>
 
     <section class="panel c4" aria-labelledby="h-dist">
@@ -270,6 +280,36 @@ function columns(id, items){
   });
   s.appendChild(svgEl("line",{x1:L,y1:H-B,x2:W-R,y2:H-B,stroke:C.line}));
 }
+/** Ein kleines Bild je Stamm. Nebeneinander lassen sich Verläufe vergleichen, die im
+    gemeinsamen Bild vom Maßstab der starken Stämme erdrückt werden. */
+function trellis(reihen, times){
+  const box=$("trellis"); box.replaceChildren();
+  reihen.forEach((r,ri)=>{
+    const fig=document.createElement("figure");
+    const cap=document.createElement("figcaption");
+    const nm=document.createElement("b"); nm.textContent=r.label; nm.style.color=r.color;
+    const letzte=r.values[r.values.length-1], erste=r.values[0], diff=letzte-erste;
+    const wert=document.createElement("span");
+    wert.textContent=nf.format(letzte)+(diff? "  "+(diff>0?"+":"")+nf.format(diff) : "");
+    cap.append(nm, wert); fig.appendChild(cap);
+    const id="tr"+ri;
+    const svg=svgEl("svg",{viewBox:"0 0 200 52", preserveAspectRatio:"none"});
+    svg.id=id; fig.appendChild(svg); box.appendChild(fig);
+    // eigener Maßstab je Bild, sonst ist die Linie eines kleinen Stammes eine Gerade
+    const min=Math.min(...r.values), max=Math.max(...r.values), sp=(max-min)||1;
+    const X=i=>(i/(Math.max(1,times.length-1)))*200;
+    const Y=v=>50-((v-min)/sp)*44-3;
+    defs(svg, [r.color], id);
+    const pts=r.values.map((v,i)=>[X(i),Y(v)]);
+    const d="M"+pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join("L");
+    svg.appendChild(svgEl("path",{d:d+"L200,52L0,52Z", fill:"url(#"+id+"v0)"}));
+    svg.appendChild(svgEl("path",{d, fill:"none", stroke:r.color, "stroke-width":"1.6",
+      "stroke-linejoin":"round", "vector-effect":"non-scaling-stroke"}));
+    const t=svgEl("title"); t.textContent=r.label+": "+nf.format(min)+" bis "+nf.format(max);
+    svg.appendChild(t);
+  });
+}
+
 /** Linien mit schattierter Fläche darunter, eine je Stamm. */
 function lines(id, times, reihen){
   const s=clear(id), W=1100, H=320, L=74, R=16, T=14, B=30;
@@ -462,16 +502,19 @@ function renderSeries(){
   if(gewaehlt.length && tribeKont.size){
     liste=liste.filter(t=>{ const ks=tribeKont.get(t.id); return ks && gewaehlt.some(k=>ks.has(k)); });
   }
+  const gefunden=liste.length;
   liste=liste.slice(0,10);
   const reihen=liste.map((t,i)=>({label:t.tag, color:LINE_COLORS[i%LINE_COLORS.length], values:t[smode]||t.points}));
   lines("ch-series", series.times, reihen);
+  trellis(reihen, series.times);
   const lg=$("series-legend"); lg.replaceChildren();
   reihen.forEach(r=>{ const sp=el("span"); const i2=el("i"); i2.style.background=r.color;
     sp.append(i2, document.createTextNode(r.label)); lg.appendChild(sp); });
   $("klegend").textContent = gewaehlt.length
-    ? "Die zehn stärksten Stämme mit Dörfern in K"+gewaehlt.join(", K")
-      + ". Die Linie zeigt die Gesamtwerte des Stammes, nicht nur seine Dörfer dort."
-    : "Ohne Auswahl gelten alle Kontinente. Ein Feld anklicken wählt aus oder ab.";
+    ? reihen.length+" von "+gefunden+" Stämmen mit Dörfern in K"+gewaehlt.join(", K")
+      + " (erfasst sind die 60 punktstärksten der Welt). Die Linie zeigt die Gesamtwerte des Stammes,"
+      + " nicht nur seine Dörfer dort."
+    : "Ohne Auswahl gelten alle Kontinente, gezeigt sind die zehn stärksten. Ein Feld anklicken wählt aus oder ab.";
 }
 function renderInaday(){
   const seg=$("inaday-type");

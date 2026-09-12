@@ -226,7 +226,7 @@ def build(out_dir):
     # Zeitverlauf der stärksten Stämme, damit die Seite Linien zeigen kann statt nur Momentaufnahmen
     series = {"times": [], "tribes": []}
     try:
-        top_ids = [int(a["id"]) for a in sorted(allies, key=lambda a: -int(a["points"]))[:30]]
+        top_ids = [int(a["id"]) for a in sorted(allies, key=lambda a: -int(a["points"]))[:60]]
         names = {int(a["id"]): (a["tag"] or a["name"]) for a in allies}
         series = tribe_series(versions, players_path, names, top_ids)
     except Exception as e:
