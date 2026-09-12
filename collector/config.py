@@ -27,7 +27,8 @@ FULL_SCRAPE_MAX_AGE_H = 24  # spätestens nach so vielen Stunden wird der Stamm 
 # lassen sich aus den stündlichen Ständen berechnen und werden deshalb nicht geblättert.
 DEEP_TYPES = [t for t in os.environ.get("K259_DEEP_TYPES", "loot_res,scavenge,loot_vil").split(",") if t.strip()]
 DEEP_MAX_PAGES = int(os.environ.get("K259_DEEP_MAX_PAGES", "500"))   # Notbremse je Kategorie
-DEEP_MAX_AGE_H = float(os.environ.get("K259_DEEP_MAX_AGE_H", "20"))  # frühestens so viele Stunden nach der letzten
+DEEP_MAX_AGE_H = float(os.environ.get("K259_DEEP_MAX_AGE_H", "20"))  # Abstand zwischen vollständigen Durchgängen
+DEEP_RETRY_H = float(os.environ.get("K259_DEEP_RETRY_H", "0.5"))     # Wartezeit nach einem unvollständigen Versuch
 # Kandidaten für eine größere Seite. Wird einmal geprüft: liefert die Seite mehr Zeilen als üblich,
 # spart das ein Vielfaches an Abrufen. Ergebnis landet in state.json.
 DEEP_PAGE_PARAMS = [p for p in os.environ.get("K259_DEEP_PAGE_PARAMS", "count,limit,per_page").split(",") if p.strip()]

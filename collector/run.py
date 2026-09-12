@@ -56,7 +56,7 @@ def main(argv=None):
         "counts": state.get("counts", {}),
         "history_since_utc": state.get("history_since_utc"),
         "inaday": {k: d.get(k) for k in ("changed_types", "full_scrape", "members", "entries", "events", "top_rows",
-                                         "deep_rows", "deep_pages", "deep_note", "deep_page_size")},
+                                         "deep_rows", "deep_pages", "deep_note", "deep_page_size", "deep_complete")},
         "last_full_scrape_utc": state.get("inaday", {}).get("last_full_scrape_utc"),
         "last_deep_scrape_utc": state.get("inaday", {}).get("last_deep_scrape_utc"),
         "requests": {"world": net.Counter.world, "guest": net.Counter.guest},

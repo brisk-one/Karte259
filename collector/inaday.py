@@ -233,7 +233,7 @@ def deep_scrape(state, now_local, types):
         first = parse_ranking(_get(page_url(t)), today)
         pages += 1
         if not first:
-            note[t] = "keine Zeilen"
+            note[t] = {"rows": 0, "complete": True, "note": "keine Zeilen"}
             continue
         size, param = probe_page_size(state, t, len(first))
         extra = {param: config.DEEP_PAGE_TRY} if param else None
@@ -241,20 +241,23 @@ def deep_scrape(state, now_local, types):
         if param:                      # größere Seite möglich, also Seite 1 damit erneut holen
             rows = parse_ranking(_get(page_url(t, extra=extra)), today)
             pages += 1
-        seen, offset = set(), 0
+        seen, offset, own, complete = set(), 0, 0, True
         while True:
             for r in rows:
                 if r["player_id"] and (r["player_id"], t) not in seen:
                     seen.add((r["player_id"], t))
                     out.append([r["player_id"], r["name"], t, r["rank"], r["value"], r["date"] or ""])
-            if len(rows) < size or pages >= config.DEEP_MAX_PAGES:
+            if len(rows) < size:       # unvollständige Seite heißt: Liste zu Ende
+                break
+            if own >= config.DEEP_MAX_PAGES:   # Notbremse gilt je Kategorie
+                complete = False
                 break
             offset += len(rows)
             rows = parse_ranking(_get(page_url(t, offset=offset, extra=extra)), today)
-            pages += 1
+            pages += 1; own += 1
             if not rows:
                 break
-        note[t] = len(seen)
+        note[t] = {"rows": len(seen), "complete": complete}
     return out, pages, note
 
 
@@ -298,17 +301,24 @@ def update(state, now_utc, now_local, members):
 
     # Vollständige Erhebung der Kategorien ohne Entsprechung in den Weltdaten. Die Rangliste wird
     # einmal täglich neu berechnet, deshalb genügt ein Durchgang pro Tag.
-    last_deep = st.get("last_deep_scrape_utc")
-    deep_due = (not last_deep) or (now_utc - datetime.fromisoformat(last_deep) >= timedelta(hours=config.DEEP_MAX_AGE_H))
-    if config.DEEP_TYPES and deep_due and (summary["changed_types"] or not last_deep):
+    # Ein vollständiger Durchgang je DEEP_MAX_AGE_H Stunden. Blieb einer unvollständig, wird er
+    # frühestens nach DEEP_RETRY_H wiederholt, damit ein Abbruch nicht bis zum nächsten Tag stehen bleibt.
+    last_ok, last_try = st.get("last_deep_scrape_utc"), st.get("last_deep_try_utc")
+    age = lambda s: (now_utc - datetime.fromisoformat(s)) if s else None
+    deep_due = ((not last_ok) or age(last_ok) >= timedelta(hours=config.DEEP_MAX_AGE_H)) \
+        and ((not last_try) or age(last_try) >= timedelta(hours=config.DEEP_RETRY_H))
+    if config.DEEP_TYPES and deep_due and (summary["changed_types"] or not last_ok):
+        st["last_deep_try_utc"] = store.iso(now_utc)
         try:
             rows, pages, note = deep_scrape(state, now_local, config.DEEP_TYPES)
             if rows:
                 store.write_csv(store.dpath("inaday", "deep_latest.csv"), TOP_HEADER,
                                 sorted(rows, key=lambda r: (r[2], r[3])))
-                st["last_deep_scrape_utc"] = store.iso(now_utc)
+                if all(v.get("complete") for v in note.values()):
+                    st["last_deep_scrape_utc"] = store.iso(now_utc)
                 summary.update(deep_rows=len(rows), deep_pages=pages, deep_note=note,
-                               deep_page_size=st.get("page_size"))
+                               deep_page_size=st.get("page_size"),
+                               deep_complete=all(v.get("complete") for v in note.values()))
         except Exception as e:
             summary["errors"].append(f"Tiefenerhebung: {e}")
 

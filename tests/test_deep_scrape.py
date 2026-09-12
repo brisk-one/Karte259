@@ -44,7 +44,7 @@ class DeepScrape(unittest.TestCase):
         rows, pages, note = inaday.deep_scrape(state, self.now, ["loot_res"])
         self.assertEqual(len(rows), 60)
         self.assertEqual(pages, 3)                     # 25 + 25 + 10
-        self.assertEqual(note["loot_res"], 60)
+        self.assertEqual(note["loot_res"], {"rows": 60, "complete": True})
         self.assertEqual(rows[0][0], 1001)             # Spieler-ID der ersten Zeile
         self.assertEqual(rows[0][2], "loot_res")
         self.assertEqual(rows[-1][3], 60)              # Rang der letzten Zeile
@@ -55,22 +55,26 @@ class DeepScrape(unittest.TestCase):
         self.assertEqual(len(rows), 25)
         self.assertEqual(pages, 2)                     # zweite Seite ist leer, danach Schluss
 
-    def test_notbremse(self):
+    def test_notbremse_gilt_je_kategorie(self):
+        """Die Grenze darf nicht über alle Kategorien zusammenzählen, sonst wird die letzte abgeschnitten."""
         self._serve(100000)
         old = config.DEEP_MAX_PAGES
-        config.DEEP_MAX_PAGES = 4
+        config.DEEP_MAX_PAGES = 3
         try:
-            rows, pages, _ = inaday.deep_scrape({}, self.now, ["loot_res"])
+            rows, pages, note = inaday.deep_scrape({}, self.now, ["loot_res", "scavenge"])
         finally:
             config.DEEP_MAX_PAGES = old
-        self.assertEqual(pages, 4)
-        self.assertEqual(len(rows), 100)
+        self.assertEqual(note["loot_res"], {"rows": 100, "complete": False})
+        self.assertEqual(note["scavenge"], {"rows": 100, "complete": False})   # bekommt eigenes Kontingent
+        self.assertEqual(len(rows), 200)
+        self.assertEqual(pages, 8)                     # je Kategorie 1 erste Seite plus 3 weitere
 
     def test_mehrere_kategorien(self):
         self._serve(30)
         rows, pages, note = inaday.deep_scrape({}, self.now, ["loot_res", "scavenge"])
         self.assertEqual(len(rows), 60)
         self.assertEqual(sorted(note), ["loot_res", "scavenge"])
+        self.assertTrue(all(v["complete"] for v in note.values()))
         self.assertEqual({r[2] for r in rows}, {"loot_res", "scavenge"})
 
 
