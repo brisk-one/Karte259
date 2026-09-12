@@ -1,12 +1,12 @@
 {
  "counts": {
   "allies": 413,
-  "conquers_total": 2338,
-  "players": 10031,
-  "villages": 29559
+  "conquers_total": 2350,
+  "players": 10035,
+  "villages": 29574
  },
- "data_last_modified": "Sat, 12 Sep 2026 08:53:02 GMT",
- "duration_s": 10.8,
+ "data_last_modified": "Sat, 12 Sep 2026 09:53:03 GMT",
+ "duration_s": 14.1,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
@@ -28,27 +28,74 @@
  "last_full_scrape_utc": "2026-09-12T00:32:13+00:00",
  "requests": {
   "guest": 7,
-  "world": 1
+  "world": 8
  },
- "result": "unverändert",
- "run_local": "2026-09-12T11:51:22+02:00",
- "run_utc": "2026-09-12T09:51:22+00:00",
+ "result": "neu",
+ "run_local": "2026-09-12T11:53:58+02:00",
+ "run_utc": "2026-09-12T09:53:58+00:00",
  "tribe_ids": [
   456
  ],
  "trigger": "push",
  "world": {
-  "changed": false,
-  "counts": null,
+  "changed": true,
+  "counts": {
+   "allies": 413,
+   "conquers_total": 2350,
+   "players": 10035,
+   "villages": 29574
+  },
   "downloads": [
    {
-    "bytes": 0,
+    "bytes": 162138,
     "file": "player",
-    "last_modified": "Sat, 12 Sep 2026 08:53:02 GMT",
-    "status": 304
+    "last_modified": "Sat, 12 Sep 2026 09:53:03 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 9178,
+    "file": "ally",
+    "last_modified": "Sat, 12 Sep 2026 09:53:03 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 407072,
+    "file": "village",
+    "last_modified": "Sat, 12 Sep 2026 09:47:11 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 12567,
+    "file": "kill_att",
+    "last_modified": "Sat, 12 Sep 2026 09:52:53 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 25549,
+    "file": "kill_def",
+    "last_modified": "Sat, 12 Sep 2026 09:53:03 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 3434,
+    "file": "kill_sup",
+    "last_modified": "Sat, 12 Sep 2026 09:47:11 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 32020,
+    "file": "kill_all",
+    "last_modified": "Sat, 12 Sep 2026 09:53:03 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 27425,
+    "file": "conquer",
+    "last_modified": "Sat, 12 Sep 2026 09:53:03 GMT",
+    "status": 200
    }
   ],
-  "new_conquers": null,
-  "note": "Server hat seit dem letzten Lauf keine neuen Weltdaten erzeugt (304)"
+  "new_conquers": 12,
+  "note": null
  }
 }
