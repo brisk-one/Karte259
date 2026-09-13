@@ -1,60 +1,60 @@
 {
- "conquer_last_ts": 1789289314,
+ "conquer_last_ts": 1789292819,
  "counts": {
-  "allies": 418,
-  "conquers_total": 2623,
-  "players": 9881,
-  "villages": 30216
+  "allies": 419,
+  "conquers_total": 2647,
+  "players": 9890,
+  "villages": 30254
  },
- "data_last_modified": "Sun, 13 Sep 2026 08:52:54 GMT",
+ "data_last_modified": "Sun, 13 Sep 2026 09:47:11 GMT",
  "files": {
   "ally": {
-   "bytes": 9296,
-   "fetched_utc": "2026-09-13T09:25:58+00:00",
-   "last_modified": "Sun, 13 Sep 2026 08:52:54 GMT",
-   "sha1": "91fd2ce679156fcc998a9c21190b119d8638ae16"
+   "bytes": 9348,
+   "fetched_utc": "2026-09-13T10:11:04+00:00",
+   "last_modified": "Sun, 13 Sep 2026 09:53:02 GMT",
+   "sha1": "b830fd1824ff2aec17f34503ff3b639babb3342c"
   },
   "conquer": {
-   "bytes": 30632,
-   "fetched_utc": "2026-09-13T09:25:58+00:00",
-   "last_modified": "Sun, 13 Sep 2026 08:52:54 GMT",
-   "sha1": "649d4e5c4ca1858ff166b95b7eba87a2d458c541"
+   "bytes": 30916,
+   "fetched_utc": "2026-09-13T10:11:04+00:00",
+   "last_modified": "Sun, 13 Sep 2026 09:47:12 GMT",
+   "sha1": "ddae0e2b13819161b060dc463b593e182998492b"
   },
   "kill_all": {
    "bytes": 33436,
-   "fetched_utc": "2026-09-13T09:25:58+00:00",
-   "last_modified": "Sun, 13 Sep 2026 08:52:54 GMT",
-   "sha1": "34997494482e66fa4517c0bb43b2ce220b4144a5"
+   "fetched_utc": "2026-09-13T10:11:04+00:00",
+   "last_modified": "Sun, 13 Sep 2026 09:53:03 GMT",
+   "sha1": "d76abe31a7daa5fd5d31a322a878b04fce51a891"
   },
   "kill_att": {
    "bytes": 13337,
-   "fetched_utc": "2026-09-13T09:25:58+00:00",
-   "last_modified": "Sun, 13 Sep 2026 08:52:54 GMT",
-   "sha1": "1000d3e9c8ab707f604e852565920c5e0ae2ee95"
+   "fetched_utc": "2026-09-13T10:11:04+00:00",
+   "last_modified": "Sun, 13 Sep 2026 09:53:03 GMT",
+   "sha1": "fc29718d0fdfa4327b9b456707fe0b8059b4dbe5"
   },
   "kill_def": {
    "bytes": 26949,
-   "fetched_utc": "2026-09-13T09:25:58+00:00",
-   "last_modified": "Sun, 13 Sep 2026 08:53:03 GMT",
-   "sha1": "6b18bd18a0333cb48a214a2544721a8eb8f1e76b"
+   "fetched_utc": "2026-09-13T10:11:04+00:00",
+   "last_modified": "Sun, 13 Sep 2026 09:53:03 GMT",
+   "sha1": "91510c52f0577499eb207ca796c216a7362b5994"
   },
   "kill_sup": {
    "bytes": 3773,
-   "fetched_utc": "2026-09-13T09:25:58+00:00",
-   "last_modified": "Sun, 13 Sep 2026 08:52:54 GMT",
-   "sha1": "e498ef44dd904c0c74c96fb6050b83066e533ce9"
+   "fetched_utc": "2026-09-13T10:11:04+00:00",
+   "last_modified": "Sun, 13 Sep 2026 09:52:54 GMT",
+   "sha1": "b071976eb461cf812be1018ecd1742f0d7ddf440"
   },
   "player": {
-   "bytes": 160328,
-   "fetched_utc": "2026-09-13T09:25:58+00:00",
-   "last_modified": "Sun, 13 Sep 2026 08:52:54 GMT",
-   "sha1": "3ce3f20149f026ec321085b82ae86d1285b2fd44"
+   "bytes": 160727,
+   "fetched_utc": "2026-09-13T10:11:04+00:00",
+   "last_modified": "Sun, 13 Sep 2026 09:47:11 GMT",
+   "sha1": "0b108ef465b875a8713ceb105f167008e8257258"
   },
   "village": {
-   "bytes": 413488,
-   "fetched_utc": "2026-09-13T09:25:58+00:00",
-   "last_modified": "Sun, 13 Sep 2026 08:52:54 GMT",
-   "sha1": "15d904d0323cb1204f672fddd606eeb53c1ae620"
+   "bytes": 414066,
+   "fetched_utc": "2026-09-13T10:11:04+00:00",
+   "last_modified": "Sun, 13 Sep 2026 09:47:12 GMT",
+   "sha1": "ae91222f220b1998f03b27f0f2ff9afa05ed3013"
   }
  },
  "history_since_utc": "2026-09-11T18:49:35+00:00",
