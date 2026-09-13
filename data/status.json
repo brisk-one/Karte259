@@ -1,12 +1,12 @@
 {
  "counts": {
   "allies": 416,
-  "conquers_total": 2542,
+  "conquers_total": 2544,
   "players": 9849,
   "villages": 30077
  },
- "data_last_modified": "Sat, 12 Sep 2026 23:52:53 GMT",
- "duration_s": 17.1,
+ "data_last_modified": "Sat, 12 Sep 2026 23:53:03 GMT",
+ "duration_s": 14.1,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
@@ -38,25 +38,25 @@
   "world": 8
  },
  "result": "neu",
- "run_local": "2026-09-13T02:04:56+02:00",
- "run_utc": "2026-09-13T00:04:56+00:00",
+ "run_local": "2026-09-13T02:22:55+02:00",
+ "run_utc": "2026-09-13T00:22:55+00:00",
  "tribe_ids": [
   456
  ],
- "trigger": "schedule",
+ "trigger": "push",
  "world": {
   "changed": true,
   "counts": {
    "allies": 416,
-   "conquers_total": 2542,
+   "conquers_total": 2544,
    "players": 9849,
    "villages": 30077
   },
   "downloads": [
    {
-    "bytes": 159777,
+    "bytes": 159776,
     "file": "player",
-    "last_modified": "Sat, 12 Sep 2026 23:52:53 GMT",
+    "last_modified": "Sat, 12 Sep 2026 23:53:03 GMT",
     "status": 200
    },
    {
@@ -72,9 +72,9 @@
     "status": 200
    },
    {
-    "bytes": 13204,
+    "bytes": 13227,
     "file": "kill_att",
-    "last_modified": "Sat, 12 Sep 2026 23:52:53 GMT",
+    "last_modified": "Sat, 12 Sep 2026 23:47:12 GMT",
     "status": 200
    },
    {
@@ -84,25 +84,25 @@
     "status": 200
    },
    {
-    "bytes": 3720,
+    "bytes": 3704,
     "file": "kill_sup",
-    "last_modified": "Sat, 12 Sep 2026 23:47:12 GMT",
-    "status": 200
-   },
-   {
-    "bytes": 33153,
-    "file": "kill_all",
     "last_modified": "Sat, 12 Sep 2026 23:52:53 GMT",
     "status": 200
    },
    {
-    "bytes": 29683,
-    "file": "conquer",
+    "bytes": 33681,
+    "file": "kill_all",
     "last_modified": "Sat, 12 Sep 2026 23:47:12 GMT",
+    "status": 200
+   },
+   {
+    "bytes": 29707,
+    "file": "conquer",
+    "last_modified": "Sat, 12 Sep 2026 23:53:03 GMT",
     "status": 200
    }
   ],
-  "new_conquers": 7,
+  "new_conquers": 2,
   "note": null
  }
 }
