@@ -166,8 +166,8 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
   const pick=$("tribe-pick");
   [...allies.rows].sort((a,b)=>b[5]-a[5]).forEach((a,i)=>{
     const o=document.createElement("option"); o.value=a[0];
-    o.textContent=(i+1)+". "+(a[2]||a[1])+" · "+a[1]+" · "+nf.format(a[3])+" Mitgl. · "+nf.format(a[5])+" Pkt"
-      +(tracked.includes(a[0])? " · Tagesbeste erfasst" : "");
+    // kurz halten, der volle Name steht daneben im Hinweis
+    o.textContent=(i+1)+". "+(a[2]||a[1])+" · "+nf.format(a[3])+" Mitgl. · "+nf.format(a[5])+" Pkt";
     pick.appendChild(o);
   });
   pick.value = tracked[0] || (allies.rows[0]||[])[0];

@@ -59,7 +59,7 @@
   --field:rgba(5,12,20,.85);
   --shine:inset 0 1px 0 rgba(210,248,255,.34), inset 0 -1px 0 rgba(0,0,0,.65),
           inset 1px 0 0 rgba(120,225,255,.12), inset -1px 0 0 rgba(120,225,255,.12);
-  --glow:0 8px 26px rgba(0,0,0,.6), 0 0 26px rgba(34,211,238,.12);
+  --glow:0 6px 20px rgba(0,0,0,.55), 0 0 12px rgba(34,211,238,.08);
   --title-fill:linear-gradient(180deg,#ffffff 6%,#a8ecff 52%,#4fc9e8 96%);
   --font:13px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
   --radius:8px;
@@ -115,7 +115,7 @@ a{color:var(--accent)}
 
 /* ---------- Panels ---------- */
 main.wrap{padding-block:12px 30px; display:grid; gap:12px}
-.grid{display:grid; gap:10px; grid-template-columns:repeat(12,1fr)}
+.grid{display:grid; gap:12px; grid-template-columns:repeat(12,1fr)}
 .panel{background:var(--panel); border:1px solid var(--edge); border-radius:var(--radius);
   box-shadow:var(--shine), var(--glow); min-width:0; position:relative; overflow:hidden}
 [data-theme="futuristic"] .panel::before{content:""; position:absolute; inset:0 0 auto 0; height:1px;
@@ -172,9 +172,11 @@ td.name{font-weight:700}
 td.rank{color:var(--muted)}
 .up{color:var(--good); font-weight:700} .down{color:var(--bad); font-weight:700} .na{color:var(--muted)}
 /* Die Gruppenzeile bekommt über einen Schatten in Flächenfarbe Luft nach unten, damit ihre
-   Kästchen nicht an denen der Spaltenzeile kleben. */
+   Kästchen nicht an denen der Spaltenzeile kleben. Ihr Rahmen ist schwächer als der der
+   Spaltenzeile, sonst stehen an der Nahtstelle zwei gleich starke Linien übereinander. */
 .group th{font-size:9.5px; letter-spacing:.12em; background:var(--head); color:var(--head-ink);
-  text-align:center; position:static; padding:3px 8px; box-shadow:0 3px 0 var(--panel-solid)}
+  text-align:center; position:static; padding:3px 8px;
+  border-color:var(--edge-soft); box-shadow:0 5px 0 var(--panel-solid)}
 .group th:empty{background:none; border-color:transparent; box-shadow:none}
 .empty{padding:10px 12px; color:var(--muted); font-size:12px}
 .pill{display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:11.5px; padding:2px 9px;
@@ -213,8 +215,8 @@ footer a{color:var(--accent)}
 }
 [data-theme="futuristic"] .panel{box-shadow:var(--shine), var(--glow)}
 [data-theme="futuristic"] .panel:hover{
-  box-shadow:var(--shine), 0 10px 30px rgba(0,0,0,.62), 0 0 30px rgba(34,211,238,.22);
-  border-color:rgba(90,228,255,.62);
+  box-shadow:var(--shine), 0 10px 26px rgba(0,0,0,.62), 0 0 14px rgba(34,211,238,.16);
+  border-color:rgba(90,228,255,.6);
 }
 
 /* Kachelkopf als angeschrägter Balken, Beschriftung mit Glanzverlauf. */
