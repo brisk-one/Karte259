@@ -266,56 +266,81 @@ function drawGrid(){
 
 
 
-/** Dorfbild statt Quadrat. Sechs Ausbaustufen wie im Spiel, aber als eigene, schlichte Zeichnung:
-    kleine Hütte, Weiler, Palisade, Wall mit Türmen, Burg, Festung mit Zinnen. */
+/** Dorfbild statt Quadrat, angelehnt an die sechs Ausbaustufen im Hilfe-Wiki.
+    Eigene Zeichnung, keine Grafiken aus dem Spiel:
+    0 einzelne Hütten, 1 Weiler mit Zaun, 2 geschlossener Wall, 3 Wall mit Toren,
+    4 eckige Mauer mit Ecktürmen, 5 Festung mit Türmen und Bergfried. */
 function drawVillage(cx2, cy2, r, farbe, stufe){
-  ctx.fillStyle=farbe;
-  ctx.strokeStyle="rgba(0,0,0,.62)";
-  ctx.lineWidth=Math.max(.7, r*0.16);
-  if(stufe<=0){                                   // einzelne Hütte
-    ctx.beginPath();
-    ctx.moveTo(cx2-r*.62, cy2+r*.55); ctx.lineTo(cx2-r*.62, cy2-r*.05);
-    ctx.lineTo(cx2, cy2-r*.72); ctx.lineTo(cx2+r*.62, cy2-r*.05);
-    ctx.lineTo(cx2+r*.62, cy2+r*.55); ctx.closePath();
-    ctx.fill(); if(r>=3) ctx.stroke();
-    return;
-  }
-  if(stufe===1){                                  // Weiler: zwei Dächer
-    for(const dx of [-r*.42, r*.42]){
+  const dunkel="rgba(0,0,0,.66)", hell="rgba(255,255,255,.42)";
+  ctx.lineWidth=Math.max(.7, r*0.15);
+
+  if(stufe===0){                                   // zwei kleine Hütten
+    ctx.fillStyle=farbe; ctx.strokeStyle=dunkel;
+    for(const [dx,dy,sk] of [[-r*.34,r*.12,.72],[r*.3,-r*.06,.92]]){
+      const h=r*.62*sk, w=r*.56*sk;
       ctx.beginPath();
-      ctx.moveTo(cx2+dx-r*.36, cy2+r*.5); ctx.lineTo(cx2+dx-r*.36, cy2);
-      ctx.lineTo(cx2+dx, cy2-r*.5); ctx.lineTo(cx2+dx+r*.36, cy2);
-      ctx.lineTo(cx2+dx+r*.36, cy2+r*.5); ctx.closePath();
-      ctx.fill(); if(r>=3.5) ctx.stroke();
+      ctx.moveTo(cx2+dx-w, cy2+dy+h*.55); ctx.lineTo(cx2+dx-w, cy2+dy-h*.1);
+      ctx.lineTo(cx2+dx, cy2+dy-h*.85); ctx.lineTo(cx2+dx+w, cy2+dy-h*.1);
+      ctx.lineTo(cx2+dx+w, cy2+dy+h*.55); ctx.closePath();
+      ctx.fill(); if(r>=3.2) ctx.stroke();
     }
     return;
   }
-  // ab Stufe 2 ein Ring, dessen Ecken mit der Stufe zunehmen
-  const ecken = stufe>=4? 8 : (stufe>=3? 7 : 6);
-  const rr = r*(stufe>=5? 1 : .92);
-  ctx.beginPath();
-  for(let i=0;i<ecken;i++){
-    const w=(i/ecken)*Math.PI*2 - Math.PI/2;
-    const px=cx2+Math.cos(w)*rr, py=cy2+Math.sin(w)*rr*.86;
-    i? ctx.lineTo(px,py) : ctx.moveTo(px,py);
-  }
-  ctx.closePath(); ctx.fill(); if(r>=3) ctx.stroke();
-  if(stufe>=3){                                   // innerer Hof
-    ctx.fillStyle="rgba(0,0,0,.30)";
+
+  const ecken = stufe>=4? 8 : (stufe>=3? 6 : 0);   // ab Stufe 3 eckig, davor rund
+  const rx = r*(stufe>=5? 1.02 : stufe>=4? .98 : .92), ry = rx*.82;
+  const pfad = () => {
     ctx.beginPath();
+    if(!ecken){ ctx.ellipse(cx2, cy2, rx, ry, 0, 0, Math.PI*2); return; }
     for(let i=0;i<ecken;i++){
       const w=(i/ecken)*Math.PI*2 - Math.PI/2;
-      const px=cx2+Math.cos(w)*rr*.5, py=cy2+Math.sin(w)*rr*.44;
+      const px=cx2+Math.cos(w)*rx, py=cy2+Math.sin(w)*ry;
+      i? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+    }
+    ctx.closePath();
+  };
+
+  ctx.fillStyle=farbe; pfad(); ctx.fill();
+  if(r>=2.6){ ctx.strokeStyle=dunkel; pfad(); ctx.stroke(); }
+
+  // Innenhof, wird mit der Stufe kleiner, weil die Bebauung dichter wird
+  if(stufe>=2 && r>=3){
+    const f=stufe>=5? .40 : stufe>=4? .46 : .54;
+    ctx.fillStyle="rgba(0,0,0,.26)";
+    ctx.beginPath();
+    if(!ecken) ctx.ellipse(cx2, cy2, rx*f, ry*f, 0, 0, Math.PI*2);
+    else for(let i=0;i<ecken;i++){
+      const w=(i/ecken)*Math.PI*2 - Math.PI/2;
+      const px=cx2+Math.cos(w)*rx*f, py=cy2+Math.sin(w)*ry*f;
       i? ctx.lineTo(px,py) : ctx.moveTo(px,py);
     }
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle=farbe;
   }
-  if(stufe>=5 && r>=4){                           // Zinnen der Festung
+
+  // Ecktürme ab Stufe 4
+  if(stufe>=4 && r>=3.4){
+    ctx.fillStyle=farbe; ctx.strokeStyle=dunkel; ctx.lineWidth=Math.max(.6, r*.1);
+    const tr=Math.max(.9, r*.19);
     for(let i=0;i<ecken;i++){
       const w=(i/ecken)*Math.PI*2 - Math.PI/2;
       ctx.beginPath();
-      ctx.arc(cx2+Math.cos(w)*rr, cy2+Math.sin(w)*rr*.86, Math.max(.8, r*.17), 0, Math.PI*2);
+      ctx.arc(cx2+Math.cos(w)*rx, cy2+Math.sin(w)*ry, tr, 0, Math.PI*2);
+      ctx.fill(); if(r>=5) ctx.stroke();
+    }
+  }
+  // Bergfried in der Mitte der grössten Stufe
+  if(stufe>=5 && r>=4){
+    ctx.fillStyle=hell;
+    ctx.beginPath(); ctx.arc(cx2, cy2, Math.max(1, r*.2), 0, Math.PI*2); ctx.fill();
+  }
+  // angedeutete Bebauung am Wall
+  if(stufe>=1 && stufe<=3 && r>=4){
+    ctx.fillStyle=hell;
+    const n=stufe===1? 2 : 3;
+    for(let i=0;i<n;i++){
+      const w=(i/n)*Math.PI*2 + Math.PI/6;
+      ctx.beginPath();
+      ctx.arc(cx2+Math.cos(w)*rx*.42, cy2+Math.sin(w)*ry*.42, Math.max(.7, r*.13), 0, Math.PI*2);
       ctx.fill();
     }
   }
