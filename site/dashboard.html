@@ -39,6 +39,13 @@
   font-size:11px; font-weight:700; margin-bottom:2px}
 .trellis figcaption span{font-weight:400; font-size:10.5px; color:var(--muted)}
 .trellis svg{display:block; width:100%; height:52px}
+.linetip{position:absolute; pointer-events:none; z-index:6; background:var(--panel-solid);
+  border:1px solid var(--edge); border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.5);
+  font-size:11.5px; padding:5px 9px; min-width:150px}
+.linetip b{display:block; font-size:12.5px; margin-bottom:2px}
+.linetip .z{color:var(--muted); font-size:10.5px}
+.linetip .r{display:flex; justify-content:space-between; gap:14px}
+.linetip .r span:last-child{font-weight:700}
 </style>
 </head>
 <body>
@@ -123,7 +130,10 @@
         <div class="kgrid" id="kgrid" role="group" aria-label="Kontinente wählen"></div>
         <p class="klegend" id="klegend"></p>
       </div>
-      <div class="chartbox"><svg id="ch-series" viewBox="0 0 1100 320"></svg></div>
+      <div class="chartbox" style="position:relative">
+        <svg id="ch-series" viewBox="0 0 1100 320"></svg>
+        <div class="linetip" id="linetip" hidden></div>
+      </div>
       <p class="legendrow" style="padding:0 11px 8px" id="series-legend"></p>
       <div class="trellis" id="trellis"></div>
     </section>
@@ -340,9 +350,45 @@ function lines(id, times, reihen){
     s.appendChild(svgEl("path",{d, fill:"none", stroke:r.color, "stroke-width":"2.1",
       "stroke-linejoin":"round", "stroke-linecap":"round", filter:"url(#"+id+"glow)"}));
     const last=pts[pts.length-1];
-    const c=svgEl("circle",{cx:last[0], cy:last[1], r:"3", fill:r.color, filter:"url(#"+id+"glow)"});
-    const ti=svgEl("title"); ti.textContent=r.label+": "+nf.format(r.values[r.values.length-1]);
-    c.appendChild(ti); s.appendChild(c);
+    s.appendChild(svgEl("circle",{cx:last[0], cy:last[1], r:"3", fill:r.color, filter:"url(#"+id+"glow)"}));
+    r._pts=pts;
+  });
+  // Zeigerlinie und Auskunft zum naechstgelegenen Stamm
+  const cursor=svgEl("line",{x1:0,y1:T,x2:0,y2:H-B,stroke:"var(--edge)","stroke-dasharray":"3 3"});
+  cursor.style.display="none"; s.appendChild(cursor);
+  const marker=svgEl("circle",{r:"4.5",fill:"none","stroke-width":"2"});
+  marker.style.display="none"; s.appendChild(marker);
+  const flaeche=svgEl("rect",{x:L,y:T,width:W-L-R,height:H-T-B,fill:"transparent"});
+  s.appendChild(flaeche);
+  const tip=$("linetip");
+  const weg=()=>{ cursor.style.display="none"; marker.style.display="none"; tip.hidden=true; };
+  flaeche.addEventListener("pointerleave", weg);
+  flaeche.addEventListener("pointermove", ev=>{
+    const box=s.getBoundingClientRect();
+    const mx=(ev.clientX-box.left)/box.width*W, my=(ev.clientY-box.top)/box.height*H;
+    let i=Math.round(((mx-L)/(W-L-R))*(times.length-1));
+    i=Math.max(0, Math.min(times.length-1, i));
+    let best=null, bd=Infinity;
+    reihen.forEach(r=>{ const d=Math.abs(r._pts[i][1]-my); if(d<bd){ bd=d; best=r; } });
+    if(!best) return;
+    cursor.setAttribute("x1", X(i)); cursor.setAttribute("x2", X(i)); cursor.style.display="";
+    marker.setAttribute("cx", best._pts[i][0]); marker.setAttribute("cy", best._pts[i][1]);
+    marker.setAttribute("stroke", best.color); marker.style.display="";
+    const wert=best.values[i], start=best.values[0], vorher=i? best.values[i-1] : null;
+    tip.replaceChildren();
+    const nm=el("b", null, best.label); nm.style.color=best.color; tip.appendChild(nm);
+    tip.appendChild(el("div","z", dtf.format(new Date(times[i]))+" Uhr"));
+    const zeile=(k,v,cls)=>{ const d=el("div","r"); d.append(el("span",null,k), el("span",cls||null,v)); tip.appendChild(d); };
+    zeile("Stand", nf.format(wert));
+    if(vorher!=null){ const d=wert-vorher; zeile("seit dem Stand davor", (d>0?"+":"")+nf.format(d), d>0?"up":(d<0?"down":"na")); }
+    const g=wert-start;
+    zeile("seit Beginn der Reihe", (g>0?"+":"")+nf.format(g), g>0?"up":(g<0?"down":"na"));
+    tip.hidden=false;
+    const bx=s.getBoundingClientRect(), pb=tip.parentElement.getBoundingClientRect();
+    let left=ev.clientX-pb.left+14, top=ev.clientY-pb.top+10;
+    if(left+tip.offsetWidth > pb.width-6) left=ev.clientX-pb.left-tip.offsetWidth-14;
+    if(top+tip.offsetHeight > pb.height-4) top=pb.height-tip.offsetHeight-6;
+    tip.style.left=Math.max(2,left)+"px"; tip.style.top=Math.max(2,top)+"px";
   });
 }
 
@@ -565,6 +611,16 @@ function renderTable(){
     const e=(inadayBest[pid]=inadayBest[pid]||{});
     if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
   });
+
+  // vollstaendige Ranglisten nachladen, sie decken deutlich mehr Spieler ab als die Spitze
+  loadData("inaday").then(d=>{
+    (d.rows||[]).forEach(([pid,type,rank,value,date])=>{
+      const e=(inadayBest[pid]=inadayBest[pid]||{});
+      if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
+    });
+    $("inaday-type").replaceChildren();
+    render();
+  }).catch(()=>{});
 
   const sel=$("sc-tribe");
   [...allies.rows].sort((a,b)=>b[5]-a[5]).forEach((a,i)=>{

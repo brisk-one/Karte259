@@ -153,6 +153,16 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
   renderMovers();
 
   /* Stamm: jeder Stamm der Welt wählbar */
+  // Die vollständigen Ranglisten sind gross und werden nebenher geholt; sobald sie da sind,
+  // fuellen sich die Spalten "Bester Tag" fuer alle erfassten Spieler statt nur fuer die Spitze.
+  loadData("inaday").then(d=>{
+    (d.rows||[]).forEach(([pid,type,rank,value,date])=>{
+      const e=(rec[pid]=rec[pid]||{});
+      if(!e[type] || e[type].rank>rank) e[type]={rank,value,date};
+    });
+    renderMovers(); renderTribe();
+  }).catch(()=>{ /* noch kein Durchgang gelaufen */ });
+
   const pick=$("tribe-pick");
   [...allies.rows].sort((a,b)=>b[5]-a[5]).forEach((a,i)=>{
     const o=document.createElement("option"); o.value=a[0];
