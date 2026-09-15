@@ -18,6 +18,8 @@
   .mr-big{font-size:44px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums}
   .mr-bar{flex:1 1 220px; height:12px; border-radius:6px; background:rgba(127,127,127,.25); overflow:hidden}
   .mr-bar i{display:block; height:100%; background:linear-gradient(90deg,#b3261e,#d9a400 50%,#3f7d20)}
+  .mr-block{margin:10px 0 0; padding:8px 10px; border-left:4px solid var(--bad); background:rgba(179,38,30,.08); font-size:13px}
+  .mr-block.ok{border-left-color:var(--good); background:rgba(63,125,32,.08)}
   .mr-steps{margin:10px 0 0; padding-left:18px; font-size:13px; line-height:1.6}
   .mr-row{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center}
   .mr-row select{max-width:100%}
@@ -46,6 +48,7 @@
           <h3>Angreifer</h3>
           <label>Spieler<input type="text" id="a-name" list="names" autocomplete="off" placeholder="Name eingeben"></label>
           <label>Punkte<input type="number" id="a-pts" min="0" step="1"></label>
+          <label>Tage auf der Welt<input type="number" id="a-days" min="0" step="0.1"></label>
           <div class="note" id="a-note"></div>
         </div>
         <div class="mr-side">
@@ -62,6 +65,7 @@
         <div class="mr-bar"><i id="bar" style="width:0"></i></div>
       </div>
       <p class="empty" id="res-text" style="margin:8px 0 0">Punkte eintragen oder Spieler wählen.</p>
+      <p class="mr-block" id="block" hidden></p>
       <ol class="mr-steps" id="steps"></ol>
     </div>
   </section>
@@ -96,7 +100,8 @@ buildAppbar("moral", "Moralrechner");
                              5.000, 5.500 und 6.000 Punkte bei 6 Tagen ergeben 80, 86, 92 und 98 %, genau wie hier.
                              Der Bonus wird also addiert und hebt nicht nur die Untergrenze an (das ergäbe 79 bis 97 %).
                              Zweite Reihe: Angreifer 10.000, Verteidiger 1.000, Spielzeit 1, 5, 15, 20, 25, 30, 35, 40 und
-                             45 Tage ergeben 55, 56, 58 bis 64 %, also genau 1 Prozentpunkt je 5 Tage (Tage/500). */
+                             45 Tage ergeben 55, 56, 58 bis 64 %, also genau 1 Prozentpunkt je 5 Tage (Tage/500).
+                             Angreifer 100.000, Verteidiger 1.000, 200 Tage: 68 % (0,75 × Tage/365 ergäbe 69 %). */
 const TYPES = [[3, "Punkte und unbegrenzte Zeit"], [2, "Punkte und Zeit (bis 125 Tage)"], [1, "nur Punkte"], [0, "keine Moral"]];
 const TYPE_NAME = Object.fromEntries(TYPES);
 
@@ -110,6 +115,17 @@ function moral(type, att, def, days) {
   const d = Math.max(0, days || 0);
   const bonus = (type === 2 ? Math.min(d, 125) : d) / 500;
   return {value: Math.min(1, 0.25 + share + bonus), base: 0.25, share, bonus, ratio};
+}
+/* Angriffsbeschränkung (get_config newbie.ratio und newbie.ratio_days, Welt 259: 10 und 60). Laut Hilfe-Wiki
+   („Angriffsschutz“) kann ein Spieler in seinen ersten Tagen niemanden angreifen, der so viel mal mehr Punkte hat,
+   und nicht von so viel größeren Spielern angegriffen werden. Maßgeblich ist also die Spielzeit des Kleineren.
+   Vermutung: die Tage zählen je Spieler und nicht ab Weltstart, die Grenze gilt ab „mehr als“ dem Verhältnis. */
+function ratioBlock(ratio, ratioDays, A, D, aDays, dDays) {
+  if (!(ratio > 0) || !(ratioDays > 0) || !(A > 0) || !(D > 0)) return null;
+  const factor = Math.max(A, D) / Math.min(A, D);
+  if (factor <= ratio) return {blocked: false, factor};
+  const small = A < D ? "a" : "d", days = small === "a" ? aDays : dDays;
+  return {blocked: days == null ? null : days < ratioDays, factor, small, days};
 }
 const pct = v => Math.round(v * 100) + " %";
 const pct1 = v => nf1.format(v * 100) + " %";
@@ -147,7 +163,7 @@ const pct1 = v => nf1.format(v * 100) + " %";
       0: "Auf dieser Welt gibt es keine Moral, jeder Angriff zählt mit voller Kampfkraft.",
       1: "Moral = 30 % + 3 × Punkte Verteidiger / Punkte Angreifer, höchstens 100 %. Wer mehr als rund 4,3 mal so viele Punkte hat wie das Ziel, greift geschwächt an, am stärksten mit 30 %. Die Spieldauer spielt keine Rolle.",
       2: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, bis 25 Prozentpunkte nach 125 Tagen. Danach liegt die Moral nie unter 50 % und greift erst, wenn der Angreifer mehr als 6 mal so viele Punkte hat.",
-      3: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, ohne Obergrenze. Nach rund 375 Tagen kämpft deshalb jeder Angreifer mit 100 %, egal wie klein das Ziel ist. Anders als bei der Moral nach Punkten und Zeit endet der Anstieg nicht nach 125 Tagen. Gegen den Moralrechner des Spiels geprüft mit 13 Beispielen bis 45 Tage Spielzeit, alle stimmen. Über 45 Tage ist der Verlauf noch nicht nachgeprüft, maßgeblich bleibt der Moralrechner im Simulator des Spiels.",
+      3: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, ohne Obergrenze. Nach rund 375 Tagen kämpft deshalb jeder Angreifer mit 100 %, egal wie klein das Ziel ist. Anders als bei der Moral nach Punkten und Zeit endet der Anstieg nicht nach 125 Tagen. Gegen den Moralrechner des Spiels geprüft mit 14 Beispielen bis 200 Tage Spielzeit, alle stimmen. Ob nach 375 Tagen wirklich immer 100 % gelten, ist noch nicht nachgeprüft, maßgeblich bleibt der Moralrechner im Simulator des Spiels.",
     }[worldType];
     if (txt) { const q = el("p", null, txt); q.style.margin = "8px 0 0"; box.appendChild(q); }
     const s = info.settings || {};
@@ -157,6 +173,9 @@ const pct1 = v => nf1.format(v * 100) + " %";
       q.style.margin = "6px 0 0"; box.appendChild(q);
     }
   }
+
+  const S = info && info.settings || {};
+  const RATIO = +(S["newbie.ratio"] || 0), RATIO_DAYS = +(S["newbie.ratio_days"] || 0);
 
   /* Rechner */
   const sel = $("type");
@@ -181,7 +200,7 @@ const pct1 = v => nf1.format(v * 100) + " %";
     });
   }
 
-  const side = {a: {name: $("a-name"), pts: $("a-pts"), note: $("a-note"), row: null},
+  const side = {a: {name: $("a-name"), pts: $("a-pts"), note: $("a-note"), days: $("a-days"), row: null},
                 d: {name: $("d-name"), pts: $("d-pts"), note: $("d-note"), days: $("d-days"), row: null}};
   function pick(key) {
     const s = side[key], i = byName.get(s.name.value.trim().toLowerCase());
@@ -202,8 +221,9 @@ const pct1 = v => nf1.format(v * 100) + " %";
     const type = +sel.value;
     const A = +side.a.pts.value, D = +side.d.pts.value;
     const days = side.d.days.value === "" ? null : +side.d.days.value;
-    side.d.days.disabled = type === 0 || type === 1;
+    const aDays = side.a.days.value === "" ? null : +side.a.days.value;
     const steps = $("steps"); steps.replaceChildren();
+    renderBlock(A, D, aDays, days);
     if (!(A > 0) || !(D >= 0) || side.d.pts.value === "") {
       $("res").textContent = "–"; $("bar").style.width = "0"; $("res-text").textContent = "Punkte eintragen oder Spieler wählen.";
       renderTribe(); return;
@@ -236,17 +256,38 @@ const pct1 = v => nf1.format(v * 100) + " %";
     renderTribe();
   }
 
+  function renderBlock(A, D, aDays, dDays) {
+    const box = $("block"), b = ratioBlock(RATIO, RATIO_DAYS, A, D, aDays, dDays);
+    box.hidden = !b;
+    if (!b) return;
+    box.className = "mr-block" + (b.blocked === false ? " ok" : "");
+    const rule = "Welt 259: höchstens " + RATIO + ":1 in den ersten " + RATIO_DAYS + " Tagen des kleineren Spielers.";
+    if (b.blocked === false) {
+      box.textContent = b.factor <= RATIO
+        ? "Angriff möglich: Punkteverhältnis " + nf1.format(b.factor) + ":1 liegt innerhalb der Grenze. " + rule
+        : "Angriff möglich: Der kleinere Spieler ist schon " + nf1.format(b.days) + " Tage auf der Welt, die Grenze von " + RATIO + ":1 gilt nicht mehr. " + rule;
+    } else {
+      const who = b.small === "a" ? "der Angreifer" : "der Verteidiger";
+      box.textContent = (b.blocked ? "Angriff gesperrt: " : "Angriff vermutlich gesperrt: ") + "Punkteverhältnis " + nf1.format(b.factor) + ":1, "
+        + who + " ist der Kleinere und "
+        + (b.days == null ? "seine Spieldauer ist unbekannt. Gesperrt, solange er unter " + RATIO_DAYS + " Tage spielt. "
+                          : "erst " + nf1.format(b.days) + " Tage auf der Welt, frei ab Tag " + RATIO_DAYS + ". ")
+        + "Die Moral unten gilt erst, wenn der Angriff möglich ist. " + rule;
+    }
+  }
+
   ["a", "d"].forEach(k => {
     const s = side[k];
     s.name.addEventListener("input", () => { suggest(s.name); pick(k); render(); });
     s.pts.addEventListener("input", render);
   });
   side.d.days.addEventListener("input", render);
+  side.a.days.addEventListener("input", render);
   sel.addEventListener("change", render);
   $("swap").addEventListener("click", () => {
-    const an = side.a.name.value, ap = side.a.pts.value;
-    side.a.name.value = side.d.name.value; side.a.pts.value = side.d.pts.value;
-    side.d.name.value = an; side.d.pts.value = ap;
+    const an = side.a.name.value, ap = side.a.pts.value, ad = side.a.days.value;
+    side.a.name.value = side.d.name.value; side.a.pts.value = side.d.pts.value; side.a.days.value = side.d.days.value;
+    side.d.name.value = an; side.d.pts.value = ap; side.d.days.value = ad;
     pick("a"); pick("d");
     render();
   });
@@ -259,16 +300,22 @@ const pct1 = v => nf1.format(v * 100) + " %";
     o.textContent = (i + 1) + ". " + (a[2] || a[1]) + " · " + nf.format(a[3]) + " Mitgl.";
     tsel.appendChild(o);
   });
+  function cell(v, b) {
+    if (b && b.blocked) return [pct(v) + " · gesperrt", "na", -1];
+    if (b && b.blocked === null) return [pct(v) + " · gesperrt?", "na", -0.5];
+    return [pct(v), v < 1 ? "down" : "", v];
+  }
   function renderTribe() {
     const out = $("tribe-table"); out.replaceChildren();
     const tid = +tsel.value, A = +side.a.pts.value, type = +sel.value;
     if (!tsel.value) { out.appendChild(el("p", "empty", "Stamm wählen, um die Moral gegen jedes Mitglied zu sehen.")); return; }
     if (!(A > 0)) { out.appendChild(el("p", "empty", "Zuerst oben einen Angreifer wählen oder seine Punkte eintragen.")); return; }
     const aN = side.a.row != null ? players.rows[side.a.row][idx.name] : "Angreifer";
-    const aDays = side.a.row != null ? daysOnWorld(side.a.row) : null;
+    const aDays = side.a.days.value === "" ? null : +side.a.days.value;
     const members = players.rows.map((r, i) => i).filter(i => players.rows[i][idx.ally] === tid);
     if (!members.length) { out.appendChild(el("p", "empty", "Keine Mitglieder mit Daten.")); return; }
-    $("tribe-hint").textContent = nf.format(members.length) + " Mitglieder · Moral von " + aN + " (" + nf.format(A) + " Pkt) auf jedes Mitglied und zurück";
+    $("tribe-hint").textContent = nf.format(members.length) + " Mitglieder · Moral von " + aN + " (" + nf.format(A) + " Pkt) auf jedes Mitglied und zurück"
+      + (RATIO ? " · „gesperrt“: Verhältnis über " + RATIO + ":1 und der Kleinere unter " + RATIO_DAYS + " Tagen" : "");
     out.appendChild(table(
       [["Spieler", "l"], ["Punkte", "", 1], ["Tage auf der Welt", "", 1], [aN + " → Mitglied", "", 1], ["Mitglied → " + aN, "", 1]],
       members.map(i => {
@@ -277,8 +324,8 @@ const pct1 = v => nf1.format(v * 100) + " %";
         const back = r[idx.points] > 0 ? moral(type, r[idx.points], A, aDays).value : null;
         return [[r[idx.name], "l name"], [nf.format(r[idx.points]), "", r[idx.points]],
                 [d == null ? "–" : nf1.format(d), d == null ? "na" : "", d],
-                [pct(there), there < 1 ? "down" : "", there],
-                [back == null ? "–" : pct(back), back != null && back < 1 ? "down" : "", back]];
+                cell(there, ratioBlock(RATIO, RATIO_DAYS, A, r[idx.points], aDays, d)),
+                back == null ? ["–", "na", null] : cell(back, ratioBlock(RATIO, RATIO_DAYS, r[idx.points], A, d, aDays))];
       }), {sort: 1}));
   }
   tsel.addEventListener("change", renderTribe);
