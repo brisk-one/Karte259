@@ -88,13 +88,14 @@ buildAppbar("moral", "Moralrechner");
    2 nach Punkten und Zeit:  25 % + 300 % × V/A + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst linear mit
                              der Zeit des Verteidigers auf der Welt bis 25 Prozentpunkte nach 125 Tagen
                              (Minimum dann 50 %, 100 % ab 6:1).
-   3 zeitlich begrenzt:      25 % + 300 % × V/A + Zeitbonus, höchstens 100 %; nach rund einem Jahr immer 100 %.
-                             Welt 259 meldet 3, die Welteinstellungen nennen „zeitlich begrenzte punktbasierte Moral“.
+   3 Punkte und unbegrenzte Zeit (so heißt es in den Welteinstellungen von Welt 259, get_config meldet 3; im Wiki
+                             „zeitlich begrenzte punktebasierte Moral“): wie 2, aber ohne die Grenze bei 125 Tagen.
+                             Der Bonus wächst weiter um 1/500 je Tag, nach 375 Tagen gilt immer 100 % („nach ca.
+                             einem Jahr“ laut Wiki). Die Steigung 1/500 ist aus Art 2 übernommen (Vermutung).
                              Geprüft am 15.09. gegen den Moralrechner des Spiels: Angreifer 25.000, Verteidiger 4.500,
                              5.000, 5.500 und 6.000 Punkte bei 6 Tagen ergeben 80, 86, 92 und 98 %, genau wie hier.
-                             Der Bonus wird also addiert und hebt nicht nur die Untergrenze an (das ergäbe 79 bis 97 %).
-                             Offen ist die genaue Steigung, angenommen 75 Prozentpunkte über 365 Tage. */
-const TYPES = [[3, "zeitlich begrenzt nach Punkten"], [2, "nach Punkten und Zeit"], [1, "nach Punkten"], [0, "keine Moral"]];
+                             Der Bonus wird also addiert und hebt nicht nur die Untergrenze an (das ergäbe 79 bis 97 %). */
+const TYPES = [[3, "Punkte und unbegrenzte Zeit"], [2, "Punkte und Zeit (bis 125 Tage)"], [1, "nur Punkte"], [0, "keine Moral"]];
 const TYPE_NAME = Object.fromEntries(TYPES);
 
 function moral(type, att, def, days) {
@@ -105,7 +106,7 @@ function moral(type, att, def, days) {
     return {value: Math.min(1, 0.3 + share), base: 0.3, share, bonus: 0, ratio};
   }
   const d = Math.max(0, days || 0);
-  const bonus = type === 2 ? Math.min(d, 125) / 500 : 0.75 * Math.min(d, 365) / 365;
+  const bonus = (type === 2 ? Math.min(d, 125) : d) / 500;
   return {value: Math.min(1, 0.25 + share + bonus), base: 0.25, share, bonus, ratio};
 }
 const pct = v => Math.round(v * 100) + " %";
@@ -137,14 +138,14 @@ const pct1 = v => nf1.format(v * 100) + " %";
     $("setting-hint").textContent = "laut Welteinstellungen (get_config meldet moral = " + worldType + "), geprüft " + fmtTime(info.settings_checked_utc);
     const p = el("p", null); p.style.margin = "0";
     const pill = el("span", "pill " + (worldType ? "ok" : "err")); pill.appendChild(el("i"));
-    pill.appendChild(document.createTextNode(TYPE_NAME[worldType] ? "Moral " + TYPE_NAME[worldType] : "Moralwert " + worldType + " (unbekannt)"));
+    pill.appendChild(document.createTextNode(TYPE_NAME[worldType] ? "Moral: " + TYPE_NAME[worldType] : "Moralwert " + worldType + " (unbekannt)"));
     p.appendChild(pill);
     box.appendChild(p);
     const txt = {
       0: "Auf dieser Welt gibt es keine Moral, jeder Angriff zählt mit voller Kampfkraft.",
       1: "Moral = 30 % + 3 × Punkte Verteidiger / Punkte Angreifer, höchstens 100 %. Wer mehr als rund 4,3 mal so viele Punkte hat wie das Ziel, greift geschwächt an, am stärksten mit 30 %. Die Spieldauer spielt keine Rolle.",
       2: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, bis 25 Prozentpunkte nach 125 Tagen. Danach liegt die Moral nie unter 50 % und greift erst, wenn der Angreifer mehr als 6 mal so viele Punkte hat.",
-      3: "Zeitlich begrenzte punktebasierte Moral. Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt, bis nach rund einem Jahr immer 100 % gelten; der Rechner nimmt einen gleichmäßigen Anstieg an (rund 0,2 Prozentpunkte je Tag). Gegen den Moralrechner des Spiels geprüft bei 6 Tagen Spielzeit: vier von vier Beispielen stimmen. Bei langer Spielzeit ist die Steigung noch nicht nachgeprüft, maßgeblich bleibt der Moralrechner im Simulator des Spiels.",
+      3: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, ohne Obergrenze. Nach rund 375 Tagen kämpft deshalb jeder Angreifer mit 100 %, egal wie klein das Ziel ist. Anders als bei der Moral nach Punkten und Zeit endet der Anstieg nicht nach 125 Tagen. Gegen den Moralrechner des Spiels geprüft bei 6 Tagen Spielzeit: vier von vier Beispielen stimmen. Die Steigung bei langer Spielzeit ist noch nicht nachgeprüft, maßgeblich bleibt der Moralrechner im Simulator des Spiels.",
     }[worldType];
     if (txt) { const q = el("p", null, txt); q.style.margin = "8px 0 0"; box.appendChild(q); }
     const s = info.settings || {};
@@ -219,7 +220,7 @@ const pct1 = v => nf1.format(v * 100) + " %";
     li("Grundwert " + pct(m.base) + " plus 3 × " + nf.format(D) + " / " + nf.format(A) + " = " + pct1(m.share) + ".");
     if (type !== 1) {
       li("Zeitbonus " + pct1(m.bonus) + (days == null ? " (Spieldauer fehlt, mit 0 Tagen gerechnet)"
-          : " für " + nf1.format(days) + " Tage auf der Welt" + (type === 2 ? ", voll ab 125 Tagen" : ", voll nach rund einem Jahr")) + ".");
+          : " für " + nf1.format(days) + " Tage auf der Welt" + (type === 2 ? ", voll ab 125 Tagen" : ", voll nach 375 Tagen")) + ".");
     }
     li("Zusammen " + pct1(m.base + m.share + m.bonus) + (m.base + m.share + m.bonus > 1 ? ", begrenzt auf 100 %." : "."));
     const need = Math.ceil(A * Math.max(0, 1 - m.base - m.bonus) / 3);

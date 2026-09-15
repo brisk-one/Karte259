@@ -114,8 +114,8 @@ def read_conquers(conquer_dir):
 
 
 def moral_type(settings):
-    """Moraltyp aus get_config: 0 keine, 1 nach Punkten, 2 nach Punkten und Zeit, 3 zeitlich begrenzt
-    nach Punkten (Welt 259 meldet 3, bestätigt über die Welteinstellungen). None, wenn unbekannt."""
+    """Moraltyp aus get_config: 0 keine, 1 nur Punkte, 2 Punkte und Zeit, 3 Punkte und unbegrenzte Zeit
+    (Welt 259, laut Welteinstellungen). None, wenn unbekannt."""
     try:
         return int((settings or {}).get("moral"))
     except (TypeError, ValueError):
