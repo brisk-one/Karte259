@@ -94,7 +94,9 @@ buildAppbar("moral", "Moralrechner");
                              einem Jahr“ laut Wiki). Die Steigung 1/500 ist aus Art 2 übernommen (Vermutung).
                              Geprüft am 15.09. gegen den Moralrechner des Spiels: Angreifer 25.000, Verteidiger 4.500,
                              5.000, 5.500 und 6.000 Punkte bei 6 Tagen ergeben 80, 86, 92 und 98 %, genau wie hier.
-                             Der Bonus wird also addiert und hebt nicht nur die Untergrenze an (das ergäbe 79 bis 97 %). */
+                             Der Bonus wird also addiert und hebt nicht nur die Untergrenze an (das ergäbe 79 bis 97 %).
+                             Zweite Reihe: Angreifer 10.000, Verteidiger 1.000, Spielzeit 1, 5, 15, 20, 25, 30, 35, 40 und
+                             45 Tage ergeben 55, 56, 58 bis 64 %, also genau 1 Prozentpunkt je 5 Tage (Tage/500). */
 const TYPES = [[3, "Punkte und unbegrenzte Zeit"], [2, "Punkte und Zeit (bis 125 Tage)"], [1, "nur Punkte"], [0, "keine Moral"]];
 const TYPE_NAME = Object.fromEntries(TYPES);
 
@@ -145,7 +147,7 @@ const pct1 = v => nf1.format(v * 100) + " %";
       0: "Auf dieser Welt gibt es keine Moral, jeder Angriff zählt mit voller Kampfkraft.",
       1: "Moral = 30 % + 3 × Punkte Verteidiger / Punkte Angreifer, höchstens 100 %. Wer mehr als rund 4,3 mal so viele Punkte hat wie das Ziel, greift geschwächt an, am stärksten mit 30 %. Die Spieldauer spielt keine Rolle.",
       2: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, bis 25 Prozentpunkte nach 125 Tagen. Danach liegt die Moral nie unter 50 % und greift erst, wenn der Angreifer mehr als 6 mal so viele Punkte hat.",
-      3: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, ohne Obergrenze. Nach rund 375 Tagen kämpft deshalb jeder Angreifer mit 100 %, egal wie klein das Ziel ist. Anders als bei der Moral nach Punkten und Zeit endet der Anstieg nicht nach 125 Tagen. Gegen den Moralrechner des Spiels geprüft bei 6 Tagen Spielzeit: vier von vier Beispielen stimmen. Die Steigung bei langer Spielzeit ist noch nicht nachgeprüft, maßgeblich bleibt der Moralrechner im Simulator des Spiels.",
+      3: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, ohne Obergrenze. Nach rund 375 Tagen kämpft deshalb jeder Angreifer mit 100 %, egal wie klein das Ziel ist. Anders als bei der Moral nach Punkten und Zeit endet der Anstieg nicht nach 125 Tagen. Gegen den Moralrechner des Spiels geprüft mit 13 Beispielen bis 45 Tage Spielzeit, alle stimmen. Über 45 Tage ist der Verlauf noch nicht nachgeprüft, maßgeblich bleibt der Moralrechner im Simulator des Spiels.",
     }[worldType];
     if (txt) { const q = el("p", null, txt); q.style.margin = "8px 0 0"; box.appendChild(q); }
     const s = info.settings || {};
