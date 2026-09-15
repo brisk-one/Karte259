@@ -36,6 +36,8 @@ button.tw.small{padding:2px 6px; font-size:11px}
 .seg .opt:first-child .scale{margin-left:0; border-bottom-left-radius:var(--radius)}
 .seg .opt:last-child .scale{border-bottom-right-radius:var(--radius)}
 .seg .opt button[aria-pressed="true"]+.scale{box-shadow:0 2px 0 var(--accent)}
+.axlabel{display:inline-flex; align-items:center; gap:4px}
+.axlabel img{width:18px; height:18px}
 @media (max-width:640px){ .vhead{display:none} .vcat{padding:14px 6px 0} .vcat>b{left:6px} .seg{flex-wrap:wrap; row-gap:3px} }
 .search{display:flex; gap:5px; align-items:center; position:relative}
 .search input{width:min(220px,40vw)}
@@ -74,6 +76,8 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .legend .keys .sym{flex:none; width:22px; display:inline-flex; justify-content:center; align-items:center; min-height:1.45em; font-size:9px}
 .legend .keys .sym b{color:#00a844} .legend .keys .sym u{color:var(--bad); text-decoration:none}
 .legend .keys .sym img{width:19px; height:19px}
+.legend .keys .axe{display:inline-flex; align-items:center; gap:2px; margin-right:10px; white-space:nowrap}
+.legend .keys .axe img{width:21px; height:21px}
 .legend .keys .raute{width:8px; height:8px; background:#f2d16b; border:1px solid rgba(0,0,0,.65); transform:rotate(45deg)}
 .legend .keys .hint{color:var(--muted); font-size:10.5px; padding-left:27px}
 .zoom{display:flex; gap:5px; pointer-events:auto}
@@ -156,6 +160,12 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
     <button class="tw" type="button" data-shape="quad" aria-pressed="true">Quadrate</button>
     <button class="tw" type="button" data-shape="village">Dorfbilder</button>
   </div>
+  <div class="grp" id="axwin" role="group" aria-label="Zeitraum für besiegte Gegner dazu">
+    <b class="axlabel"><span id="axicon"></span>Kämpfe der letzten</b>
+    <button class="tw" type="button" data-w="6h">6 h</button>
+    <button class="tw" type="button" data-w="12h">12 h</button>
+    <button class="tw" type="button" data-w="24h" aria-pressed="true">24 h</button>
+  </div>
   <form class="search" id="searchform" role="search" autocomplete="off">
     <input id="q" type="search" placeholder="500|500, Spieler oder Stamm" aria-label="Suche nach Koordinate, Spieler oder Stamm"
            aria-expanded="false" aria-controls="sugg">
@@ -191,7 +201,7 @@ buildAppbar("karte", "Karte");
 
 /* Farben je Fassung. Beim Umschalten werden sie neu gelesen, damit die Karte mitzieht. */
 let GRASS, GRID, GRID_MAJOR, LABEL, C_BARB, C_BONUS, C_OTHER, C_NONE, EDGE;
-const C_LOSS="#d50000";
+const C_LOSS="#37474f";              // Verlust dunkelgrau, damit er sich von der Pink-Skala abhebt
 const C_TRACKED="#1e6fff";          // Stämme, deren Tagesbeste erhoben werden, immer blau
 const TRIBE_COLORS=["#e53935","#fdd835","#d81b60","#00bcd4","#fb8c00","#8e24aa","#c6ff00",
                     "#3949ab","#00e676","#6d4c41","#ff80ab","#b0bec5"];
@@ -199,14 +209,17 @@ const TRIBE_COLORS=["#e53935","#fdd835","#d81b60","#00bcd4","#fb8c00","#8e24aa",
 const EXTRA_COLORS=["#ffffff","#000000","#ff3d00","#76ff03","#18ffff","#f50057","#ffea00","#651fff"];
 // Stufen des prozentualen Punktzuwachses, hergeleitet aus der gemessenen Verteilung vom 12.09.2026:
 // über 1 h wachsen 11,4 % der Spieler überhaupt, über 24 h rund 39 %.
-// Eine gemeinsame Skala für alle Ansichten mit Stufen, damit man nicht umdenken muss:
-// wenig orange, über gelb nach grün für viel. Grau heißt kein Wert, Rot beim Zuwachs heißt Verlust.
-const SCALE5=["#ff8f00","#ffc400","#ffea00","#aeea00","#00c853"];
-const SCALE6=["#ff8f00","#ffb300","#ffea00","#c6ff00","#64dd17","#00c853"];
-const GROWTH_COLORS=SCALE5;
+// Jede Kategorie hat ihre eigene Farbfamilie, immer von hell oder schwach (wenig) nach kräftig (viel):
+//   Punktezuwachs  rosa über pink nach dunkelmagenta, Verlust dunkelgrau
+//   Besiegte Gegner grün über gelb und orange nach rot (wie die Äxte)
+//   An einem Tag   hellblau über dunkelblau nach lila
+// Grau heißt überall kein Wert.
+const GROWTH_COLORS=["#f8bbd0","#f48fb1","#ec407a","#c2185b","#6d0e3f"];
+const BASH_COLORS=["#00c853","#aeea00","#ffd600","#ff6d00","#c62828"];
+const RANK_SCALE=["#b3e5fc","#4fc3f7","#1e88e5","#283593","#6a1b9a","#b000ff"];
 const STEPS={ d1h:[1,2,3,5], d12h:[3,6,10,18], d24h:[5,10,15,25], d7d:[10,20,35,60] };
 const VIEW_LABEL={ d1h:"1 Stunde", d12h:"12 Stunden", d24h:"24 Stunden", d7d:"7 Tage" };
-// Besiegte Gegner, Farben aus SCALE5. Stufen je Art aus der Verteilung vom 15.09.2026 (Spieler mit Wert > 0), grob bei p50, p75, p90, p97:
+// Besiegte Gegner, Farben aus BASH_COLORS. Stufen je Art aus der Verteilung vom 15.09.2026 (Spieler mit Wert > 0), grob bei p50, p75, p90, p97:
 //   Off gesamt 1.491 / 7.158 / 18.196 / 35.733, dazu in 24 h 273 / 2.015 / 6.346 / 14.795
 //   Deff gesamt 418 / 1.795 / 5.505 / 16.193,   dazu in 24 h 143 / 642 / 4.260 / 17.211
 //   Unt. gesamt 934 / 3.201 / 7.922 / 15.335,   dazu in 24 h 203 / 1.812 / 5.048 / 10.796
@@ -221,8 +234,12 @@ const BASH={
   bash_sup_new:{ art:"sup", neu:true,  steps:[200,1800,5000,10000] }
 };
 const isBash = v => !!BASH[v];
-// Gekreuzte Äxte am Dorf: in der letzten Stunde (ersatzweise 12) mehr als so viele besiegte Gegner dazu
-const AXE_STEPS=[1000,5000];
+// Gekreuzte Äxte am Dorf: besiegte Gegner (Off, Deff, Unterstützung zusammen) im gewählten Zeitraum.
+// Klein grün ab 100, mittel gelb ab 1.000, groß rot ab 5.000 (Vorgabe Dennis 15.09.2026).
+const AXE_STEPS=[100,1000,5000];
+const AXE_COLORS=["#00c853","#ffd600","#e53935"];
+const BASH_WINDOWS=["6h","12h","24h"];
+let axWin="24h";                     // Zeitraum für Äxte und die Ansichten "+ …"
 // Ausbaustufen wie im Hilfe-Wiki: 26 bis 299, 300 bis 999, 1.000 bis 2.999, 3.000 bis 8.999,
 // 9.000 bis 10.999, ab 11.000. Die Zeichnung ist eine eigene, schlichte Nachbildung.
 const STAGE_STEPS=[300,1000,3000,9000,11000];
@@ -230,8 +247,8 @@ const stageOf = pts => { let s=0; while(s<STAGE_STEPS.length && pts>=STAGE_STEPS
 let shape="quad";
 // Ranglisten "An einem Tag": Farbe nach Weltrang, Stufen wie im Artefakt vom 11.09.2026
 const RANK_STEPS=[10,50,100,500,2500];
-// Platz 1 bis 10 zuerst, deshalb die Skala umgedreht: vorne grün, "dahinter" orange
-const RANK_COLORS=SCALE6.slice().reverse();
+// Platz 1 bis 10 zuerst, deshalb die Skala umgedreht: vorne lila, "dahinter" hellblau
+const RANK_COLORS=RANK_SCALE.slice().reverse();
 const INADAY_LABEL={ loot_res:"Rohstoffe geplündert", scavenge:"Rohstoffe gesammelt", loot_vil:"Dörfer geplündert",
                      kill_att:"Bash Angriff", kill_def:"Bash Verteidigung", kill_sup:"Bash Unterstützung",
                      conquer:"Dörfer erobert" };
@@ -413,8 +430,8 @@ function drawVillage(cx2, cy2, r, farbe, stufe){
   }
 }
 
-/** Gekreuzte Äxte, Mittelpunkt (x,y), halbe Breite a. Auch in der Legende als SVG nachgebildet. */
-function drawAxes(c, x, y, a, big){
+/** Gekreuzte Äxte, Mittelpunkt (x,y), halbe Breite a, Klingenfarbe color. Auch als Bild in der Legende. */
+function drawAxes(c, x, y, a, color){
   const s=Math.SQRT1_2, h=a*0.62;
   c.lineCap="round";
   for(const dir of [1,-1]){
@@ -431,15 +448,16 @@ function drawAxes(c, x, y, a, big){
     c.lineTo(ex+nx*h-ux*h*0.75, ey+ny*h-uy*h*0.75);
     c.lineTo(ex-ux*h*0.55, ey-uy*h*0.55);
     c.closePath();
-    c.fillStyle = big? "#ffffff" : "#d7dde0"; c.fill();
+    c.fillStyle = color; c.fill();
     c.strokeStyle="rgba(0,0,0,.8)"; c.lineWidth=Math.max(0.8, a*0.12); c.stroke();
   }
 }
 
 // Dasselbe Symbol als kleines Bild für Legende und Knöpfe
-const AXES_SVG=(()=>{ const c=document.createElement("canvas"); c.width=c.height=32;
-  drawAxes(c.getContext("2d"), 16, 17, 10.5, true); return "<img alt='' src='"+c.toDataURL()+"'>"; })();
-const windowText = k => k==="24h"? "24 Stunden" : k==="12h"? "12 Stunden" : k==="1h"? "einer Stunde" : "";
+const AXES_IMG=AXE_COLORS.map(color=>{ const c=document.createElement("canvas"); c.width=c.height=32;
+  drawAxes(c.getContext("2d"), 16, 17, 12, color); return "<img alt='' src='"+c.toDataURL()+"'>"; });
+const windowText = k => k==="24h"? "24 Stunden" : k==="12h"? "12 Stunden" : k==="6h"? "6 Stunden" : k==="1h"? "einer Stunde" : "";
+const winShort = k => k? k.replace("h"," h") : "";
 
 /** Zeichen am Dorf: Bonusdorf und frisch besiegte Gegner. Die Menge besiegter Gegner steckt nur
     in der Dorffarbe der Ansichten "Besiegte Gegner", nicht zusätzlich als Rahmen.
@@ -460,8 +478,8 @@ function drawMarks(x0,x1,y0,y1,size){
     }
     const n=bashNewOf? bashNewOf[i] : 0;
     if(n){                                       // hier wurde gekämpft: gekreuzte Äxte oben links
-      const a=Math.max(3.2, Math.min(7.5, scale*0.36)) * (n>=2? 1.2 : 1);
-      drawAxes(ctx, bx+a*0.3, by+a*0.3, a, n>=2);
+      const a=Math.max(3.2, Math.min(7.5, scale*0.36)) * [0, 0.85, 1.1, 1.4][n];   // klein, mittel, groß
+      drawAxes(ctx, bx+a*0.3, by+a*0.3, a, AXE_COLORS[n-1]);
     }
   }
 }
@@ -564,7 +582,7 @@ function computeArrows(){
   if(!P) return;
   const key=arrowWindow();
   const lvl=new Int8Array(P.rows.length), bn=new Int8Array(P.rows.length);
-  const bashKey=refs["1h"]? "1h" : (refs["12h"]? "12h" : null);
+  const bashKey=bashWindow();
   P.rows.forEach((r,i)=>{
     if(key){
       const e=STEPS["d"+key], g=pct(r,key);
@@ -573,7 +591,7 @@ function computeArrows(){
     // Zeichen für frisch besiegte Gegner (Äxte)
     if(bashKey){
       const d=(r[pIdx["d"+bashKey+"_att"]]||0)+(r[pIdx["d"+bashKey+"_def"]]||0)+(r[pIdx["d"+bashKey+"_sup"]]||0);
-      bn[i] = d>AXE_STEPS[1]? 2 : d>AXE_STEPS[0]? 1 : 0;
+      bn[i] = d>=AXE_STEPS[2]? 3 : d>=AXE_STEPS[1]? 2 : d>=AXE_STEPS[0]? 1 : 0;
     }
   });
   for(let i=0;i<N;i++){
@@ -594,9 +612,12 @@ function computeGrowth(){
     });
   }
 }
-// Die Kampfwerte kommen gebündelt etwa alle drei Stunden. Ein Stundenfenster wäre meist leer,
-// deshalb rechnet der Zuwachs über 24 Stunden, ersatzweise 12.
-function bashWindow(){ return refs["24h"]? "24h" : (refs["12h"]? "12h" : (refs["1h"]? "1h" : null)); }
+// Die Kampfwerte kommen gebündelt etwa alle drei Stunden, ein Stundenfenster wäre meist leer.
+// Wählbar sind deshalb 6, 12 und 24 Stunden; fehlt der gewählte Vergleichsstand, gilt ein vorhandener.
+function bashWindow(){
+  if(refs[axWin]) return axWin;
+  return ["24h","12h","6h","1h"].find(k=>refs[k]) || null;
+}
 function bashValue(p, v){
   const r=P.rows[p], cfg=BASH[v||view];
   if(!cfg.neu) return r[pIdx[cfg.art]]||0;
@@ -623,7 +644,7 @@ function buildBuckets(){
       push(RANK_COLORS[s], i);
     }
   } else if(isBash(view)){
-    const cfg=BASH[view], colors=SCALE5;
+    const cfg=BASH[view], colors=BASH_COLORS;
     for(let i=0;i<N;i++){
       const p=vp[i];
       if(p<0){ push(C_BARB, i); continue; }
@@ -644,7 +665,7 @@ function buildBuckets(){
       push(GROWTH_COLORS[s], i);
     }
   }
-  const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...SCALE6,...SCALE5,C_LOSS,
+  const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...GROWTH_COLORS,...BASH_COLORS,...RANK_SCALE,C_LOSS,
                ...TRIBE_COLORS,C_TRACKED,...EXTRA_COLORS];
   const keys=[...map.keys()].sort((a,b)=>{
     const ia=order.indexOf(a), ib=order.indexOf(b);
@@ -665,7 +686,7 @@ function renderLegend(){
     tribeList.forEach(a=>{ if(!marks.has(a[0]) && !(T.tribe_ids||[]).includes(a[0])) add(tribeColor.get(a[0]), a[2]||a[1]); });
     add(C_OTHER,"übrige Spieler"); add(C_BARB,"Barbaren"); add(C_BONUS,"Bonusdörfer");
   } else if(isBash(view)){
-    const cfg=BASH[view], steps=cfg.steps, colors=SCALE5;
+    const cfg=BASH[view], steps=cfg.steps, colors=BASH_COLORS;
     $("legend-title").textContent = "Besiegte Gegner "+BASH_ART[cfg.art]
       + (cfg.neu? ", dazugekommen in "+windowText(bashWindow()) : ", Stand jetzt");
     add(C_NONE,"keine");
@@ -691,7 +712,7 @@ function renderLegend(){
   }
   // Zeichen am Dorf, je eine Zeile mit Symbol
   const key=arrowWindow(), e=key? STEPS["d"+key] : null;
-  const axeKey=refs["1h"]? "1h" : (refs["12h"]? "12h" : null);
+  const axeKey=bashWindow();
   const keys=$("legend-keys"); keys.replaceChildren();
   const zeile=(sym, html)=>{ const li=document.createElement("li"); const s=document.createElement("span");
     s.className="sym"; s.innerHTML=sym; const t=document.createElement("span"); t.innerHTML=html;
@@ -699,8 +720,11 @@ function renderLegend(){
   zeile("<b>&#9650;</b><u>&#9660;</u>", key
     ? "Rechts oben: Punktezuwachs über "+VIEW_LABEL["d"+key]+", ein Pfeil ab "+e[1]+" %, zwei ab "+e[2]+" %, drei ab "+e[3]+" %"
     : "Pfeile für den Punktezuwachs erscheinen ab zwölf Stunden Historie");
-  if(axeKey) zeile(AXES_SVG, "Links oben: hier wurde gekämpft, über "+nf.format(AXE_STEPS[0])+" besiegte Gegner in "
-    +windowText(axeKey)+" dazu (hell ab "+nf.format(AXE_STEPS[1])+")");
+  if(axeKey){
+    const stufe=(k,text)=>"<span class='axe'>"+AXES_IMG[k]+text+"</span>";
+    zeile(AXES_IMG[2], "Links oben: besiegte Gegner dazu in "+windowText(axeKey)+"<br>"
+      +stufe(0,"ab "+nf.format(AXE_STEPS[0]))+stufe(1,"ab "+nf.format(AXE_STEPS[1]))+stufe(2,"ab "+nf.format(AXE_STEPS[2])));
+  }
   zeile("<i class='raute'></i>", "Links unten: Bonusdorf");
   const hint=document.createElement("li"); hint.className="hint"; hint.textContent="Zeichen erscheinen ab mittlerem Zoom.";
   keys.appendChild(hint);
@@ -726,6 +750,24 @@ async function ensureDeep(){
   return deepLoading;
 }
 let deepCounts={};
+
+/** Beschriftung der Knöpfe "+ …" und des Zeitraum-Schalters nach dem gewählten Zeitraum. */
+function labelBashButtons(){
+  const bw=bashWindow();
+  document.querySelectorAll("#axwin button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.w===bw)));
+  document.querySelectorAll("#views button").forEach(b=>{
+    const cfg=BASH[b.dataset.v]; if(!cfg) return;
+    b.title="Besiegte Gegner "+BASH_ART[cfg.art]+(cfg.neu? ", dazugekommen in "+windowText(bw) : ", Stand jetzt");
+    if(!cfg.neu) return;
+    b.disabled=!bw;
+    b.textContent = bw? "+ "+winShort(bw) : "+";
+    if(!bw) b.title="Noch kein Vergleichsstand";
+  });
+}
+function setAxWin(w){
+  if(!refs[w]) return;
+  axWin=w; labelBashButtons(); setView(view);
+}
 
 function setView(v){
   view=v;
@@ -797,7 +839,7 @@ function showTip(i, px, py){
     const bw=bashWindow();
     [["att","Angriff (Off)"],["def","Verteidigung (Deff)"],["sup","Unterstützung"]].forEach(([art,label])=>{
       trow(label, nf.format(r[pIdx[art]]), null, view==="bash_"+art);
-      if(view==="bash_"+art+"_new" && bw) trow(label+" + "+bw.replace("h"," h"), "+"+nf.format(bashValue(p)), null, true);
+      if(view==="bash_"+art+"_new" && bw) trow(label+" + "+winShort(bw), "+"+nf.format(bashValue(p)), null, true);
     });
     const e=inaday.get(r[pIdx.id]);
     // Ist die Karte nach einer Bestwert-Kategorie eingefärbt, erscheint deren Zeile immer, notfalls
@@ -925,6 +967,7 @@ function saveUrl(){
     const p=new URLSearchParams();
     if(userView){ p.set("c", Math.round(cx)+"|"+Math.round(cy)); p.set("z", scale.toFixed(2)); }
     if(view!=="tribes") p.set("v", view);
+    if(axWin!=="24h") p.set("w", axWin);
     if(marks.size) p.set("m", [...marks].map(([id,c])=>id+"-"+c.replace("#","")).join(","));
     const q=p.toString();
     history.replaceState(null,"", q? "?"+q : location.pathname);
@@ -933,6 +976,7 @@ function saveUrl(){
 function readUrl(){
   const p=new URLSearchParams(location.search);
   const v=p.get("v"); if(v && (STEPS[v]||isRank(v)||isBash(v))) view=v;
+  const w=p.get("w"); if(BASH_WINDOWS.includes(w)) axWin=w;
   (p.get("m")||"").split(",").filter(Boolean).forEach(s=>{
     const [id,c]=s.split("-");
     if(/^\d+$/.test(id) && /^[0-9a-fA-F]{6}$/.test(c||"")) marks.set(+id, "#"+c);
@@ -986,19 +1030,11 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
 
   const rankCount={};
   inaday.forEach(e=>{ for(const t in e) rankCount[t]=(rankCount[t]||0)+1; });
-  const bw=bashWindow();
   document.querySelectorAll("#views button").forEach(b=>{
     const v=b.dataset.v;
     if(isGrowth(v)){
       b.title="Punktezuwachs über "+VIEW_LABEL[v];
       if(!refs[v.slice(1)]){ b.disabled=true; b.title="Noch kein Vergleichsstand für dieses Zeitfenster"; }
-    } else if(isBash(v)){
-      const cfg=BASH[v];
-      b.title="Besiegte Gegner "+BASH_ART[cfg.art]+(cfg.neu? ", dazugekommen in "+windowText(bw) : ", Stand jetzt");
-      if(cfg.neu){
-        if(bw) b.textContent="+ "+bw.replace("h"," h");
-        else { b.disabled=true; b.title="Noch kein Vergleichsstand"; }
-      }
     } else if(isRank(v)){
       const n=rankCount[v]||0;
       b.title = INADAY_LABEL[v]+": "+(n? n+" Spieler mit erfasstem Wert (vollständige Liste wird beim Umschalten geladen)"
@@ -1008,11 +1044,17 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   // Farbstreifen unter den Knöpfen aus denselben Paletten wie die Karte
   const verlauf = cs => "linear-gradient(90deg,"+cs.join(",")+")";
   const streifen={ tribes:"linear-gradient(90deg,"+TRIBE_COLORS.slice(0,6).map((c,i)=>c+" "+(i*100/6)+"% "+((i+1)*100/6)+"%").join(",")+")",
-    growth:verlauf(SCALE5), rank:verlauf(SCALE6) };
-  for(const v in BASH) streifen["bash_"+BASH[v].art]=verlauf(SCALE5);
+    growth:verlauf(GROWTH_COLORS), rank:verlauf(RANK_SCALE) };
+  for(const v in BASH) streifen["bash_"+BASH[v].art]=verlauf(BASH_COLORS);
+  $("axicon").innerHTML=AXES_IMG[2];
+  document.querySelectorAll("#axwin button").forEach(b=>{
+    if(!refs[b.dataset.w]){ b.disabled=true; b.title="Noch kein Vergleichsstand für dieses Zeitfenster"; }
+    else b.title="Gekreuzte Äxte und Ansichten „+“ über "+windowText(b.dataset.w);
+  });
   document.querySelectorAll("#views .scale").forEach(s=>{ s.style.background=streifen[s.dataset.scale]||"none"; });
 
   if(readUrl()) ownView();
+  labelBashButtons();
   resize();
   if(isGrowth(view) && !refs[view.slice(1)]) view="tribes";
   if(isBash(view) && BASH[view].neu && !bashWindow()) view="tribes";
@@ -1047,6 +1089,9 @@ document.getElementById("shape").addEventListener("click", e=>{
   shape=b.dataset.shape;
   document.querySelectorAll("#shape button").forEach(x=>x.setAttribute("aria-pressed", String(x.dataset.shape===shape)));
   draw();
+});
+$("axwin").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(b && !b.disabled) setAxWin(b.dataset.w);
 });
 document.querySelectorAll("#views").forEach(g=>g.addEventListener("click", e=>{
   const b=e.target.closest("button"); if(b && !b.disabled) setView(b.dataset.v);

@@ -23,7 +23,7 @@ from email.utils import parsedate_to_datetime
 
 from . import config, net, store, world
 
-WINDOWS = [("1h", 3600, 600), ("12h", 12 * 3600, 1800), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
+WINDOWS = [("1h", 3600, 600), ("6h", 6 * 3600, 1800), ("12h", 12 * 3600, 1800), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
 DELTA_FIELDS = ["points", "villages", "att", "def", "sup"]
 BASE_FIELDS = ["id", "name", "ally", "villages", "points", "rank", "att", "def", "sup", "all"]
 
