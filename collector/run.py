@@ -6,7 +6,7 @@ import sys
 import time
 import traceback
 
-from . import config, inaday, net, store, world
+from . import config, inaday, net, store, world, worldconfig
 
 RUNS_HEADER = ["run_utc", "trigger", "result", "world_changed", "data_last_modified", "players", "villages",
                "allies", "new_conquers", "world_requests", "guest_requests", "inaday_changed_types",
@@ -33,6 +33,12 @@ def main(argv=None):
         w = world.update(state, now_utc, now_local)
     except Exception as e:
         errors.append(f"Weltdaten: {e}")
+        traceback.print_exc()
+
+    try:
+        worldconfig.update(state, now_utc)
+    except Exception as e:
+        errors.append(f"Welteinstellungen: {e}")
         traceback.print_exc()
 
     if not args.skip_inaday:

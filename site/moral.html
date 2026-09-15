@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="de" data-theme="classic">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moralrechner · Welt 259</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  .mr-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media (max-width:640px){ .mr-grid{grid-template-columns:1fr} }
+  .mr-side{display:flex; flex-direction:column; gap:8px}
+  .mr-side h3{margin:0; font-size:13px; text-transform:uppercase; letter-spacing:.04em; opacity:.8}
+  .mr-side label{display:flex; flex-direction:column; gap:3px; font-size:12px}
+  .mr-side input{width:100%; max-width:320px; font-size:13px; padding:4px 8px}
+  .mr-side .note{font-size:12px; opacity:.75; min-height:1.2em}
+  .mr-result{display:flex; flex-wrap:wrap; align-items:center; gap:10px 24px; margin-top:14px}
+  .mr-big{font-size:44px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums}
+  .mr-bar{flex:1 1 220px; height:12px; border-radius:6px; background:rgba(127,127,127,.25); overflow:hidden}
+  .mr-bar i{display:block; height:100%; background:linear-gradient(90deg,#b3261e,#d9a400 50%,#3f7d20)}
+  .mr-steps{margin:10px 0 0; padding-left:18px; font-size:13px; line-height:1.6}
+  .mr-row{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center}
+  .mr-row select{max-width:100%}
+  input[type="number"]{font:inherit; color:var(--ink); background:var(--field); border:1px solid var(--edge);
+    border-radius:var(--radius)}
+  input[type="number"]:disabled{opacity:.5}
+</style>
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+
+<main class="wrap">
+  <section class="panel" aria-labelledby="h-setting">
+    <h2 id="h-setting">Moral auf Welt 259 <span class="hint" id="setting-hint">lädt …</span></h2>
+    <div class="body" id="setting"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-calc">
+    <h2 id="h-calc">Moralrechner
+      <label class="pick"><span>Berechnung</span><select id="type" aria-label="Art der Moral"></select></label>
+      <button class="tw" type="button" id="swap" title="Angreifer und Verteidiger tauschen">Seiten tauschen</button>
+    </h2>
+    <div class="body">
+      <div class="mr-grid">
+        <div class="mr-side">
+          <h3>Angreifer</h3>
+          <label>Spieler<input type="text" id="a-name" list="names" autocomplete="off" placeholder="Name eingeben"></label>
+          <label>Punkte<input type="number" id="a-pts" min="0" step="1"></label>
+          <div class="note" id="a-note"></div>
+        </div>
+        <div class="mr-side">
+          <h3>Verteidiger</h3>
+          <label>Spieler<input type="text" id="d-name" list="names" autocomplete="off" placeholder="Name eingeben"></label>
+          <label>Punkte<input type="number" id="d-pts" min="0" step="1"></label>
+          <label>Tage auf der Welt<input type="number" id="d-days" min="0" step="0.1"></label>
+          <div class="note" id="d-note"></div>
+        </div>
+      </div>
+      <datalist id="names"></datalist>
+      <div class="mr-result" aria-live="polite">
+        <div class="mr-big" id="res">–</div>
+        <div class="mr-bar"><i id="bar" style="width:0"></i></div>
+      </div>
+      <p class="empty" id="res-text" style="margin:8px 0 0">Punkte eintragen oder Spieler wählen.</p>
+      <ol class="mr-steps" id="steps"></ol>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-tribe">
+    <h2 id="h-tribe">Moral gegen einen Stamm
+      <label class="pick"><span>Stamm</span><select id="tribe" aria-label="Stamm auswählen"></select></label>
+      <span class="hint" id="tribe-hint">Nutzt den Angreifer aus dem Rechner.</span>
+    </h2>
+    <div class="scroll" id="tribe-table"></div>
+  </section>
+
+  <footer>Fan-Projekt mit öffentlichen Daten von die-staemme.de. Kein Angebot von InnoGames.
+    Formeln nach dem <a href="https://help.die-staemme.de/wiki/Moral">Hilfe-Wiki</a>, maßgeblich ist der Moralrechner im Simulator des Spiels.
+    Quelltext auf <a href="https://github.com/brisk-one/Karte259">GitHub</a>.</footer>
+</main>
+
+<script src="app.js"></script>
+<script>
+buildAppbar("moral", "Moralrechner");
+
+/* Formeln laut Hilfe-Wiki (Seite „Moral“):
+   1 nach Punkten:           30 % + 300 % × V/A, höchstens 100 %. Minimum 30 % ab 600:1, 100 % ab rund 4,3:1.
+   2 nach Punkten und Zeit:  25 % + 300 % × V/A + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst linear mit
+                             der Zeit des Verteidigers auf der Welt bis 25 Prozentpunkte nach 125 Tagen
+                             (Minimum dann 50 %, 100 % ab 6:1).
+   3 zeitlich begrenzt:      wie 2, aber der Bonus wächst bis 75 Prozentpunkte nach rund einem Jahr (Vermutung,
+                             das Wiki nennt nur „nach ca. einem Jahr 100 %“). */
+const TYPES = [[2, "nach Punkten und Zeit"], [1, "nach Punkten"], [3, "Punkte, zeitlich begrenzt"], [0, "keine Moral"]];
+const TYPE_NAME = Object.fromEntries(TYPES);
+
+function moral(type, att, def, days) {
+  if (type === 0) return {value: 1, base: 0, ratio: 0, bonus: 0};
+  const ratio = att > 0 ? def / att : Infinity;
+  const share = Math.min(3 * ratio, 10);
+  if (type === 1) {
+    return {value: Math.min(1, 0.3 + share), base: 0.3, share, bonus: 0, ratio};
+  }
+  const d = Math.max(0, days || 0);
+  const bonus = type === 2 ? Math.min(d, 125) / 500 : 0.75 * Math.min(d, 365) / 365;
+  return {value: Math.min(1, 0.25 + share + bonus), base: 0.25, share, bonus, ratio};
+}
+const pct = v => Math.round(v * 100) + " %";
+const pct1 = v => nf1.format(v * 100) + " %";
+
+(async function(){
+  let players, allies, info = null;
+  try { [players, allies] = await Promise.all(["players", "allies"].map(loadData)); }
+  catch(e){ $("setting-hint").textContent = "Daten konnten nicht geladen werden: " + e.message; return; }
+  try { info = await loadData("moral"); } catch(e) { /* ohne Schätzung und Welteinstellung weiter nutzbar */ }
+
+  const F = players.fields, idx = Object.fromEntries(F.map((f, i) => [f, i]));
+  const allyTag = {}; allies.rows.forEach(a => { allyTag[a[0]] = a[2]; });
+  const byName = new Map(players.rows.map((r, i) => [r[idx.name].toLowerCase(), i]));
+  const startTs = info && info.world_start_utc ? new Date(info.world_start_utc).getTime() : null;
+  function daysOnWorld(i) {
+    const jd = info && info.join_days ? info.join_days[i] : null;
+    if (jd == null || startTs == null) return null;
+    return Math.max(0, (Date.now() - startTs) / 86400000 - jd);
+  }
+
+  /* Welteinstellung */
+  const worldType = info ? info.moral : null;
+  const box = $("setting");
+  if (worldType == null) {
+    $("setting-hint").textContent = "Welteinstellung noch nicht geladen";
+    box.appendChild(el("p", "empty", "Der Sammler holt die Welteinstellungen beim nächsten Lauf. Bis dahin lässt sich die Art der Moral im Rechner von Hand wählen."));
+  } else {
+    $("setting-hint").textContent = "laut Welteinstellungen (get_config), geprüft " + fmtTime(info.settings_checked_utc);
+    const p = el("p", null); p.style.margin = "0";
+    const pill = el("span", "pill " + (worldType ? "ok" : "err")); pill.appendChild(el("i"));
+    pill.appendChild(document.createTextNode(TYPE_NAME[worldType] ? "Moral " + TYPE_NAME[worldType] : "Moralwert " + worldType + " (unbekannt)"));
+    p.appendChild(pill);
+    box.appendChild(p);
+    const txt = {
+      0: "Auf dieser Welt gibt es keine Moral, jeder Angriff zählt mit voller Kampfkraft.",
+      1: "Moral = 30 % + 3 × Punkte Verteidiger / Punkte Angreifer, höchstens 100 %. Wer mehr als rund 4,3 mal so viele Punkte hat wie das Ziel, greift geschwächt an, am stärksten mit 30 %. Die Spieldauer spielt keine Rolle.",
+      2: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, bis 25 Prozentpunkte nach 125 Tagen. Danach liegt die Moral nie unter 50 % und greift erst, wenn der Angreifer mehr als 6 mal so viele Punkte hat.",
+      3: "Wie die zeitbasierte Moral, der Bonus steigt aber weiter, bis nach rund einem Jahr immer 100 % gelten. Die genaue Steigung ist nicht dokumentiert, der Rechner nimmt einen linearen Anstieg an.",
+    }[worldType];
+    if (txt) { const q = el("p", null, txt); q.style.margin = "8px 0 0"; box.appendChild(q); }
+    const s = info.settings || {};
+    const extra = [["Weltgeschwindigkeit", s.speed], ["Einheitengeschwindigkeit", s.unit_speed]].filter(([, v]) => v);
+    if (extra.length) {
+      const q = el("p", "empty", extra.map(([k, v]) => k + " " + String(v).replace(".", ",")).join(" · "));
+      q.style.margin = "6px 0 0"; box.appendChild(q);
+    }
+  }
+
+  /* Rechner */
+  const sel = $("type");
+  TYPES.forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l + (v === worldType ? " (Welt 259)" : ""); sel.appendChild(o); });
+  sel.value = String(worldType != null && TYPE_NAME[worldType] ? worldType : 2);
+
+  const dl = $("names");
+  function suggest(input) {
+    const q = input.value.trim().toLowerCase();
+    dl.replaceChildren();
+    if (q.length < 2) return;
+    const starts = [], contains = [];
+    for (const r of players.rows) {
+      const n = r[idx.name].toLowerCase();
+      if (n.startsWith(q)) starts.push(r); else if (n.includes(q)) contains.push(r);
+      if (starts.length >= 25) break;
+    }
+    starts.concat(contains).slice(0, 25).forEach(r => {
+      const o = document.createElement("option"); o.value = r[idx.name];
+      o.label = nf.format(r[idx.points]) + " Pkt" + (allyTag[r[idx.ally]] ? " · " + allyTag[r[idx.ally]] : "");
+      dl.appendChild(o);
+    });
+  }
+
+  const side = {a: {name: $("a-name"), pts: $("a-pts"), note: $("a-note"), row: null},
+                d: {name: $("d-name"), pts: $("d-pts"), note: $("d-note"), days: $("d-days"), row: null}};
+  function pick(key) {
+    const s = side[key], i = byName.get(s.name.value.trim().toLowerCase());
+    s.row = i == null ? null : i;
+    if (i == null) { s.note.textContent = s.name.value.trim() ? "Kein Spieler mit diesem Namen, Punkte von Hand eintragen." : ""; return; }
+    const r = players.rows[i];
+    s.pts.value = r[idx.points];
+    let note = (allyTag[r[idx.ally]] ? "Stamm " + allyTag[r[idx.ally]] + " · " : "") + nf.format(r[idx.villages]) + " Dörfer · Rang " + nf.format(r[idx.rank]);
+    if (s.days) {
+      const d = daysOnWorld(i);
+      if (d != null) { s.days.value = d.toFixed(1); note += " · Spieldauer geschätzt über das Startdorf"; }
+      else { s.days.value = ""; note += " · Spieldauer unbekannt, von Hand eintragen"; }
+    }
+    s.note.textContent = note;
+  }
+
+  function render() {
+    const type = +sel.value;
+    const A = +side.a.pts.value, D = +side.d.pts.value;
+    const days = side.d.days.value === "" ? null : +side.d.days.value;
+    side.d.days.disabled = type === 0 || type === 1;
+    const steps = $("steps"); steps.replaceChildren();
+    if (!(A > 0) || !(D >= 0) || side.d.pts.value === "") {
+      $("res").textContent = "–"; $("bar").style.width = "0"; $("res-text").textContent = "Punkte eintragen oder Spieler wählen.";
+      renderTribe(); return;
+    }
+    const m = moral(type, A, D, days);
+    $("res").textContent = pct(m.value);
+    $("bar").style.width = (m.value * 100) + "%";
+    const aN = side.a.row != null ? players.rows[side.a.row][idx.name] : "Der Angreifer";
+    const dN = side.d.row != null ? players.rows[side.d.row][idx.name] : "den Verteidiger";
+    $("res-text").textContent = m.value >= 1
+      ? aN + " greift " + dN + " mit voller Kampfkraft an."
+      : aN + " kämpft gegen " + dN + " nur mit " + pct(m.value) + " der Kampfkraft.";
+    const li = t => steps.appendChild(el("li", null, t));
+    if (type === 0) { li("Keine Moral gewählt."); renderTribe(); return; }
+    li("Punkteverhältnis Angreifer zu Verteidiger " + (D > 0 ? nf1.format(A / D) + " : 1" : "unendlich") + ".");
+    li("Grundwert " + pct(m.base) + " plus 3 × " + nf.format(D) + " / " + nf.format(A) + " = " + pct1(m.share) + ".");
+    if (type !== 1) {
+      li("Zeitbonus " + pct1(m.bonus) + (days == null ? " (Spieldauer fehlt, mit 0 Tagen gerechnet)"
+          : " für " + nf1.format(days) + " Tage auf der Welt" + (type === 2 ? ", voll ab 125 Tagen" : "")) + ".");
+    }
+    li("Zusammen " + pct1(m.base + m.share + m.bonus) + (m.base + m.share + m.bonus > 1 ? ", begrenzt auf 100 %." : "."));
+    const need = Math.ceil(A * Math.max(0, 1 - m.base - m.bonus) / 3);
+    li(m.value >= 1 ? "Volle Moral, solange " + dN + " mindestens " + nf.format(need) + " Punkte hat."
+                    : "Volle Moral ab " + nf.format(need) + " Punkten beim Verteidiger.");
+    try {
+      const u = new URL(location.href);
+      [["a", side.a], ["d", side.d]].forEach(([k, s]) => { if (s.row != null) u.searchParams.set(k, players.rows[s.row][idx.name]); else u.searchParams.delete(k); });
+      history.replaceState(null, "", u);
+    } catch (e) { /* Adresszeile nicht änderbar */ }
+    renderTribe();
+  }
+
+  ["a", "d"].forEach(k => {
+    const s = side[k];
+    s.name.addEventListener("input", () => { suggest(s.name); pick(k); render(); });
+    s.pts.addEventListener("input", render);
+  });
+  side.d.days.addEventListener("input", render);
+  sel.addEventListener("change", render);
+  $("swap").addEventListener("click", () => {
+    const an = side.a.name.value, ap = side.a.pts.value;
+    side.a.name.value = side.d.name.value; side.a.pts.value = side.d.pts.value;
+    side.d.name.value = an; side.d.pts.value = ap;
+    pick("a"); pick("d");
+    render();
+  });
+
+  /* Stamm */
+  const tsel = $("tribe");
+  const none = document.createElement("option"); none.value = ""; none.textContent = "Stamm wählen"; tsel.appendChild(none);
+  [...allies.rows].sort((a, b) => b[5] - a[5]).forEach((a, i) => {
+    const o = document.createElement("option"); o.value = a[0];
+    o.textContent = (i + 1) + ". " + (a[2] || a[1]) + " · " + nf.format(a[3]) + " Mitgl.";
+    tsel.appendChild(o);
+  });
+  function renderTribe() {
+    const out = $("tribe-table"); out.replaceChildren();
+    const tid = +tsel.value, A = +side.a.pts.value, type = +sel.value;
+    if (!tsel.value) { out.appendChild(el("p", "empty", "Stamm wählen, um die Moral gegen jedes Mitglied zu sehen.")); return; }
+    if (!(A > 0)) { out.appendChild(el("p", "empty", "Zuerst oben einen Angreifer wählen oder seine Punkte eintragen.")); return; }
+    const aN = side.a.row != null ? players.rows[side.a.row][idx.name] : "Angreifer";
+    const aDays = side.a.row != null ? daysOnWorld(side.a.row) : null;
+    const members = players.rows.map((r, i) => i).filter(i => players.rows[i][idx.ally] === tid);
+    if (!members.length) { out.appendChild(el("p", "empty", "Keine Mitglieder mit Daten.")); return; }
+    $("tribe-hint").textContent = nf.format(members.length) + " Mitglieder · Moral von " + aN + " (" + nf.format(A) + " Pkt) auf jedes Mitglied und zurück";
+    out.appendChild(table(
+      [["Spieler", "l"], ["Punkte", "", 1], ["Tage auf der Welt", "", 1], [aN + " → Mitglied", "", 1], ["Mitglied → " + aN, "", 1]],
+      members.map(i => {
+        const r = players.rows[i], d = daysOnWorld(i);
+        const there = moral(type, A, r[idx.points], d).value;
+        const back = r[idx.points] > 0 ? moral(type, r[idx.points], A, aDays).value : null;
+        return [[r[idx.name], "l name"], [nf.format(r[idx.points]), "", r[idx.points]],
+                [d == null ? "–" : nf1.format(d), d == null ? "na" : "", d],
+                [pct(there), there < 1 ? "down" : "", there],
+                [back == null ? "–" : pct(back), back != null && back < 1 ? "down" : "", back]];
+      }), {sort: 1}));
+  }
+  tsel.addEventListener("change", renderTribe);
+
+  const q = new URLSearchParams(location.search);
+  if (q.get("a")) { side.a.name.value = q.get("a"); pick("a"); }
+  if (q.get("d")) { side.d.name.value = q.get("d"); pick("d"); }
+  render();
+})();
+</script>
+</body>
+</html>

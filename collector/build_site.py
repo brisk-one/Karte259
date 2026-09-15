@@ -21,7 +21,7 @@ import subprocess
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from . import config, net, store, world
+from . import config, moral, net, store, world
 
 WINDOWS = [("1h", 3600, 600), ("6h", 6 * 3600, 1800), ("12h", 12 * 3600, 1800), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
 DELTA_FIELDS = ["points", "villages", "att", "def", "sup"]
@@ -216,6 +216,22 @@ def build(out_dir):
     except Exception as e:  # Karte fehlt, Statusseite bleibt nutzbar
         villages = {"count": 0, "source": None, "error": repr(e)}
 
+    # Moralrechner: Welteinstellung und geschätzte Spieldauer, ebenfalls ohne Einfluss auf den Rest
+    moral_info = {"estimated": 0}
+    try:
+        if vrows:
+            state = store.load_state()
+            wc = store.load_json(store.dpath("world_config.json"), {}) or {}
+            dates = [r.get("date") for name in ("tribe_latest.csv", "top_latest.csv", "deep_latest.csv")
+                     for r in store.read_csv(store.dpath("inaday", name))]
+            mp = moral.payload(vrows, [r[0] for r in rows], moral.read_conquers(store.dpath("conquers")), dates,
+                               state.get("history_since_utc"), newest if vsource == "cache" else None,
+                               wc.get("settings"), state.get("world_config_checked_utc"))
+            _dump(os.path.join(ddir, "moral.json"), mp)
+            moral_info = {"estimated": mp["estimated"], "moral": mp["moral"]}
+    except Exception as e:
+        moral_info = {"estimated": 0, "error": repr(e)}
+
     allies = store.read_csv(store.dpath("latest", "allies.csv"))
     ally_fields = ["id", "name", "tag", "members", "villages", "points", "all_points", "rank"]
     _dump(os.path.join(ddir, "allies.json"), {
@@ -268,7 +284,7 @@ def build(out_dir):
         "world": config.WORLD,
     })
     return {"players": len(rows), "refs": sorted(refs), "allies": len(allies),
-            "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages}
+            "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages, "moral": moral_info}
 
 
 def main(argv=None):
