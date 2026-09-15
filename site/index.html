@@ -111,7 +111,7 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
      Dadurch sehen Spielerrangliste und Stammesliste gleich aus und lassen sich gleich sortieren. */
   const REK=[["loot_res","Rohst. gepl."],["scavenge","Rohst. ges."],["loot_vil","Dörfer gepl."],["conquer","Erobert"]];
   function spaltenKopf(winKey){
-    return [["#","rank"],["Spieler","l"],["Stamm","l"],
+    return [["#","rank",1],["Spieler","l"],["Stamm","l"],
             ["Punkte","",1],["± "+winLabel(winKey),"",1],["Dörfer","",1],
             ["Bash","",1],["Angr.","",1],["Vert.","",1],["Unt.","",1]]
       .concat(REK.map(([,l])=>[l,"",1]));
@@ -141,13 +141,14 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
     winBtns.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.w===win)));
     const box=$("movers"); box.replaceChildren();
     if(!win){ box.appendChild(el("p","empty","Noch keine Vergleichswerte.")); return; }
-    const k=idx["d"+win+"_points"];
-    const top=players.rows.map((r,i)=>i).filter(i=>players.rows[i][k]!=null)
-      .sort((x,y)=>players.rows[y][k]-players.rows[x][k]).slice(0,100);
-    box.appendChild(table(spaltenKopf(win), top.map((i,n)=>zeile(i,n+1,win)),
-      {groups:spaltenGruppen(), sort:4}));
-    $("movers-hint").textContent="die 100 Spieler mit dem größten Zuwachs über "+winLabel(win)
-      +", Vergleich mit dem Stand vom "+fmtTime(refs[win])+". Jede Spalte ist sortierbar.";
+    // Rangliste nach Gesamtpunkten: # ist der Rang auf der Welt und bleibt beim Umsortieren am Spieler,
+    // der Zuwachs steht daneben und lässt sich weiterhin sortieren
+    const top=players.rows.map((r,i)=>i)
+      .sort((x,y)=>players.rows[x][idx.rank]-players.rows[y][idx.rank]).slice(0,100);
+    box.appendChild(table(spaltenKopf(win), top.map(i=>zeile(i,players.rows[i][idx.rank],win)),
+      {groups:spaltenGruppen(), sort:0, dir:"asc"}));
+    $("movers-hint").textContent="die 100 Spieler mit den meisten Punkten, # ist der Rang auf der Welt. ± zeigt den Zuwachs über "
+      +winLabel(win)+", Vergleich mit dem Stand vom "+fmtTime(refs[win])+". Jede Spalte ist sortierbar.";
   }
   winBtns.forEach(b=>b.addEventListener("click",()=>{ if(!b.disabled){ win=b.dataset.w; renderMovers(); } }));
   renderMovers();
