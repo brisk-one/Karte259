@@ -68,6 +68,11 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .tip .row>span:last-child{font-weight:600}
 .tip .k{color:var(--muted); font-weight:400}
 .tip .up{color:var(--good); font-weight:700} .tip .down{color:var(--bad); font-weight:700} .tip .na{color:var(--muted)}
+/* Die Zeile, nach der die Karte gerade eingefärbt ist, trägt dieselbe Farbe wie der gedrückte Knopf. */
+.tip .row.cur{background:var(--btn-on); color:var(--accent-ink); box-shadow:inset 3px 0 0 var(--edge)}
+.tip .row.cur .k, .tip .row.cur .up, .tip .row.cur .down, .tip .row.cur .na{color:inherit}
+.tip .row.cur .k{font-weight:700}
+.tip .row.cur .k::before{content:"▶ "; font-size:.8em}
 .msg{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
   color:var(--ink); background:var(--panel-solid); opacity:.94; font-size:13px; padding:24px; z-index:4}
 @media (max-width:640px){ .stand{width:100%; text-align:left; margin-left:0} .legend{font-size:11px} }
@@ -673,8 +678,8 @@ function hit(px,py){
   }
   return bestD<=grenze? best : -1;
 }
-function trow(k, v, cls){
-  const d=document.createElement("div"); d.className="row";
+function trow(k, v, cls, cur){
+  const d=document.createElement("div"); d.className=cur? "row cur" : "row";
   const a=document.createElement("span"); a.className="k"; a.textContent=k;
   const b=document.createElement("span"); if(cls) b.className=cls; b.textContent=v;
   d.append(a,b); tip.appendChild(d);
@@ -706,19 +711,27 @@ function showTip(i, px, py){
       if(d==null) return;
       const g=pct(r,k);
       const txt=(d>0?"+":"")+nf.format(d)+(g!=null&&g<999? " ("+(g>0?"+":"")+nf1.format(g)+" %)" : "");
-      trow("Zuwachs "+(k==="7d"?"7 Tage":k.replace("h"," h")), txt, d>0?"up":(d<0?"down":"na"));
+      trow("Zuwachs "+(k==="7d"?"7 Tage":k.replace("h"," h")), txt, d>0?"up":(d<0?"down":"na"), view==="d"+k);
     });
     tsec("Besiegte Gegner");
-    trow("Gesamt", nf.format(r[pIdx.all]));
+    trow("Gesamt", nf.format(r[pIdx.all]), null, view==="bash_all");
+    if(view==="bash_new"){
+      const k=bashWindow();
+      if(k) trow("Dazugekommen "+k.replace("h"," h"), nf.format(bashValue(p)), null, true);
+    }
     trow("Angriff", nf.format(r[pIdx.att]));
     trow("Verteidigung", nf.format(r[pIdx.def]));
     trow("Unterstützung", nf.format(r[pIdx.sup]));
     const e=inaday.get(r[pIdx.id]);
-    if(e){
+    // Ist die Karte nach einer Bestwert-Kategorie eingefärbt, erscheint deren Zeile immer, notfalls
+    // als "kein Wert erfasst", damit sichtbar bleibt, warum das Dorf grau ist.
+    const aktiv=isRank(view)? view : null;
+    if(e || aktiv){
       tsec("Bester Tag (An einem Tag)");
       ["loot_res","scavenge","loot_vil","conquer","kill_att","kill_def","kill_sup"].forEach(t=>{
-        const v=e[t]; if(!v) return;
-        trow(INADAY_SHORT[t], nf.format(v.value)+" · Rang "+nf.format(v.rank)+(v.date? " ("+fmtDay(v.date)+")" : ""));
+        const v=e&&e[t];
+        if(!v){ if(t===aktiv) trow(INADAY_SHORT[t], "kein Wert erfasst", "na", true); return; }
+        trow(INADAY_SHORT[t], nf.format(v.value)+" · Rang "+nf.format(v.rank)+(v.date? " ("+fmtDay(v.date)+")" : ""), null, t===aktiv);
       });
     }
   }
