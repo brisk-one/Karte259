@@ -88,9 +88,12 @@ buildAppbar("moral", "Moralrechner");
    2 nach Punkten und Zeit:  25 % + 300 % × V/A + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst linear mit
                              der Zeit des Verteidigers auf der Welt bis 25 Prozentpunkte nach 125 Tagen
                              (Minimum dann 50 %, 100 % ab 6:1).
-   3 zeitlich begrenzt:      wie 2, aber der Bonus wächst bis 75 Prozentpunkte nach rund einem Jahr. Vermutung in
-                             zwei Punkten: dass get_config diese Art als 3 meldet (Reihenfolge im Wiki) und dass der
-                             Bonus wie bei 2 addiert wird; das Wiki nennt nur „nach ca. einem Jahr 100 %“. */
+   3 zeitlich begrenzt:      25 % + 300 % × V/A + Zeitbonus, höchstens 100 %; nach rund einem Jahr immer 100 %.
+                             Welt 259 meldet 3, die Welteinstellungen nennen „zeitlich begrenzte punktbasierte Moral“.
+                             Geprüft am 15.09. gegen den Moralrechner des Spiels: Angreifer 25.000, Verteidiger 4.500,
+                             5.000, 5.500 und 6.000 Punkte bei 6 Tagen ergeben 80, 86, 92 und 98 %, genau wie hier.
+                             Der Bonus wird also addiert und hebt nicht nur die Untergrenze an (das ergäbe 79 bis 97 %).
+                             Offen ist die genaue Steigung, angenommen 75 Prozentpunkte über 365 Tage. */
 const TYPES = [[3, "zeitlich begrenzt nach Punkten"], [2, "nach Punkten und Zeit"], [1, "nach Punkten"], [0, "keine Moral"]];
 const TYPE_NAME = Object.fromEntries(TYPES);
 
@@ -141,7 +144,7 @@ const pct1 = v => nf1.format(v * 100) + " %";
       0: "Auf dieser Welt gibt es keine Moral, jeder Angriff zählt mit voller Kampfkraft.",
       1: "Moral = 30 % + 3 × Punkte Verteidiger / Punkte Angreifer, höchstens 100 %. Wer mehr als rund 4,3 mal so viele Punkte hat wie das Ziel, greift geschwächt an, am stärksten mit 30 %. Die Spieldauer spielt keine Rolle.",
       2: "Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt um 0,2 Prozentpunkte je Tag, bis 25 Prozentpunkte nach 125 Tagen. Danach liegt die Moral nie unter 50 % und greift erst, wenn der Angreifer mehr als 6 mal so viele Punkte hat.",
-      3: "Zeitlich begrenzte punktebasierte Moral. Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt, bis nach rund einem Jahr immer 100 % gelten; der Rechner nimmt einen gleichmäßigen Anstieg an (rund 0,2 Prozentpunkte je Tag). Das Hilfe-Wiki nennt keine genaue Formel, der Wert ist deshalb eine Näherung. Maßgeblich bleibt der Moralrechner im Simulator des Spiels.",
+      3: "Zeitlich begrenzte punktebasierte Moral. Moral = 25 % + 3 × Punkte Verteidiger / Punkte Angreifer + Zeitbonus, höchstens 100 %. Der Zeitbonus wächst mit der Zeit des Verteidigers auf der Welt, bis nach rund einem Jahr immer 100 % gelten; der Rechner nimmt einen gleichmäßigen Anstieg an (rund 0,2 Prozentpunkte je Tag). Gegen den Moralrechner des Spiels geprüft bei 6 Tagen Spielzeit: vier von vier Beispielen stimmen. Bei langer Spielzeit ist die Steigung noch nicht nachgeprüft, maßgeblich bleibt der Moralrechner im Simulator des Spiels.",
     }[worldType];
     if (txt) { const q = el("p", null, txt); q.style.margin = "8px 0 0"; box.appendChild(q); }
     const s = info.settings || {};
