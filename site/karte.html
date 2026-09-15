@@ -15,6 +15,28 @@ body{display:flex; flex-direction:column; overflow:hidden; background-attachment
 .grp{display:inline-flex; align-items:center; gap:3px; flex-wrap:wrap}
 .grp>b{font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-right:2px}
 button.tw.small{padding:2px 6px; font-size:11px}
+/* Auswahl der Dorffarbe: Kategorien mit Überschrift, darin zusammenhängende Knopfreihen.
+   Unter jedem Knopf ein Streifen mit seiner Farbskala. */
+.vbar{align-items:flex-end; gap:6px 0; padding-block:5px 7px}
+.vhead{font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  line-height:1.2; align-self:center; margin-right:12px}
+.vcat{display:flex; flex-wrap:wrap; align-items:flex-end; gap:4px 5px; padding:14px 12px 0; border-left:1px solid var(--edge-line);
+  position:relative}
+/* Überschrift absolut, damit sie nicht in die Breitenberechnung der Knopfreihe eingeht */
+.vcat>b{position:absolute; top:0; left:12px; font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); white-space:nowrap; line-height:1.3}
+.seg{display:inline-flex}
+.seg .opt{display:flex; flex-direction:column}
+.seg .opt button.tw{border-radius:0; margin-left:-1px; white-space:nowrap; position:relative}
+.seg .opt:first-child button.tw{margin-left:0; border-top-left-radius:var(--radius)}
+.seg .opt:last-child button.tw{border-top-right-radius:var(--radius)}
+.seg .opt button.tw[aria-pressed="true"]{z-index:1}
+.seg .opt button.tw.neu{font-weight:600; font-size:10.5px; padding-inline:6px}
+.scale{display:block; height:5px; border:1px solid var(--edge); border-top:0; margin-left:-1px}
+.seg .opt:first-child .scale{margin-left:0; border-bottom-left-radius:var(--radius)}
+.seg .opt:last-child .scale{border-bottom-right-radius:var(--radius)}
+.seg .opt button[aria-pressed="true"]+.scale{box-shadow:0 2px 0 var(--accent)}
+@media (max-width:640px){ .vhead{display:none} .vcat{padding:14px 6px 0} .vcat>b{left:6px} .seg{flex-wrap:wrap; row-gap:3px} }
 .search{display:flex; gap:5px; align-items:center; position:relative}
 .search input{width:min(220px,40vw)}
 .sugg{position:absolute; z-index:20; top:100%; left:0; margin-top:2px; width:min(280px,62vw);
@@ -46,8 +68,14 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .legend ul{margin:0; padding:6px 8px; list-style:none; display:flex; flex-wrap:wrap; gap:3px 12px}
 .legend li{display:flex; align-items:center; gap:5px; white-space:nowrap}
 .legend i{width:11px; height:11px; border:1px solid var(--map-edge); flex:none}
-.legend .arrows{border-top:1px solid var(--edge-line); padding:4px 8px; color:var(--ink-2); margin:0}
-.legend .arrows b{color:var(--good)} .legend .arrows u{color:var(--bad); text-decoration:none}
+.legend .keys{border-top:1px solid var(--edge-line); padding:4px 8px 5px; color:var(--ink-2); margin:0;
+  display:flex; flex-direction:column; gap:2px}
+.legend .keys li{white-space:normal; align-items:flex-start}
+.legend .keys .sym{flex:none; width:22px; display:inline-flex; justify-content:center; align-items:center; min-height:1.45em; font-size:9px}
+.legend .keys .sym b{color:#00a844} .legend .keys .sym u{color:var(--bad); text-decoration:none}
+.legend .keys .sym img{width:19px; height:19px}
+.legend .keys .raute{width:8px; height:8px; background:#f2d16b; border:1px solid rgba(0,0,0,.65); transform:rotate(45deg)}
+.legend .keys .hint{color:var(--muted); font-size:10.5px; padding-left:27px}
 .zoom{display:flex; gap:5px; pointer-events:auto}
 .zoom button{font:inherit; font-weight:700; font-size:15px; width:32px; height:32px; cursor:pointer;
   background:var(--btn); color:var(--ink); border:1px solid var(--edge); border-radius:var(--radius);
@@ -81,34 +109,53 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 <body>
 <header class="appbar" id="appbar"></header>
 
-<div class="bar">
-  <div class="grp" id="views" role="group" aria-label="Ansicht">
-    <b>Ansicht</b>
-    <button class="tw" type="button" data-v="tribes" aria-pressed="true">Stämme</button>
-    <button class="tw" type="button" data-v="d1h">Punktezuwachs 1 h</button>
-    <button class="tw" type="button" data-v="d12h">Punktezuwachs 12 h</button>
-    <button class="tw" type="button" data-v="d24h">Punktezuwachs 24 h</button>
-    <button class="tw" type="button" data-v="d7d">Punktezuwachs 7 Tage</button>
+<!-- Eine einzige Auswahl für die Dorffarbe: alle Knöpfe gehören zu einer Gruppe, genau einer ist gedrückt.
+     Der Farbstreifen unter jedem Knopf zeigt die Skala, die er auf die Karte legt. -->
+<div class="bar vbar" id="views" role="group" aria-label="Dorffarbe nach">
+  <span class="vhead">Dorffarbe<br>nach</span>
+  <div class="vcat"><b>Stamm</b>
+    <div class="seg"><span class="opt"><button class="tw" type="button" data-v="tribes" aria-pressed="true">Stämme</button><i class="scale" data-scale="tribes"></i></span></div>
   </div>
+  <div class="vcat"><b>Punktezuwachs</b>
+    <div class="seg">
+      <span class="opt"><button class="tw" type="button" data-v="d1h">1 h</button><i class="scale" data-scale="growth"></i></span>
+      <span class="opt"><button class="tw" type="button" data-v="d12h">12 h</button><i class="scale" data-scale="growth"></i></span>
+      <span class="opt"><button class="tw" type="button" data-v="d24h">24 h</button><i class="scale" data-scale="growth"></i></span>
+      <span class="opt"><button class="tw" type="button" data-v="d7d">7 Tage</button><i class="scale" data-scale="growth"></i></span>
+    </div>
+  </div>
+  <div class="vcat"><b>Besiegte Gegner</b>
+    <div class="seg">
+      <span class="opt"><button class="tw" type="button" data-v="bash_all">Gesamt</button><i class="scale" data-scale="bash_all"></i></span>
+    </div>
+    <div class="seg">
+      <span class="opt"><button class="tw" type="button" data-v="bash_att">Off</button><i class="scale" data-scale="bash_att"></i></span>
+      <span class="opt"><button class="tw neu" type="button" data-v="bash_att_new">+ 24 h</button><i class="scale" data-scale="bash_att"></i></span>
+    </div>
+    <div class="seg">
+      <span class="opt"><button class="tw" type="button" data-v="bash_def">Deff</button><i class="scale" data-scale="bash_def"></i></span>
+      <span class="opt"><button class="tw neu" type="button" data-v="bash_def_new">+ 24 h</button><i class="scale" data-scale="bash_def"></i></span>
+    </div>
+    <div class="seg">
+      <span class="opt"><button class="tw" type="button" data-v="bash_sup">Unterstützt</button><i class="scale" data-scale="bash_sup"></i></span>
+      <span class="opt"><button class="tw neu" type="button" data-v="bash_sup_new">+ 24 h</button><i class="scale" data-scale="bash_sup"></i></span>
+    </div>
+  </div>
+  <div class="vcat"><b>An einem Tag · Weltrang</b>
+    <div class="seg">
+      <span class="opt"><button class="tw" type="button" data-v="loot_res">Rohst. geplündert</button><i class="scale" data-scale="rank"></i></span>
+      <span class="opt"><button class="tw" type="button" data-v="scavenge">Rohst. gesammelt</button><i class="scale" data-scale="rank"></i></span>
+      <span class="opt"><button class="tw" type="button" data-v="loot_vil">Dörfer geplündert</button><i class="scale" data-scale="rank"></i></span>
+    </div>
+  </div>
+</div>
+
+<div class="bar">
   <div class="grp" id="shape" role="group" aria-label="Darstellung">
     <b>Dörfer</b>
     <button class="tw" type="button" data-shape="quad" aria-pressed="true">Quadrate</button>
     <button class="tw" type="button" data-shape="village">Dorfbilder</button>
   </div>
-  <div class="grp" id="views3" role="group" aria-label="Besiegte Gegner">
-    <b>Besiegte Gegner</b>
-    <button class="tw" type="button" data-v="bash_all">gesamt</button>
-    <button class="tw" type="button" data-v="bash_new">dazugekommen</button>
-  </div>
-  <div class="grp" id="views2" role="group" aria-label="Ranglisten An einem Tag">
-    <b>An einem Tag</b>
-    <button class="tw" type="button" data-v="loot_res">Rohstoffe geplündert</button>
-    <button class="tw" type="button" data-v="scavenge">Rohstoffe gesammelt</button>
-    <button class="tw" type="button" data-v="loot_vil">Dörfer geplündert</button>
-  </div>
-</div>
-
-<div class="bar">
   <form class="search" id="searchform" role="search" autocomplete="off">
     <input id="q" type="search" placeholder="500|500, Spieler oder Stamm" aria-label="Suche nach Koordinate, Spieler oder Stamm"
            aria-expanded="false" aria-controls="sugg">
@@ -128,7 +175,7 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
     <details class="legend" id="legend" hidden open>
       <summary id="legend-title">Legende</summary>
       <ul id="legend-items"></ul>
-      <p class="arrows" id="legend-arrows"></p>
+      <ul class="keys" id="legend-keys"></ul>
     </details>
     <div class="zoom">
       <button type="button" id="zin" title="Näher" aria-label="Näher">+</button>
@@ -156,12 +203,31 @@ const EXTRA_COLORS=["#ffffff","#000000","#ff3d00","#76ff03","#18ffff","#f50057",
 const GROWTH_COLORS=["#fff59d","#ffeb3b","#c6ff00","#76ff03","#00e676"];
 const STEPS={ d1h:[1,2,3,5], d12h:[3,6,10,18], d24h:[5,10,15,25], d7d:[10,20,35,60] };
 const VIEW_LABEL={ d1h:"1 Stunde", d12h:"12 Stunden", d24h:"24 Stunden", d7d:"7 Tage" };
-// Besiegte Gegner. Grau heißt keine, danach gelb über orange nach grün, weil es keine negativen Werte gibt.
-// Stufen aus der Verteilung vom 12.09.2026: 58 % der Spieler haben null, p90 liegt bei 3.108.
-const BASH_STEPS=[500,2500,10000,30000];
-const BASH_NEW_STEPS=[100,1000,5000,20000];
-const BASH_COLORS=["#ffe066","#ffa726","#c6ff00","#76ff03","#00e676"];
-const isBash = v => v==="bash_all" || v==="bash_new";
+// Besiegte Gegner. Grau heißt keine, danach von grün (wenig) zur Farbe der Art (viel):
+// Off nach tiefrot, Deff nach tiefblau, Unterstützung nach tiefviolett, Gesamt nach dunkelbraun.
+// Stufen je Art aus der Verteilung vom 15.09.2026 (Spieler mit Wert > 0), grob bei p50, p75, p90, p97:
+//   Off gesamt 1.491 / 7.158 / 18.196 / 35.733, dazu in 24 h 273 / 2.015 / 6.346 / 14.795
+//   Deff gesamt 418 / 1.795 / 5.505 / 16.193,   dazu in 24 h 143 / 642 / 4.260 / 17.211
+//   Unt. gesamt 934 / 3.201 / 7.922 / 15.335,   dazu in 24 h 203 / 1.812 / 5.048 / 10.796
+const BASH_PALETTE={
+  all:["#76ff03","#ffee58","#ffa000","#a0522d","#4e2a0a"],
+  att:["#76ff03","#ffea00","#ff9100","#e53935","#7f0000"],
+  def:["#76ff03","#1de9b6","#00b0ff","#2962ff","#0a1a80"],
+  sup:["#76ff03","#f48fb1","#e040fb","#9c27b0","#3d0066"]
+};
+const BASH_ART={ all:"insgesamt", att:"als Angreifer (Off)", def:"als Verteidiger (Deff)", sup:"als Unterstützer" };
+const BASH={
+  bash_all:    { art:"all", neu:false, steps:[500,2500,10000,30000] },
+  bash_att:    { art:"att", neu:false, steps:[1500,7000,18000,35000] },
+  bash_att_new:{ art:"att", neu:true,  steps:[300,2000,6000,15000] },
+  bash_def:    { art:"def", neu:false, steps:[500,2000,5500,16000] },
+  bash_def_new:{ art:"def", neu:true,  steps:[150,700,4000,15000] },
+  bash_sup:    { art:"sup", neu:false, steps:[1000,3000,8000,15000] },
+  bash_sup_new:{ art:"sup", neu:true,  steps:[200,1800,5000,10000] }
+};
+const isBash = v => !!BASH[v];
+// Gekreuzte Äxte am Dorf: in der letzten Stunde (ersatzweise 12) mehr als so viele besiegte Gegner dazu
+const AXE_STEPS=[1000,5000];
 // Ausbaustufen wie im Hilfe-Wiki: 26 bis 299, 300 bis 999, 1.000 bis 2.999, 3.000 bis 8.999,
 // 9.000 bis 10.999, ab 11.000. Die Zeichnung ist eine eigene, schlichte Nachbildung.
 const STAGE_STEPS=[300,1000,3000,9000,11000];
@@ -193,7 +259,7 @@ const wrap=$("mapwrap"), tip=$("tip");
 let W=0, H=0, dpr=1;
 let V=null, P=null, A=null, T=null;
 let N=0, vx=null, vy=null, vp=null, vpts=null, vb=null, vname=null, byXY=null;
-let pIdx={}, allyOf=null, growth={}, arrowOf=null, bashOf=null, bashNewOf=null, refs={}, tagOf=new Map(), allyById=new Map();
+let pIdx={}, allyOf=null, growth={}, arrowOf=null, bashNewOf=null, refs={}, tagOf=new Map(), allyById=new Map();
 let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
 let inaday=new Map();                                      // player_id -> {typ: {rank, value, date}}
 let rankOf={};                                             // Spielerzeile -> Weltrang in der aktiven Rangliste
@@ -351,9 +417,37 @@ function drawVillage(cx2, cy2, r, farbe, stufe){
   }
 }
 
-/** Zeichen am Dorf: Bonusdorf, hoher Bestand an besiegten Gegnern, frisch dazugekommene.
-    Bewusst drei verschiedene Orte am Quadrat, damit sie sich nicht überlagern:
-    Bonus unten links, Bestand als Rahmen, frischer Zuwachs als Funke oben links. */
+/** Gekreuzte Äxte, Mittelpunkt (x,y), halbe Breite a. Auch in der Legende als SVG nachgebildet. */
+function drawAxes(c, x, y, a, big){
+  const s=Math.SQRT1_2, h=a*0.62;
+  c.lineCap="round";
+  for(const dir of [1,-1]){
+    // Stiel von unten nach oben außen, Klinge am oberen Ende nach außen
+    const ux=dir*s, uy=-s, nx=dir*s, ny=s;
+    const ex=x+ux*a*0.8, ey=y+uy*a*0.8;
+    c.strokeStyle="rgba(0,0,0,.8)"; c.lineWidth=Math.max(1.6, a*0.34);
+    c.beginPath(); c.moveTo(x-ux*a, y-uy*a); c.lineTo(ex, ey); c.stroke();
+    c.strokeStyle="#8d5a2b"; c.lineWidth=Math.max(0.9, a*0.18);
+    c.beginPath(); c.moveTo(x-ux*a, y-uy*a); c.lineTo(ex, ey); c.stroke();
+    c.beginPath();
+    c.moveTo(ex+ux*h*0.25, ey+uy*h*0.25);
+    c.lineTo(ex+nx*h+ux*h*0.55, ey+ny*h+uy*h*0.55);
+    c.lineTo(ex+nx*h-ux*h*0.75, ey+ny*h-uy*h*0.75);
+    c.lineTo(ex-ux*h*0.55, ey-uy*h*0.55);
+    c.closePath();
+    c.fillStyle = big? "#ffffff" : "#d7dde0"; c.fill();
+    c.strokeStyle="rgba(0,0,0,.8)"; c.lineWidth=Math.max(0.8, a*0.12); c.stroke();
+  }
+}
+
+// Dasselbe Symbol als kleines Bild für Legende und Knöpfe
+const AXES_SVG=(()=>{ const c=document.createElement("canvas"); c.width=c.height=32;
+  drawAxes(c.getContext("2d"), 16, 17, 10.5, true); return "<img alt='' src='"+c.toDataURL()+"'>"; })();
+const windowText = k => k==="24h"? "24 Stunden" : k==="12h"? "12 Stunden" : k==="1h"? "einer Stunde" : "";
+
+/** Zeichen am Dorf: Bonusdorf und frisch besiegte Gegner. Die Menge besiegter Gegner steckt nur
+    in der Dorffarbe der Ansichten "Besiegte Gegner", nicht zusätzlich als Rahmen.
+    Bonus als Raute unten links, Kampf als gekreuzte Äxte oben links. */
 function drawMarks(x0,x1,y0,y1,size){
   const off=(scale-size)/2;
   const r=Math.max(1.6, Math.min(3.4, scale*0.19));
@@ -368,21 +462,10 @@ function drawMarks(x0,x1,y0,y1,size){
       ctx.moveTo(cx2, cy2-r); ctx.lineTo(cx2+r, cy2); ctx.lineTo(cx2, cy2+r); ctx.lineTo(cx2-r, cy2);
       ctx.closePath(); ctx.fill(); if(r>=2.4) ctx.stroke();
     }
-    const b=bashOf? bashOf[i] : 0;
-    if(b){                                       // viele besiegte Gegner: leuchtender Rahmen
-      ctx.strokeStyle = b>=3? "#ff3d00" : "#ffb300";
-      ctx.lineWidth = b>=3? 2 : 1.5;
-      ctx.strokeRect(bx-1, by-1, size+2, size+2);
-    }
     const n=bashNewOf? bashNewOf[i] : 0;
-    if(n>=2){                                    // frisch dazugekommen: Funke oben links
-      const fx=bx-1, fy=by-1, a=Math.max(2.2, Math.min(4.5, scale*0.26));
-      ctx.fillStyle = n>=3? "#ffffff" : "#ffd54f";
-      ctx.beginPath();
-      ctx.moveTo(fx, fy-a); ctx.lineTo(fx+a*0.32, fy-a*0.32); ctx.lineTo(fx+a, fy);
-      ctx.lineTo(fx+a*0.32, fy+a*0.32); ctx.lineTo(fx, fy+a); ctx.lineTo(fx-a*0.32, fy+a*0.32);
-      ctx.lineTo(fx-a, fy); ctx.lineTo(fx-a*0.32, fy-a*0.32);
-      ctx.closePath(); ctx.fill();
+    if(n){                                       // hier wurde gekämpft: gekreuzte Äxte oben links
+      const a=Math.max(3.2, Math.min(7.5, scale*0.36)) * (n>=2? 1.2 : 1);
+      drawAxes(ctx, bx+a*0.3, by+a*0.3, a, n>=2);
     }
   }
 }
@@ -481,28 +564,25 @@ function arrowWindow(){
   return refs["24h"]? "24h" : (refs["12h"]? "12h" : null);
 }
 function computeArrows(){
-  arrowOf=new Int8Array(N); bashOf=new Int8Array(N); bashNewOf=new Int8Array(N);
+  arrowOf=new Int8Array(N); bashNewOf=new Int8Array(N);
   if(!P) return;
   const key=arrowWindow();
-  const lvl=new Int8Array(P.rows.length), bl=new Int8Array(P.rows.length), bn=new Int8Array(P.rows.length);
+  const lvl=new Int8Array(P.rows.length), bn=new Int8Array(P.rows.length);
   const bashKey=refs["1h"]? "1h" : (refs["12h"]? "12h" : null);
   P.rows.forEach((r,i)=>{
     if(key){
       const e=STEPS["d"+key], g=pct(r,key);
       if(g!=null) lvl[i] = g>e[3]? 3 : g>e[2]? 2 : g>e[1]? 1 : g<-e[3]? -3 : g<-e[2]? -2 : g<-e[1]? -1 : 0;
     }
-    // Zeichen für besiegte Gegner: gesamt ab der oberen Spitze, frischer Zuwachs immer
-    const all=r[pIdx.all]||0;
-    bl[i] = all>BASH_STEPS[3]? 3 : all>BASH_STEPS[2]? 2 : 0;
+    // Zeichen für frisch besiegte Gegner (Äxte)
     if(bashKey){
       const d=(r[pIdx["d"+bashKey+"_att"]]||0)+(r[pIdx["d"+bashKey+"_def"]]||0)+(r[pIdx["d"+bashKey+"_sup"]]||0);
-      bn[i] = d>BASH_NEW_STEPS[2]? 3 : d>BASH_NEW_STEPS[1]? 2 : d>0? 1 : 0;
+      bn[i] = d>AXE_STEPS[1]? 2 : d>AXE_STEPS[0]? 1 : 0;
     }
   });
   for(let i=0;i<N;i++){
     const p=vp[i];
     arrowOf[i]= p>=0? lvl[p] : 0;
-    bashOf[i]= p>=0? bl[p] : 0;
     bashNewOf[i]= p>=0? bn[p] : 0;
   }
 }
@@ -521,12 +601,11 @@ function computeGrowth(){
 // Die Kampfwerte kommen gebündelt etwa alle drei Stunden. Ein Stundenfenster wäre meist leer,
 // deshalb rechnet der Zuwachs über 24 Stunden, ersatzweise 12.
 function bashWindow(){ return refs["24h"]? "24h" : (refs["12h"]? "12h" : (refs["1h"]? "1h" : null)); }
-function bashValue(p){
-  const r=P.rows[p];
-  if(view==="bash_all") return r[pIdx.all]||0;
+function bashValue(p, v){
+  const r=P.rows[p], cfg=BASH[v||view];
+  if(!cfg.neu) return r[pIdx[cfg.art]]||0;
   const k=bashWindow();
-  if(!k) return 0;
-  return (r[pIdx["d"+k+"_att"]]||0)+(r[pIdx["d"+k+"_def"]]||0)+(r[pIdx["d"+k+"_sup"]]||0);
+  return k? (r[pIdx["d"+k+"_"+cfg.art]]||0) : 0;
 }
 function tribeColorOf(id){ return marks.get(id) || tribeColor.get(id); }
 function buildBuckets(){
@@ -548,14 +627,14 @@ function buildBuckets(){
       push(RANK_COLORS[s], i);
     }
   } else if(isBash(view)){
-    const steps = view==="bash_all"? BASH_STEPS : BASH_NEW_STEPS;
+    const cfg=BASH[view], colors=BASH_PALETTE[cfg.art];
     for(let i=0;i<N;i++){
       const p=vp[i];
       if(p<0){ push(C_BARB, i); continue; }
       const v=bashValue(p);
       if(!v){ push(C_NONE, i); continue; }
-      let s=0; while(s<steps.length && v>steps[s]) s++;
-      push(BASH_COLORS[s], i);
+      let s=0; while(s<cfg.steps.length && v>cfg.steps[s]) s++;
+      push(colors[s], i);
     }
   } else {
     const edges=STEPS[view];
@@ -569,7 +648,7 @@ function buildBuckets(){
       push(GROWTH_COLORS[s], i);
     }
   }
-  const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...GROWTH_COLORS,...BASH_COLORS,...RANK_COLORS.slice().reverse(),C_LOSS,
+  const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...GROWTH_COLORS,...Object.values(BASH_PALETTE).flat(),...RANK_COLORS.slice().reverse(),C_LOSS,
                ...TRIBE_COLORS,C_TRACKED,...EXTRA_COLORS];
   const keys=[...map.keys()].sort((a,b)=>{
     const ia=order.indexOf(a), ib=order.indexOf(b);
@@ -590,15 +669,13 @@ function renderLegend(){
     tribeList.forEach(a=>{ if(!marks.has(a[0]) && !(T.tribe_ids||[]).includes(a[0])) add(tribeColor.get(a[0]), a[2]||a[1]); });
     add(C_OTHER,"übrige Spieler"); add(C_BARB,"Barbaren"); add(C_BONUS,"Bonusdörfer");
   } else if(isBash(view)){
-    const steps = view==="bash_all"? BASH_STEPS : BASH_NEW_STEPS;
-    const bw=bashWindow();
-    const fenster = bw==="24h"? "24 Stunden" : bw==="12h"? "12 Stunden" : bw==="1h"? "Stunde" : "";
-    $("legend-title").textContent = view==="bash_all"
-      ? "Besiegte Gegner insgesamt" : "Besiegte Gegner in den letzten "+fenster;
+    const cfg=BASH[view], steps=cfg.steps, colors=BASH_PALETTE[cfg.art];
+    $("legend-title").textContent = "Besiegte Gegner "+BASH_ART[cfg.art]
+      + (cfg.neu? ", dazugekommen in "+windowText(bashWindow()) : ", Stand jetzt");
     add(C_NONE,"keine");
-    add(BASH_COLORS[0],"bis "+nf.format(steps[0]));
-    for(let s=1;s<steps.length;s++) add(BASH_COLORS[s], "über "+nf.format(steps[s-1])+" bis "+nf.format(steps[s]));
-    add(BASH_COLORS[steps.length],"über "+nf.format(steps[steps.length-1]));
+    add(colors[0],"bis "+nf.format(steps[0]));
+    for(let s=1;s<steps.length;s++) add(colors[s], "bis "+nf.format(steps[s]));
+    add(colors[steps.length],"über "+nf.format(steps[steps.length-1]));
     add(C_BARB,"Barbaren");
   } else if(isRank(view)){
     const n=deepCounts[view] || [...inaday.values()].filter(e=>e[view]).length;
@@ -616,15 +693,21 @@ function renderLegend(){
     add(GROWTH_COLORS[e.length],"über "+e[e.length-1]+" %");
     add(C_BARB,"Barbaren");
   }
+  // Zeichen am Dorf, je eine Zeile mit Symbol
   const key=arrowWindow(), e=key? STEPS["d"+key] : null;
-  const teile=[];
-  teile.push(key
-    ? "Pfeile rechts oben, Punktezuwachs über "+VIEW_LABEL["d"+key]+": <b>&#9650;</b> ab "+e[1]+" %, <b>&#9650;&#9650;</b> ab "+e[2]
-      +" %, <b>&#9650;&#9650;&#9650;</b> ab "+e[3]+" %, <u>&#9660;</u> entsprechend bei Verlust."
-    : "Pfeile für den Punktezuwachs erscheinen ab zwölf Stunden Historie.");
-  teile.push("Rahmen um das Dorf: viele besiegte Gegner (gelb ab "+nf.format(BASH_STEPS[2])
-    +", rot ab "+nf.format(BASH_STEPS[3])+"). Funke links oben: zuletzt dazugekommen. Raute links unten: Bonusdorf.");
-  $("legend-arrows").innerHTML = teile.join(" ") + " Zeichen erscheinen ab mittlerem Zoom.";
+  const axeKey=refs["1h"]? "1h" : (refs["12h"]? "12h" : null);
+  const keys=$("legend-keys"); keys.replaceChildren();
+  const zeile=(sym, html)=>{ const li=document.createElement("li"); const s=document.createElement("span");
+    s.className="sym"; s.innerHTML=sym; const t=document.createElement("span"); t.innerHTML=html;
+    li.append(s,t); keys.appendChild(li); };
+  zeile("<b>&#9650;</b><u>&#9660;</u>", key
+    ? "Rechts oben: Punktezuwachs über "+VIEW_LABEL["d"+key]+", ein Pfeil ab "+e[1]+" %, zwei ab "+e[2]+" %, drei ab "+e[3]+" %"
+    : "Pfeile für den Punktezuwachs erscheinen ab zwölf Stunden Historie");
+  if(axeKey) zeile(AXES_SVG, "Links oben: hier wurde gekämpft, über "+nf.format(AXE_STEPS[0])+" besiegte Gegner in "
+    +windowText(axeKey)+" dazu (hell ab "+nf.format(AXE_STEPS[1])+")");
+  zeile("<i class='raute'></i>", "Links unten: Bonusdorf");
+  const hint=document.createElement("li"); hint.className="hint"; hint.textContent="Zeichen erscheinen ab mittlerem Zoom.";
+  keys.appendChild(hint);
   const box=$("legend");
   if(box.hidden){ box.hidden=false; box.open = wrap.clientWidth>=560; }  // auf schmalen Schirmen zugeklappt
 }
@@ -650,7 +733,7 @@ let deepCounts={};
 
 function setView(v){
   view=v;
-  document.querySelectorAll("#views button, #views2 button, #views3 button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
+  document.querySelectorAll("#views button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
   const apply=()=>{ computeGrowth(); computeArrows(); buildBuckets(); renderLegend(); draw(); saveUrl(); };
   if(isRank(v) && !deepLoaded){
     $("stand").textContent="Lade vollständige Rangliste …";
@@ -715,13 +798,11 @@ function showTip(i, px, py){
     });
     tsec("Besiegte Gegner");
     trow("Gesamt", nf.format(r[pIdx.all]), null, view==="bash_all");
-    if(view==="bash_new"){
-      const k=bashWindow();
-      if(k) trow("Dazugekommen "+k.replace("h"," h"), nf.format(bashValue(p)), null, true);
-    }
-    trow("Angriff", nf.format(r[pIdx.att]));
-    trow("Verteidigung", nf.format(r[pIdx.def]));
-    trow("Unterstützung", nf.format(r[pIdx.sup]));
+    const bw=bashWindow();
+    [["att","Angriff (Off)"],["def","Verteidigung (Deff)"],["sup","Unterstützung"]].forEach(([art,label])=>{
+      trow(label, nf.format(r[pIdx[art]]), null, view==="bash_"+art);
+      if(view==="bash_"+art+"_new" && bw) trow(label+" + "+bw.replace("h"," h"), "+"+nf.format(bashValue(p)), null, true);
+    });
     const e=inaday.get(r[pIdx.id]);
     // Ist die Karte nach einer Bestwert-Kategorie eingefärbt, erscheint deren Zeile immer, notfalls
     // als "kein Wert erfasst", damit sichtbar bleibt, warum das Dorf grau ist.
@@ -907,21 +988,38 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   tribeList=[...A.rows].filter(a=>!tracked.has(a[0])).sort((a,b)=>b[5]-a[5]).slice(0, TRIBE_COLORS.length);
   tribeList.forEach((a,i)=>tribeColor.set(a[0], TRIBE_COLORS[i]));
 
-  document.querySelectorAll("#views button").forEach(b=>{
-    const v=b.dataset.v;
-    if(v!=="tribes" && !refs[v.slice(1)]){ b.disabled=true; b.title="Noch kein Vergleichsstand für dieses Zeitfenster"; }
-  });
   const rankCount={};
   inaday.forEach(e=>{ for(const t in e) rankCount[t]=(rankCount[t]||0)+1; });
-  document.querySelectorAll("#views2 button").forEach(b=>{
-    const n=rankCount[b.dataset.v]||0;
-    b.title = n? n+" Spieler mit erfasstem Wert (vollständige Liste wird beim Umschalten geladen)"
-               : "Wird beim Umschalten geladen, falls schon ein Durchgang gelaufen ist";
+  const bw=bashWindow();
+  document.querySelectorAll("#views button").forEach(b=>{
+    const v=b.dataset.v;
+    if(isGrowth(v)){
+      b.title="Punktezuwachs über "+VIEW_LABEL[v];
+      if(!refs[v.slice(1)]){ b.disabled=true; b.title="Noch kein Vergleichsstand für dieses Zeitfenster"; }
+    } else if(isBash(v)){
+      const cfg=BASH[v];
+      b.title="Besiegte Gegner "+BASH_ART[cfg.art]+(cfg.neu? ", dazugekommen in "+windowText(bw) : ", Stand jetzt");
+      if(cfg.neu){
+        if(bw) b.textContent="+ "+bw.replace("h"," h");
+        else { b.disabled=true; b.title="Noch kein Vergleichsstand"; }
+      }
+    } else if(isRank(v)){
+      const n=rankCount[v]||0;
+      b.title = INADAY_LABEL[v]+": "+(n? n+" Spieler mit erfasstem Wert (vollständige Liste wird beim Umschalten geladen)"
+                 : "wird beim Umschalten geladen, falls schon ein Durchgang gelaufen ist");
+    }
   });
+  // Farbstreifen unter den Knöpfen aus denselben Paletten wie die Karte
+  const verlauf = cs => "linear-gradient(90deg,"+cs.join(",")+")";
+  const streifen={ tribes:"linear-gradient(90deg,"+TRIBE_COLORS.slice(0,6).map((c,i)=>c+" "+(i*100/6)+"% "+((i+1)*100/6)+"%").join(",")+")",
+    growth:verlauf(GROWTH_COLORS), rank:verlauf(RANK_COLORS.slice(0,5).reverse()) };
+  for(const art in BASH_PALETTE) streifen["bash_"+art]=verlauf(BASH_PALETTE[art]);
+  document.querySelectorAll("#views .scale").forEach(s=>{ s.style.background=streifen[s.dataset.scale]||"none"; });
 
   if(readUrl()) ownView();
   resize();
   if(isGrowth(view) && !refs[view.slice(1)]) view="tribes";
+  if(isBash(view) && BASH[view].neu && !bashWindow()) view="tribes";
   renderMarks();
   setView(view);
   initDone=true;
@@ -954,7 +1052,7 @@ document.getElementById("shape").addEventListener("click", e=>{
   document.querySelectorAll("#shape button").forEach(x=>x.setAttribute("aria-pressed", String(x.dataset.shape===shape)));
   draw();
 });
-document.querySelectorAll("#views, #views2, #views3").forEach(g=>g.addEventListener("click", e=>{
+document.querySelectorAll("#views").forEach(g=>g.addEventListener("click", e=>{
   const b=e.target.closest("button"); if(b && !b.disabled) setView(b.dataset.v);
 }));
 $("searchform").addEventListener("submit", e=>{ e.preventDefault(); $("sugg").hidden=true; search($("q").value); });
