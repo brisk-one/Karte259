@@ -4,14 +4,15 @@ Laufzeit = Entfernung in Feldern × Minuten je Feld. Die Minuten je Feld stehen 
 werden durch Weltgeschwindigkeit × Einheitengeschwindigkeit geteilt (auf Welt 259 ist dieses Produkt
 1,6 × 0,625 = 1,0, dort sind beide Lesarten deshalb gleich). Die Reihenfolge ist die des Spiels.
 """
+# Miliz bleibt außen vor: sie verlässt das Dorf nie, ihre Angabe in get_unit_info ist keine Laufgeschwindigkeit
 ORDER = ["spear", "sword", "axe", "archer", "spy", "light", "marcher", "heavy", "ram", "catapult",
-         "knight", "snob", "militia"]
+         "knight", "snob"]
 NAMES = {"spear": "Speerträger", "sword": "Schwertkämpfer", "axe": "Axtkämpfer", "archer": "Bogenschütze",
          "spy": "Späher", "light": "Leichte Kavallerie", "marcher": "Berittener Bogenschütze",
          "heavy": "Schwere Kavallerie", "ram": "Rammbock", "catapult": "Katapult", "knight": "Paladin",
          "snob": "Adelsgeschlecht", "militia": "Miliz"}
 # Einheiten, die es nur bei passender Welteinstellung gibt
-NEEDS = {"archer": "game.archer", "marcher": "game.archer", "knight": "game.knight", "militia": "game.militia"}
+NEEDS = {"archer": "game.archer", "marcher": "game.archer", "knight": "game.knight"}
 
 
 def _num(value, default=None):

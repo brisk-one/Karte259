@@ -80,6 +80,31 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .legend .keys .axe img{width:21px; height:21px}
 .legend .keys .raute{width:8px; height:8px; background:#f2d16b; border:1px solid rgba(0,0,0,.65); transform:rotate(45deg)}
 .legend .keys .hint{color:var(--muted); font-size:10.5px; padding-left:27px}
+/* Laufzeiten zwischen zwei angeklickten Dörfern, Aufbau wie die Legende */
+.dist{background:var(--panel-solid); border:1px solid var(--edge); border-radius:var(--radius);
+  box-shadow:0 2px 8px rgba(0,0,0,.4); font-size:11.5px; max-width:min(420px,93vw); pointer-events:auto}
+.dist summary{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--head-ink); background:var(--head); border-bottom:1px solid var(--edge-soft);
+  padding:3px 8px; cursor:pointer; list-style-position:inside}
+.dist:not([open]) summary{border-bottom:0}
+.dist .dbody{padding:5px 8px 6px; max-height:min(52vh,420px); overflow:auto}
+.dist .pair{display:flex; flex-wrap:wrap; gap:2px 10px; align-items:baseline; margin-bottom:4px}
+.dist .pair b{font-weight:700}
+.dist .pair .co{color:var(--muted)}
+.dist .fields{font-weight:700; color:var(--accent-ink); background:var(--btn-on); border:1px solid var(--edge);
+  border-radius:var(--radius); padding:0 5px}
+.dist table{width:100%; border-collapse:collapse; font-size:11.5px}
+.dist th,.dist td{padding:1.5px 5px; text-align:right; white-space:nowrap}
+.dist th{font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700;
+  border-bottom:1px solid var(--edge-line); background:none}
+.dist td:first-child,.dist th:first-child{text-align:left; white-space:normal}
+.dist tbody tr:nth-child(even){background:var(--row-alt)}
+.dist tbody tr.slow td{border-top:1px solid var(--edge-line)}
+.dist .u{display:inline-block}
+.dist .t{font-variant-numeric:tabular-nums; font-weight:700}
+.dist .arr{font-variant-numeric:tabular-nums; color:var(--ink-2)}
+.dist .moon{color:#6f8fd0}
+.dist .note{color:var(--muted); font-size:10.5px; margin:5px 0 0; line-height:1.35}
 .zoom{display:flex; gap:5px; pointer-events:auto}
 .zoom button{font:inherit; font-weight:700; font-size:15px; width:32px; height:32px; cursor:pointer;
   background:var(--btn); color:var(--ink); border:1px solid var(--edge); border-radius:var(--radius);
@@ -107,7 +132,8 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .tip .row.cur .k::before{content:"▶ "; font-size:.8em}
 .msg{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
   color:var(--ink); background:var(--panel-solid); opacity:.94; font-size:13px; padding:24px; z-index:4}
-@media (max-width:640px){ .stand{width:100%; text-align:left; margin-left:0} .legend{font-size:11px} }
+@media (max-width:640px){ .stand{width:100%; text-align:left; margin-left:0} .legend{font-size:11px}
+  .dist .dbody{max-height:34vh} .dist .note{display:none} }
 </style>
 </head>
 <body>
@@ -186,6 +212,10 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
       <summary id="legend-title">Legende</summary>
       <ul id="legend-items"></ul>
       <ul class="keys" id="legend-keys"></ul>
+    </details>
+    <details class="dist" id="dist" hidden open>
+      <summary id="dist-title">Laufzeit</summary>
+      <div class="dbody" id="dist-body"></div>
     </details>
     <div class="zoom">
       <button type="button" id="zin" title="Näher" aria-label="Näher">+</button>
@@ -270,7 +300,8 @@ const cv=$("c"), ctx=cv.getContext("2d", {alpha:false});
 const ov=$("ov"), octx=ov.getContext("2d");
 const wrap=$("mapwrap"), tip=$("tip");
 let W=0, H=0, dpr=1;
-let V=null, P=null, A=null, T=null;
+let V=null, P=null, A=null, T=null, UNITS=null;
+const dtfTag=new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin", weekday:"short", day:"2-digit", month:"2-digit"});
 let N=0, vx=null, vy=null, vp=null, vpts=null, vb=null, vname=null, byXY=null;
 let pIdx={}, allyOf=null, growth={}, arrowOf=null, bashNewOf=null, refs={}, tagOf=new Map(), allyById=new Map();
 let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
@@ -553,6 +584,29 @@ function drawOverlay(){
       const x=vx[i], y=vy[i]; if(x<x0||x>x1||y<y0||y>y1) continue;
       octx.strokeRect(sx(x)+off-1.5, sy(y)+off-1.5, size+3, size+3);
     }
+  }
+  if(selA>=0){
+    const punkte=[[selA,"A"]].concat(selB>=0? [[selB,"B"]] : []);
+    const mitte=i=>[sx(vx[i])+off+size/2, sy(vy[i])+off+size/2];
+    if(selB>=0){
+      const [ax,ay]=mitte(selA), [bx2,by2]=mitte(selB);
+      octx.setLineDash([6,4]); octx.lineWidth=3; octx.strokeStyle="rgba(0,0,0,.55)";
+      octx.beginPath(); octx.moveTo(ax,ay); octx.lineTo(bx2,by2); octx.stroke();
+      octx.lineWidth=1.5; octx.strokeStyle="#ffd54a";
+      octx.beginPath(); octx.moveTo(ax,ay); octx.lineTo(bx2,by2); octx.stroke();
+      octx.setLineDash([]);
+    }
+    punkte.forEach(([i,label])=>{
+      const bx2=sx(vx[i])+off, by2=sy(vy[i])+off, s2=Math.max(size,4);
+      octx.strokeStyle="rgba(0,0,0,.65)"; octx.lineWidth=3.5;
+      octx.strokeRect(bx2-3, by2-3, s2+6, s2+6);
+      octx.strokeStyle="#ffd54a"; octx.lineWidth=2;
+      octx.strokeRect(bx2-3, by2-3, s2+6, s2+6);
+      octx.font="bold 12px system-ui, sans-serif"; octx.textAlign="center"; octx.textBaseline="bottom";
+      octx.lineWidth=3; octx.strokeStyle="rgba(0,0,0,.7)";
+      octx.strokeText(label, bx2+s2/2, by2-5); octx.fillStyle="#ffd54a";
+      octx.fillText(label, bx2+s2/2, by2-5);
+    });
   }
   if(hover>=0){
     const bx=sx(vx[hover])+off, by=sy(vy[hover])+off, s2=Math.max(size,4);
@@ -862,6 +916,102 @@ function showTip(i, px, py){
   tip.style.left=Math.max(4,left)+"px"; tip.style.top=Math.max(4,top)+"px";
 }
 
+/* ---------- Laufzeiten zwischen zwei Dörfern ----------
+   Erster Klick setzt das Startdorf, der zweite das Ziel. Jeder weitere Klick verschiebt nur das Ziel,
+   damit man von einem Dorf aus mehrere Ziele abmessen kann. Klick auf das Startdorf oder Escape hebt auf.
+   Laufzeit = Entfernung in Feldern × Minuten je Feld aus units.json (get_unit_info geteilt durch
+   Weltgeschwindigkeit × Einheitengeschwindigkeit). Einheiten mit gleicher Geschwindigkeit stehen in einer Zeile. */
+const UNIT_SHORT={spear:"Speer", sword:"Schwert", axe:"Axt", archer:"Bogen", spy:"Späher", light:"LKav",
+                  marcher:"BBogen", heavy:"SKav", ram:"Ramme", catapult:"Kata", knight:"Paladin",
+                  snob:"Adelsgeschlecht", militia:"Miliz"};
+let selA=-1, selB=-1, distTimer=0;
+
+function fieldsBetween(i,j){ return Math.hypot(vx[i]-vx[j], vy[i]-vy[j]); }
+function dauerText(min){
+  const s=Math.round(min*60), t=Math.floor(s/86400), r=s%86400;
+  const hh=String(Math.floor(r/3600)).padStart(2,"0"), mm=String(Math.floor(r%3600/60)).padStart(2,"0"),
+        ss=String(r%60).padStart(2,"0");
+  return (t? t+" d " : "")+hh+":"+mm+":"+ss;
+}
+function ankunft(min){
+  const d=new Date(Date.now()+min*60000);
+  const heute=new Date();
+  const tag=d.toDateString()===heute.toDateString()? "" : dtfTag.format(d)+" ";
+  return {text:tag+hmf.format(d)+" Uhr", nacht:inNight(d)};
+}
+function inNight(d){
+  const n=UNITS&&UNITS.night;
+  if(!n||!n.active||n.start_hour==null||n.end_hour==null) return false;
+  // Serverzeit ist Europe/Berlin, dieselbe Zeitzone wie die übrigen Anzeigen
+  // de-DE hängt " Uhr" an, deshalb parseInt statt +
+  const h=parseInt(new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin",hour:"2-digit",hour12:false}).format(d),10);
+  return n.start_hour<=n.end_hour ? (h>=n.start_hour && h<n.end_hour) : (h>=n.start_hour || h<n.end_hour);
+}
+function selectVillage(i){
+  if(i<0){ selA=-1; selB=-1; }
+  else if(selA<0) selA=i;
+  else if(i===selA){ selA=-1; selB=-1; }
+  else selB=i;
+  renderDist(); drawOverlay();
+}
+function renderDist(){
+  const box=$("dist"), body=$("dist-body");
+  if(selA<0){ box.hidden=true; body.replaceChildren(); return; }
+  box.hidden=false;
+  body.replaceChildren();
+  const name=i=>(vname[i]||"Dorf")+" ("+vx[i]+"|"+vy[i]+")";
+  const pair=el("div","pair");
+  pair.append(el("b",null,name(selA)));
+  if(selB>=0){
+    pair.append(el("span",null,"→"), el("b",null,name(selB)),
+                el("span","fields", nf1.format(fieldsBetween(selA,selB))+" Felder"));
+  }
+  body.appendChild(pair);
+  if(selB<0){
+    body.appendChild(el("p","note","Startdorf gewählt. Jetzt ein zweites Dorf anklicken, dann stehen hier die Laufzeiten aller Einheiten."));
+    $("dist-title").textContent="Laufzeit";
+    return;
+  }
+  const felder=fieldsBetween(selA,selB);
+  $("dist-title").textContent="Laufzeit · "+nf1.format(felder)+" Felder";
+  if(!UNITS || !UNITS.units || !UNITS.units.length){
+    body.appendChild(el("p","note","Die Einheitendaten fehlen noch. Der Sammler holt sie einmal je Woche von der Welt; danach stehen hier die Laufzeiten."));
+    return;
+  }
+  // Einheiten mit gleicher Geschwindigkeit zusammenfassen, schnellste zuerst
+  const gruppen=new Map();
+  UNITS.units.forEach(u=>{
+    const k=u.min_per_field.toFixed(4);
+    if(!gruppen.has(k)) gruppen.set(k,{min:u.min_per_field, namen:[], voll:[]});
+    const g=gruppen.get(k);
+    g.namen.push(UNIT_SHORT[u.id]||u.name); g.voll.push(u.name);
+  });
+  const reihen=[...gruppen.values()].sort((a,b)=>a.min-b.min);
+  const t=document.createElement("table");
+  const thead=document.createElement("thead"), hr=document.createElement("tr");
+  ["Einheiten","Laufzeit","Ankunft"].forEach(h=>{ const th=document.createElement("th"); th.textContent=h; hr.appendChild(th); });
+  thead.appendChild(hr); t.appendChild(thead);
+  const tb=document.createElement("tbody");
+  const langsamste=reihen[reihen.length-1];
+  reihen.forEach(g=>{
+    const min=felder*g.min, a=ankunft(min), tr=document.createElement("tr");
+    if(g===langsamste && reihen.length>1) tr.className="slow";
+    const c1=document.createElement("td");
+    c1.title=g.voll.join(", ")+" · "+nf1.format(g.min)+" Minuten je Feld";
+    c1.textContent=g.namen.join(", ");
+    const c2=document.createElement("td"); c2.className="t"; c2.textContent=dauerText(min);
+    const c3=document.createElement("td"); c3.className="arr"; c3.textContent=a.text;
+    if(a.nacht){ const m=el("span","moon"," ☾"); m.title="Ankunft im Nachtbonus"+(UNITS.night.def_factor? " (Verteidigung ×"+nf1.format(UNITS.night.def_factor)+")" : ""); c3.appendChild(m); }
+    tr.append(c1,c2,c3); tb.appendChild(tr);
+  });
+  t.appendChild(tb); body.appendChild(t);
+  const hinweise=["Abschickzeit jetzt, Rückweg dauert genauso lang.",
+                  "Ein Angriff ist so langsam wie seine langsamste Einheit (letzte Zeile).",
+                  "Klick auf ein weiteres Dorf setzt ein neues Ziel, Klick auf das Startdorf oder Escape hebt die Auswahl auf."];
+  if(UNITS.night && UNITS.night.active) hinweise.splice(1, 0, "☾ heißt Ankunft im Nachtbonus ("+UNITS.night.start_hour+" bis "+UNITS.night.end_hour+" Uhr).");
+  body.appendChild(el("p","note", hinweise.join(" ")));
+}
+
 /* ---------- Stamm markieren ---------- */
 function nextColor(){
   const used=new Set([...marks.values(), ...tribeColor.values()]);
@@ -1053,6 +1203,9 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   });
   document.querySelectorAll("#views .scale").forEach(s=>{ s.style.background=streifen[s.dataset.scale]||"none"; });
 
+  // Einheitendaten nur für die Laufzeiten, ihr Fehlen darf die Karte nicht aufhalten
+  load("units").then(u=>{ UNITS=u; if(selB>=0) renderDist(); }).catch(()=>{ /* noch kein Abruf gelaufen */ });
+
   if(readUrl()) ownView();
   labelBashButtons();
   resize();
@@ -1066,6 +1219,9 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   // Der Browser stellt den Zustand von <details> nach dem Laden wieder her, deshalb erst danach setzen
   requestAnimationFrame(()=>{ $("legend").open = wrap.clientWidth>=560; });
 })();
+
+// Die Ankunftszeiten hängen an der Uhr, deshalb minütlich neu rechnen, solange eine Strecke gewählt ist
+setInterval(()=>{ if(selA>=0 && selB>=0) renderDist(); }, 60000);
 
 function showStand(){
   if(!V) return;
@@ -1140,11 +1296,14 @@ function endPointer(e){
   if(pts.size<2) pinch=0;
   if(!dragging) return;
   dragging=false; wrap.classList.remove("drag");
-  if(moved<6 && e.pointerType!=="mouse"){
-    const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
-    const i=hit(px,py); hover=i; drawOverlay();
+  if(moved>=6) return;
+  const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+  const i=hit(px,py);
+  if(e.pointerType!=="mouse"){
+    hover=i;
     if(i>=0) showTip(i,px,py); else tip.style.display="none";
   }
+  selectVillage(i);           // zeichnet die Auswahl und füllt die Laufzeiten
 }
 wrap.addEventListener("pointerup", endPointer);
 wrap.addEventListener("pointercancel", endPointer);
@@ -1156,6 +1315,7 @@ wrap.addEventListener("wheel", e=>{
 }, {passive:false});
 
 document.addEventListener("keydown", e=>{
+  if(e.key==="Escape" && selA>=0){ selectVillage(-1); return; }
   if(e.target.tagName==="INPUT") return;
   const step=60/scale;
   if(e.key==="ArrowLeft") cx-=step;
