@@ -126,9 +126,13 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
             [nf.format(r[idx.villages]),"",r[idx.villages]],
             [nf.format(r[idx.all]),"",r[idx.all]],[nf.format(r[idx.att]),"",r[idx.att]],
             [nf.format(r[idx.def]),"",r[idx.def]],[nf.format(r[idx.sup]),"",r[idx.sup]]]
-      .concat(REK.map(([t])=>{
+      .concat(REK.map(([t,l])=>{
         const v=R[t];
-        return v? [nf.format(v.value)+" ", "", v.value] : ["–","na",null];
+        // Quickinfo: an welchem Tag der Bestwert erreicht wurde und auf welchem Weltrang er liegt
+        if(!v) return ["–","na",null];
+        const wann = v.date? "am "+fmtDay(v.date) : "Datum nicht erfasst";
+        return [nf.format(v.value)+" ", "", v.value,
+                l+": "+nf.format(v.value)+" "+wann+(v.rank? " · Weltrang "+nf.format(v.rank) : "")];
       }));
   }
   function winLabel(w){ return w==="7d"? "7 Tage" : w.replace("h"," h"); }

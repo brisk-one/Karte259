@@ -115,10 +115,11 @@ function table(cols, rows, opts) {
   const tb = el("tbody");
   rows.forEach(cells => {
     const tr = el("tr");
-    cells.forEach(([content, cls, sv]) => {
+    cells.forEach(([content, cls, sv, tip]) => {
       const td = el("td", cls || null);
       if (content instanceof Node) td.appendChild(content); else td.textContent = content;
       if (sv != null) td.dataset.v = sv;
+      if (tip) td.title = tip;                       // Quickinfo, z. B. Datum eines Bestwerts
       tr.appendChild(td);
     });
     tb.appendChild(tr);
