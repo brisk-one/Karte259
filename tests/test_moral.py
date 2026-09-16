@@ -20,9 +20,20 @@ class WorldConfig(unittest.TestCase):
         self.assertEqual(s["night.start_hour"], "23")
         self.assertEqual(moral.moral_type(s), 2)
 
-    def test_parse_ohne_moral_ist_fehler(self):
-        with self.assertRaises(ValueError):
-            worldconfig.parse(b"<config><speed>1</speed></config>")
+    def test_parse_einheiten(self):
+        s = worldconfig.parse(b"<config><spear><speed>18</speed><pop>1</pop></spear>"
+                              b"<snob><speed>35</speed></snob></config>")
+        self.assertEqual(s["spear.speed"], "18")
+        self.assertEqual(s["snob.speed"], "35")
+
+    def test_fehlende_pflichtfelder_sind_fehler(self):
+        alt = worldconfig.net.fetch
+        worldconfig.net.fetch = lambda *a, **k: (200, b"<config><speed>1</speed></config>", {})
+        try:
+            with self.assertRaises(ValueError):
+                worldconfig.update({}, datetime.now(timezone.utc))
+        finally:
+            worldconfig.net.fetch = alt
 
     def test_moraltyp_unbekannt(self):
         self.assertIsNone(moral.moral_type({}))

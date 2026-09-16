@@ -21,7 +21,7 @@ import subprocess
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from . import config, moral, net, store, world
+from . import config, moral, net, store, units, world
 
 WINDOWS = [("1h", 3600, 600), ("6h", 6 * 3600, 1800), ("12h", 12 * 3600, 1800), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
 DELTA_FIELDS = ["points", "villages", "att", "def", "sup"]
@@ -232,6 +232,18 @@ def build(out_dir):
     except Exception as e:
         moral_info = {"estimated": 0, "error": repr(e)}
 
+    # Laufzeiten auf der Karte: Einheitendaten plus Weltgeschwindigkeit
+    unit_info = {"units": 0}
+    try:
+        ui = store.load_json(store.dpath("unit_info.json"), {}) or {}
+        wc = store.load_json(store.dpath("world_config.json"), {}) or {}
+        if ui.get("settings"):
+            up = units.payload(ui["settings"], wc.get("settings"))
+            _dump(os.path.join(ddir, "units.json"), up)
+            unit_info = {"units": len(up["units"])}
+    except Exception as e:
+        unit_info = {"units": 0, "error": repr(e)}
+
     allies = store.read_csv(store.dpath("latest", "allies.csv"))
     ally_fields = ["id", "name", "tag", "members", "villages", "points", "all_points", "rank"]
     _dump(os.path.join(ddir, "allies.json"), {
@@ -284,7 +296,7 @@ def build(out_dir):
         "world": config.WORLD,
     })
     return {"players": len(rows), "refs": sorted(refs), "allies": len(allies),
-            "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages, "moral": moral_info}
+            "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages, "moral": moral_info, "units": unit_info}
 
 
 def main(argv=None):

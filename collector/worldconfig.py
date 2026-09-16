@@ -1,7 +1,7 @@
-"""Welteinstellungen (interface.php?func=get_config), unter anderem die Art der Moral.
+"""Welteinstellungen und Einheitendaten (interface.php?func=get_config bzw. get_unit_info).
 
-Die Einstellungen einer Welt ändern sich praktisch nie. Deshalb höchstens ein Abruf je Woche; die Datei
-data/world_config.json wird nur neu geschrieben, wenn sich ein Wert tatsächlich geändert hat.
+Beides ändert sich während einer Welt praktisch nie. Deshalb höchstens ein Abruf je Woche und Datei;
+data/world_config.json und data/unit_info.json werden nur neu geschrieben, wenn sich ein Wert ändert.
 """
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -11,12 +11,13 @@ from . import config, net, store
 MAX_AGE_H = 7 * 24
 
 
-def url():
-    return f"{config.BASE_URL}/interface.php?func=get_config"
+def url(func):
+    return f"{config.BASE_URL}/interface.php?func={func}"
 
 
 def parse(body):
-    """Flache Zuordnung Pfad -> Text, z. B. {"speed": "1.6", "moral": "2", "night.active": "1"}."""
+    """Flache Zuordnung Pfad -> Text, z. B. {"speed": "1.6", "moral": "3", "night.active": "1"}
+    bzw. {"spear.speed": "18", "spear.pop": "1", ...} bei get_unit_info."""
     root = ET.fromstring(net.maybe_gunzip(body))
     out = {}
 
@@ -29,23 +30,34 @@ def parse(body):
 
     walk(root, "")
     out.pop("", None)
-    if "moral" not in out or "speed" not in out:
-        raise ValueError("get_config ohne Felder moral und speed")
     return out
 
 
-def update(state, now_utc):
-    checked = state.get("world_config_checked_utc")
-    path = store.dpath("world_config.json")
+def _update_one(state, now_utc, func, filename, required, key):
+    checked = state.get(key)
+    path = store.dpath(filename)
     if checked and store.load_json(path):
         age_h = (now_utc - datetime.fromisoformat(checked)).total_seconds() / 3600
         if age_h < MAX_AGE_H:
             return {"fetched": False}
-    status, body, _ = net.fetch(url())
-    settings = parse(body)
+    _status, body, _headers = net.fetch(url(func))
+    values = parse(body)
+    missing = [f for f in required if f not in values]
+    if missing:
+        raise ValueError(f"{func} ohne Felder {', '.join(missing)}")
     old = store.load_json(path, {}) or {}
-    changed = old.get("settings") != settings
+    changed = old.get("settings") != values
     if changed:
-        store.save_json(path, {"settings": settings, "since_utc": store.iso(now_utc)})
-    state["world_config_checked_utc"] = store.iso(now_utc)
-    return {"fetched": True, "changed": changed, "moral": settings.get("moral")}
+        store.save_json(path, {"settings": values, "since_utc": store.iso(now_utc)})
+    state[key] = store.iso(now_utc)
+    return {"fetched": True, "changed": changed}
+
+
+def update(state, now_utc):
+    """Beide Abrufe, höchstens einer je Woche und Datei. Einheitendaten sind für die Laufzeiten
+    auf der Karte nötig, die Welteinstellungen für den Moralrechner."""
+    out = {"config": _update_one(state, now_utc, "get_config", "world_config.json",
+                                 ("moral", "speed"), "world_config_checked_utc")}
+    out["units"] = _update_one(state, now_utc, "get_unit_info", "unit_info.json",
+                               ("spear.speed", "snob.speed"), "unit_info_checked_utc")
+    return out
