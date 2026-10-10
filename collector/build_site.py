@@ -21,11 +21,19 @@ import subprocess
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from . import config, moral, net, store, units, world
+from . import config, erfahrung, moral, net, store, units, world
 
 WINDOWS = [("1h", 3600, 600), ("6h", 6 * 3600, 1800), ("12h", 12 * 3600, 1800), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
 DELTA_FIELDS = ["points", "villages", "att", "def", "sup"]
 BASE_FIELDS = ["id", "name", "ally", "villages", "points", "rank", "att", "def", "sup", "all"]
+# Erfahrungs-Stufe (E12 bis E14, Dennis 11.10.2026): Bash-Weltrang und Zahl echter Tagesauszeichnungen
+# je Typ, angehängt an jede Spielerzeile. TITEL_TYPEN_ALLE in der Reihenfolge Verteidiger/Angreifer
+# (gewertet, am wichtigsten) vor Räuber vor Sammler (gewertet) vor Plünderer/Eroberer (nur Anzeige).
+TITEL_TYPEN_ALLE = ["kill_def", "kill_att", "loot_res", "scavenge", "loot_vil", "conquer"]
+TITEL_FELD = {"kill_def": "t_def", "kill_att": "t_att", "loot_res": "t_res",
+              "scavenge": "t_sam", "loot_vil": "t_vil", "conquer": "t_con"}
+ERFAHRUNG_FIELDS = ["tier", "rank_att", "rank_def", "rank_sup"] + [TITEL_FELD[t] for t in TITEL_TYPEN_ALLE]
+STUFE_FIELDS = [f"stufe{i}" for i in range(len(erfahrung.STUFEN))]
 
 
 def _git(*args):
@@ -187,15 +195,33 @@ def build(out_dir):
     # Rang nach Punkten (die stündliche Datei speichert keinen Rang mehr, siehe world.PLAYER_HEADER)
     order = sorted(current, key=lambda r: (-int(r["points"]), int(r["id"])))
     rank_of = {int(r["id"]): i for i, r in enumerate(order, 1)}
+    # Bash-Weltrang je Art, für die Top-20/Top-100-Kennzeichnung im Erfahrungs-Score (E12)
+    bash_rank_of = {}
+    for f in ("att", "def", "sup"):
+        bash_order = sorted(current, key=lambda r: (-int(r[f]), int(r["id"])))
+        bash_rank_of[f] = {int(r["id"]): i for i, r in enumerate(bash_order, 1)}
+    # Echte Tagesauszeichnungen je Spieler und Typ, aus dem Verlauf in data/inaday/titel.csv (E14)
+    titel_counts = {}
+    for tr in store.read_csv(store.dpath("inaday", "titel.csv")):
+        d = titel_counts.setdefault(int(tr["player_id"]), {})
+        d[tr["type"]] = d.get(tr["type"], 0) + 1
+
     rows = []
+    tier_of = {}
     for r in current:
         pid = int(r["id"])
         row = [pid, r["name"]] + [rank_of[pid] if f == "rank" else int(r[f]) for f in BASE_FIELDS[2:]]
         for key, _, _ in WINDOWS:
             old = refs.get(key, (None, {}))[1].get(pid)
             row += [int(r[f]) - int(old[f]) for f in DELTA_FIELDS] if old else [None] * len(DELTA_FIELDS)
+        bash_rang = {k: bash_rank_of[k].get(pid) for k in ("att", "def", "sup")}
+        tc = titel_counts.get(pid, {})
+        tier = erfahrung.stufe_index(int(r["points"]), rank_of[pid], bash_rang, tc)
+        tier_of[pid] = tier
+        row += [tier, bash_rang["att"], bash_rang["def"], bash_rang["sup"]]
+        row += [tc.get(t, 0) for t in TITEL_TYPEN_ALLE]
         rows.append(row)
-    fields = BASE_FIELDS + [f"d{key}_{f}" for key, _, _ in WINDOWS for f in DELTA_FIELDS]
+    fields = BASE_FIELDS + [f"d{key}_{f}" for key, _, _ in WINDOWS for f in DELTA_FIELDS] + ERFAHRUNG_FIELDS
     _dump(os.path.join(ddir, "players.json"), {
         "fields": fields, "rows": rows,
         "data_time_utc": _iso(newest) if newest else None,
@@ -246,9 +272,17 @@ def build(out_dir):
 
     allies = store.read_csv(store.dpath("latest", "allies.csv"))
     ally_fields = ["id", "name", "tag", "members", "villages", "points", "all_points", "rank"]
+    # Erfahrungs-Verteilung der Mitglieder je Stamm (E12: wie viele erfahrene Spieler sitzen hier)
+    ally_of = {int(r["id"]): int(r["ally"]) for r in current}
+    tiers_by_ally = {}
+    for pid, tier in tier_of.items():
+        aid = ally_of.get(pid, 0)
+        if aid:
+            tiers_by_ally.setdefault(aid, []).append(tier)
     _dump(os.path.join(ddir, "allies.json"), {
-        "fields": ally_fields,
-        "rows": [[int(a["id"]), a["name"], a["tag"]] + [int(a[f]) for f in ally_fields[3:]] for a in allies],
+        "fields": ally_fields + STUFE_FIELDS,
+        "rows": [[int(a["id"]), a["name"], a["tag"]] + [int(a[f]) for f in ally_fields[3:]]
+                 + erfahrung.tribe_histogram(tiers_by_ally.get(int(a["id"]), [])) for a in allies],
     })
 
     # Zeitverlauf der stärksten Stämme, damit die Seite Linien zeigen kann statt nur Momentaufnahmen
@@ -260,6 +294,14 @@ def build(out_dir):
     except Exception as e:
         series = {"times": [], "tribes": [], "error": repr(e)}
     _dump(os.path.join(ddir, "series.json"), series)
+
+    # Erfahrungs-Score: Stufennamen und Auszeichnungstypen an einer Stelle, damit die Karte sie nicht
+    # doppelt pflegen muss (E12 bis E14, Dennis 11.10.2026)
+    _dump(os.path.join(ddir, "erfahrung.json"), {
+        "stufen": erfahrung.STUFEN,
+        "titel_namen": erfahrung.AUSZEICHNUNG_NAME,
+        "titel_gewertet": erfahrung.TITEL_GEWERTET,
+    })
 
     records = store.read_csv(store.dpath("inaday", "tribe_latest.csv"))
     events = store.read_csv(store.dpath("inaday", "events.csv"))

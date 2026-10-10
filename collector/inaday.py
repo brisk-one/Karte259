@@ -22,6 +22,10 @@ from . import config, net, store
 LATEST_HEADER = ["player_id", "name", "type", "rank", "value", "date"]
 TOP_HEADER = ["player_id", "name", "type", "rank", "value", "date"]
 EVENTS_HEADER = ["detected_utc", "player_id", "name", "type", "old_value", "new_value", "rank", "date"]
+# Verlauf der echten Tagesauszeichnungen (Erfahrungs-Score, Dennis 11.10.2026, E14): wer Rang 1 der
+# Seite 1 war, hat an diesem Tag serverweit den höchsten Wert der Kategorie erreicht, das ist die
+# echte Auszeichnung. Eine Zeile je (type, date), überschrieben statt angehängt, siehe update_titel.
+TITEL_HEADER = ["date", "type", "player_id", "name", "value"]
 ID_RE = re.compile(r"[?&;]id=(\d+)")
 DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})")
 
@@ -261,6 +265,33 @@ def deep_scrape(state, now_local, types):
     return out, pages, note
 
 
+def update_titel(rang1_by_type):
+    """Trägt die Rang-1-Zeile je Kategorie als Auszeichnung des jeweiligen Tages nach, ohne Netz.
+
+    rang1_by_type: {type: Zeile aus parse_ranking oder None}. Eine Zeile je (type, date); ein noch
+    laufender Tag ("heute") darf dabei den zuvor gespeicherten Spitzenwert desselben Tages
+    überschreiben, falls sich der Spitzenreiter noch ändert. Gibt die Zahl neuer oder geänderter
+    Zeilen zurück.
+    """
+    path = store.dpath("inaday", "titel.csv")
+    titel = {(r["type"], r["date"]): r for r in store.read_csv(path)}
+    changed = 0
+    for t, r in (rang1_by_type or {}).items():
+        if not r or r.get("rank") != 1 or not r.get("date") or not r.get("player_id"):
+            continue
+        key = (t, r["date"])
+        cur = titel.get(key)
+        if cur is None or int(cur["player_id"]) != r["player_id"] or int(cur["value"]) != r["value"]:
+            titel[key] = {"date": r["date"], "type": t, "player_id": r["player_id"],
+                          "name": r["name"], "value": r["value"]}
+            changed += 1
+    if changed:
+        rows = sorted(titel.values(), key=lambda r: (r["date"], r["type"]))
+        store.write_csv(path, TITEL_HEADER,
+                        [[r["date"], r["type"], r["player_id"], r["name"], r["value"]] for r in rows])
+    return changed
+
+
 def update(state, now_utc, now_local, members):
     """members: Liste von (player_id, name) der erfassten Stämme."""
     st = state.setdefault("inaday", {})
@@ -269,6 +300,7 @@ def update(state, now_utc, now_local, members):
     summary = {"changed_types": [], "full_scrape": False, "errors": [], "top_rows": {}}
     save_samples = not st.get("samples_saved")
     top_all = []   # Seite 1 jeder Kategorie wird ohnehin geladen, also auch aufheben (keine Mehrlast)
+    rang1 = {}
 
     for t in config.INADAY_TYPES:
         try:
@@ -284,6 +316,7 @@ def update(state, now_utc, now_local, members):
             _save_debug(f"unparsed_{t}_page1.html", html)
             continue
         summary["top_rows"][t] = len(rows)
+        rang1[t] = next((r for r in rows if r["rank"] == 1), None)
         for r in rows:
             if r["player_id"]:
                 top_all.append([r["player_id"], r["name"], t, r["rank"], r["value"], r["date"] or ""])
@@ -291,6 +324,10 @@ def update(state, now_utc, now_local, members):
         if sigs.get(t) and sigs[t] != sig:
             summary["changed_types"].append(t)
         sigs[t] = sig
+
+    titel_changed = update_titel(rang1)
+    if titel_changed:
+        summary["titel_changed"] = titel_changed
 
     # Weltweite Spitze je Kategorie festhalten. Ohne diese Ablage gäbe es Ranglistenwerte nur für die
     # Mitglieder der erfassten Stämme, zu wenig für eine Auswertung über die ganze Welt.

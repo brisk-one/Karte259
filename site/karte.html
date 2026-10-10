@@ -105,6 +105,23 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .dist .arr{font-variant-numeric:tabular-nums; color:var(--ink-2)}
 .dist .moon{color:#6f8fd0}
 .dist .note{color:var(--muted); font-size:10.5px; margin:5px 0 0; line-height:1.35}
+/* Spieler-Details per Doppelklick: eigener Schließen-Knopf im Kopf statt Aufklapp-Dreieck,
+   deshalb ein normales div statt details/summary wie bei Legende und Laufzeit. */
+.pdet{background:var(--panel-solid); border:1px solid var(--edge); border-radius:var(--radius);
+  box-shadow:0 2px 8px rgba(0,0,0,.4); font-size:11.5px; max-width:min(380px,93vw); pointer-events:auto}
+.pdet .ph{display:flex; align-items:center; justify-content:space-between; gap:8px;
+  font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--head-ink); background:var(--head); border-bottom:1px solid var(--edge-soft); padding:3px 4px 3px 8px}
+.pdet .ph button{font:inherit; font-weight:700; font-size:14px; cursor:pointer; background:none; color:inherit;
+  border:0; width:22px; height:22px; border-radius:var(--radius)}
+.pdet .ph button:hover{background:rgba(255,255,255,.18)}
+.pdet .pb{padding:5px 8px 7px; max-height:min(58vh,440px); overflow:auto}
+.pdet .stufe{display:inline-block; font-weight:700; padding:1px 7px; border-radius:var(--radius);
+  background:var(--btn-on); color:var(--accent-ink); border:1px solid var(--edge)}
+.pdet .zeile{display:flex; justify-content:space-between; gap:12px; padding:1.5px 0}
+.pdet .zeile.aus{color:var(--muted)}
+.pdet .sec{padding:4px 0 1px; font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); border-top:1px solid var(--edge-soft); margin-top:3px}
 .zoom{display:flex; gap:5px; pointer-events:auto}
 .zoom button{font:inherit; font-weight:700; font-size:15px; width:32px; height:32px; cursor:pointer;
   background:var(--btn); color:var(--ink); border:1px solid var(--edge); border-radius:var(--radius);
@@ -200,6 +217,7 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
   </form>
   <div class="grp" id="marks" aria-live="polite"></div>
   <p class="stand" id="stand">Lade Kartendaten …</p>
+  <button class="tw small" type="button" id="clearmark" title="Hervorhebung aufheben" aria-label="Hervorhebung aufheben" hidden>×</button>
 </div>
 
 <div class="mapwrap" id="mapwrap">
@@ -217,7 +235,13 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
       <summary id="dist-title">Laufzeit</summary>
       <div class="dbody" id="dist-body"></div>
     </details>
+    <div class="pdet" id="pdet" hidden>
+      <div class="ph"><span id="pdet-title">Spieler</span>
+        <button type="button" id="pdet-close" title="Schließen" aria-label="Schließen">×</button></div>
+      <div class="pb" id="pdet-body"></div>
+    </div>
     <div class="zoom">
+      <button type="button" id="undo" title="Letzte Aktion rückgängig machen (oder Escape)" aria-label="Rückgängig" disabled>↩</button>
       <button type="button" id="zin" title="Näher" aria-label="Näher">+</button>
       <button type="button" id="zout" title="Weiter weg" aria-label="Weiter weg">&minus;</button>
       <button type="button" id="zfit" title="Ganze Welt" aria-label="Ganze Welt">⤢</button>
@@ -285,6 +309,16 @@ const INADAY_LABEL={ loot_res:"Rohstoffe geplündert", scavenge:"Rohstoffe gesam
 // kurze Fassung für die Detailinfo, damit jede Zeile einzeilig bleibt
 const INADAY_SHORT={ loot_res:"Rohst. gepl.", scavenge:"Rohst. ges.", loot_vil:"Dörfer gepl.",
                      kill_att:"Bash Angriff", kill_def:"Bash Vert.", kill_sup:"Bash Unt.", conquer:"Erobert" };
+// Erfahrungs-Score (Dennis 11.10.2026, E12 bis E14): Stufennamen kommen aus erfahrung.json, dieser
+// Fallback greift nur, falls die Datei einmal fehlt.
+const STUFE_FALLBACK=["Rekrut","Phalanx-Krieger","Hauptmann","Spartiat","Kriegsherr","Unsterblicher"];
+const TITEL_FELD={kill_def:"t_def", kill_att:"t_att", loot_res:"t_res", scavenge:"t_sam", loot_vil:"t_vil", conquer:"t_con"};
+// Generische Rückgängig-Funktion über alle Darstellungen hinweg (Wunsch Dennis 10.10.): jede Funktion,
+// die Auswahl oder Darstellung ändert, legt vor der Änderung ihre Umkehrung hier ab.
+let undoStack=[];
+function pushUndo(fn){ undoStack.push(fn); if(undoStack.length>20) undoStack.shift(); updateUndoBtn(); }
+function doUndo(){ const fn=undoStack.pop(); updateUndoBtn(); if(fn) fn(); }
+function updateUndoBtn(){ const b=$("undo"); if(b) b.disabled=!undoStack.length; }
 function readColors(){
   const cs=getComputedStyle(document.documentElement);
   const v=n=>cs.getPropertyValue(n).trim();
@@ -300,10 +334,10 @@ const cv=$("c"), ctx=cv.getContext("2d", {alpha:false});
 const ov=$("ov"), octx=ov.getContext("2d");
 const wrap=$("mapwrap"), tip=$("tip");
 let W=0, H=0, dpr=1;
-let V=null, P=null, A=null, T=null, UNITS=null;
+let V=null, P=null, A=null, T=null, UNITS=null, ERF=null;
 const dtfTag=new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin", weekday:"short", day:"2-digit", month:"2-digit"});
 let N=0, vx=null, vy=null, vp=null, vpts=null, vb=null, vname=null, byXY=null;
-let pIdx={}, allyOf=null, growth={}, arrowOf=null, bashNewOf=null, refs={}, tagOf=new Map(), allyById=new Map();
+let pIdx={}, aIdx={}, allyOf=null, growth={}, arrowOf=null, bashNewOf=null, refs={}, tagOf=new Map(), allyById=new Map();
 let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
 let inaday=new Map();                                      // player_id -> {typ: {rank, value, date}}
 let rankOf={};                                             // Spielerzeile -> Weltrang in der aktiven Rangliste
@@ -948,10 +982,12 @@ function inNight(d){
   return n.start_hour<=n.end_hour ? (h>=n.start_hour && h<n.end_hour) : (h>=n.start_hour || h<n.end_hour);
 }
 function selectVillage(i){
+  const prevA=selA, prevB=selB;
   if(i<0){ selA=-1; selB=-1; }
   else if(selA<0) selA=i;
   else if(i===selA){ selA=-1; selB=-1; }
   else selB=i;
+  if(selA!==prevA || selB!==prevB) pushUndo(()=>{ selA=prevA; selB=prevB; renderDist(); drawOverlay(); });
   renderDist(); drawOverlay();
 }
 function renderDist(){
@@ -1012,6 +1048,55 @@ function renderDist(){
   body.appendChild(el("p","note", hinweise.join(" ")));
 }
 
+/* ---------- Spieler-Details per Doppelklick ----------
+   Einzelner Klick bleibt die Laufzeitmessung. Doppelklick auf ein Dorf (nicht Barbaren) öffnet die
+   Erfahrungs-Stufe des Besitzers, gleicher Bedienweg wie im privaten Netzwerk-Werkzeug. */
+function stufeName(i){ return (ERF && ERF.stufen && ERF.stufen[i]) || STUFE_FALLBACK[i] || "?"; }
+function rangBadge(rang){ if(rang==null) return null; if(rang<=20) return "Top 20"; if(rang<=100) return "Top 100"; return null; }
+function closePlayerPanel(){ $("pdet").hidden=true; }
+function openPlayerPanel(pi){
+  if(pi==null || pi<0) return;
+  const schonOffen=!$("pdet").hidden;
+  renderPlayerPanel(pi);
+  if(!schonOffen) pushUndo(closePlayerPanel);
+}
+function renderPlayerPanel(pi){
+  const r=P.rows[pi], aid=allyOf[pi];
+  $("pdet-title").textContent=r[pIdx.name];
+  const body=$("pdet-body"); body.replaceChildren();
+  const zeile=(k,v,cls)=>{
+    const d=el("div","zeile"+(cls? " "+cls : "")), a=el("span",null,k), b=el("span",null,v);
+    d.append(a,b); body.appendChild(d);
+  };
+  const kopf=el("p"); kopf.append("Erfahrungsstufe: ", el("span","stufe", stufeName(r[pIdx.tier])));
+  body.appendChild(kopf);
+  const rg=r[pIdx.rank];
+  zeile("Punkte-Rang", "Platz "+nf.format(rg)+(rangBadge(rg)? " ("+rangBadge(rg)+")" : ""));
+  body.appendChild(el("div","sec","Bash-Weltrang"));
+  [["att","Angriff (Off)"],["def","Verteidigung (Deff)"],["sup","Unterstützung"]].forEach(([k,label])=>{
+    const br=r[pIdx["rank_"+k]];
+    zeile(label, br!=null? "Platz "+nf.format(br)+(rangBadge(br)? " ("+rangBadge(br)+")" : "") : "kein Wert erfasst");
+  });
+  body.appendChild(el("div","sec","Erfolge (An einem Tag)"));
+  const gewertet=new Set((ERF&&ERF.titel_gewertet)||["kill_def","kill_att","loot_res","scavenge"]);
+  const namen=(ERF&&ERF.titel_namen)||{};
+  Object.keys(TITEL_FELD).forEach(typ=>{
+    const n=r[pIdx[TITEL_FELD[typ]]]||0, gw=gewertet.has(typ);
+    zeile(namen[typ]||typ, n+"×"+(gw? "" : " (zählt nicht in die Stufe)"), gw? null : "aus");
+  });
+  body.appendChild(el("div","sec","Stamm"));
+  const a=aid? allyById.get(aid) : null;
+  if(a){
+    const stufen=[0,1,2,3,4,5].map(k=>a[aIdx["stufe"+k]]||0);
+    zeile("Stamm", (tagOf.get(aid)||a[1])+" ("+nf.format(a[3])+" Mitglieder)");
+    zeile("Erfahrene Mitglieder", (stufen[4]+stufen[5])+" Kriegsherren/Unsterbliche von "+nf.format(a[3]));
+  } else {
+    zeile("Stamm", "ohne Stamm");
+  }
+  $("pdet").hidden=false;
+}
+$("pdet-close").addEventListener("click", closePlayerPanel);
+
 /* ---------- Stamm markieren ---------- */
 function nextColor(){
   const used=new Set([...marks.values(), ...tribeColor.values()]);
@@ -1020,6 +1105,7 @@ function nextColor(){
 function addMark(id, color){
   if(!id || marks.has(id)) return;
   marks.set(id, color || nextColor());
+  pushUndo(()=>{ marks.delete(id); renderMarks(); buildBuckets(); renderLegend(); draw(); });
   renderMarks(); buildBuckets(); renderLegend(); draw();
 }
 function renderMarks(){
@@ -1038,7 +1124,11 @@ function renderMarks(){
       buildBuckets(); renderLegend(); draw(); });
     const del=document.createElement("button"); del.type="button"; del.className="tw small"; del.textContent="×";
     del.title="Markierung entfernen";
-    del.addEventListener("click", ()=>{ marks.delete(id); renderMarks(); buildBuckets(); renderLegend(); draw(); });
+    del.addEventListener("click", ()=>{
+      const prevColor=marks.get(id);
+      marks.delete(id); renderMarks(); buildBuckets(); renderLegend(); draw();
+      pushUndo(()=>{ marks.set(id, prevColor); renderMarks(); buildBuckets(); renderLegend(); draw(); });
+    });
     wrap2.append(dot, tag, cnt, inp, del);
     box.appendChild(wrap2);
   }
@@ -1079,9 +1169,11 @@ function renderSuggestions(){
   });
   box.hidden=false; $("q").setAttribute("aria-expanded","true");
 }
+function updateClearMarkBtn(){ const b=$("clearmark"); if(b) b.hidden=!marked; }
+function clearMarked(){ marked=null; draw(); showStand(); updateClearMarkBtn(); }
 function search(qRaw){
   const q=qRaw.trim(); marked=null;
-  if(!q){ showStand(); draw(); return; }
+  if(!q){ showStand(); draw(); updateClearMarkBtn(); return; }
   const m=q.match(/^(\d{1,3})\s*[|,; ]\s*(\d{1,3})$/);
   if(m){ ownView(); cx=+m[1]; cy=+m[2]; scale=Math.max(scale,10); clampView(); draw(); saveUrl(); return; }
   const low=q.toLowerCase();
@@ -1106,6 +1198,8 @@ function search(qRaw){
   cx=mx/set.size; cy=my/set.size;
   scale=Math.max(scale, set.size>200? 3 : 8); clampView(); draw(); saveUrl();
   $("stand").textContent=label+": "+nf.format(set.size)+" Dörfer hervorgehoben";
+  updateClearMarkBtn();
+  pushUndo(clearMarked);
 }
 
 /* ---------- Adresszeile ---------- */
@@ -1154,6 +1248,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
     return;
   }
   pIdx=Object.fromEntries(P.fields.map((f,i)=>[f,i]));
+  aIdx=Object.fromEntries(A.fields.map((f,i)=>[f,i]));
   refs=P.refs_utc||{};
   N=V.rows.length;
   vx=new Int16Array(N); vy=new Int16Array(N); vp=new Int32Array(N); vpts=new Int32Array(N);
@@ -1205,6 +1300,8 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
 
   // Einheitendaten nur für die Laufzeiten, ihr Fehlen darf die Karte nicht aufhalten
   load("units").then(u=>{ UNITS=u; if(selB>=0) renderDist(); }).catch(()=>{ /* noch kein Abruf gelaufen */ });
+  // Stufennamen für die Spieler-Details, ebenfalls ohne die Karte aufzuhalten (STUFE_FALLBACK greift sonst)
+  load("erfahrung").then(e=>{ ERF=e; }).catch(()=>{ /* Fallback-Namen reichen */ });
 
   if(readUrl()) ownView();
   labelBashButtons();
@@ -1216,6 +1313,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   initDone=true;
   new ResizeObserver(resize).observe(wrap);
   showStand();
+  updateUndoBtn(); updateClearMarkBtn();
   // Der Browser stellt den Zustand von <details> nach dem Laden wieder her, deshalb erst danach setzen
   requestAnimationFrame(()=>{ $("legend").open = wrap.clientWidth>=560; });
 })();
@@ -1239,7 +1337,9 @@ document.addEventListener("themechange", ()=>{ readColors(); if(N){ buildBuckets
 window.addEventListener("resize", resize);
 $("zin").addEventListener("click", ()=>zoomAt(W/2,H/2,1.6));
 $("zout").addEventListener("click", ()=>zoomAt(W/2,H/2,1/1.6));
-$("zfit").addEventListener("click", ()=>{ marked=null; userView=false; fitWorld(); draw(); saveUrl(); });
+$("zfit").addEventListener("click", ()=>{ marked=null; userView=false; fitWorld(); draw(); saveUrl(); updateClearMarkBtn(); });
+$("clearmark").addEventListener("click", clearMarked);
+$("undo").addEventListener("click", doUndo);
 document.getElementById("shape").addEventListener("click", e=>{
   const b=e.target.closest("button"); if(!b) return;
   shape=b.dataset.shape;
@@ -1250,7 +1350,10 @@ $("axwin").addEventListener("click", e=>{
   const b=e.target.closest("button"); if(b && !b.disabled) setAxWin(b.dataset.w);
 });
 document.querySelectorAll("#views").forEach(g=>g.addEventListener("click", e=>{
-  const b=e.target.closest("button"); if(b && !b.disabled) setView(b.dataset.v);
+  const b=e.target.closest("button"); if(!b || b.disabled) return;
+  const prev=view;
+  setView(b.dataset.v);
+  if(view!==prev) pushUndo(()=>setView(prev));
 }));
 $("searchform").addEventListener("submit", e=>{ e.preventDefault(); $("sugg").hidden=true; search($("q").value); });
 $("q").addEventListener("input", renderSuggestions);
@@ -1291,6 +1394,7 @@ wrap.addEventListener("pointermove", e=>{
   if(i!==hover){ hover=i; drawOverlay(); }
   if(i>=0) showTip(i,px,py); else tip.style.display="none";
 });
+let lastClick={i:-1, t:0};
 function endPointer(e){
   pts.delete(e.pointerId);
   if(pts.size<2) pinch=0;
@@ -1303,7 +1407,12 @@ function endPointer(e){
     hover=i;
     if(i>=0) showTip(i,px,py); else tip.style.display="none";
   }
-  selectVillage(i);           // zeichnet die Auswahl und füllt die Laufzeiten
+  // Doppelklick auf dasselbe (nicht-Barbaren-)Dorf öffnet die Spieler-Details, einfacher Klick
+  // bleibt unverändert die Laufzeitmessung (selectVillage).
+  const now=Date.now(), istDoppelklick = i>=0 && vp[i]>=0 && lastClick.i===i && (now-lastClick.t)<450;
+  lastClick = istDoppelklick? {i:-1, t:0} : {i, t:now};
+  if(istDoppelklick) openPlayerPanel(vp[i]);
+  else selectVillage(i);       // zeichnet die Auswahl und füllt die Laufzeiten
 }
 wrap.addEventListener("pointerup", endPointer);
 wrap.addEventListener("pointercancel", endPointer);
@@ -1315,7 +1424,11 @@ wrap.addEventListener("wheel", e=>{
 }, {passive:false});
 
 document.addEventListener("keydown", e=>{
-  if(e.key==="Escape" && selA>=0){ selectVillage(-1); return; }
+  if(e.key==="Escape"){
+    if(undoStack.length) doUndo();
+    else if(selA>=0) selectVillage(-1);
+    return;
+  }
   if(e.target.tagName==="INPUT") return;
   const step=60/scale;
   if(e.key==="ArrowLeft") cx-=step;
