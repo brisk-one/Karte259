@@ -1,0 +1,1673 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title>Gastzugang</title>
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+
+		<meta name="robots" content="noindex" />
+	
+	<link rel="stylesheet" type="text/css" href="https://dsde.innogamescdn.com/assets/de259/merged/game.a25c6c.css" />
+
+	<link rel="stylesheet" type="text/css" href="https://dsde.innogamescdn.com/assets/de259/css/game/premiumBenefits.914b96.css" />
+
+		<link rel="stylesheet" type="text/css" href="https://dsde.innogamescdn.com/assets/de259/css/game/image_upload.c1ccf4.css" />
+
+	
+    <script src="https://dsde.innogamescdn.com/assets/de259/js/lang.de_DE.d6954a.js"></script>
+
+	<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/merged/game.e34639.js"></script>
+
+    <script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/merged/game.de_DE.031eea.js"></script>
+
+	<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/PremiumBenefits.bfe4ad.js"></script>
+
+		<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/InfoPlayer.a659b0.js"></script>
+
+		<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/COA.642760.js_"></script>
+
+		<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/merged/map.6e385c.js"></script>
+
+		<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/twmap_drag.f5f4a9.js"></script>
+
+		<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/merged/JsModuleBundles/VillageNotes.10f6a4.js"></script>
+
+		<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/RelicSelect.1f6067.js_"></script>
+
+	
+	
+	<script type="text/javascript">
+	//<![CDATA[
+		$(document).ready(function() {
+			if (self!= top){
+				$('.text a').each(function(i,link){
+					$(link).attr('target', '_parent');
+				});
+			}
+		});
+	//]]>
+	</script>
+	
+</head>
+
+<body id="ds_body" class="header" >
+<div style="margin: 10px">
+<table class="content-border" style=" border-collapse: collapse; width: 800px; margin: 0 auto">
+	<tr>
+		<td>
+			<table id="content_value" class="inner-border main" cellspacing="0">
+				<tr>
+					<td>
+
+<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/InfoPlayer.a659b0.js"></script>
+
+<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/COA.642760.js_"></script>
+
+<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/merged/map.6e385c.js"></script>
+
+<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/twmap_drag.f5f4a9.js"></script>
+
+<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/merged/JsModuleBundles/VillageNotes.10f6a4.js"></script>
+
+<script type="text/javascript" src="https://dsde.innogamescdn.com/assets/de259/js/game/RelicSelect.1f6067.js_"></script>
+
+
+
+<script type="text/javascript">
+	TribalWars._script = '/guest.php';
+	TribalWars.updateGameData({player : {},village : {}});
+	var mobile_on_normal = false;
+	var mobile = false;
+	var image_base = "https://dsde.innogamescdn.com/asset/3e3b154c/graphic/";
+</script>
+
+<table class="vis">
+<tr>
+<td ><a href="/guest.php?screen=map">Karte</a></td>
+<td ><a href="/guest.php?screen=ranking">Rangliste</a></td>
+</tr>
+</table>
+
+
+<h2>
+
+    <span class=" ">
+     dersAcul
+    </span>
+</h2>
+
+
+<script type="text/javascript">
+
+
+    //todo: move this into InfoPlayer
+    var Player = {
+        getAllVillages: function(anchor, link) {
+            $.get(link, { }, function(data) {
+                $('#villages_list > tbody').append(data.villages);
+                $(anchor).parent().parent().remove();
+
+                if (game_data.player.id) {
+                    VillageContext.init();
+                    UI.ToolTip('.tooltip');
+                }
+            }, 'json');
+        }
+    };
+
+
+    $(document).ready(function() {
+        Toggler.register('#embedmap_player', '#map_toggler', function() {
+            if (TWMap.minimap) {
+                TWMap.minimap.resize();
+            }
+        });
+
+        InfoPlayer.player_id = 1577544193;
+        InfoPlayer.init();
+    });
+</script>
+
+<img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/events/april/noblesmall.webp" style="display: none" alt="" class="guy " />
+<img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/reports/hidden.webp" style="display: none" alt="" class="guy2 " />
+
+
+<table style="width: 100%" class="">
+	<tr>
+		<td valign="top" style="width: 50%">
+			<table class="vis" id="player_info" width="100%">
+				<tr>
+					<th colspan="2">
+                        <img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/welcome/player_points.webp" style="vertical-align:middle; margin-bottom:1px;" alt="" class="" />
+                        <span class="">dersAcul</span>
+                        						<img class="float_right tooltip" style="cursor: pointer;" src="graphic/map_toggle.png" id="map_toggler" title="Karte ein-/ausblenden">					</th>
+				</tr>
+				                                        <td colspan="2" style="padding: 0" id="embedmap_player" data-name="embedmap_player">
+                        <div id="minimap" style="overflow:hidden; position:relative; box-sizing: border-box; padding:0px;width:100%; height:200px;">
+                            <div id="minimap_viewport"></div>
+                        </div>
+                        <script>
+                            $(function(){
+                                TWMap.showEmbeddedMap('1148549741', 0, 362, 528, 17719);
+                            });
+                        </script>
+                    </td>
+                                        <tr><td width="80">Punkte:</td><td>349<span class="grey">.</span>329</td></tr>
+                    <tr><td>Rang:</td><td>46</td></tr>
+                                        <tr>
+                        <td>Besiegte Gegner:</td>
+                        <td class="tooltip" title="Als Angreifer: 562&lt;span class=&quot;grey&quot;&gt;.&lt;/span&gt;874 (20.)                         :: Als Verteidiger: 3&lt;span class=&quot;grey&quot;&gt;.&lt;/span&gt;995&lt;span class=&quot;grey&quot;&gt;.&lt;/span&gt;127 (1.)                         <br/>Als Unterstützer: 4&lt;span class=&quot;grey&quot;&gt;.&lt;/span&gt;983 (764.)                         ">
+                            4<span class="grey">.</span>562<span class="grey">.</span>984 (1.)
+                        </td>
+                    </tr>
+                    
+                                        								<tr><td>Stamm:</td><td>
+									<a href="/guest.php?screen=info_ally&amp;id=443">M-D</a>
+								</td></tr>
+
+                                
+                                			</table>
+
+            <!-- actions -->
+            
+			<br />
+			
+			<br />
+
+						<table id="villages_list" class="vis" width="100%">
+				<thead>
+					<tr>
+                        <th width="180" >Dörfer (79)</th>
+                        <th width="80">Koordinaten</th>
+                        <th>Punkte</th>
+                    </tr>
+				</thead>
+				<tbody>
+						<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17719" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17719">001 | Kronenburg</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17719" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>362|528</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="19755" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=19755">002 | Rosswacht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_19755" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>358|526</td>
+        <td>10<span class="grey">.</span>947</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17854" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17854">004 | Siedlerwacht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17854" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>364|526</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17237" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17237">005 | Steinmark</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17237" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>362|526</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16874" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16874">006 | Falkenwacht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16874" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>363|529</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17072" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17072">007 | Nebelburg</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17072" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>363|526</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17622" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17622">009 | Hohenbrunn</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17622" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>365|528</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17486" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17486">010 | Rosenfurt</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17486" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>363|531</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16753" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16753">012 | Schattenwall</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16753" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>366|528</td>
+        <td>10<span class="grey">.</span>251</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15242" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15242">013 | Morgenquell</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15242" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>377|530</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="6662" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=6662">014 | Dornental</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_6662" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>379|532</td>
+        <td>10<span class="grey">.</span>444</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="6700" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=6700">015 | Aschenburg</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_6700" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>377|532</td>
+        <td>9<span class="grey">.</span>979</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="9239" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=9239">016 | Kronenfeste</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_9239" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>378|534</td>
+        <td>10<span class="grey">.</span>495</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15137" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15137">020 | Lichtental</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15137" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>377|531</td>
+        <td>9<span class="grey">.</span>691</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17205" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17205">021 | Fernblick</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17205" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>363|524</td>
+        <td>9<span class="grey">.</span>298</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14605" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14605">022 | Tannenburg</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14605" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>378|531</td>
+        <td>8<span class="grey">.</span>341</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17229" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17229">024 | Eichenwehr</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17229" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>362|527</td>
+        <td>7<span class="grey">.</span>961</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14988" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14988">026 | Birkenfurt</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14988" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>376|532</td>
+        <td>9<span class="grey">.</span>281</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17080" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17080">027 | Adlerfels</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17080" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>364|531</td>
+        <td>8<span class="grey">.</span>210</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15710" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15710">028 | Reichsspeicher</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15710" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>372|530</td>
+        <td>8<span class="grey">.</span>268</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16915" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16915">029 | Abendhain</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16915" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>366|531</td>
+        <td>6<span class="grey">.</span>469</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16566" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16566">032 | Dunkelquell</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16566" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>367|528</td>
+        <td>6<span class="grey">.</span>451</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17670" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17670">034 | Teufelsschlucht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17670" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>363|534</td>
+        <td>6<span class="grey">.</span>071</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16255" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16255">035 | Wolfsgrund</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16255" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>367|529</td>
+        <td>5<span class="grey">.</span>328</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14699" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14699">036 | Falkenbrück</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14699" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>378|528</td>
+        <td>6<span class="grey">.</span>410</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16638" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16638">037 | Klingenwerk</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16638" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>370|534</td>
+        <td>3<span class="grey">.</span>617</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="6467" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=6467">038 | Lichtblick</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_6467" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>376|529</td>
+        <td>9<span class="grey">.</span>722</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15181" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15181">039 | Schwarzkrone</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15181" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>375|535</td>
+        <td>5<span class="grey">.</span>345</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14396" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14396">040 | Blutstein</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14396" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>378|527</td>
+        <td>3<span class="grey">.</span>715</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16745" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16745">041 | Seebach</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16745" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>369|533</td>
+        <td>4<span class="grey">.</span>080</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16207" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16207">042 | Adlerwacht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16207" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>369|534</td>
+        <td>3<span class="grey">.</span>038</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15508" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15508">043 | Todeswall</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15508" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>377|535</td>
+        <td>3<span class="grey">.</span>432</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15875" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15875">044 | Neuendorf</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15875" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>375|536</td>
+        <td>2<span class="grey">.</span>533</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17440" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17440">045 | Hägendorf</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17440" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>368|535</td>
+        <td>2<span class="grey">.</span>768</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15775" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15775">048 | Kreuzwacht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15775" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>373|535</td>
+        <td>2<span class="grey">.</span>669</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16113" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16113">049 | Finstermark</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16113" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>370|529</td>
+        <td>3<span class="grey">.</span>145</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16187" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16187">050 | Düsterwald</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16187" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>373|538</td>
+        <td>2<span class="grey">.</span>851</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="27479" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=27479">051 | Morgenfels</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_27479" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>376|531</td>
+        <td>3<span class="grey">.</span>083</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16633" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16633">052 | Greifenwald</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16633" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>374|540</td>
+        <td>2<span class="grey">.</span>340</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15669" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15669">053 | Königsfurt</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15669" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>370|535</td>
+        <td>2<span class="grey">.</span>357</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17861" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17861">055 | Bergfried</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17861" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>364|537</td>
+        <td>2<span class="grey">.</span>750</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16476" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16476">056 | Eichenmark</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16476" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>369|537</td>
+        <td>2<span class="grey">.</span>669</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16971" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16971">057 | Hohenwehr</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16971" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>371|538</td>
+        <td>2<span class="grey">.</span>032</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="18475" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=18475">058 | Rotenfels</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_18475" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>365|540</td>
+        <td>2<span class="grey">.</span>496</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15240" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15240">059 | Finsterfurt</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15240" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>377|540</td>
+        <td>2<span class="grey">.</span>586</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16992" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16992">060 | Thalgrim</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16992" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>366|540</td>
+        <td>2<span class="grey">.</span>603</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16137" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16137">062 | Tannenruh</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16137" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>372|540</td>
+        <td>2<span class="grey">.</span>262</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16579" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16579">063 | Silberquell</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16579" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>373|540</td>
+        <td>2<span class="grey">.</span>441</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17955" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17955">064 | Rabenau</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17955" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>367|543</td>
+        <td>2<span class="grey">.</span>158</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15892" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15892">065 | Eichenruh</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15892" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>372|544</td>
+        <td>1<span class="grey">.</span>829</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16625" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16625">066 | Sonnenbruch</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16625" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>373|545</td>
+        <td>2<span class="grey">.</span>806</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14116" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14116">067 | Mondtal</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14116" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>381|530</td>
+        <td>2<span class="grey">.</span>016</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15770" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15770">068 | Nachtwall</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15770" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>373|546</td>
+        <td>2<span class="grey">.</span>501</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14345" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14345">069 | Grimmstein</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14345" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>382|529</td>
+        <td>2<span class="grey">.</span>456</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17007" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17007">070 | Sturmzinne</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17007" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>367|545</td>
+        <td>2<span class="grey">.</span>686</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14684" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14684">071 | Frostwacht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14684" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>383|531</td>
+        <td>1<span class="grey">.</span>577</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17864" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17864">072 | Nachtwacht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17864" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>366|543</td>
+        <td>1<span class="grey">.</span>840</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="19865" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=19865">073 | Wolfsgrat</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_19865" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>366|547</td>
+        <td>2<span class="grey">.</span>366</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="18430" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=18430">075 | Runenfels</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_18430" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>361|543</td>
+        <td>2<span class="grey">.</span>635</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="3729" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=3729">077 | Krähental</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_3729" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>379|538</td>
+        <td>2<span class="grey">.</span>062</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14904" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14904">078 | Mondwall</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14904" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>382|541</td>
+        <td>1<span class="grey">.</span>601</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="18712" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=18712">079 | Donnergrat</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_18712" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>364|546</td>
+        <td>1<span class="grey">.</span>383</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="4953" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=4953">080 | Eisenkrone</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_4953" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>378|542</td>
+        <td>1<span class="grey">.</span>488</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16652" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16652">081 | Runenmark</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16652" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>376|548</td>
+        <td>983</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17757" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17757">082 | Zornacker</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17757" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>364|547</td>
+        <td>875</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="5328" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=5328">083 | Königsmund</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_5328" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>378|543</td>
+        <td>1<span class="grey">.</span>503</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="5279" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=5279">084 | Galgenfurt</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_5279" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>381|539</td>
+        <td>1<span class="grey">.</span>364</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16674" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16674">085 | Eisenfluch</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16674" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>373|548</td>
+        <td>1<span class="grey">.</span>069</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16680" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16680">086 | Kriegsthron</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16680" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>373|549</td>
+        <td>1<span class="grey">.</span>060</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="16452" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=16452">087 | Schwarzfall</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_16452" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>376|549</td>
+        <td>1<span class="grey">.</span>062</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15116" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15116">088 | Schattenhort</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15116" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>381|548</td>
+        <td>1<span class="grey">.</span>001</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="15180" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=15180">089 | Todesklamm</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_15180" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>382|548</td>
+        <td>979</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="19057" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=19057">090 | Finsterhain</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_19057" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>364|548</td>
+        <td>841</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17692" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17692">091 | Zornfeste</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17692" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>365|549</td>
+        <td>838</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="17753" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=17753">092 | Stahlwacht</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_17753" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>370|550</td>
+        <td>819</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="18659" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=18659">093 | Donnergrat</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_18659" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>368|551</td>
+        <td>968</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="5895" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=5895">094 | Barbarendorf</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_5895" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>382|546</td>
+        <td>897</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14091" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14091">095 | Barbarendorf</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14091" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>386|540</td>
+        <td>719</td>
+    </tr>
+	<tr>
+        <td>
+            <!-- tables rool -->
+            <table width="100%">
+                <tr>
+                    <td style="padding:0;">
+                        <span class="village_anchor" data-id="14412" data-player="1577544193">
+                        <a href="/guest.php?screen=info_village&amp;id=14412">096 | Barbarendorf</a></span>
+                    </td>
+                    <td style="padding:0;"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/map/reserved_player.webp" id="reservation_14412" style="display: none; float:right;" title="" alt="" class="tooltip" /></td>
+                </tr>
+            </table>
+        </td>
+
+        
+        <td>386|549</td>
+        <td>558</td>
+    </tr>
+				</tbody>
+			</table>
+					</td>
+		<td valign="top" style="width: 50%">
+						<table class="vis w100">
+			<tr>
+				<th colspan="2">
+					Profil
+									</th>
+			</tr>
+
+			<tr><td colspan="2" align="center"><img src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/userimage/735905_large" alt="Profilbild" /></td></tr>
+		</table>
+	
+		<table class="vis w100">
+		<tr>
+			<th>
+				Persönlicher Text
+							</th>
+		</tr>
+		<tr><td class="word-break-word text-center"><img alt="shield" class="emoji" src="https://media.innogamescdn.com/TribalWars/emoji/1f6e1.png"><b>„Loyal zu Freunden. Gnadenlos zu Feinden.“</b><br />
+<img alt="handshake" class="emoji" src="https://media.innogamescdn.com/TribalWars/emoji/1f91d.png"><b>„Respekt bekommt Respekt. Angriff bekommt Antwort.“</b></td></tr>
+	</table>
+	<br />
+	
+	<div class="award-group showcase-group">
+    <div class="award-group-head showcase-head">Reliquien</div>
+    <div class="award-group-content showcase-content">
+        <div class="showcase-list-wrap">
+            <div id="relic_showcase_list" class="showcase-list">
+                                    <div class="showcase-entry" data-relic-id="78490">
+                        <img class="showcase-icon" src="https://dsde.innogamescdn.com/asset/3e3b154c/graphic/relic_system/relics_46/greataxe_superior.webp" alt="" />
+                        <div class="showcase-info">
+                            <strong class="relic-quality-superior">Erstklassige Großaxt</strong>
+                            <div>Haupt: Axtkämpfer: +8% Angriffs- und Verteidigungsstärke</div>
+                                                            <div>Stall: +4% Rekrutierungs-Geschwindigkeit</div>
+                                                            <div>Bogenschütze: +4% Angriffs- und Verteidigungsstärke</div>
+                                                    </div>
+                                            </div>
+                            </div>
+                    </div>
+            </div>
+    <div class="award-group-foot showcase-foot">&nbsp;</div>
+</div>
+
+<script>
+    InfoPlayer.Showcase.initFade();
+    </script>
+
+            
+
+
+								</td>
+	</tr>
+</table>
+
+</td></tr></table>
+</div>
+</td></tr></table><script type="text/javascript">
+//<![CDATA[
+	setImageTitles();
+//]]>
+</script>
+</body>
+</html>
