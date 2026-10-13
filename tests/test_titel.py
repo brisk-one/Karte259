@@ -11,6 +11,36 @@ def zeile(rank, player_id, name, value, date):
     return {"rank": rank, "player_id": player_id, "name": name, "value": value, "date": date}
 
 
+class ProbeProfil(unittest.TestCase):
+    """Einmalige Probe des öffentlichen Spielerprofils (Dennis 3b, 13.10.2026)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.old_data, self.old_get = config.DATA_DIR, inaday._get
+        config.DATA_DIR = os.path.join(self.tmp, "data")
+        self.urls = []
+        inaday._get = lambda url: (self.urls.append(url), "<html>Profil</html>")[1]
+
+    def tearDown(self):
+        config.DATA_DIR, inaday._get = self.old_data, self.old_get
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_einmalig_zwei_seiten_des_rang_1_spielers(self):
+        state = {}
+        n = inaday.probe_profil(state, {"conquer": zeile(1, 5, "Eroberer", 3, "2026-10-10"),
+                                        "kill_def": zeile(1, 42, "Anna", 9000, "2026-10-10")})
+        self.assertEqual(n, 2)
+        self.assertTrue(all(u.endswith("id=42") for u in self.urls))       # Verteidiger vor Eroberer
+        self.assertTrue(os.path.exists(store.dpath("debug", "sample_info_player.html")))
+        self.assertEqual(inaday.probe_profil(state, {"kill_def": zeile(1, 42, "Anna", 9000, "2026-10-10")}), 0)
+        self.assertEqual(len(self.urls), 2)                                 # kein zweites Mal
+
+    def test_ohne_rang_1_kein_abruf(self):
+        state = {}
+        self.assertEqual(inaday.probe_profil(state, {"kill_def": None}), 0)
+        self.assertEqual((self.urls, state["inaday"].get("profil_probe_saved")), ([], None))
+
+
 class UpdateTitel(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

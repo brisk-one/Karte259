@@ -265,6 +265,37 @@ def deep_scrape(state, now_local, types):
     return out, pages, note
 
 
+PROFIL_PROBE_SEITEN = [("sample_info_player.html", "screen=info_player&id={pid}"),
+                       ("sample_info_player_awards.html", "screen=info_player&mode=awards&id={pid}")]
+
+
+def probe_profil(state, rang1_by_type):
+    """Legt einmalig das öffentliche Profil (Gastzugang) eines Rang-1-Spielers als Beispiel unter data/debug/ ab.
+
+    Befund 13.10.2026: titel.csv enthält Allzeit-Rekordtage der Rangliste "an einem Tag", keine Tagestitel.
+    Geprüft wird, ob das Spielerprofil die Zahl der Tagestitel (Angreifer, Verteidiger, Räuber, Sammler des
+    Tages) zeigt (Dennis 3b). Kostet höchstens zwei Abrufe, einmal; das Ergebnis steht in state.json.
+    """
+    st = state.setdefault("inaday", {})
+    if st.get("profil_probe_saved"):
+        return 0
+    r = next((rang1_by_type.get(t) for t in ("kill_def", "kill_att", "loot_res", "scavenge")
+              if (rang1_by_type or {}).get(t) and rang1_by_type[t].get("player_id")), None)
+    if not r:
+        return 0
+    gespeichert = 0
+    for name, query in PROFIL_PROBE_SEITEN:
+        try:
+            html = _get(f"{config.BASE_URL}/guest.php?" + query.format(pid=r["player_id"]))
+        except net.FetchError:
+            continue
+        _save_debug(name, html)
+        gespeichert += 1
+    if gespeichert:                                      # sonst beim nächsten Lauf erneut versuchen
+        st["profil_probe_saved"] = True
+    return gespeichert
+
+
 def update_titel(rang1_by_type):
     """Trägt die Rang-1-Zeile je Kategorie als Auszeichnung des jeweiligen Tages nach, ohne Netz.
 
@@ -325,6 +356,8 @@ def update(state, now_utc, now_local, members):
             summary["changed_types"].append(t)
         sigs[t] = sig
 
+    if probe_profil(state, rang1):
+        summary["profil_probe"] = True
     titel_changed = update_titel(rang1)
     if titel_changed:
         summary["titel_changed"] = titel_changed
