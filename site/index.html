@@ -110,22 +110,26 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
   /* Beide Ranglisten teilen sich denselben Aufbau: Stand jetzt, besiegte Gegner, bester Tag.
      Dadurch sehen Spielerrangliste und Stammesliste gleich aus und lassen sich gleich sortieren. */
   const REK=[["loot_res","Rohst. gepl."],["scavenge","Rohst. ges."],["loot_vil","Dörfer gepl."],["conquer","Erobert"]];
-  function spaltenKopf(winKey){
-    return [["#","rank",1],["Spieler","l"],["Stamm","l"],
+  // weltrang=true blendet neben dem Rang im Stamm zusaetzlich den Weltrang ein (Wunsch Dennis 16.09.)
+  function spaltenKopf(winKey, weltrang){
+    return [["#","rank",1]].concat(weltrang? [["Weltrang","rank",1]] : [])
+      .concat([["Spieler","l"],["Stamm","l"],
             ["Punkte","",1],["± "+winLabel(winKey),"",1],["Dörfer","",1],
-            ["Bash","",1],["Angr.","",1],["Vert.","",1],["Unt.","",1]]
+            ["Bash","",1],["Angr.","",1],["Vert.","",1],["Unt.","",1]])
       .concat(REK.map(([,l])=>[l,"",1]));
   }
-  function spaltenGruppen(){
-    return [["",3],["Stand jetzt",3],["Besiegte Gegner",4],["Bester Tag (An einem Tag)",REK.length]];
+  function spaltenGruppen(weltrang){
+    return [["",weltrang? 4 : 3],["Stand jetzt",3],["Besiegte Gegner",4],["Bester Tag (An einem Tag)",REK.length]];
   }
-  function zeile(i, n, winKey){
+  function zeile(i, n, winKey, weltrang){
     const r=players.rows[i], R=rec[r[idx.id]]||{}, k=idx["d"+winKey+"_points"];
-    return [[String(n),"rank",n],[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],
+    return [[String(n),"rank",n]]
+      .concat(weltrang? [[nf.format(r[idx.rank]),"rank",r[idx.rank]]] : [])
+      .concat([[r[idx.name],"l name"],[allyTag[r[idx.ally]]||"","l"],
             [nf.format(r[idx.points]),"",r[idx.points]],[signed(r[k]),"",r[k]],
             [nf.format(r[idx.villages]),"",r[idx.villages]],
             [nf.format(r[idx.all]),"",r[idx.all]],[nf.format(r[idx.att]),"",r[idx.att]],
-            [nf.format(r[idx.def]),"",r[idx.def]],[nf.format(r[idx.sup]),"",r[idx.sup]]]
+            [nf.format(r[idx.def]),"",r[idx.def]],[nf.format(r[idx.sup]),"",r[idx.sup]]])
       .concat(REK.map(([t,l])=>{
         const v=R[t];
         // Quickinfo: an welchem Tag der Bestwert erreicht wurde und auf welchem Weltrang er liegt
@@ -182,11 +186,12 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
       .sort((x,y)=>players.rows[y][idx.points]-players.rows[x][idx.points]);
     const withRec=members.filter(i=>rec[players.rows[i][idx.id]]).length;
     $("tribe-hint").textContent=(ally? ally[1]+" · ":"")
+      +"# ist der Rang im Stamm nach Punkten, Weltrang der Platz auf der ganzen Welt. "
       +(withRec? "Rekorde für "+withRec+" von "+members.length+" Mitgliedern." : "Für diesen Stamm liegen noch keine Rekorde vor.");
     const box=$("tribe"); box.replaceChildren();
     if(!members.length){ box.appendChild(el("p","empty","Keine Mitglieder mit Daten.")); return; }
-    box.appendChild(table(spaltenKopf(win), members.map((i,n)=>zeile(i,n+1,win)),
-      {groups:spaltenGruppen(), sort:3}));
+    box.appendChild(table(spaltenKopf(win,true), members.map((i,n)=>zeile(i,n+1,win,true)),
+      {groups:spaltenGruppen(true), sort:4}));
   }
   pick.addEventListener("change", renderTribe);
   renderTribe();
