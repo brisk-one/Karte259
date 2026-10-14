@@ -8,6 +8,11 @@ laut Dennis leicht an schwachen Barbarendörfern erzeugen lassen; sie werden tro
 
 Alle Schwellwerte sind ein erster Entwurf (11.10.2026) und bewusst als Konstanten gehalten, damit sie
 sich ohne Eingriff in die Rechnung anpassen lassen, siehe HUB Decision-Log.
+
+Quelle der Titel seit 14.10.2026 (Dennis 2a): Angreifer und Verteidiger des Tages aus der Git-Historie der
+Spielerliste (data/inaday/tagessieger.csv, collector/tagessieger.py). Für Räuber, Sammler, Plünderer und Eroberer
+gibt es keine Tagesquelle; dort zählen die Tage, an denen der Spieler Rang 1 der Rangliste "an einem Tag" wurde,
+also nur Allzeit-Rekordtage (data/inaday/titel.csv). Die Anzeige kennzeichnet das.
 """
 
 STUFEN = ["Rekrut", "Phalanx-Krieger", "Hauptmann", "Spartiat", "Kriegsherr", "Unsterblicher"]
@@ -18,9 +23,11 @@ TITEL_GEWICHT = {"kill_def": 3, "kill_att": 3, "loot_res": 2, "scavenge": 1}
 
 AUSZEICHNUNG_NAME = {
     "kill_def": "Verteidiger des Tages", "kill_att": "Angreifer des Tages",
-    "loot_res": "Räuber des Tages", "scavenge": "Sammler des Tages",
-    "loot_vil": "Plünderer des Tages", "conquer": "Eroberer des Tages",
+    "loot_res": "Räuber des Tages (nur Rekordtage)", "scavenge": "Sammler des Tages (nur Rekordtage)",
+    "loot_vil": "Plünderer des Tages (nur Rekordtage)", "conquer": "Eroberer des Tages (nur Rekordtage)",
 }
+# Typen, deren Tagessieger aus der eigenen Historie kommen (tagessieger.csv); alle anderen aus titel.csv
+TITEL_AUS_HISTORIE = ["kill_def", "kill_att"]
 # Typen, die in die Stufe einfließen (Reihenfolge = Wichtigkeit laut Dennis 11.10.)
 TITEL_GEWERTET = ["kill_def", "kill_att", "loot_res", "scavenge"]
 

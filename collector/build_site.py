@@ -173,6 +173,19 @@ def _cache_bust(out_dir):
             f.write(html)
 
 
+def titel_zaehlen():
+    """Tagesauszeichnungen je Spieler und Typ (E14): {spieler: {typ: anzahl}}. Angreifer und Verteidiger aus der
+    eigenen Historie (tagessieger.csv, Dennis 2a 14.10.2026), die übrigen Typen als Rekordtage aus titel.csv."""
+    zeilen = [tr for tr in store.read_csv(store.dpath("inaday", "titel.csv"))
+              if tr["type"] not in erfahrung.TITEL_AUS_HISTORIE]
+    zeilen += store.read_csv(store.dpath("inaday", "tagessieger.csv"))
+    counts = {}
+    for tr in zeilen:
+        d = counts.setdefault(int(tr["player_id"]), {})
+        d[tr["type"]] = d.get(tr["type"], 0) + 1
+    return counts
+
+
 def build(out_dir):
     if os.path.exists(out_dir):
         shutil.rmtree(out_dir)
@@ -200,11 +213,7 @@ def build(out_dir):
     for f in ("att", "def", "sup"):
         bash_order = sorted(current, key=lambda r: (-int(r[f]), int(r["id"])))
         bash_rank_of[f] = {int(r["id"]): i for i, r in enumerate(bash_order, 1)}
-    # Echte Tagesauszeichnungen je Spieler und Typ, aus dem Verlauf in data/inaday/titel.csv (E14)
-    titel_counts = {}
-    for tr in store.read_csv(store.dpath("inaday", "titel.csv")):
-        d = titel_counts.setdefault(int(tr["player_id"]), {})
-        d[tr["type"]] = d.get(tr["type"], 0) + 1
+    titel_counts = titel_zaehlen()
 
     rows = []
     tier_of = {}

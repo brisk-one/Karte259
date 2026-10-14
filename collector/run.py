@@ -6,7 +6,7 @@ import sys
 import time
 import traceback
 
-from . import config, inaday, net, store, world, worldconfig
+from . import config, inaday, net, store, tagessieger, world, worldconfig
 
 RUNS_HEADER = ["run_utc", "trigger", "result", "world_changed", "data_last_modified", "players", "villages",
                "allies", "new_conquers", "world_requests", "guest_requests", "inaday_changed_types",
@@ -48,6 +48,12 @@ def main(argv=None):
         except Exception as e:
             errors.append(f"Tagesbeste: {e}")
             traceback.print_exc()
+
+    try:                                         # Angreifer und Verteidiger des Tages aus der Git-Historie, ohne Netz
+        tagessieger.update(now_local)
+    except Exception as e:
+        errors.append(f"Tagessieger: {e}")
+        traceback.print_exc()
 
     duration = round(time.time() - t0, 1)
     result = "fehler" if errors else ("neu" if w.get("changed") else "unverändert")

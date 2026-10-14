@@ -1077,7 +1077,7 @@ function renderPlayerPanel(pi){
     const br=r[pIdx["rank_"+k]];
     zeile(label, br!=null? "Platz "+nf.format(br)+(rangBadge(br)? " ("+rangBadge(br)+")" : "") : "kein Wert erfasst");
   });
-  body.appendChild(el("div","sec","Erfolge (An einem Tag)"));
+  body.appendChild(el("div","sec","Tagestitel"));
   const gewertet=new Set((ERF&&ERF.titel_gewertet)||["kill_def","kill_att","loot_res","scavenge"]);
   const namen=(ERF&&ERF.titel_namen)||{};
   Object.keys(TITEL_FELD).forEach(typ=>{
