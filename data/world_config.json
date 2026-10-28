@@ -72,6 +72,8 @@
   "coord.select_start": "1",
   "coord.start_villages": "1",
   "coord.village_move_wait": "336",
+  "dominance_win.coins_reduction_enabled": "",
+  "dominance_win.coins_reduction_world_age": "90",
   "dominance_win.domination_endgame": "60",
   "dominance_win.domination_reached_at": "0",
   "dominance_win.domination_warning": "45",
@@ -87,7 +89,7 @@
   "game.base_production": "30",
   "game.buildtime_formula": "2",
   "game.church": "0",
-  "game.event": "26",
+  "game.event": "19",
   "game.fake_limit": "1",
   "game.farm_limit": "0",
   "game.hauls": "1",
@@ -194,5 +196,5 @@
   "win.check": "3",
   "win.give_prizes": "1"
  },
- "since_utc": "2026-09-29T19:42:35+00:00"
+ "since_utc": "2026-10-28T00:49:13+00:00"
 }
