@@ -1,40 +1,88 @@
 name: Sammler
+run-name: ${{ github.event_name == 'push' && github.event.head_commit.message || (inputs.modus == 'seite' && 'Seite' || 'Lauf') }}
 
+# Sammler-Takt (Entscheidung 8.1a, 29.10.2026): GitHub startet geplante Läufe seit 20.09. nur noch rund
+# fünfmal am Tag. Deshalb bleibt ein Lauf rund 5,5 h aktiv, holt selbst einmal je Stunde ab Minute 55
+# (collector/takt.py, .github/actions/stunde) und stößt am Ende seinen Nachfolger an. Der Zeitplan ist nur
+# noch Rückfallebene, falls die Kette reißt; der Wächter lässt ihn aus, solange ein Lauf aktiv ist.
+# Die Seite wird nach jedem Abruf über einen eigenen Lauf (modus=seite) gebaut und veröffentlicht,
+# bei einem Code-Push ebenfalls, dann ohne Abruf.
 on:
   schedule:
-    - cron: "55 * * * *"   # stündlich, Minute 55 (UTC), kurz nach der Serveraktualisierung (Minute 47 bis 53)
+    - cron: "55 * * * *"
   workflow_dispatch:
+    inputs:
+      modus:
+        description: "lauf = langer Sammellauf, seite = nur Seite bauen"
+        type: choice
+        options: [lauf, seite]
+        default: lauf
+      vorgaenger:
+        description: "Lauf, der diesen als Nachfolger angestoßen hat (vom Wächter ignoriert)"
+        required: false
+        default: ""
   push:
     branches: [main]
     paths:
       - "collector/**"
       - "site/**"
       - "tests/**"
-      - ".github/workflows/**"
+      - ".github/**"
 
 permissions:
   contents: write
   pages: write
   id-token: write
-
-concurrency:
-  group: sammler
-  cancel-in-progress: false
+  actions: write
 
 jobs:
-  collect:
+  waechter:
+    if: github.event_name == 'schedule' || inputs.modus == 'lauf'
     runs-on: ubuntu-latest
-    # Der tägliche Durchgang durch die vollständigen Ranglisten dauert je nach Seitengröße
-    # bis zu rund 25 Minuten (Notbremse bei 500 Seiten je Kategorie).
-    timeout-minutes: 45
+    outputs:
+      frei: ${{ steps.check.outputs.frei }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/sammler.yml/runs?per_page=50" > runs.json
+          python3 - <<'EOF'
+          import json, os
+          eigen, vorg = "${{ github.run_id }}", "${{ inputs.vorgaenger }}"
+          runs = json.load(open("runs.json"))["workflow_runs"]
+          # Nur ältere Läufe zählen: starten zwei gleichzeitig, läuft der ältere und der jüngere entfällt
+          ich = next(((r["created_at"], r["id"]) for r in runs if str(r["id"]) == eigen), ("9999", 0))
+          aktiv = [r for r in runs
+                   if r["status"] != "completed" and str(r["id"]) not in (eigen, vorg)
+                   and r["event"] != "push" and r["display_title"] == "Lauf"
+                   and (r["created_at"], r["id"]) < ich]
+          for r in aktiv:
+              print(f"Aktiv: Lauf {r['id']} ({r['event']}, {r['status']}, seit {r['run_started_at']})")
+          print("Kein anderer Lauf aktiv." if not aktiv else "Dieser Lauf entfällt.")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"frei={'false' if aktiv else 'true'}\n")
+          EOF
+
+  lauf:
+    needs: waechter
+    if: needs.waechter.outputs.frei == 'true'
+    runs-on: ubuntu-latest
+    # Ein Lauf am Stück, nie zwei gleichzeitig; ein wartender Nachfolger startet, sobald der Vorgänger endet
+    concurrency:
+      group: sammler-lauf
+      cancel-in-progress: false
+    # Letzter Abruf spätestens 315 min nach Start, der tägliche Ranglisten-Durchgang dauert bis zu 25 min;
+    # gehostete Runner erlauben höchstens 360 min
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      # Rohdaten des letzten Laufs mitnehmen. Ohne sie faellt die Karte bei einem Lauf ohne neue
-      # Weltdaten auf das Tagesarchiv zurueck, obwohl frischere Daten schon einmal da waren.
-      - uses: actions/cache@v6
+      # Rohdaten des letzten Abrufs (auch aus dem Vorgänger) mitnehmen
+      - uses: actions/cache/restore@v6
         with:
           path: .cache
           key: rohdaten-${{ github.run_id }}
@@ -46,24 +94,74 @@ jobs:
       - name: Tests Prägerechner
         run: node --test tests/praegen.test.js
 
-      - name: Daten holen
-        id: run
-        run: python3 -m collector.run --trigger "${{ github.event_name }}"
-
-      - name: Daten speichern
+      - name: Vorbereiten
+        id: start
         run: |
           git config user.name "karte259-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data
-          if git diff --cached --quiet; then
-            echo "Keine Änderungen zum Speichern."
-          else
-            git commit -q -m "Daten $(date -u +%Y-%m-%dT%H:%MZ) (${{ github.event_name }})"
-            for i in 1 2 3; do
-              git push -q origin HEAD:main && break
-              git pull -q --rebase origin main
-            done
+          echo "ende=$(date -u -d '+315 minutes' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/stunde
+        continue-on-error: true
+        with: {nr: 1, ende: "${{ steps.start.outputs.ende }}"}
+      - uses: ./.github/actions/stunde
+        continue-on-error: true
+        with: {nr: 2, ende: "${{ steps.start.outputs.ende }}"}
+      - uses: ./.github/actions/stunde
+        continue-on-error: true
+        with: {nr: 3, ende: "${{ steps.start.outputs.ende }}"}
+      - uses: ./.github/actions/stunde
+        continue-on-error: true
+        with: {nr: 4, ende: "${{ steps.start.outputs.ende }}"}
+      - uses: ./.github/actions/stunde
+        continue-on-error: true
+        with: {nr: 5, ende: "${{ steps.start.outputs.ende }}"}
+      - uses: ./.github/actions/stunde
+        continue-on-error: true
+        with: {nr: 6, ende: "${{ steps.start.outputs.ende }}"}
+
+      - name: Nachfolger anstoßen
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/sammler.yml/dispatches" \
+            -d '{"ref":"main","inputs":{"modus":"lauf","vorgaenger":"${{ github.run_id }}"}}'
+
+      - name: Fehler melden
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f .lauf-fehler ]; then
+            echo "::error::Mindestens ein Abruf hat Fehler gemeldet, Details in data/status.json und data/runs.csv"
+            exit 1
           fi
+
+  seite:
+    if: github.event_name == 'push' || inputs.modus == 'seite'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: seite
+      cancel-in-progress: false
+    timeout-minutes: 15
+    steps:
+      # Immer der neueste Stand von main, auch bei einem Push (Daten des Bots können neuer sein)
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/cache/restore@v6
+        with:
+          path: .cache
+          key: rohdaten-${{ github.run_id }}
+          restore-keys: rohdaten-
+
+      - name: Tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Tests Prägerechner
+        run: node --test tests/praegen.test.js
 
       - name: Seite bauen
         run: python3 -m collector.build_site --out _site
@@ -72,17 +170,24 @@ jobs:
         with:
           path: _site
 
-      - name: Fehler melden
-        if: steps.run.outputs.error == 'true'
+      # Nach einem Code-Push sicherstellen, dass ein Sammellauf aktiv ist (der Wächter lässt ihn sonst aus)
+      - name: Sammellauf sicherstellen
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "::error::Der Lauf hat Fehler gemeldet, Details in data/status.json"
-          exit 1
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/sammler.yml/dispatches" \
+            -d '{"ref":"main","inputs":{"modus":"lauf"}}'
 
   deploy:
-    needs: collect
-    if: always() && needs.collect.result != 'cancelled'
+    needs: seite
+    if: always() && needs.seite.result == 'success'
     runs-on: ubuntu-latest
     continue-on-error: true
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

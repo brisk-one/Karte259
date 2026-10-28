@@ -97,6 +97,15 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
      r.append(el("span",null,k), el("b",null,v)); d.appendChild(r); sb.appendChild(d); });
   if(!ok){ const ul=$("errors"); st.errors.forEach(x=>ul.appendChild(el("li",null,x))); ul.hidden=false; }
 
+  /* Läufe der letzten 24 h, gezählt zur Ansichtszeit: bleibt der Sammler stehen, sinkt die Zahl auch ohne neuen Seitenbau.
+     Ziel 24 je Tag, Warnung unter 20 (Retro v1.0, Entscheidung 8.1a). */
+  const since=Date.now()-24*3600e3;
+  const n24=(meta.runs||[]).filter(r=>Date.parse(r.run_utc)>since).length;
+  const mon=el("span","pill "+(n24>=20?"ok":"err")); mon.appendChild(el("i"));
+  mon.appendChild(document.createTextNode("Läufe 24 h: "+n24+(n24>=20?"":" (Warnung, Ziel 24)")));
+  mon.title="Sammelläufe in den letzten 24 Stunden. Ziel ist einer je Stunde, unter 20 stimmt etwas mit dem Takt nicht.";
+  sb.insertBefore(mon, pill.nextSibling);
+
   const F=players.fields, idx=Object.fromEntries(F.map((f,i)=>[f,i]));
   const allyTag={}; allies.rows.forEach(a=>{ allyTag[a[0]]=a[2]; });
   const refs=players.refs_utc||{};

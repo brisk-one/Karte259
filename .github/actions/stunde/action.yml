@@ -1,0 +1,73 @@
+name: Stunde
+description: Ein Abruf im langen Sammellauf (8.1a). Wartet auf das nächste Stundenfenster, holt, speichert, stößt die Seite an.
+
+inputs:
+  nr:
+    description: laufende Nummer im Lauf (für den Cache-Schlüssel)
+    required: true
+  ende:
+    description: spätester Abruf (ISO, UTC)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Warten
+      id: warten
+      shell: bash
+      run: |
+        git pull -q --rebase origin main
+        python3 -m collector.takt warten --ende "${{ inputs.ende }}"
+
+    # Während des Wartens kann ein anderer Lauf geholt oder Dennis Code gepusht haben
+    - name: Prüfen
+      id: pruefen
+      if: steps.warten.outputs.abruf == 'true'
+      shell: bash
+      run: |
+        git pull -q --rebase origin main
+        python3 -m collector.takt faellig
+
+    - name: Daten holen
+      id: run
+      if: steps.pruefen.outputs.faellig == 'true'
+      shell: bash
+      run: python3 -m collector.run --trigger takt
+
+    - name: Fehler merken
+      if: steps.run.outputs.error == 'true'
+      shell: bash
+      run: touch .lauf-fehler
+
+    - name: Daten speichern
+      if: steps.pruefen.outputs.faellig == 'true'
+      shell: bash
+      run: |
+        git add data
+        if git diff --cached --quiet; then
+          echo "Keine Änderungen zum Speichern."
+        else
+          git commit -q -m "Daten $(date -u +%Y-%m-%dT%H:%MZ) (takt)"
+        fi
+        for i in 1 2 3; do
+          git push -q origin HEAD:main && break
+          git pull -q --rebase origin main
+        done
+
+    # Rohdaten für den Seitenbau und den nächsten Lauf (Dorfstand), je Abruf ein eigener Schlüssel
+    - uses: actions/cache/save@v6
+      if: steps.pruefen.outputs.faellig == 'true'
+      with:
+        path: .cache
+        key: rohdaten-${{ github.run_id }}-${{ inputs.nr }}
+
+    # Ein Push mit GITHUB_TOKEN startet keinen Workflow, workflow_dispatch über die API schon
+    - name: Seite anstoßen
+      if: steps.pruefen.outputs.faellig == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/workflows/sammler.yml/dispatches" \
+          -d '{"ref":"main","inputs":{"modus":"seite"}}'
