@@ -117,6 +117,9 @@
           <label class="pick"><span>Rohstoffe anfordern</span><select id="interval" aria-label="Klickfrequenz"></select></label>
         </div>
         <div class="pr-row">
+          <label class="pick"><span>Marktplatz mindestens</span><select id="minmarket" aria-label="Mindeststufe Marktplatz für alle Dörfer"></select></label>
+        </div>
+        <div class="pr-row">
           <label class="pr-check"><input type="checkbox" id="bonus" checked> Händlerbonus (+50 % Tragkraft und Tempo)</label>
         </div>
         <div class="pr-row">
@@ -247,19 +250,26 @@ K.FLAG_PCT.forEach((p, lvl) => {
 $("flag").value = "9";
 K.LADDER.forEach(m => { const o = document.createElement("option"); o.value = m; o.textContent = "alle " + ivl(m); $("interval").appendChild(o); });
 $("interval").value = "60";
+// Optional: alle Dörfer rechnen mindestens mit dieser Marktstufe (vorher ausbauen)
+for (let L = 0; L <= 25; L++) {
+  const o = document.createElement("option"); o.value = L;
+  o.textContent = L ? "Stufe " + L + " (" + nf.format(K.merchantsAt(L)) + " Händler)" : "wie im Dorf";
+  $("minmarket").appendChild(o);
+}
 
 function inputs() {
   const mpf = parseFloat($("mpf").value), pf = parseFloat($("pfac").value);
   return {pkgPct: +$("pkg").value || 0, startPct: +$("start").value || 0, decree: $("decree").checked,
           merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, intervalMin: +$("interval").value,
           production: $("prod").checked, prodFactor: pf > 0 ? pf : null, minGainPct: +$("gain").value || 0,
+          minMarket: +$("minmarket").value || 0,
           minPerField: mpf > 0 && Math.abs(mpf - WORLD.base_min_per_field / WORLD.speed) > 1e-6 ? mpf : null};
 }
 
 let timer = null;
 function schedule() { clearTimeout(timer); timer = setTimeout(run, 250); }
 ["paste", "pkg", "start", "mpf", "pfac", "gain"].forEach(id => $(id).addEventListener("input", schedule));
-["flag", "interval", "bonus", "decree", "prod"].forEach(id => $(id).addEventListener("change", schedule));
+["flag", "interval", "minmarket", "bonus", "decree", "prod"].forEach(id => $(id).addEventListener("change", schedule));
 document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => { VIEW = +b.dataset.view; renderView(); }));
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
 document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); } });
@@ -366,6 +376,8 @@ function needSmall(n) {
   return q.kind === "voll" ? "für 100 % rechtzeitig" : "100 % nicht erreichbar, höchstens " + pct0(q.top);
 }
 function siteName(s) { return s.name + " " + coord(s); }
+// Marktstufe eines vorbereiteten Dorfs, mit Ausbau auf die Mindeststufe als „17 → 20“
+function marketText(s) { return s.b.market > s.marketFrom ? s.marketFrom + " → " + s.b.market : String(s.b.market); }
 function engpass(d) {
   const m = d.rows.filter(r => r.status === "markt").length, w = d.rows.filter(r => r.status === "weit").length;
   return {m, w};
@@ -382,7 +394,7 @@ function renderRecommendation() {
     + (P.decree ? ", die ersten 24 h mit Erlass" : ""));
   title.appendChild(sub);
   $("rec-hint").textContent = P.pkgPct + " % Pakete · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
-    + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decree ? " · Erlass" : "");
+    + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decree ? " · Erlass" : "");
 
   const frist = P.decree ? "in den 24 h des Erlasses" : "in den 48 h";
   let why;
@@ -398,12 +410,16 @@ function renderRecommendation() {
   $("rec-why").textContent = why;
 
   const notes = [];
+  if (P.minMarket) notes.push(R.marketUp.count
+    ? "Gerechnet mit Marktplatz mindestens Stufe " + P.minMarket + ": " + R.marketUp.count + " Dörfer bauen den Marktplatz vorher aus, zusammen "
+      + R.marketUp.levels + " Stufen. Erst danach mit dem Münzprägen anfangen."
+    : "Alle Dörfer haben schon Marktplatz Stufe " + P.minMarket + " oder höher.");
   if (a.r.needsSnob) notes.push("Keines der Dörfer hat einen Adelshof. Im Prägedorf muss erst einer gebaut werden.");
   if (R.singleAny) {
     const s = R.src[R.singleAny.sites[0]];
     notes.push("Ohne Adelshof-Pflicht wäre " + siteName(s) + " als einzelnes Prägedorf besser (+"
       + nf1.format(Math.round((R.singleAny.coins / R.single.coins - 1) * 1000) / 10) + " % Münzen). Dort fehlt der Adelshof, Ausbau heute: Hauptgebäude "
-      + s.b.main + ", Schmiede " + s.b.smith + ", Marktplatz " + s.b.market + ".");
+      + s.b.main + ", Schmiede " + s.b.smith + ", Marktplatz " + s.marketFrom + ".");
   }
   $("rec-note").textContent = notes.join(" ");
   $("rec-note").hidden = !notes.length;
@@ -530,7 +546,7 @@ function renderMap() {
     const tt = svgEl("title", {});
     tt.textContent = s.name + " " + coord(s) + "\n"
       + (r.i === r.site ? "Prägedorf" : "Laufzeit " + hm(r.tau) + " (" + nf1.format(Math.round(r.dist * 10) / 10) + " Felder)") + "\n"
-      + "Markt " + s.b.market + " (" + s.merchants + " Händler), Speicher " + s.b.storage + "\n"
+      + "Markt " + marketText(s) + " (" + s.merchants + " Händler), Speicher " + s.b.storage + "\n"
       + "Paket prägbar " + mio(r.pkgUnits * R.P.unitRes) + ", rechtzeitig " + (r.pkgUnits > 0 ? pct0(r.inTime / r.pkgUnits) : "k. A.")
       + ", alles nach " + hrs(r.doneAt) + "\n" + (r.status === "markt" ? "Markt " + r.need + " nötig" : STATUS[r.status]);
     hit.appendChild(tt);
@@ -570,7 +586,7 @@ function renderVillages() {
             [pct0(share), share < 1 - 1e-9 ? "down" : "", Math.round(share * 10000)],
             [hrs(r.doneAt), "", isFinite(r.doneAt) ? Math.round(r.doneAt * 60) : 999999999],
             [r.i === r.site ? "0:00 h" : hm(r.tau), "", Math.round(r.tau * 3600)],
-            [v.b.market + " (" + nf.format(r.merchants) + ")", "", v.b.market], [String(v.b.storage), "", v.b.storage],
+            [marketText(R.src[r.i]) + " (" + nf.format(r.merchants) + ")", "", R.src[r.i].b.market], [String(v.b.storage), "", v.b.storage],
             [mio(r.pkgUnits * R.P.unitRes), "", Math.round(r.pkgUnits * 1000)],
             [r.i === r.site ? "selbst (Prägedorf)" : site.name, "l"]];
   });
@@ -740,6 +756,7 @@ function renderAssumptions() {
     "Das Prägedorf braucht einen Adelshof. Zwei Prägedörfer brauchen zwei Flaggendoppler und zwei Münzkosten-Flaggen; der Rechner nimmt für beide dieselbe Stufe an.",
     "„Markt zu klein“: Das Dorf schafft seinen Anteil mit der genannten Marktstufe rechtzeitig. „zu weit weg oder zu selten geklickt“: auch Markt 25 reicht bei diesem Klickabstand nicht.",
   ];
+  if (P.minMarket) items.push("Marktplatz mindestens Stufe " + P.minMarket + " (" + nf.format(K.merchantsAt(P.minMarket)) + " Händler): Dörfer darunter rechnen mit dieser Stufe, als wäre der Ausbau vor dem Start fertig. Bauzeit und Baukosten sind nicht eingerechnet. In der Dorftabelle steht der Ausbau als „alt → neu“.");
   $("assume").replaceChildren(...items.map(t => el("li", null, t)));
 }
 

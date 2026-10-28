@@ -149,6 +149,27 @@ test("Engpass-Einstufung nennt die nötige Marktstufe", () => {
   assert.ok(row.need > 6 && row.need <= 25);
 });
 
+test("Mindeststufe Marktplatz hebt kleine Märkte an, senkt keine", () => {
+  const v = haufen().slice(0, 3);
+  v[1].b = Object.assign({}, v[1].b, {market: 10});
+  v[2].b = Object.assign({}, v[2].b, {market: 6, snob: 0});
+  v[2].x = 106;
+  const ohne = K.params({pkgPct: 100, flagLevel: 9, intervalMin: 60, merchantBonus: true, production: false}, WELT);
+  const mit = K.params({pkgPct: 100, flagLevel: 9, intervalMin: 60, merchantBonus: true, production: false, minMarket: 20}, WELT);
+  assert.equal(ohne.minMarket, 0);
+  const [a, b, c] = K.prepare(v, mit);
+  assert.deepEqual([a.b.market, b.b.market, c.b.market], [25, 20, 20]);
+  assert.deepEqual([a.marketFrom, b.marketFrom, c.marketFrom], [25, 10, 6]);
+  assert.equal(c.merchants, K.merchantsAt(20));
+  assert.equal(v[2].b.market, 6, "Eingabe bleibt unverändert");
+  const r0 = K.plan(v, ohne), r1 = K.plan(v, mit);
+  assert.deepEqual(r0.marketUp, {count: 0, levels: 0});
+  assert.deepEqual(r1.marketUp, {count: 2, levels: 24});
+  assert.equal(r0.d1.rows.find(x => x.i === 2).status, "markt");
+  assert.equal(r1.d1.rows.find(x => x.i === 2).status, "ok");
+  assert.ok(r1.single.coins >= r0.single.coins);
+});
+
 test("Nötige Klickfrequenz", () => {
   const steps = [{min: 5, share1: 1}, {min: 30, share1: 1}, {min: 60, share1: 0.97}];
   assert.deepEqual(K.requiredInterval(steps, "share1"), {kind: "voll", min: 30});

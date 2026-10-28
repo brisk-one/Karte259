@@ -104,6 +104,8 @@ function params(input, world) {
     production: input.production !== false,
     prodFactor: +input.prodFactor > 0 ? +input.prodFactor : 1,
     minGainPct: Math.max(0, +(input.minGainPct != null ? input.minGainPct : 10)),
+    minMarket: Math.max(0, Math.min(25, input.minMarket | 0)),   // 0: Marktstufen wie im Dorf
+
     speed: +w.speed || 1,
     coin: w.coin,
     carry: (+w.merchant_carry || 1000) * bonus,
@@ -121,14 +123,18 @@ const reduction = (t, P) => Math.min(0.95, 2 * FLAG_PCT[P.flagLevel] / 100
                                            + (P.decree && t <= DECREE_HOURS + EPS ? DECREE_PCT / 100 : 0));
 const coinPrice = (t, P) => P.unitRes * (1 - reduction(t, P));
 
-/* ---------- Dörfer vorbereiten ---------- */
+/* ---------- Dörfer vorbereiten ----------
+   Mit P.minMarket rechnet jedes Dorf mindestens mit dieser Marktstufe (Ausbau vor dem Start, Wunsch Dennis
+   28.10.2026). b.market ist dann die gerechnete Stufe, marketFrom die Stufe aus der Übersicht. */
 function prepare(villages, P) {
   return villages.map((v, i) => {
     const cap = storageCap(v.b.storage);
     const per = cap * (P.pkgPct + P.startPct) / 100;
     const prod = {};
     RES.forEach(r => { prod[r] = P.production ? baseProd(v.b[r]) * P.speed * P.prodFactor : 0; });
-    return {i, name: v.name, x: v.x, y: v.y, b: v.b, cap, merchants: merchantsAt(v.b.market),
+    const from = v.b.market | 0, market = Math.max(from, P.minMarket || 0);
+    const b = market > from ? Object.assign({}, v.b, {market}) : v.b;
+    return {i, name: v.name, x: v.x, y: v.y, b, marketFrom: from, cap, merchants: merchantsAt(market),
             snob: (v.b.snob || 0) >= 1, pkg: {wood: per, stone: per, iron: per}, prod};
   });
 }
@@ -290,6 +296,9 @@ function plan(villages, P) {
   const pl = new Planner(src, P);
   const all = src.map(s => s.i), ah = src.filter(s => s.snob).map(s => s.i);
   const out = {P, src, ahCount: ah.length};
+  // Dörfer, die für die Mindeststufe den Marktplatz vorher ausbauen, und die Summe der Ausbaustufen
+  const up = src.filter(s => s.b.market > s.marketFrom);
+  out.marketUp = {count: up.length, levels: up.reduce((n, s) => n + s.b.market - s.marketFrom, 0)};
   if (!src.length) return out;
   const cands1 = ah.length ? ah : all;
   out.single = pl.bestSingle(cands1);
