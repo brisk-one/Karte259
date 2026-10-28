@@ -43,6 +43,9 @@ jobs:
       - name: Tests
         run: python3 -m unittest discover -s tests -v
 
+      - name: Tests Prägerechner
+        run: node --test tests/praegen.test.js
+
       - name: Daten holen
         id: run
         run: python3 -m collector.run --trigger "${{ github.event_name }}"

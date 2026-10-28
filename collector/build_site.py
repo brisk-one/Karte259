@@ -21,7 +21,7 @@ import subprocess
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from . import config, erfahrung, moral, net, store, units, world
+from . import config, erfahrung, moral, net, praegen, store, units, world
 
 WINDOWS = [("1h", 3600, 600), ("6h", 6 * 3600, 1800), ("12h", 12 * 3600, 1800), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
 DELTA_FIELDS = ["points", "villages", "att", "def", "sup"]
@@ -148,15 +148,15 @@ def village_payload(vrows, source, player_index, data_time=None):
 
 
 def _cache_bust(out_dir):
-    """Hängt an style.css und app.js eine Kennung aus dem Dateiinhalt.
+    """Hängt an jede .css- und .js-Datei der Seite eine Kennung aus dem Dateiinhalt.
 
     Ohne sie liefert der Browser nach einer Änderung weiter die alte Fassung aus dem Zwischenspeicher.
     Die Kennung ändert sich nur, wenn sich die Datei wirklich ändert.
     """
     stamps = {}
-    for name in ("style.css", "app.js"):
+    for name in sorted(os.listdir(out_dir)):
         p = os.path.join(out_dir, name)
-        if os.path.exists(p):
+        if name.endswith((".css", ".js")) and os.path.isfile(p):
             with open(p, "rb") as f:
                 stamps[name] = hashlib.sha1(f.read()).hexdigest()[:8]
     if not stamps:
@@ -279,6 +279,17 @@ def build(out_dir):
     except Exception as e:
         unit_info = {"units": 0, "error": repr(e)}
 
+    # Prägerechner: nur Münzkosten und Weltgeschwindigkeit, gerechnet wird im Browser
+    praegen_info = {"ok": False}
+    try:
+        wc = store.load_json(store.dpath("world_config.json"), {}) or {}
+        pp = praegen.payload(wc.get("settings"))
+        if pp:
+            _dump(os.path.join(ddir, "praegen.json"), pp)
+            praegen_info = {"ok": True}
+    except Exception as e:
+        praegen_info = {"ok": False, "error": repr(e)}
+
     allies = store.read_csv(store.dpath("latest", "allies.csv"))
     ally_fields = ["id", "name", "tag", "members", "villages", "points", "all_points", "rank"]
     # Erfahrungs-Verteilung der Mitglieder je Stamm (E12: wie viele erfahrene Spieler sitzen hier)
@@ -347,7 +358,8 @@ def build(out_dir):
         "world": config.WORLD,
     })
     return {"players": len(rows), "refs": sorted(refs), "allies": len(allies),
-            "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages, "moral": moral_info, "units": unit_info}
+            "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages, "moral": moral_info, "units": unit_info,
+            "praegen": praegen_info}
 
 
 def main(argv=None):

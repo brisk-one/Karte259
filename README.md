@@ -8,6 +8,7 @@ Fan-Projekt: sammelt stündlich öffentliche Daten der Welt 259 von [Die Stämme
 - **Weltdaten** (`/map/*.txt.gz`: player, ally, village, kill_att, kill_def, kill_sup, kill_all, conquer): Zuerst wird `player.txt.gz` bedingt abgefragt. Nur wenn der Server neue Daten erzeugt hat, werden die übrigen Dateien geladen, geprüft und abgelegt.
 - **Rangliste „An einem Tag“** (Gastzugang): stündlich ein Änderungs-Check über Seite 1 jeder Kategorie (7 Abrufe). Die Mitglieder der erfassten Stämme werden nur bei einer Änderung oder spätestens nach 24 Stunden vollständig erhoben.
 - Ergebnisse landen in `data/`, die Seite wird über GitHub Pages veröffentlicht.
+- **Prägerechner** (`site/praegen.html`): Wer seine Gebäudeübersicht einfügt, sieht, in welchem Dorf sich ein Flaggendoppler lohnt, ob zwei nötig sind, wie viele Münzen herauskommen und wie oft er Rohstoffe anfordern muss. Gerechnet wird im Browser (`site/praegen-core.js`), die eingefügten Daten verlassen den Rechner nicht. Vom Sammler kommen nur Münzkosten und Weltgeschwindigkeit (`praegen.json`).
 
 ## Ablage in `data/`
 
@@ -23,6 +24,7 @@ Fan-Projekt: sammelt stündlich öffentliche Daten der Welt 259 von [Die Stämme
 
 ```
 python3 -m unittest discover -s tests
+node --test tests/praegen.test.js
 python3 -m collector.build_site --out _site
 ```
 
@@ -34,7 +36,7 @@ K259_BASE_URL=http://127.0.0.1:8765 python3 -m collector.run --trigger manual
 
 Ohne gesetztes `K259_BASE_URL` geht der Lauf an den echten Server. Reguläre Abrufe kommen ausschließlich aus dem stündlichen Workflow auf den GitHub-Runnern.
 
-Nur Python-Standardbibliothek, keine Abhängigkeiten.
+Nur Python-Standardbibliothek, keine Abhängigkeiten. Der Rechenkern des Prägerechners wird mit dem eingebauten Testläufer von Node geprüft.
 
 ## Hinweis
 

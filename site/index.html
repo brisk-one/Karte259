@@ -110,9 +110,10 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
   /* Beide Ranglisten teilen sich denselben Aufbau: Stand jetzt, besiegte Gegner, bester Tag.
      Dadurch sehen Spielerrangliste und Stammesliste gleich aus und lassen sich gleich sortieren. */
   const REK=[["loot_res","Rohst. gepl."],["scavenge","Rohst. ges."],["loot_vil","Dörfer gepl."],["conquer","Erobert"]];
-  // weltrang=true blendet neben dem Rang im Stamm zusaetzlich den Weltrang ein (Wunsch Dennis 16.09.)
+  // weltrang=true blendet neben # zusaetzlich den Weltrang ein (Wunsch Dennis 16.09.). # zählt die Zeilen in der
+  // angezeigten Reihenfolge und wird nach jedem Sortieren neu nummeriert, ist selbst nicht sortierbar (Dennis 28.10.)
   function spaltenKopf(winKey, weltrang){
-    return [["#","rank",1]].concat(weltrang? [["Weltrang","rank",1]] : [])
+    return [["#","rank"]].concat(weltrang? [["Weltrang","rank",1]] : [])
       .concat([["Spieler","l"],["Stamm","l"],
             ["Punkte","",1],["± "+winLabel(winKey),"",1],["Dörfer","",1],
             ["Bash","",1],["Angr.","",1],["Vert.","",1],["Unt.","",1]])
@@ -149,13 +150,13 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
     winBtns.forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.w===win)));
     const box=$("movers"); box.replaceChildren();
     if(!win){ box.appendChild(el("p","empty","Noch keine Vergleichswerte.")); return; }
-    // Rangliste nach Gesamtpunkten: # ist der Rang auf der Welt und bleibt beim Umsortieren am Spieler,
+    // Rangliste nach Gesamtpunkten: # zählt die angezeigten Zeilen, der Weltrang bleibt beim Umsortieren am Spieler,
     // der Zuwachs steht daneben und lässt sich weiterhin sortieren
     const top=players.rows.map((r,i)=>i)
       .sort((x,y)=>players.rows[x][idx.rank]-players.rows[y][idx.rank]).slice(0,100);
-    box.appendChild(table(spaltenKopf(win), top.map(i=>zeile(i,players.rows[i][idx.rank],win)),
-      {groups:spaltenGruppen(), sort:0, dir:"asc"}));
-    $("movers-hint").textContent="die 100 Spieler mit den meisten Punkten, # ist der Rang auf der Welt. ± zeigt den Zuwachs über "
+    box.appendChild(table(spaltenKopf(win,true), top.map((i,n)=>zeile(i,n+1,win,true)),
+      {groups:spaltenGruppen(true), sort:1, dir:"asc", counter:0}));
+    $("movers-hint").textContent="die 100 Spieler mit den meisten Punkten. # zählt die Zeilen in der aktuellen Sortierung, Weltrang ist der Platz auf der ganzen Welt. ± zeigt den Zuwachs über "
       +winLabel(win)+", Vergleich mit dem Stand vom "+fmtTime(refs[win])+". Jede Spalte ist sortierbar.";
   }
   winBtns.forEach(b=>b.addEventListener("click",()=>{ if(!b.disabled){ win=b.dataset.w; renderMovers(); } }));
@@ -186,12 +187,12 @@ const TYPE_LONG = {loot_vil:"Dörfer geplündert", loot_res:"Rohstoffe geplünde
       .sort((x,y)=>players.rows[y][idx.points]-players.rows[x][idx.points]);
     const withRec=members.filter(i=>rec[players.rows[i][idx.id]]).length;
     $("tribe-hint").textContent=(ally? ally[1]+" · ":"")
-      +"# ist der Rang im Stamm nach Punkten, Weltrang der Platz auf der ganzen Welt. "
+      +"# zählt die Zeilen in der aktuellen Sortierung (nach Punkten sortiert ist das der Rang im Stamm), Weltrang der Platz auf der ganzen Welt. "
       +(withRec? "Rekorde für "+withRec+" von "+members.length+" Mitgliedern." : "Für diesen Stamm liegen noch keine Rekorde vor.");
     const box=$("tribe"); box.replaceChildren();
     if(!members.length){ box.appendChild(el("p","empty","Keine Mitglieder mit Daten.")); return; }
     box.appendChild(table(spaltenKopf(win,true), members.map((i,n)=>zeile(i,n+1,win,true)),
-      {groups:spaltenGruppen(true), sort:4}));
+      {groups:spaltenGruppen(true), sort:4, counter:0}));
   }
   pick.addEventListener("change", renderTribe);
   renderTribe();

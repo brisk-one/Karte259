@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="de" data-theme="classic">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prägerechner · Welt 259</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  /* Serienfarben (1 bzw. 2 Flaggendoppler) und Statusfarben, je Gestaltung geprüft auf Abstand und Kontrast */
+  :root,[data-theme="classic"]{--s1:#8a5a12; --s2:#1f5fae; --st-ok:#2f6b1f; --st-markt:#a8700a; --st-weit:#9c2b1c;
+    --chart-grid:rgba(60,40,10,.16); --surface:#f4e4bc}
+  [data-theme="futuristic"]{--s1:#0aa3be; --s2:#9a6cf5; --st-ok:#34e5b0; --st-markt:#ff9f1c; --st-weit:#ff6b81;
+    --chart-grid:rgba(120,200,240,.14); --surface:#0a1622}
+
+  .pr-in{display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:14px}
+  @media (max-width:900px){ .pr-in{grid-template-columns:1fr} }
+  .pr-in textarea{width:100%; min-height:190px; resize:vertical; font:12px/1.4 ui-monospace,Consolas,monospace;
+    color:var(--ink); background:var(--field); border:1px solid var(--edge); border-radius:var(--radius); padding:6px 8px}
+  .pr-ctl{display:grid; gap:10px; align-content:start}
+  .pr-ctl .lab{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700;
+    display:block; margin-bottom:3px}
+  .pr-row{display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+  .pr-row input[type="number"]{width:84px}
+  .pr-ctl input[type="number"],.pr-adv input[type="number"]{font:inherit; font-size:12px; padding:2px 6px; color:var(--ink);
+    background:var(--field); border:1px solid var(--edge); border-radius:var(--radius)}
+  .pr-check{display:inline-flex; gap:6px; align-items:center; font-size:12px; cursor:pointer}
+  .pr-check input{accent-color:var(--accent)}
+  .pr-adv{grid-column:1/-1; font-size:12px}
+  .pr-adv summary{cursor:pointer; color:var(--muted); font-weight:700}
+  .pr-adv .pr-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px 18px; margin-top:8px}
+  .pr-adv label{display:grid; gap:3px}
+  .pr-adv .note{color:var(--muted); font-size:11px}
+  .pr-status{grid-column:1/-1; margin:0; font-size:12px; color:var(--ink-2)}
+  .pr-status.err{color:var(--bad); font-weight:700}
+  .pr-problems{grid-column:1/-1; margin:0; padding-left:18px; font-size:11.5px; color:var(--bad)}
+
+  .pr-verdict{display:grid; gap:6px}
+  .pr-big{font-size:clamp(20px,3.2vw,30px); font-weight:700; line-height:1.15}
+  .pr-big small{display:block; font-size:13px; font-weight:400; color:var(--ink-2); margin-top:4px}
+  .pr-why{margin:0; font-size:13px; max-width:90ch}
+  .pr-note{margin:6px 0 0; padding:7px 10px; font-size:12.5px; border-left:4px solid var(--st-markt); background:var(--accent-soft)}
+  .facts.pr-facts{margin-top:10px}
+  .facts.pr-facts dd small{font-size:11px; font-weight:400; color:var(--muted)}
+
+  .pr-cmp td.rec{font-weight:700}
+  .pr-cmp th.rec{box-shadow:inset 0 -3px 0 var(--accent)}
+  .pr-cmp th,.pr-cmp td{white-space:normal; vertical-align:top}
+  .pr-cmp td:first-child{color:var(--ink-2); width:9.5em}
+  .pr-cmp td:not(:first-child){text-align:left}
+
+  .pr-legend{display:flex; flex-wrap:wrap; gap:4px 16px; font-size:11.5px; color:var(--ink-2); margin:0 0 6px}
+  .pr-legend span{display:inline-flex; align-items:center; gap:6px}
+  .pr-legend svg{flex:none}
+  .pr-chart{position:relative}
+  .pr-chart svg{display:block; width:100%; height:auto; overflow:visible}
+  .pr-chart .axis{font-size:10.5px; fill:var(--muted)}
+  .pr-chart .grid{stroke:var(--chart-grid); stroke-width:1}
+  .pr-chart .ref{stroke:var(--ink-2); stroke-width:1; stroke-dasharray:3 3; opacity:.7}
+  .pr-chart .reflab{font-size:10px; fill:var(--ink-2)}
+  .pr-chart .cross{stroke:var(--ink-2); stroke-width:1; opacity:.55}
+  .pr-chart .endlab{font-size:11px; fill:var(--ink); font-weight:700}
+  .pr-tip{position:absolute; pointer-events:none; background:var(--panel-solid); color:var(--ink);
+    border:1px solid var(--edge); border-radius:var(--radius); padding:5px 8px; font-size:11.5px; box-shadow:var(--glow);
+    white-space:nowrap; z-index:5}
+  .pr-tip b{font-weight:700}
+  .pr-tip i{display:inline-block; width:12px; height:2px; vertical-align:middle; margin-right:5px}
+  .pr-tip .muted{color:var(--muted)}
+
+  .pr-map{display:flex; justify-content:center}
+  .pr-map svg{display:block; max-width:100%; height:auto}
+  .pr-map .mapbg{fill:var(--map-bg)}
+  .pr-map .g1{stroke:var(--map-grid); stroke-width:1}
+  .pr-map .g2{stroke:var(--map-grid-major); stroke-width:1.5}
+  .pr-map .klab{fill:var(--map-label); font-weight:700}
+  .pr-map .link{stroke:var(--ink); stroke-opacity:.35; vector-effect:non-scaling-stroke}
+  [data-theme="futuristic"] .pr-map .link{stroke:#cfefff; stroke-opacity:.28}
+  .pr-map .mk{stroke:var(--surface); stroke-width:1.5px; vector-effect:non-scaling-stroke}
+  .pr-map .site{fill:none; stroke:var(--ink); stroke-width:2.5px; vector-effect:non-scaling-stroke}
+  [data-theme="futuristic"] .pr-map .site{stroke:#eafcff}
+  .pr-map .sitelab{fill:var(--ink); font-weight:700; paint-order:stroke; stroke:var(--surface)}
+  .pr-map .hit{fill:transparent; cursor:help}
+  .ok-c{fill:var(--st-ok)} .markt-c{fill:var(--st-markt)} .weit-c{fill:var(--st-weit)}
+
+  .pr-tag{display:inline-flex; align-items:center; gap:5px; font-weight:700}
+  .pr-tag svg{flex:none}
+  .pr-assume{margin:0; padding-left:18px; font-size:12px; line-height:1.55; max-width:110ch}
+  .pr-assume li{margin-bottom:3px}
+  td input[type="checkbox"]{accent-color:var(--accent); cursor:pointer}
+  tr.off td{opacity:.45}
+</style>
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+
+<main class="wrap">
+  <section class="panel" aria-labelledby="h-in">
+    <h2 id="h-in">Gebäudeübersicht einfügen
+      <span class="hint">Übersichten › Gebäude öffnen, Strg+A, kopieren, hier einfügen. Die Daten bleiben in deinem Browser und werden nicht gespeichert.</span>
+      <span class="right"><button class="tw" type="button" id="example">Beispiel laden</button></span>
+    </h2>
+    <div class="body pr-in">
+      <textarea id="paste" spellcheck="false" aria-label="Gebäudeübersicht"
+        placeholder="[001] Dorfname (500|500) K55   10.393   22   25   20   15   0   1   20   1   1   23   30   30   30   30   30   10   20&#10;…"></textarea>
+      <div class="pr-ctl">
+        <div>
+          <span class="lab">Rohstoffpakete gesamt</span>
+          <div class="pr-row" id="pkg-row">
+            <input type="number" id="pkg" min="0" max="2000" step="1" value="100" aria-label="Rohstoffpakete in Prozent"> <span>% der Speicherkapazität</span>
+          </div>
+          <div class="pr-row" style="margin-top:5px" id="pkg-quick" role="group" aria-label="Schnellwahl Pakete"></div>
+        </div>
+        <div class="pr-row">
+          <label class="pick"><span>Münzkosten-Flagge</span><select id="flag" aria-label="Stufe der Münzkosten-Flagge"></select></label>
+        </div>
+        <div class="pr-row">
+          <label class="pick"><span>Rohstoffe anfordern</span><select id="interval" aria-label="Klickfrequenz"></select></label>
+        </div>
+        <div class="pr-row">
+          <label class="pr-check"><input type="checkbox" id="bonus" checked> Händlerbonus (+50 % Tragkraft und Tempo)</label>
+        </div>
+        <div class="pr-row">
+          <label class="pr-check"><input type="checkbox" id="decree"> Erlass des Adels (−10 % für 24 h)</label>
+        </div>
+      </div>
+      <details class="pr-adv">
+        <summary>Erweitert</summary>
+        <div class="pr-grid">
+          <label class="pr-check" style="display:flex"><input type="checkbox" id="prod" checked> Laufende Produktion der 48 h einrechnen</label>
+          <label>Produktionsfaktor <input type="number" id="pfac" min="0.5" max="3" step="0.01" placeholder="automatisch">
+            <span class="note">leer: aus der Σ-Zeile der Übersicht, sonst 1,0 (nur Minenstufen)</span></label>
+          <label>Startbestand in % des Speichers <input type="number" id="start" min="0" max="100" step="1" value="0">
+            <span class="note">Rohstoffe, die beim Start schon in den Dörfern liegen</span></label>
+          <label>Händler: Minuten je Feld ohne Bonus <input type="number" id="mpf" min="0.5" max="20" step="0.01">
+            <span class="note" id="mpf-note"></span></label>
+          <label>Zweiter Flaggendoppler ab Mehrertrag (%) <input type="number" id="gain" min="0" max="500" step="1" value="10">
+            <span class="note">nur wenn einer nicht alles rechtzeitig schafft</span></label>
+        </div>
+      </details>
+      <p class="pr-status" id="status" aria-live="polite">Noch keine Übersicht eingefügt.</p>
+      <ul class="pr-problems" id="problems" hidden></ul>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-rec" id="p-rec" hidden>
+    <h2 id="h-rec">Empfehlung <span class="hint" id="rec-hint"></span></h2>
+    <div class="body pr-verdict">
+      <div class="pr-big" id="rec-title"></div>
+      <p class="pr-why" id="rec-why"></p>
+      <p class="pr-note" id="rec-note" hidden></p>
+      <dl class="facts pr-facts" id="rec-facts"></dl>
+    </div>
+  </section>
+
+  <div class="grid" id="p-more" hidden>
+    <section class="panel c6" aria-labelledby="h-cmp">
+      <h2 id="h-cmp">Ein oder zwei Flaggendoppler</h2>
+      <div class="body" id="cmp" style="overflow-x:auto"></div>
+    </section>
+
+    <section class="panel c6" aria-labelledby="h-map">
+      <h2 id="h-map">Lage
+        <span class="right" role="group" aria-label="Aufstellung wählen">
+          <button class="tw" type="button" data-view="1">1 Flaggendoppler</button>
+          <button class="tw" type="button" data-view="2">2 Flaggendoppler</button>
+        </span>
+      </h2>
+      <div class="body">
+        <div class="pr-legend" id="map-legend"></div>
+        <div class="pr-map" id="map"></div>
+      </div>
+    </section>
+
+    <section class="panel c6" aria-labelledby="h-arr">
+      <h2 id="h-arr">Paket-Rohstoffe angekommen <span class="hint">Anteil im Prägedorf über die Zeit</span></h2>
+      <div class="body">
+        <div class="pr-legend" id="arr-legend"></div>
+        <div class="pr-chart" id="arr"></div>
+      </div>
+    </section>
+
+    <section class="panel c6" aria-labelledby="h-freq">
+      <h2 id="h-freq">Klickfrequenz <span class="hint" id="freq-hint">rechnet …</span></h2>
+      <div class="body">
+        <div class="pr-legend" id="freq-legend"></div>
+        <div class="pr-chart" id="freq"></div>
+      </div>
+    </section>
+
+    <section class="panel c12" aria-labelledby="h-vil">
+      <h2 id="h-vil">Dörfer <span class="hint" id="vil-hint"></span>
+        <span class="right"><button class="tw" type="button" id="reset-off" hidden>alle wieder einbeziehen</button></span>
+      </h2>
+      <div class="scroll" id="vil"></div>
+    </section>
+
+    <section class="panel c12" aria-labelledby="h-ass">
+      <h2 id="h-ass">So wird gerechnet</h2>
+      <div class="body"><ul class="pr-assume" id="assume"></ul></div>
+    </section>
+  </div>
+
+  <footer>Fan-Projekt mit öffentlichen Daten von die-staemme.de. Kein Angebot von InnoGames.
+    Spielwerte nach der Hilfe von InnoGames und Stichproben im Spiel, maßgeblich bleibt das Spiel.
+    Quelltext auf <a href="https://github.com/brisk-one/Karte259">GitHub</a>.</footer>
+</main>
+
+<script src="app.js"></script>
+<script src="praegen-core.js"></script>
+<script>
+buildAppbar("praegen", "Prägerechner");
+const K = window.Praegen;
+
+/* ---------- Formate ---------- */
+const nf2 = new Intl.NumberFormat("de-DE", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+// Anteile nie auf 100 % aufrunden, solange etwas fehlt
+const pctf = v => nf1.format(v < 1 - 1e-9 ? Math.min(99.9, Math.floor(v * 1000) / 10) : 100) + " %";
+const pct0 = v => (v < 1 - 1e-9 ? Math.min(99, Math.floor(v * 100)) : 100) + " %";
+const mio = r => r >= 1e6 ? nf1.format(Math.round(r / 1e5) / 10) + " Mio." : nf.format(Math.round(r / 1000)) + " Tsd.";
+function hrs(h) {
+  if (!isFinite(h)) return "über 14 Tage";
+  if (h < 48) return nf1.format(Math.round(h * 10) / 10) + " h";
+  return Math.floor(h / 24) + " Tage " + Math.round(h % 24) + " h";
+}
+function hm(h) { const m = Math.round(h * 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0") + " h"; }
+const ivl = m => m < 60 ? m + " min" : nf1.format(m / 60) + " h";
+const coord = v => "(" + v.x + "|" + v.y + ")";
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/* ---------- Zustand ---------- */
+let WORLD = Object.assign({}, K.WORLD_DEFAULT);
+let RESULT = null, VIEW = null, STEPS = [], RUN = 0;
+const OFF = new Set();                 // ausgeschlossene Dörfer, Schlüssel "x|y"
+
+/* ---------- Bedienelemente ---------- */
+[10, 30, 50, 100, 150, 300].forEach(p => {
+  const b = el("button", "tw", p + " %"); b.type = "button";
+  b.addEventListener("click", () => { $("pkg").value = p; schedule(); });
+  $("pkg-quick").appendChild(b);
+});
+K.FLAG_PCT.forEach((p, lvl) => {
+  if (!lvl) return;
+  const o = document.createElement("option"); o.value = lvl;
+  o.textContent = "Stufe " + lvl + ": −" + p + " %, verdoppelt −" + 2 * p + " %";
+  $("flag").appendChild(o);
+});
+$("flag").value = "9";
+K.LADDER.forEach(m => { const o = document.createElement("option"); o.value = m; o.textContent = "alle " + ivl(m); $("interval").appendChild(o); });
+$("interval").value = "60";
+
+function inputs() {
+  const mpf = parseFloat($("mpf").value), pf = parseFloat($("pfac").value);
+  return {pkgPct: +$("pkg").value || 0, startPct: +$("start").value || 0, decree: $("decree").checked,
+          merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, intervalMin: +$("interval").value,
+          production: $("prod").checked, prodFactor: pf > 0 ? pf : null, minGainPct: +$("gain").value || 0,
+          minPerField: mpf > 0 && Math.abs(mpf - WORLD.base_min_per_field / WORLD.speed) > 1e-6 ? mpf : null};
+}
+
+let timer = null;
+function schedule() { clearTimeout(timer); timer = setTimeout(run, 250); }
+["paste", "pkg", "start", "mpf", "pfac", "gain"].forEach(id => $(id).addEventListener("input", schedule));
+["flag", "interval", "bonus", "decree", "prod"].forEach(id => $(id).addEventListener("change", schedule));
+document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => { VIEW = +b.dataset.view; renderView(); }));
+$("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
+document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); } });
+let rsz = null;
+window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { if (RESULT) { renderView(); renderArrival(); renderFreq(); } }, 200); });
+
+/* Beispiel: erfundene Dörfer in zwei Haufen, damit die Seite ohne eigene Daten ausprobiert werden kann */
+$("example").addEventListener("click", () => {
+  const lines = ["Dorf (24)\tPunkte"];
+  let n = 0;
+  const add = (x, y, snob, market, storage) => {
+    n++;
+    const b = [20, 20, 15, 10, 0, snob, snob ? 20 : 15, 1, 1, market, 30, 30, 30, 30, storage, 5, 20];
+    lines.push("[" + String(n).padStart(3, "0") + "] Beispieldorf " + n + " (" + x + "|" + y + ") K" + Math.floor(y / 100) + Math.floor(x / 100)
+               + " \t" + nf.format(5000 + n * 137) + "\t" + b.join("\t") + "\t");
+  };
+  [[0, 0], [2, 1], [-1, 3], [3, -2], [1, 4], [-3, -1], [4, 2], [-2, 5], [5, -1], [0, -4], [2, 6], [-4, 2], [6, 3], [-1, -3]]
+    .forEach(([dx, dy], i) => add(312 + dx, 448 + dy, i % 3 === 0 ? 1 : 0, 25 - (i % 4) * 2, 30));
+  [[0, 0], [2, 2], [-2, 1], [1, -3], [3, 0], [-1, 4], [4, -2], [-3, -2], [2, 5], [0, 3]]
+    .forEach(([dx, dy], i) => add(331 + dx, 482 + dy, i % 4 === 0 ? 1 : 0, 21 - (i % 5) * 3, 28));
+  $("paste").value = lines.join("\n");
+  $("pkg").value = 300;
+  schedule();
+});
+
+/* ---------- Rechnen ---------- */
+function run() {
+  const token = ++RUN;
+  const parsed = K.parseOverview($("paste").value);
+  const prob = $("problems");
+  prob.replaceChildren(...parsed.problems.slice(0, 8).map(t => el("li", null, t)));
+  prob.hidden = !parsed.problems.length;
+  const st = $("status");
+  st.classList.remove("err");
+  if (!parsed.villages.length) {
+    st.textContent = $("paste").value.trim() ? "Keine Dorfzeile erkannt. Erwartet wird die Ansicht Übersichten › Gebäude, komplett markiert und kopiert." : "Noch keine Übersicht eingefügt.";
+    if ($("paste").value.trim()) st.classList.add("err");
+    ["p-rec", "p-more"].forEach(id => $(id).hidden = true);
+    RESULT = null;
+    return;
+  }
+  const villages = parsed.villages.filter(v => !OFF.has(v.x + "|" + v.y));
+  const inp = inputs();
+  const auto = K.prodFactorFrom(parsed.villages, parsed.prodSum, WORLD.speed);
+  if (inp.prodFactor == null) inp.prodFactor = auto || 1;
+  const P = K.params(inp, WORLD);
+  const ah = parsed.villages.filter(v => v.b.snob >= 1).length;
+  st.textContent = parsed.villages.length + " Dörfer erkannt, " + ah + " mit Adelshof"
+    + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "")
+    + (inp.production ? " · Produktion × " + nf2.format(inp.prodFactor)
+       + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
+  if (!villages.length) { ["p-rec", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
+
+  RESULT = K.plan(villages, P);
+  RESULT.villages = villages;
+  RESULT.allParsed = parsed.villages;
+  VIEW = RESULT.recommend;                // nach jeder Neuberechnung die empfohlene Aufstellung zeigen
+  STEPS = [];
+  ["p-rec", "p-more"].forEach(id => $(id).hidden = false);
+  renderRecommendation();
+  renderCompare();
+  renderView();
+  renderArrival();
+  renderFreq();
+  renderAssumptions();
+
+  // Klickfrequenz-Leiter in kleinen Schritten, damit die Seite bedienbar bleibt
+  $("freq-hint").textContent = "rechnet …";
+  let k = 0;
+  const step = () => {
+    if (token !== RUN) return;
+    STEPS.push(K.ladderStep(villages, P, K.LADDER[k++]));
+    renderFreq();
+    if (k < K.LADDER.length) setTimeout(step, 0);
+    else { $("freq-hint").textContent = "Anteil der Paket-Rohstoffe, der rechtzeitig ankommt, je Klickabstand"; renderRecommendation(); renderCompare(); }
+  };
+  setTimeout(step, 0);
+}
+
+function aufstellung(n) {
+  const r = n === 2 ? RESULT.pair : RESULT.single;
+  return r ? {r, d: n === 2 ? RESULT.d2 : RESULT.d1, sites: r.sites.map(i => RESULT.src[i])} : null;
+}
+function share90(d) {
+  const total = d.curve.reduce((a, c) => a + c[1], 0);
+  if (total <= 0) return 0;
+  let acc = 0;
+  for (const [t, u] of d.curve) { acc += u; if (acc >= 0.9 * total - 1e-9) return t; }
+  return Infinity;
+}
+function needInterval(n) {
+  if (STEPS.length < K.LADDER.length) return null;
+  return K.requiredInterval(STEPS, n === 2 ? "share2" : "share1");
+}
+function needText(n, short) {
+  const q = needInterval(n);
+  if (!q) return "rechnet …";
+  if (q.kind === "voll") return "alle " + ivl(q.min) + (short ? "" : " oder öfter");
+  return short ? "alle " + ivl(q.min) : "100 % nicht erreichbar, öfter als alle " + ivl(q.min) + " bringt kaum mehr (höchstens " + pct0(q.top) + ")";
+}
+function needSmall(n) {
+  const q = needInterval(n);
+  if (!q) return "";
+  return q.kind === "voll" ? "für 100 % rechtzeitig" : "100 % nicht erreichbar, höchstens " + pct0(q.top);
+}
+function siteName(s) { return s.name + " " + coord(s); }
+function engpass(d) {
+  const m = d.rows.filter(r => r.status === "markt").length, w = d.rows.filter(r => r.status === "weit").length;
+  return {m, w};
+}
+
+/* ---------- Empfehlung ---------- */
+function renderRecommendation() {
+  const R = RESULT, P = R.P, n = R.recommend, a = aufstellung(n), one = aufstellung(1), two = aufstellung(2);
+  const title = $("rec-title");
+  title.replaceChildren();
+  const names = a.sites.map(siteName).join(" und ");
+  title.appendChild(document.createTextNode(n === 2 ? "2 Flaggendoppler: " + names : "1 Flaggendoppler in " + names));
+  const sub = el("small", null, nf.format(Math.round(a.r.coins)) + " Münzen in 48 h"
+    + (P.decree ? ", die ersten 24 h mit Erlass" : ""));
+  title.appendChild(sub);
+  $("rec-hint").textContent = P.pkgPct + " % Pakete · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
+    + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decree ? " · Erlass" : "");
+
+  const frist = P.decree ? "in den 24 h des Erlasses" : "in den 48 h";
+  let why;
+  if (n === 1 && R.singleComplete) why = "Alle Paket-Rohstoffe kommen " + frist + " im Prägedorf an. Ein zweiter Flaggendoppler bringt nichts.";
+  else if (n === 1 && two) why = "Mit einem Flaggendoppler kommen " + pctf(one.r.share) + " der Paket-Rohstoffe " + frist + " an. Ein zweiter brächte nur "
+    + (R.gainPct >= 0 ? "+" : "") + nf1.format(Math.round(R.gainPct * 10) / 10) + " % Münzen, die Schwelle liegt bei " + P.minGainPct + " %.";
+  else if (n === 1) why = "Mit einem Flaggendoppler kommen " + pctf(one.r.share) + " der Paket-Rohstoffe " + frist + " an.";
+  else why = "Mit einem Flaggendoppler kämen nur " + pctf(one.r.share) + " der Paket-Rohstoffe " + frist + " an. Zwei Prägedörfer schaffen "
+    + pctf(two.r.share) + " und bringen +" + nf1.format(Math.round(R.gainPct * 10) / 10) + " % Münzen ("
+    + nf.format(Math.round(two.r.coins - one.r.coins)) + " mehr). Dafür braucht es zwei Flaggendoppler und zwei Münzkosten-Flaggen.";
+  const e = engpass(a.d);
+  if (e.m || e.w) why += " Engpass: " + [e.m ? e.m + " Dörfer mit zu kleinem Markt" : "", e.w ? e.w + " Dörfer zu weit weg" : ""].filter(Boolean).join(", ") + ".";
+  $("rec-why").textContent = why;
+
+  const notes = [];
+  if (a.r.needsSnob) notes.push("Keines der Dörfer hat einen Adelshof. Im Prägedorf muss erst einer gebaut werden.");
+  if (R.singleAny) {
+    const s = R.src[R.singleAny.sites[0]];
+    notes.push("Ohne Adelshof-Pflicht wäre " + siteName(s) + " als einzelnes Prägedorf besser (+"
+      + nf1.format(Math.round((R.singleAny.coins / R.single.coins - 1) * 1000) / 10) + " % Münzen). Dort fehlt der Adelshof, Ausbau heute: Hauptgebäude "
+      + s.b.main + ", Schmiede " + s.b.smith + ", Marktplatz " + s.b.market + ".");
+  }
+  $("rec-note").textContent = notes.join(" ");
+  $("rec-note").hidden = !notes.length;
+
+  const f = $("rec-facts");
+  f.replaceChildren();
+  const fact = (dt, dd, small) => {
+    const d = el("div"); d.appendChild(el("dt", null, dt));
+    const v = el("dd", null, dd); if (small) { v.appendChild(document.createTextNode(" ")); v.appendChild(el("small", null, small)); }
+    d.appendChild(v); f.appendChild(d);
+  };
+  fact("Münzen", nf.format(Math.round(a.r.coins)));
+  fact("Pakete rechtzeitig", pctf(a.r.share), P.decree ? "bis 24 h" : "bis 48 h");
+  fact("90 % angekommen", hrs(share90(a.d)));
+  fact("alles angekommen", hrs(a.d.doneAt));
+  fact("Nötige Klickfrequenz", needText(n, true), needSmall(n));
+  const res = a.r.pkg * P.unitRes;
+  fact("Paket-Rohstoffe, prägbar", mio(res), "von " + mio(R.src.reduce((x, s) => x + s.pkg.wood + s.pkg.stone + s.pkg.iron, 0)));
+}
+
+/* ---------- Vergleich ---------- */
+function renderCompare() {
+  const R = RESULT, box = $("cmp");
+  box.replaceChildren();
+  const one = aufstellung(1), two = aufstellung(2);
+  if (!two) { box.appendChild(el("p", "empty", "Für zwei Prägedörfer braucht es mindestens zwei Dörfer.")); return; }
+  const t = el("table", "pr-cmp"), th = el("thead"), hr = el("tr");
+  [["", "l"], ["1 Flaggendoppler", R.recommend === 1 ? "rec" : ""], ["2 Flaggendoppler", R.recommend === 2 ? "rec" : ""]]
+    .forEach(([l, c]) => hr.appendChild(el("th", c, l + (c === "rec" ? " ✓" : ""))));
+  th.appendChild(hr); t.appendChild(th);
+  const tb = el("tbody");
+  const row = (label, f) => {
+    const tr = el("tr");
+    tr.appendChild(el("td", "l", label));
+    [one, two].forEach((x, i) => tr.appendChild(el("td", R.recommend === i + 1 ? "rec" : "", f(x, i + 1))));
+    tb.appendChild(tr);
+  };
+  row("Prägedorf", x => x.sites.map(siteName).join(" + "));
+  row("Münzen", x => nf.format(Math.round(x.r.coins)));
+  row("Pakete rechtzeitig", x => pctf(x.r.share));
+  row("90 % angekommen", x => hrs(share90(x.d)));
+  row("alles angekommen", x => hrs(x.d.doneAt));
+  row("Nötige Klickfrequenz", (x, n) => needText(n, false));
+  row("Markt zu klein", x => String(engpass(x.d).m));
+  row("zu weit weg", x => String(engpass(x.d).w));
+  t.appendChild(tb);
+  box.appendChild(t);
+  const p = el("p", "empty", "Regel: Zwei Flaggendoppler nur, wenn einer nicht alles rechtzeitig schafft und zwei mindestens "
+    + R.P.minGainPct + " % mehr Münzen bringen. Jedes Dorf beliefert das nähere Prägedorf.");
+  p.style.padding = "8px 0 0"; box.appendChild(p);
+}
+
+/* ---------- Statuszeichen ---------- */
+const STATUS = {ok: "rechtzeitig", markt: "Markt zu klein", weit: "zu weit weg oder zu selten geklickt"};
+function shape(status, cx, cy, r) {
+  if (status === "markt") return svgEl("path", {d: `M${cx},${cy - r * 1.15} L${cx + r * 1.1},${cy + r * 0.8} L${cx - r * 1.1},${cy + r * 0.8}Z`, class: "mk markt-c"});
+  if (status === "weit") return svgEl("rect", {x: cx - r * 0.9, y: cy - r * 0.9, width: r * 1.8, height: r * 1.8, class: "mk weit-c"});
+  return svgEl("circle", {cx, cy, r, class: "mk ok-c"});
+}
+function keyIcon(status) {
+  const s = svgEl("svg", {width: 14, height: 14, viewBox: "0 0 14 14"});
+  s.appendChild(shape(status, 7, 7.5, 4.6));
+  return s;
+}
+function statusTag(row) {
+  const span = el("span", "pr-tag");
+  span.appendChild(keyIcon(row.status));
+  span.appendChild(document.createTextNode(row.status === "markt" ? "Markt " + row.need + " nötig" : STATUS[row.status]));
+  return span;
+}
+
+/* ---------- Ansicht 1 oder 2: Karte und Dorftabelle ---------- */
+function renderView() {
+  if (!RESULT) return;
+  if (VIEW === 2 && !RESULT.pair) VIEW = 1;
+  document.querySelectorAll("[data-view]").forEach(b => {
+    b.setAttribute("aria-pressed", String(+b.dataset.view === VIEW));
+    b.disabled = +b.dataset.view === 2 && !RESULT.pair;
+  });
+  renderMap();
+  renderVillages();
+}
+
+function renderMap() {
+  const R = RESULT, a = aufstellung(VIEW), box = $("map");
+  const lg = $("map-legend");
+  lg.replaceChildren();
+  ["ok", "markt", "weit"].forEach(s => { const sp = el("span"); sp.appendChild(keyIcon(s)); sp.appendChild(document.createTextNode(STATUS[s])); lg.appendChild(sp); });
+  const ks = svgEl("svg", {width: 16, height: 16, viewBox: "0 0 16 16"});
+  ks.appendChild(svgEl("circle", {cx: 8, cy: 8, r: 6, fill: "none", stroke: "currentColor", "stroke-width": 2}));
+  const sp = el("span"); sp.appendChild(ks); sp.appendChild(document.createTextNode("Prägedorf")); lg.appendChild(sp);
+
+  const xs = R.src.map(s => s.x), ys = R.src.map(s => s.y), pad = 3;
+  const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad, y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad;
+  const w = Math.max(x1 - x0, 10), h = Math.max(y1 - y0, 10);
+  const availW = Math.max(260, box.clientWidth || 600), maxH = Math.min(560, Math.max(320, window.innerHeight * 0.62));
+  const sc = Math.min(availW / w, maxH / h, 40);               // Pixel je Feld
+  const svg = svgEl("svg", {viewBox: `${x0} ${y0} ${w} ${h}`, width: Math.round(w * sc), height: Math.round(h * sc),
+                            role: "img", "aria-label": "Lage der Dörfer und Prägedörfer"});
+  const px = v => v / sc;                                         // Pixelmaß in Feldern
+  svg.appendChild(svgEl("rect", {x: x0, y: y0, width: w, height: h, class: "mapbg"}));
+  const stepMinor = sc >= 9 ? 1 : sc >= 4 ? 5 : 10;
+  for (let gx = Math.ceil(x0 / stepMinor) * stepMinor; gx <= x1; gx += stepMinor)
+    svg.appendChild(svgEl("line", {x1: gx, y1: y0, x2: gx, y2: y1, class: gx % 100 === 0 ? "g2" : "g1", "vector-effect": "non-scaling-stroke", opacity: gx % 10 === 0 ? 1 : .45}));
+  for (let gy = Math.ceil(y0 / stepMinor) * stepMinor; gy <= y1; gy += stepMinor)
+    svg.appendChild(svgEl("line", {x1: x0, y1: gy, x2: x1, y2: gy, class: gy % 100 === 0 ? "g2" : "g1", "vector-effect": "non-scaling-stroke", opacity: gy % 10 === 0 ? 1 : .45}));
+  // Kontinentnamen in der linken oberen Ecke jedes sichtbaren Kontinents
+  for (let ky = Math.floor(y0 / 100); ky <= Math.floor(y1 / 100); ky++)
+    for (let kx = Math.floor(x0 / 100); kx <= Math.floor(x1 / 100); kx++) {
+      const t = svgEl("text", {x: Math.max(kx * 100, x0) + px(5), y: Math.max(ky * 100, y0) + px(15), class: "klab", "font-size": px(12)});
+      t.textContent = "K" + ky + kx; svg.appendChild(t);
+    }
+  const siteIdx = new Set(a.r.sites);
+  a.d.rows.forEach(r => {
+    if (r.i === r.site) return;
+    const s = R.src[r.i], c = R.src[r.site];
+    svg.appendChild(svgEl("line", {x1: s.x, y1: s.y, x2: c.x, y2: c.y, class: "link", "stroke-width": 1.2}));
+  });
+  const rad = Math.max(0.32, px(4.5));
+  a.d.rows.forEach(r => {
+    const s = R.src[r.i], g = svgEl("g", {});
+    g.appendChild(shape(r.status, s.x, s.y, rad));
+    const hit = svgEl("circle", {cx: s.x, cy: s.y, r: Math.max(rad * 1.8, px(12)), class: "hit"});
+    const tt = svgEl("title", {});
+    tt.textContent = s.name + " " + coord(s) + "\n"
+      + (r.i === r.site ? "Prägedorf" : "Laufzeit " + hm(r.tau) + " (" + nf1.format(Math.round(r.dist * 10) / 10) + " Felder)") + "\n"
+      + "Markt " + s.b.market + " (" + s.merchants + " Händler), Speicher " + s.b.storage + "\n"
+      + "Paket prägbar " + mio(r.pkgUnits * R.P.unitRes) + ", rechtzeitig " + (r.pkgUnits > 0 ? pct0(r.inTime / r.pkgUnits) : "k. A.")
+      + ", alles nach " + hrs(r.doneAt) + "\n" + (r.status === "markt" ? "Markt " + r.need + " nötig" : STATUS[r.status]);
+    hit.appendChild(tt);
+    g.appendChild(hit);
+    svg.appendChild(g);
+  });
+  siteIdx.forEach(i => {
+    const s = R.src[i];
+    svg.appendChild(svgEl("circle", {cx: s.x, cy: s.y, r: rad * 2.4, class: "site"}));
+    const label = s.name.length > 26 ? s.name.slice(0, 25) + "…" : s.name, half = px(label.length * 3.6);
+    const anchor = s.x - half < x0 ? "start" : s.x + half > x1 ? "end" : "middle";
+    const lx = anchor === "start" ? x0 + px(3) : anchor === "end" ? x1 - px(3) : s.x;
+    const t = svgEl("text", {x: lx, y: s.y - rad * 2.4 - px(5), "text-anchor": anchor, class: "sitelab", "font-size": px(12), "stroke-width": px(3)});
+    t.textContent = label;
+    svg.appendChild(t);
+  });
+  box.replaceChildren(svg);
+}
+
+function renderVillages() {
+  const R = RESULT, a = aufstellung(VIEW), box = $("vil");
+  const byKey = new Map(a.d.rows.map(r => [R.src[r.i].x + "|" + R.src[r.i].y, r]));
+  const cols = [["dabei", "l"], ["Dorf", "l"], ["Koordinaten", "l"], ["Status", "l", 1], ["rechtzeitig", "", 1], ["alles da nach", "", 1],
+                ["Laufzeit", "", 1], ["Markt (Händler)", "", 1], ["Speicher", "", 1], ["Paket prägbar", "", 1], ["Prägedorf", "l"]];
+  const rows = R.allParsed.map(v => {
+    const key = v.x + "|" + v.y, r = byKey.get(key), off = OFF.has(key);
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !off;
+    cb.title = off ? "wieder einbeziehen" : "dieses Dorf nicht berücksichtigen";
+    cb.setAttribute("aria-label", v.name + " einbeziehen");
+    cb.addEventListener("change", () => { if (cb.checked) OFF.delete(key); else OFF.add(key); schedule(); });
+    if (!r) return [[cb, "l"], [v.name, "l name"], [coord(v), "l"], ["ausgeschlossen", "l"], ["", ""], ["", ""], ["", ""],
+                    [v.b.market + " (" + nf.format(K.merchantsAt(v.b.market)) + ")", "", v.b.market], [String(v.b.storage), "", v.b.storage],
+                    ["", ""], ["", "l"]];
+    const site = R.src[r.site];
+    const share = r.pkgUnits > 0 ? r.inTime / r.pkgUnits : 1;
+    return [[cb, "l"], [v.name, "l name"], [coord(v), "l"], [statusTag(r), "l", {ok: 0, markt: 1, weit: 2}[r.status]],
+            [pct0(share), share < 1 - 1e-9 ? "down" : "", Math.round(share * 10000)],
+            [hrs(r.doneAt), "", isFinite(r.doneAt) ? Math.round(r.doneAt * 60) : 999999999],
+            [r.i === r.site ? "0:00 h" : hm(r.tau), "", Math.round(r.tau * 3600)],
+            [v.b.market + " (" + nf.format(r.merchants) + ")", "", v.b.market], [String(v.b.storage), "", v.b.storage],
+            [mio(r.pkgUnits * R.P.unitRes), "", Math.round(r.pkgUnits * 1000)],
+            [r.i === r.site ? "selbst (Prägedorf)" : site.name, "l"]];
+  });
+  const t = table(cols, rows, {sort: 4, dir: "asc"});
+  [...t.tBodies[0].rows].forEach(tr => { if (!tr.cells[0].firstChild.checked) tr.classList.add("off"); });
+  box.replaceChildren(t);
+  const e = engpass(a.d);
+  $("vil-hint").textContent = (VIEW === 2 ? "Aufstellung mit 2 Flaggendopplern" : "Aufstellung mit 1 Flaggendoppler")
+    + " · " + a.d.rows.filter(r => r.status === "ok").length + " rechtzeitig, " + e.m + " Markt zu klein, " + e.w + " zu weit weg"
+    + " · Haken entfernen, um ein Dorf nicht zu berücksichtigen";
+  $("reset-off").hidden = !OFF.size;
+}
+
+/* ---------- Diagramme ---------- */
+function legend(box, items) {
+  box.replaceChildren();
+  items.forEach(([label, color, dashed]) => {
+    const sp = el("span"), s = svgEl("svg", {width: 18, height: 10, viewBox: "0 0 18 10"});
+    s.appendChild(svgEl("line", {x1: 1, y1: 5, x2: 17, y2: 5, stroke: color, "stroke-width": 2, "stroke-linecap": "round", "stroke-dasharray": dashed ? "3 3" : ""}));
+    sp.appendChild(s); sp.appendChild(document.createTextNode(label)); box.appendChild(sp);
+  });
+}
+function frame(box, W, H, m) {
+  const svg = svgEl("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  box.replaceChildren(svg);
+  const tip = el("div", "pr-tip"); tip.hidden = true; box.appendChild(tip);
+  return {svg, tip, iw: W - m.l - m.r, ih: H - m.t - m.b};
+}
+function yGrid(svg, m, iw, ih) {
+  [0, .25, .5, .75, 1].forEach(v => {
+    const y = m.t + ih * (1 - v);
+    svg.appendChild(svgEl("line", {x1: m.l, x2: m.l + iw, y1: y, y2: y, class: "grid"}));
+    const t = svgEl("text", {x: m.l - 6, y: y + 3.5, "text-anchor": "end", class: "axis"}); t.textContent = Math.round(v * 100) + " %"; svg.appendChild(t);
+  });
+}
+function showTip(box, tip, px, py, lines) {
+  tip.replaceChildren();
+  lines.forEach((ln, i) => {
+    const d = el("div", i === 0 ? "muted" : null);
+    if (ln.color) { const k = el("i"); k.style.background = ln.color; d.appendChild(k); }
+    if (ln.value != null) { d.appendChild(el("b", null, ln.value)); d.appendChild(document.createTextNode(" " + ln.label)); }
+    else d.textContent = ln.label;
+    tip.appendChild(d);
+  });
+  tip.hidden = false;
+  const bw = box.clientWidth, tw = tip.offsetWidth;
+  tip.style.left = Math.min(Math.max(0, px + 12), bw - tw) + "px";
+  tip.style.top = Math.max(0, py - 10) + "px";
+}
+
+function cumulative(d) {
+  const total = d.curve.reduce((a, c) => a + c[1], 0) || 1;
+  const pts = [];
+  let acc = 0;
+  for (const [t, u] of d.curve) {
+    if (pts.length && Math.abs(pts[pts.length - 1][0] - t) < 1e-9) { acc += u; pts[pts.length - 1][1] = acc / total; continue; }
+    acc += u; pts.push([t, acc / total]);
+  }
+  return pts;
+}
+const valAt = (pts, x) => { let v = 0; for (const [t, y] of pts) { if (t <= x + 1e-9) v = y; else break; } return v; };
+
+function renderArrival() {
+  if (!RESULT) return;
+  const box = $("arr"), P = RESULT.P, W = Math.max(300, Math.round(box.clientWidth || 620)), H = W < 500 ? 220 : 250;
+  const m = {l: 44, r: W < 500 ? 16 : 78, t: 12, b: 28};
+  const series = [[1, "1 Flaggendoppler", css("--s1")]];
+  if (RESULT.pair) series.push([2, "2 Flaggendoppler", css("--s2")]);
+  const data = series.map(([n, label, color]) => ({n, label: label + (RESULT.recommend === n ? " (Empfehlung)" : ""), color, pts: cumulative(aufstellung(n).d)}));
+  legend($("arr-legend"), data.map(s => [s.label, s.color]));
+  const X = 72;
+  const {svg, tip, iw, ih} = frame(box, W, H, m);
+  svg.setAttribute("aria-label", "Anteil angekommener Paket-Rohstoffe über 72 Stunden");
+  const sx = x => m.l + iw * Math.min(x, X) / X, sy = y => m.t + ih * (1 - y);
+  yGrid(svg, m, iw, ih);
+  for (let x = 0; x <= X; x += W < 500 ? 24 : 12) {
+    const t = svgEl("text", {x: sx(x), y: H - 8, "text-anchor": "middle", class: "axis"}); t.textContent = x + " h"; svg.appendChild(t);
+  }
+  const refs = [[48, "Ende Flaggendoppler"]];
+  if (P.decree) refs.unshift([24, "Ende Erlass"]);
+  refs.forEach(([x, lab]) => {
+    svg.appendChild(svgEl("line", {x1: sx(x), x2: sx(x), y1: m.t, y2: m.t + ih, class: "ref"}));
+    const t = svgEl("text", {x: sx(x) + 4, y: m.t + 10, class: "reflab"}); t.textContent = lab; svg.appendChild(t);
+  });
+  const ends = [];
+  data.forEach(s => {
+    let d = `M${sx(0)},${sy(0)}`, last = 0;
+    for (const [t, y] of s.pts) { if (t > X) break; d += ` H${sx(t)} V${sy(y)}`; last = y; }
+    d += ` H${sx(X)}`;
+    svg.appendChild(svgEl("path", {d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+    ends.push({y: sy(last), v: last, label: s.n + " FD"});
+  });
+  // Endbeschriftung nur, wenn sich die Werte nicht überdecken; sonst tragen Legende und Quickinfo
+  if (m.r > 40 && (ends.length < 2 || Math.abs(ends[0].y - ends[1].y) > 13))
+    ends.forEach(e => { const t = svgEl("text", {x: m.l + iw + 6, y: e.y + 4, class: "endlab"}); t.textContent = e.label + " " + pct0(e.v); svg.appendChild(t); });
+  const cross = svgEl("line", {y1: m.t, y2: m.t + ih, class: "cross", visibility: "hidden"});
+  svg.appendChild(cross);
+  const hit = svgEl("rect", {x: m.l, y: m.t, width: iw, height: ih, fill: "transparent"});
+  svg.appendChild(hit);
+  const move = ev => {
+    const r = svg.getBoundingClientRect(), k = W / r.width;
+    const xv = Math.max(0, Math.min(X, ((ev.clientX - r.left) * k - m.l) / iw * X));
+    const xs = sx(xv);
+    cross.setAttribute("x1", xs); cross.setAttribute("x2", xs); cross.setAttribute("visibility", "visible");
+    showTip(box, tip, (ev.clientX - r.left), (ev.clientY - r.top),
+      [{label: "nach " + nf1.format(Math.round(xv * 10) / 10) + " h"}].concat(data.map(s => ({color: s.color, value: pct0(valAt(s.pts, xv)), label: s.label}))));
+  };
+  hit.addEventListener("pointermove", move);
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+}
+
+function renderFreq() {
+  if (!RESULT) return;
+  const box = $("freq"), P = RESULT.P, W = Math.max(300, Math.round(box.clientWidth || 620)), H = W < 500 ? 220 : 250;
+  const m = {l: 44, r: 16, t: 12, b: 28};
+  const L = K.LADDER, N = L.length;
+  const series = [["share1", "coins1", "1 Flaggendoppler", css("--s1"), 1]];
+  if (RESULT.pair) series.push(["share2", "coins2", "2 Flaggendoppler", css("--s2"), 2]);
+  legend($("freq-legend"), series.map(s => [s[2] + (RESULT.recommend === s[4] ? " (Empfehlung)" : ""), s[3]]));
+  const {svg, tip, iw, ih} = frame(box, W, H, m);
+  svg.setAttribute("aria-label", "Anteil rechtzeitig angekommener Paket-Rohstoffe je Klickabstand");
+  const sx = i => m.l + iw * (i + 0.5) / N, sy = y => m.t + ih * (1 - y);
+  const sel = L.indexOf(P.intervalMin);
+  if (sel >= 0) svg.appendChild(svgEl("rect", {x: sx(sel) - iw / N / 2, y: m.t, width: iw / N, height: ih, fill: "var(--accent-soft)"}));
+  yGrid(svg, m, iw, ih);
+  L.forEach((mn, i) => {
+    if (W < 500 && i % 2) return;                     // schmal: jede zweite Beschriftung
+    const t = svgEl("text", {x: sx(i), y: H - 8, "text-anchor": "middle", class: "axis"}); t.textContent = ivl(mn).replace(" min", "m").replace(" h", "h"); svg.appendChild(t);
+  });
+  const surface = css("--surface");
+  series.forEach(([key, , , color]) => {
+    const pts = STEPS.map((s, i) => [sx(i), sy(s[key])]).filter(p => !isNaN(p[1]));
+    if (!pts.length) return;
+    svg.appendChild(svgEl("polyline", {points: pts.map(p => p.join(",")).join(" "), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+    pts.forEach(p => svg.appendChild(svgEl("circle", {cx: p[0], cy: p[1], r: 4, fill: color, stroke: surface, "stroke-width": 2})));
+  });
+  if (STEPS.length < N) {
+    const t = svgEl("text", {x: m.l + iw - 4, y: m.t + ih - 6, "text-anchor": "end", class: "reflab"}); t.textContent = "rechnet " + STEPS.length + " von " + N; svg.appendChild(t);
+  }
+  const cross = svgEl("line", {y1: m.t, y2: m.t + ih, class: "cross", visibility: "hidden"});
+  svg.appendChild(cross);
+  const hit = svgEl("rect", {x: m.l, y: m.t, width: iw, height: ih, fill: "transparent"});
+  svg.appendChild(hit);
+  hit.addEventListener("pointermove", ev => {
+    const r = svg.getBoundingClientRect(), k = W / r.width;
+    const i = Math.max(0, Math.min(N - 1, Math.floor(((ev.clientX - r.left) * k - m.l) / iw * N)));
+    cross.setAttribute("x1", sx(i)); cross.setAttribute("x2", sx(i)); cross.setAttribute("visibility", "visible");
+    const s = STEPS[i];
+    const lines = [{label: "Klick alle " + ivl(L[i])}];
+    if (!s) lines.push({label: "rechnet noch …"});
+    else series.forEach(([key, ck, label, color]) => lines.push({color, value: pctf(s[key]), label: label + ", " + nf.format(Math.round(s[ck])) + " Münzen"}));
+    showTip(box, tip, ev.clientX - r.left, ev.clientY - r.top, lines);
+  });
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+}
+
+/* ---------- Annahmen ---------- */
+function renderAssumptions() {
+  const P = RESULT.P, w = WORLD;
+  const items = [
+    "Rohstoffpakete bringen je Rohstoff " + P.pkgPct + " % der Speicherkapazität in jedes Dorf. Pakete über 100 % gelten als nach und nach eingelöst, sobald Platz im Speicher ist; Überlauf in kleinen Dörfern wird nicht abgezogen.",
+    "Verschickt wird nur im Prägeverhältnis Holz : Lehm : Eisen = " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + ". Der Überschuss, meist Holz und Eisen, bleibt im Dorf.",
+    "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",
+    "Klick auf „Rohstoffe anfordern“ beim Start und dann alle " + ivl(P.intervalMin) + ". Jeder Klick schickt alle freien Händler aller Dörfer los. Jedes Dorf beliefert das nächstgelegene Prägedorf.",
+    "Münzpreis: Flagge Stufe " + P.flagLevel + " verdoppelt −" + 2 * K.FLAG_PCT[P.flagLevel] + " %" + (P.decree ? ", in den ersten 24 h zusätzlich −10 % durch den Erlass (die Werte addieren sich)" : "") + ". Geprägt wird, was bis zum Ende der 48 h ankommt (Dauermünzprägen).",
+    "„Pakete rechtzeitig“ zählt die Paket-Rohstoffe, die " + (P.decree ? "innerhalb der 24 h des Erlasses" : "innerhalb der 48 h") + " ankommen. Die laufende Produktion wird nach den Paketen verschickt und zählt nur bei den Münzen.",
+    "Das Prägedorf braucht einen Adelshof. Zwei Prägedörfer brauchen zwei Flaggendoppler und zwei Münzkosten-Flaggen; der Rechner nimmt für beide dieselbe Stufe an.",
+    "„Markt zu klein“: Das Dorf schafft seinen Anteil mit der genannten Marktstufe rechtzeitig. „zu weit weg oder zu selten geklickt“: auch Markt 25 reicht bei diesem Klickabstand nicht.",
+  ];
+  $("assume").replaceChildren(...items.map(t => el("li", null, t)));
+}
+
+/* ---------- Start ---------- */
+(async function () {
+  try {
+    const w = await loadData("praegen");
+    if (w && w.speed) WORLD = Object.assign({}, K.WORLD_DEFAULT, w);
+  } catch (e) { /* ohne Weltwerte gelten die Werte von Welt 259 */ }
+  const base = WORLD.base_min_per_field / WORLD.speed;
+  $("mpf").value = String(Math.round(base * 100) / 100);
+  $("mpf-note").textContent = nf.format(WORLD.base_min_per_field) + " ÷ Weltgeschwindigkeit " + nf1.format(WORLD.speed) + "; der Händlerbonus wird zusätzlich abgezogen";
+  if ($("paste").value.trim()) run();
+})();
+</script>
+</body>
+</html>

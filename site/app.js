@@ -1,4 +1,4 @@
-/* Gemeinsame Bausteine der drei Seiten: Kopfzeile mit Navigation, Umschalter für die Gestaltung,
+/* Gemeinsame Bausteine aller Seiten: Kopfzeile mit Navigation, Umschalter für die Gestaltung,
    Zahlenformate, Laden der Daten und sortierbare Tabellen. */
 
 const nf = new Intl.NumberFormat("de-DE");
@@ -64,8 +64,8 @@ function toggleTheme() {
 }
 
 /* ---------- Kopfzeile ---------- */
-const PAGES = [["./", "Punkteübersicht", "index"], ["dashboard.html", "Dashboard", "dashboard"],
-               ["karte.html", "Karte", "karte"], ["moral.html", "Moral", "moral"]];
+const PAGES = [["./", "Punkteübersicht", "index"], ["praegen.html", "Prägerechner", "praegen"],
+               ["dashboard.html", "Dashboard", "dashboard"], ["karte.html", "Karte", "karte"], ["moral.html", "Moral", "moral"]];
 function buildAppbar(current, title) {
   const bar = $("appbar");
   if (!bar) return;
@@ -125,8 +125,17 @@ function table(cols, rows, opts) {
     tb.appendChild(tr);
   });
   t.appendChild(tb);
+  // opts.counter: Spalte mit laufender Nummer 1, 2, 3 … in der angezeigten Reihenfolge, wird nach jedem
+  // Sortieren neu gezählt und ist selbst nicht sortierbar (Wunsch Dennis 28.10.2026)
+  if (opts.counter != null) t.dataset.counter = opts.counter;
   if (opts.sort != null) sortTable(t, opts.sort, opts.dir || "desc");
+  else renumber(t);
   return t;
+}
+function renumber(t) {
+  if (t.dataset.counter == null) return;
+  const c = +t.dataset.counter;
+  [...t.tBodies[0].rows].forEach((tr, n) => { if (tr.cells[c]) tr.cells[c].textContent = String(n + 1); });
 }
 function sortTable(t, col, force) {
   const hr = t.tHead.rows[t.tHead.rows.length - 1];
@@ -147,4 +156,5 @@ function sortTable(t, col, force) {
     if (y == null) return -1;
     return dir === "asc" ? x - y : y - x;
   }).forEach(r => t.tBodies[0].appendChild(r));
+  renumber(t);
 }
