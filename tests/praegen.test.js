@@ -171,11 +171,50 @@ test("Mindeststufe Marktplatz hebt kleine Märkte an, senkt keine", () => {
 });
 
 test("Nötige Klickfrequenz", () => {
-  const steps = [{min: 5, share1: 1}, {min: 30, share1: 1}, {min: 60, share1: 0.97}];
-  assert.deepEqual(K.requiredInterval(steps, "share1"), {kind: "voll", min: 30});
-  const plat = K.requiredInterval([{min: 5, share1: 0.9}, {min: 30, share1: 0.89}, {min: 60, share1: 0.8}], "share1");
+  const steps = [{min: 5, share: [1]}, {min: 30, share: [1]}, {min: 60, share: [0.97]}];
+  assert.deepEqual(K.requiredInterval(steps, 1), {kind: "voll", min: 30});
+  const plat = K.requiredInterval([{min: 5, share: [0.9, 1]}, {min: 30, share: [0.89, 1]}, {min: 60, share: [0.8, 0.99]}], 1);
   assert.equal(plat.kind, "plateau");
   assert.equal(plat.min, 30);
+  assert.deepEqual(K.requiredInterval([{min: 5, share: [0.9, 1]}, {min: 30, share: [0.89, 1]}], 2), {kind: "voll", min: 30});
+});
+
+// Drei Haufen, je 70 bis 90 Felder auseinander, je fünf Dörfer, zwei davon mit Adelshof
+function dreiHaufen() {
+  const v = [];
+  [[100, 100], [180, 110], [140, 190]].forEach(([cx, cy], h) => {
+    [[0, 0], [1, 0], [0, 1], [-1, 1], [1, -1]].forEach(([dx, dy], j) => {
+      v.push({name: "D" + h + "-" + j, x: cx + dx, y: cy + dy, b: {main: 20, smith: 20, market: 20, storage: 30,
+               wood: 30, stone: 30, iron: 30, snob: j < 2 ? 1 : 0}});
+    });
+  });
+  return v;
+}
+
+test("Drei weit entfernte Haufen: drei Prägedörfer, je eines pro Haufen", () => {
+  const P = K.params({pkgPct: 300, flagLevel: 9, intervalMin: 60, merchantBonus: true, production: true, minGainPct: 10}, WELT);
+  const r = K.plan(dreiHaufen(), P);
+  assert.equal(r.recommend, 3);
+  const haufen = r.configs[2].sites.map(i => r.src[i].name[1]).sort().join("");
+  assert.equal(haufen, "012");
+  assert.ok(r.configs[2].gainPct >= 10);
+  assert.ok(r.configs.length >= 3 && r.configs.length <= 4, "gerechnet bis zur ersten Aufstellung unter der Schwelle");
+  assert.equal(r.details.length, r.configs.length);
+  if (r.configs[3]) assert.ok(r.configs[3].gainPct < 10);
+});
+
+test("Schwelle stoppt die Suche: bei hoher Schwelle bleibt es bei einem", () => {
+  const P = K.params({pkgPct: 300, flagLevel: 9, intervalMin: 60, merchantBonus: true, production: true, minGainPct: 500}, WELT);
+  const r = K.plan(dreiHaufen(), P);
+  assert.equal(r.recommend, 1);
+  assert.equal(r.configs.length, 2);
+});
+
+test("Frequenzleiter liefert Anteile je Zahl der Prägedörfer", () => {
+  const P = K.params({pkgPct: 300, flagLevel: 9, intervalMin: 60, merchantBonus: true, production: false}, WELT);
+  const st = K.ladderStep(dreiHaufen(), P, 60, 3);
+  assert.equal(st.share.length, 3);
+  assert.ok(st.share[2] >= st.share[1] - 1e-9 && st.share[1] >= st.share[0] - 1e-9);
 });
 
 test("Großes Konto: 400 Dörfer, 160 mit Adelshof, Rechnung bleibt schnell", () => {

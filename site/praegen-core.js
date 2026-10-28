@@ -229,35 +229,91 @@ Planner.prototype.bestSingle = function (cands) {
   for (const c of cands) { const r = this.evaluate([c]); if (!best || better(r, best)) best = r; }
   return best;
 };
-/* Große Konten: höchstens 60 Kandidaten für die Paarsuche. Die Dörfer werden nach Paketmenge gewichtet in zwei
-   Haufen geteilt (2-means), je Haufen kommen die 30 Kandidaten nahe dem Schwerpunkt in die engere Wahl. */
-const PAIR_MAX = 60;
-Planner.prototype.pairCandidates = function (cands) {
-  if (cands.length <= PAIR_MAX) return cands;
+/* ---------- Mehrere Prägedörfer ----------
+   k = 1 und k = 2 werden vollständig durchsucht, ab k = 3 heuristisch: Start aus der besten Aufstellung mit k − 1
+   Prägedörfern plus dem besten Zusatzdorf und zweiter Start aus k Haufen (gewichtetes k-means, je Haufen das
+   Kandidatendorf am Schwerpunkt), danach so lange Prägedörfer gegen andere Kandidaten tauschen, wie es besser wird.
+   Große Konten: höchstens 60 Kandidaten, je Haufen die nächsten am Schwerpunkt. */
+const CAND_MAX = 60;
+Planner.prototype.clusters = function (k) {
   const src = this.src, w = src.map(s => 1 + s.pkg.stone);
-  const far = (from, list) => list.reduce((b, s) => (dist(s, from) > dist(b, from) ? s : b), list[0]);
   const mean = src.reduce((m, s, i) => ({x: m.x + s.x * w[i], y: m.y + s.y * w[i], w: m.w + w[i]}), {x: 0, y: 0, w: 0});
-  let c1 = far({x: mean.x / mean.w, y: mean.y / mean.w}, src), c2 = far(c1, src);
-  c1 = {x: c1.x, y: c1.y}; c2 = {x: c2.x, y: c2.y};
-  for (let it = 0; it < 12; it++) {
-    const acc = [{x: 0, y: 0, w: 0}, {x: 0, y: 0, w: 0}];
-    src.forEach((s, i) => { const a = acc[dist(s, c1) <= dist(s, c2) ? 0 : 1]; a.x += s.x * w[i]; a.y += s.y * w[i]; a.w += w[i]; });
-    if (acc[0].w) c1 = {x: acc[0].x / acc[0].w, y: acc[0].y / acc[0].w};
-    if (acc[1].w) c2 = {x: acc[1].x / acc[1].w, y: acc[1].y / acc[1].w};
+  // Startpunkte: jeweils das Dorf, das am weitesten von allen bisherigen entfernt liegt
+  const cent = [];
+  let first = src[0], fd = -1;
+  src.forEach(s => { const d = dist(s, {x: mean.x / mean.w, y: mean.y / mean.w}); if (d > fd) { fd = d; first = s; } });
+  cent.push({x: first.x, y: first.y});
+  while (cent.length < k) {
+    let pick = null, pd = -1;
+    src.forEach(s => { const d = Math.min(...cent.map(c => dist(s, c))); if (d > pd) { pd = d; pick = s; } });
+    if (pd <= 0) break;
+    cent.push({x: pick.x, y: pick.y});
   }
-  const pick = new Set();
-  [c1, c2].forEach(c => cands.slice().sort((a, b) => dist(src[a], c) - dist(src[b], c))
-    .slice(0, PAIR_MAX / 2).forEach(i => pick.add(i)));
+  const near = s => { let b = 0, bd = Infinity; cent.forEach((c, j) => { const d = dist(s, c); if (d < bd) { bd = d; b = j; } }); return b; };
+  for (let it = 0; it < 15; it++) {
+    const acc = cent.map(() => ({x: 0, y: 0, w: 0}));
+    src.forEach((s, i) => { const a = acc[near(s)]; a.x += s.x * w[i]; a.y += s.y * w[i]; a.w += w[i]; });
+    acc.forEach((a, j) => { if (a.w) cent[j] = {x: a.x / a.w, y: a.y / a.w}; });
+  }
+  return cent;
+};
+Planner.prototype.kCandidates = function (cands, k) {
+  if (cands.length <= CAND_MAX) return cands;
+  const per = Math.max(1, Math.floor(CAND_MAX / k)), pick = new Set();
+  this.clusters(k).forEach(c => cands.slice().sort((a, b) => dist(this.src[a], c) - dist(this.src[b], c))
+    .slice(0, per).forEach(i => pick.add(i)));
   return [...pick];
 };
 Planner.prototype.bestPair = function (cands) {
-  cands = this.pairCandidates(cands);
+  cands = this.kCandidates(cands, 2);
   let best = null;
   for (let a = 0; a < cands.length; a++)
     for (let b = a + 1; b < cands.length; b++) {
       const r = this.evaluate([cands[a], cands[b]]);
       if (!best || better(r, best)) best = r;
     }
+  return best;
+};
+Planner.prototype.improve = function (sites, cands) {
+  let cur = this.evaluate(sites);
+  for (let round = 0; round < 20; round++) {
+    let changed = false;
+    for (let pos = 0; pos < cur.sites.length; pos++) {
+      for (const c of cands) {
+        if (cur.sites.includes(c)) continue;
+        const trial = cur.sites.slice(); trial[pos] = c;
+        const r = this.evaluate(trial);
+        if (better(r, cur)) { cur = r; changed = true; }
+      }
+    }
+    if (!changed) break;
+  }
+  return cur;
+};
+Planner.prototype.bestK = function (cands, k, prevSites) {
+  if (k === 1) return this.bestSingle(cands);
+  if (k > cands.length) return null;
+  if (k === 2) return this.bestPair(cands);
+  cands = this.kCandidates(cands, k);
+  if (k > cands.length) return null;
+  const starts = [];
+  if (prevSites && prevSites.length === k - 1) {
+    let best = null;
+    for (const c of cands) {
+      if (prevSites.includes(c)) continue;
+      const r = this.evaluate(prevSites.concat([c]));
+      if (!best || better(r, best)) best = r;
+    }
+    if (best) starts.push(best.sites);
+  }
+  const seed = [];
+  this.clusters(k).forEach(c => {
+    const free = cands.filter(i => !seed.includes(i));
+    if (free.length) seed.push(free.reduce((b, i) => (dist(this.src[i], c) < dist(this.src[b], c) ? i : b), free[0]));
+  });
+  if (seed.length === k) starts.push(seed);
+  let best = null;
+  for (const st of starts) { const r = this.improve(st, cands); if (!best || better(r, best)) best = r; }
   return best;
 };
 
@@ -291,61 +347,88 @@ function details(src, P, sites, planner) {
 }
 
 /* ---------- Gesamtrechnung ---------- */
+/* ---------- Gesamtrechnung ----------
+   Regel 9.1a (Dennis 28.10.2026), verallgemeinert auf beliebig viele Flaggendoppler (Dennis 23:24): ein weiterer
+   Flaggendoppler wird nur empfohlen, wenn die Aufstellung mit einem weniger nicht alle Paket-Rohstoffe rechtzeitig
+   schafft und der weitere mindestens minGainPct mehr Münzen bringt. Gerechnet wird bis zur ersten Aufstellung, die
+   diese Hürde nicht nimmt, damit die Seite zeigen kann, warum dort Schluss ist. */
+const K_MAX = 8;
+function search(src, P, pl) {
+  const all = src.map(s => s.i), ah = src.filter(s => s.snob).map(s => s.i);
+  const cands1 = ah.length ? ah : all, candsK = ah.length >= 2 ? ah : all;
+  const configs = [];
+  const r1 = pl.bestSingle(cands1);
+  r1.needsSnob = !ah.length; r1.gainPct = null;
+  configs.push(r1);
+  let recommend = 1;
+  for (let k = 2; k <= K_MAX && k <= candsK.length; k++) {
+    const prev = configs[k - 2];
+    const next = pl.bestK(candsK, k, prev.sites);
+    if (!next) break;
+    next.needsSnob = ah.length < k;
+    next.gainPct = (next.coins / prev.coins - 1) * 100;
+    configs.push(next);
+    if (prev.share >= 1 - 1e-6 || next.gainPct < P.minGainPct - 1e-9) break;
+    recommend = k;
+  }
+  return {configs, recommend, ah, all};
+}
 function plan(villages, P) {
   const src = prepare(villages, P);
   const pl = new Planner(src, P);
-  const all = src.map(s => s.i), ah = src.filter(s => s.snob).map(s => s.i);
-  const out = {P, src, ahCount: ah.length};
+  const out = {P, src, ahCount: src.filter(s => s.snob).length};
   // Dörfer, die für die Mindeststufe den Marktplatz vorher ausbauen, und die Summe der Ausbaustufen
   const up = src.filter(s => s.b.market > s.marketFrom);
   out.marketUp = {count: up.length, levels: up.reduce((n, s) => n + s.b.market - s.marketFrom, 0)};
   if (!src.length) return out;
-  const cands1 = ah.length ? ah : all;
-  out.single = pl.bestSingle(cands1);
-  out.single.needsSnob = !ah.length;
-  // Bester Standort ohne Adelshof-Pflicht, nur als Hinweis, wenn er spürbar mehr bringt
-  if (ah.length && ah.length < all.length) {
-    const any = pl.bestSingle(all);
-    if (!src[any.sites[0]].snob && any.coins > out.single.coins * 1.01) out.singleAny = any;
+  const sr = search(src, P, pl);
+  out.configs = sr.configs;
+  out.recommend = sr.recommend;
+  out.details = sr.configs.map(c => details(src, P, c.sites, pl));
+  // Bester Einzelstandort ohne Adelshof-Pflicht, nur als Hinweis, wenn er spürbar mehr bringt
+  if (sr.ah.length && sr.ah.length < sr.all.length) {
+    const any = pl.bestSingle(sr.all);
+    if (!src[any.sites[0]].snob && any.coins > sr.configs[0].coins * 1.01) out.singleAny = any;
   }
-  if (src.length >= 2) {
-    const cands2 = ah.length >= 2 ? ah : all;
-    out.pair = pl.bestPair(cands2);
-    if (out.pair) out.pair.needsSnob = ah.length < 2;
-  }
-  // Regel 9.1a (Dennis 28.10.2026): zweiter Flaggendoppler nur, wenn einer nicht alles rechtzeitig schafft
-  // und zwei mindestens minGainPct mehr Münzen bringen
-  const gain = out.pair ? out.pair.coins / out.single.coins - 1 : 0;
-  out.gainPct = gain * 100;
+  // Kurzformen für eine und zwei Aufstellungen
+  out.single = sr.configs[0]; out.pair = sr.configs[1] || null;
+  out.d1 = out.details[0]; out.d2 = out.details[1] || null;
   out.singleComplete = out.single.share >= 1 - 1e-6;
-  out.recommend = out.pair && !out.singleComplete && gain * 100 >= P.minGainPct - 1e-9 ? 2 : 1;
-  out.d1 = details(src, P, out.single.sites, pl);
-  if (out.pair) out.d2 = details(src, P, out.pair.sites, pl);
+  out.gainPct = out.pair ? out.pair.gainPct : 0;
   return out;
 }
 
-/* Klickfrequenz: für jeden Abstand der Leiter beide Aufstellungen neu suchen */
-function ladderStep(villages, P, minutes) {
+/* Klickfrequenz: für jeden Abstand der Leiter die Aufstellungen mit 1 bis kMax Prägedörfern neu suchen */
+function ladderStep(villages, P, minutes, kMax) {
   const Q = Object.assign({}, P, {intervalMin: minutes, interval: minutes / 60});
   const src = prepare(villages, Q), pl = new Planner(src, Q);
   const all = src.map(s => s.i), ah = src.filter(s => s.snob).map(s => s.i);
-  const r1 = pl.bestSingle(ah.length ? ah : all);
-  const r2 = src.length >= 2 ? pl.bestPair(ah.length >= 2 ? ah : all) : null;
-  return {min: minutes, share1: r1.share, coins1: r1.coins, share2: r2 ? r2.share : null, coins2: r2 ? r2.coins : null};
+  const share = [], coins = [];
+  let prev = pl.bestSingle(ah.length ? ah : all);
+  share.push(prev.share); coins.push(prev.coins);
+  const candsK = ah.length >= 2 ? ah : all;
+  for (let k = 2; k <= (kMax || 2); k++) {
+    const r = pl.bestK(candsK, k, prev.sites);
+    if (!r) break;
+    share.push(r.share); coins.push(r.coins); prev = r;
+  }
+  return {min: minutes, share, coins};
 }
-/* Größter Klickabstand, bei dem alles rechtzeitig ankommt; sonst der größte, der 98 % des Bestwerts erreicht */
-function requiredInterval(steps, key) {
-  const ok = steps.filter(s => s[key] != null);
+/* Größter Klickabstand, bei dem alles rechtzeitig ankommt; sonst der größte, der 98 % des Bestwerts erreicht.
+   k = Zahl der Prägedörfer. */
+function requiredInterval(steps, k) {
+  const ok = steps.filter(s => s.share[k - 1] != null);
   if (!ok.length) return null;
-  const full = ok.filter(s => s[key] >= 1 - 1e-6);
+  const v = s => s.share[k - 1];
+  const full = ok.filter(s => v(s) >= 1 - 1e-6);
   if (full.length) return {kind: "voll", min: Math.max(...full.map(s => s.min))};
-  const top = Math.max(...ok.map(s => s[key]));
-  const near = ok.filter(s => s[key] >= 0.98 * top);
+  const top = Math.max(...ok.map(v));
+  const near = ok.filter(s => v(s) >= 0.98 * top);
   return {kind: "plateau", min: Math.max(...near.map(s => s.min)), top};
 }
 
 const api = {RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
-             WORLD_DEFAULT, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
+             WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Praegen = api;
