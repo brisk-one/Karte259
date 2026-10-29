@@ -1023,12 +1023,12 @@ function kampfLabels(){
   }
   return out;
 }
-// Kompakte Schrift: 11 px halbfett mit dünnem dunklem Rand bleibt auf jedem Untergrund lesbar und braucht
-// rund ein Fünftel weniger Platz als 12 px fett mit dickem Rand.
-const NAME_FONT="600 11px system-ui, sans-serif", VS_FONT="600 9px system-ui, sans-serif", WEIT_FONT="600 10.5px system-ui, sans-serif";
+// Schwarze Schrift mit weißem Rand (Wunsch Dennis 29.10.2026): auf dem bunten Dorfteppich klarer als weiße Schrift
+// mit dunklem Rand, die bei 11 px zerfaserte. Fett, damit die Buchstaben den Rand tragen.
+const NAME_FONT="700 11px system-ui, sans-serif", VS_FONT="700 9px system-ui, sans-serif", WEIT_FONT="700 10.5px system-ui, sans-serif";
 const frei=(belegt, boxen)=>!boxen.some(q=>belegt.some(b=>q[0]<b[2] && q[2]>b[0] && q[1]<b[3] && q[3]>b[1]));
 function namensText(c, t, x, y, farbe){
-  c.lineWidth=2.6; c.strokeStyle="rgba(0,0,0,.78)"; c.fillStyle=farbe||"#ffffff";
+  c.lineWidth=3.2; c.strokeStyle="rgba(255,255,255,.92)"; c.fillStyle=farbe||"#111111";
   c.strokeText(t, x, y); c.fillText(t, x, y);
 }
 /** „Angreifer vs Verteidiger“ weit weg: Namen 10,5 px, „vs“ kleiner und gedämpft. */
@@ -1042,7 +1042,7 @@ function vsZeile(X, Y, an, vn, belegt){
   belegt.push(box);
   let x=X-w/2;
   ctx.font=WEIT_FONT; namensText(ctx, an, x, Y); x+=wa;
-  ctx.font=VS_FONT; namensText(ctx, " vs ", x, Y+0.5, "#d7d7d7"); x+=ws;
+  ctx.font=VS_FONT; namensText(ctx, " vs ", x, Y+0.5, "#555555"); x+=ws;
   ctx.font=WEIT_FONT; namensText(ctx, vn, x, Y);
 }
 /** Waagerechte Zeile ohne Zeichen, mittig bei (X,Y). */
