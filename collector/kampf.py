@@ -88,7 +88,8 @@ def zuordnen(alt, neu, doerfer, verluste):
 
     alt, neu: {pid: {"ally", "att", "def", "sup"}} zu Beginn und Ende des Intervalls
     doerfer: {pid: [(x, y), ...]} Dörfer je Spieler
-    verluste: {pid: [(x, y), ...]} Dörfer mit Punktverlust im Intervall, None ohne Dorfvergleich
+    verluste: {pid: [(x, y[, (vorher_utc, stand_utc), Δpunkte]), ...]} Dörfer mit Punktverlust im Intervall, None ohne
+        Dorfvergleich. Ein Dorf kann mehrfach vorkommen (Verlust in mehreren Stunden).
     """
     def delta(pid, f):
         a = alt.get(pid)
@@ -102,7 +103,8 @@ def zuordnen(alt, neu, doerfer, verluste):
     kaempfe = []
     for v in verteidiger:
         getroffen = (verluste or {}).get(v) or []
-        orte = getroffen or doerfer[v]
+        punkte = list(dict.fromkeys((p[0], p[1]) for p in getroffen))
+        orte = punkte or doerfer[v]
         naehe = _naehe(raster_a, orte)
         ally_v = neu[v]["ally"]
         kand = []
@@ -112,7 +114,7 @@ def zuordnen(alt, neu, doerfer, verluste):
             kand.append((delta(a, "att") / (1 + d / NAEHE), a, d, dorf))
         kand.sort(key=lambda k: (-k[0], k[1]))
         if getroffen:
-            ziele, geschaetzt = getroffen[:MAX_ZIELE], False
+            ziele, geschaetzt = punkte[:MAX_ZIELE], False
         elif kand:
             # ohne Dorfvergleich: die Dörfer des Verteidigers am nächsten Dorf des wahrscheinlichsten Angreifers
             fa = kand[0][3]
@@ -125,7 +127,11 @@ def zuordnen(alt, neu, doerfer, verluste):
         kaempfe.append({
             "v": v, "dv": delta(v, "def"), "ally": ally_v, "ziel": list(ziel),
             "orte": [list(p) for p in ziele], "geschaetzt": geschaetzt,
-            "a": [[a, delta(a, "att"), round(d, 1), *_front(doerfer[a], ziel)] for _, a, d, _ in kand[:MAX_ANGREIFER]],
+            # alle getroffenen Dörfer mit Stunde und Punktverlust, für die Liste im Infofeld
+            "treffer": sorted(((p[0], p[1], p[2] if len(p) > 2 else None, p[3] if len(p) > 3 else 0)
+                               for p in getroffen), key=lambda t: (t[2] or (), t[0], t[1])),
+            "a": [[a, delta(a, "att"), round(d, 1), *_front(doerfer[a], ziel), neu[a]["ally"]]
+                  for _, a, d, _ in kand[:MAX_ANGREIFER]],
             "a_sicher": _sicherheit([k[0] for k in kand]),
             "u": [],
         })
@@ -151,16 +157,15 @@ def zuordnen(alt, neu, doerfer, verluste):
         else:
             k, sicher = max(kandidaten, key=lambda k: k["dv"]), UNKLAR
         front = _mitte(sorted(doerfer[s], key=lambda p: _dist(p, k["ziel"]))[:3])
-        k["u"].append([s, delta(s, "sup"), sicher, *front])
+        k["u"].append([s, delta(s, "sup"), sicher, *front, neu[s]["ally"]])
     for k in kaempfe:
         k["u"].sort(key=lambda u: -u[1])
         k["staerke"] = k["dv"] + sum(u[1] for u in k["u"])
-        del k["ally"]
     return kaempfe
 
 
 def verluste_laden(data_dir=None):
-    """Dorfverluste je Intervall: {(vorher_utc, stand_utc): {pid: [(x, y), ...]}}."""
+    """Dorfverluste je Intervall: {(vorher_utc, stand_utc): {pid: [(x, y, (vorher_utc, stand_utc), Δpunkte), ...]}}."""
     d = os.path.join(data_dir or store.dpath(), "kampf")
     out = defaultdict(lambda: defaultdict(list))
     if not os.path.isdir(d):
@@ -168,7 +173,9 @@ def verluste_laden(data_dir=None):
     for f in sorted(os.listdir(d)):
         if f.startswith("dorfverluste_") and f.endswith(".csv"):
             for r in store.read_csv(os.path.join(d, f)):
-                out[(r["vorher_utc"], r["stand_utc"])][int(r["player"])].append((int(r["x"]), int(r["y"])))
+                out[(r["vorher_utc"], r["stand_utc"])][int(r["player"])].append(
+                    (int(r["x"]), int(r["y"]), (r["vorher_utc"], r["stand_utc"]),
+                     int(r["points"]) - int(r["points_vorher"])))
     return out
 
 
@@ -178,14 +185,17 @@ def stand(rows):
 
 
 KURZ = {WAHRSCHEINLICH: "w", MOEGLICH: "m", UNKLAR: "u"}
-FELDER = ["i", "v", "dv", "x", "y", "geschaetzt", "staerke", "a_sicher", "orte", "a", "u"]
+FELDER = ["i", "v", "dv", "x", "y", "geschaetzt", "staerke", "a_sicher", "orte", "a", "u", "treffer"]
 
 
-def zeile(i, k):
+def zeile(i, k, stunde_nr):
     """Kompakte Zeile nach FELDER. Orte als x*1000+y, Angreifer [pid, Δatt, Abstand, x, y],
-    Unterstützer [pid, Δsup, Sicherheit, x, y], Sicherheit als w, m oder u."""
+    Unterstützer [pid, Δsup, Sicherheit, x, y], Sicherheit als w, m oder u. Treffer [x*1000+y, Stunde, Δpunkte],
+    Stunde als Index in "stunden" ([vorher, stand] der Stunde mit dem Punktverlust), -1 ohne Zeit."""
     return [i, k["v"], k["dv"], k["ziel"][0], k["ziel"][1], int(k["geschaetzt"]), k["staerke"], KURZ[k["a_sicher"]],
-            [x * 1000 + y for x, y in k["orte"]], k["a"], [[u[0], u[1], KURZ[u[2]], u[3], u[4]] for u in k["u"]]]
+            [x * 1000 + y for x, y in k["orte"]], [a[:5] for a in k["a"]],
+            [[u[0], u[1], KURZ[u[2]], u[3], u[4]] for u in k["u"]],
+            [[x * 1000 + y, stunde_nr.get(t, -1), dp] for x, y, t, dp in k["treffer"]]]
 
 
 def _bash_gleich(a, b):
@@ -195,13 +205,16 @@ def _bash_gleich(a, b):
                for pid, v in b.items() if pid in a)
 
 
-def auswerten(staende, doerfer, verluste, iso):
-    """staende: [(zeit, {pid: {...}})] aufsteigend nach Zeit. Ergebnis für data/kampf.json.
+def intervalle(staende, doerfer, verluste, iso):
+    """Kämpfe je Intervall, aufsteigend: (von, bis, dorfvergleich, kämpfe) mit Kämpfen wie zuordnen().
 
-    Der Server rechnet die Bashwerte nur alle paar Stunden neu, die Punkte dagegen laufend. Stände mit
-    unveränderten Bashwerten werden deshalb zusammengefasst: ein Intervall reicht vom ersten Stand mit den
-    alten Werten bis zum ersten mit neuen, die Dorfverluste aller Teilintervalle zählen zusammen."""
-    intervalle, rows = [], []
+    staende: [(zeit, {pid: {...}})] aufsteigend nach Zeit. doerfer: {pid: [(x, y)]} oder eine Funktion
+    zeit -> solches Wörterbuch (Rückfüllung alter Intervalle mit dem Dorfstand ihres Tages).
+
+    Der Server rechnet die Bashwerte nur alle 3 Stunden neu (Messung 29.10.2026), die Punkte dagegen laufend.
+    Stände mit unveränderten Bashwerten werden deshalb zusammengefasst: ein Intervall reicht vom ersten Stand
+    mit den alten Werten bis zum ersten mit neuen, die Dorfverluste aller Teilintervalle zählen zusammen.
+    Stände nach der letzten Änderung bilden noch kein Intervall."""
     start = 0
     for j in range(1, len(staende)):
         if _bash_gleich(staende[j - 1][1], staende[j][1]):
@@ -215,9 +228,23 @@ def auswerten(staende, doerfer, verluste, iso):
                 continue
             for pid, orte in teil.items():
                 vl[pid] += orte
-        i = len(intervalle)
-        intervalle.append({"von": iso(t0), "bis": iso(t1), "dorfvergleich": alle})
-        rows += [zeile(i, k) for k in zuordnen(s0, s1, doerfer, dict(vl) if (vl or alle) else None)]
+        d = doerfer(t1) if callable(doerfer) else doerfer
+        yield iso(t0), iso(t1), alle, zuordnen(s0, s1, d, dict(vl) if (vl or alle) else None)
         start = j
-    return {"intervalle": intervalle, "felder": FELDER, "rows": rows,
+
+
+def auswerten(staende, doerfer, verluste, iso):
+    """Ergebnis für data/kampf.json aus intervalle()."""
+    return als_json(intervalle(staende, doerfer, verluste, iso))
+
+
+def als_json(ivs):
+    liste, roh = [], []
+    for von, bis, alle, kaempfe in ivs:
+        roh.append((len(liste), kaempfe))
+        liste.append({"von": von, "bis": bis, "dorfvergleich": alle})
+    stunden = sorted({t[2] for _, ks in roh for k in ks for t in k["treffer"] if t[2]})
+    nr = {t: i for i, t in enumerate(stunden)}
+    rows = [zeile(i, k, nr) for i, ks in roh for k in ks]
+    return {"intervalle": liste, "stunden": [list(t) for t in stunden], "felder": FELDER, "rows": rows,
             "regeln": {"min_def": MIN_DEF, "min_att": MIN_ATT, "min_sup": MIN_SUP, "r": R, "dominanz": DOMINANZ}}

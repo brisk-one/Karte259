@@ -55,7 +55,8 @@ button.tw.small{padding:2px 6px; font-size:11px}
 .mark input[type="color"]{width:26px; height:20px; padding:0; border:1px solid var(--edge); background:none; cursor:pointer}
 .stand{font-size:11.5px; color:var(--ink-2); margin-left:auto; text-align:right}
 .stand b{font-weight:700}
-.mapwrap{position:relative; flex:1; min-height:0; background:var(--map-bg); touch-action:none; cursor:default}
+.mainrow{flex:1; min-height:0; display:flex; position:relative}
+.mapwrap{position:relative; flex:1; min-width:0; min-height:0; background:var(--map-bg); touch-action:none; cursor:default}
 .mapwrap.drag{cursor:grabbing}
 canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 #ov{pointer-events:none}
@@ -99,9 +100,54 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .kampf .kb:first-child{border-top:0; padding-top:0}
 .kampf .kb p{margin:1px 0}
 .kampf .kb .zeit{color:var(--muted); font-size:10.5px}
-.kampf .kb .ang{border-left:3px solid #e53935; padding-left:5px}
-.kampf .kb .unt{border-left:3px solid #4fc3f7; padding-left:5px}
+.kampf .kb .ang,.kampf .kb .unt,.kampf .kb .ver{border-left:4px solid var(--c,#888); padding-left:5px}
 .kampf .kb .s{color:var(--muted); font-size:10.5px}
+.kampf .kb .fokus{background:var(--row-alt)}
+.kampf details.dl{margin-top:3px}
+.kampf details.dl summary{font-size:11px; cursor:pointer; color:var(--ink-2)}
+.kampf .dorf{display:flex; gap:8px; justify-content:space-between; padding:1px 2px; cursor:pointer; font-variant-numeric:tabular-nums}
+.kampf .dorf:hover{background:var(--row-hover)}
+.kampf .dorf .s{white-space:nowrap}
+/* Zeichen der Kampfart, gleiche Bilder wie auf der Karte */
+.kart img{width:16px; height:16px; vertical-align:-3px; margin-right:3px}
+.tip .kz{padding:3px 9px; white-space:normal; max-width:360px; line-height:1.35}
+.tip .kz b{font-weight:700}
+.tip .row .nm{display:inline-flex; align-items:center; gap:4px}
+.tip .dot,.kriege .dot{display:inline-block; width:9px; height:9px; border:1px solid rgba(0,0,0,.5); flex:none}
+.tip .hl{padding:2px 9px 4px; font-size:10.5px; color:var(--muted); white-space:normal; max-width:360px}
+/* Kriegsübersicht rechts neben der Karte, auf schmalen Schirmen als Schublade über der Karte */
+.kriege{width:360px; flex:none; overflow:auto; background:var(--panel-solid); border-left:1px solid var(--edge);
+  font-size:12px}
+.kriege[hidden]{display:none}
+.kriege .kh{position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:8px;
+  font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--head-ink);
+  background:var(--head); border-bottom:1px solid var(--edge-soft); padding:4px 4px 4px 10px}
+.kriege .kh button{font:inherit; font-weight:700; font-size:14px; cursor:pointer; background:none; color:inherit;
+  border:0; width:22px; height:22px; border-radius:var(--radius)}
+.kriege .regel{color:var(--muted); font-size:10.5px; padding:6px 10px; margin:0; line-height:1.35; border-bottom:1px solid var(--edge-line)}
+.kriege .kr{padding:7px 10px 8px; border-bottom:1px solid var(--edge-line)}
+.kriege .kr.sel{background:var(--row-alt)}
+.kriege .kt{display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; font-size:13px}
+.kriege .kt:hover .vs{text-decoration:underline}
+.kriege .badge{font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:1px 5px;
+  border-radius:var(--radius); border:1px solid var(--edge); margin-left:auto; white-space:nowrap}
+.kriege .badge.beginn{background:#ffd600; color:#3a2a00; border-color:#8a6d00}
+.kriege .badge.krieg{background:#b71c1c; color:#fff; border-color:#5d0b0b}
+.kriege .meta{color:var(--ink-2); font-size:11px; margin:2px 0 4px}
+.kriege .ruhe{color:var(--muted)}
+.kriege .spark{display:flex; align-items:center; gap:1px; height:34px; margin:3px 0 5px}
+.kriege .spark i{flex:1; display:flex; flex-direction:column; justify-content:center; height:100%; min-width:2px; max-width:9px}
+.kriege .spark i b,.kriege .spark i u{display:block; text-decoration:none}
+.kriege .seite{display:flex; justify-content:space-between; gap:8px; font-size:11.5px; padding:1px 0}
+.kriege .seite.s{color:var(--muted); font-size:10.5px; padding:0 0 2px 13px}
+.kriege details{margin-top:3px}
+.kriege details summary{cursor:pointer; font-size:11px; color:var(--ink-2)}
+.kriege .sec{padding:4px 0 1px; font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); border-top:1px solid var(--edge-soft); margin-top:3px}
+.kriege .li{display:flex; justify-content:space-between; gap:8px; padding:1px 0}
+.kriege .li span:last-child{font-variant-numeric:tabular-nums; white-space:nowrap}
+@media (max-width:900px){ .kriege{position:absolute; right:0; top:0; bottom:0; z-index:6; width:min(360px,92vw);
+  box-shadow:-4px 0 14px rgba(0,0,0,.45)} }
 .dist th,.dist td{padding:1.5px 5px; text-align:right; white-space:nowrap}
 .dist th{font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700;
   border-bottom:1px solid var(--edge-line); background:none}
@@ -218,9 +264,13 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
     <button class="tw" type="button" data-w="12h">12 h</button>
     <button class="tw" type="button" data-w="24h" aria-pressed="true">24 h</button>
   </div>
-  <div class="grp" id="namesgrp" hidden>
+  <div class="grp" id="namesgrp">
     <button class="tw" type="button" id="names" aria-pressed="false"
-            title="Spielernamen schon ab Gelb zeigen statt erst ab Rot">Namen ab Gelb</button>
+            title="Namen auch von Spielern mit mittleren Bashpunkten zeigen (ab Gelb), nicht nur mit vielen (ab Rot)">+ mittlere Namen</button>
+  </div>
+  <div class="grp">
+    <button class="tw" type="button" id="kriegbtn" aria-pressed="false" aria-controls="kriege"
+            title="Rechts neben der Karte: Stämme im Krieg laut Kampfauswertung">Kriege</button>
   </div>
   <form class="search" id="searchform" role="search" autocomplete="off">
     <input id="q" type="search" placeholder="500|500, Spieler oder Stamm" aria-label="Suche nach Koordinate, Spieler oder Stamm"
@@ -233,6 +283,7 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
   <button class="tw small" type="button" id="clearmark" title="Hervorhebung aufheben" aria-label="Hervorhebung aufheben" hidden>×</button>
 </div>
 
+<div class="mainrow">
 <div class="mapwrap" id="mapwrap">
   <canvas id="c"></canvas>
   <canvas id="ov"></canvas>
@@ -264,6 +315,12 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
       <button type="button" id="zfit" title="Ganze Welt" aria-label="Ganze Welt">⤢</button>
     </div>
   </div>
+</div>
+<aside class="kriege" id="kriege" hidden aria-label="Stämme im Krieg">
+  <div class="kh"><span id="kriege-title">Kriege</span>
+    <button type="button" id="kriege-close" title="Schließen" aria-label="Schließen">×</button></div>
+  <div id="kriege-body"></div>
+</aside>
 </div>
 
 <script src="app.js"></script>
@@ -316,10 +373,12 @@ let namesFrom=NAME_AB_ROT;
 // 15.09. entfallen; Farben bleiben für die kleinen Bilder in Legende und Knopfleiste.
 const AXE_COLORS=["#00c853","#ffd600","#e53935"];
 // Kämpfe aus data/kampf.json (collector/kampf.py): unter KAMPF_ZOOM ein Symbol je Kampfgebiet (Kämpfe
-// innerhalb KAMPF_GEBIET Feldern zusammengefasst), ab KAMPF_ZOOM Pfeile vom Angreifer (rot) und vom
-// Unterstützer (hellblau) zum Ziel.
+// innerhalb KAMPF_GEBIET Feldern zusammengefasst), ab KAMPF_ZOOM Pfeile vom Angreifer und vom Unterstützer
+// zum Ziel. Pfeile in der Stammesfarbe des Handelnden, die Art an Form und Zeichen (Dennis 1a, 29.10.2026):
+// Angriff durchgezogen mit spitzer Spitze und Schwertern, Unterstützung gestrichelt mit runder Spitze und
+// Schild, „möglich“ halb durchsichtig. Rot und Hellblau als feste Pfeilfarben wurden mit Stämmen verwechselt.
 const KAMPF_ZOOM=6, KAMPF_GEBIET=15;
-const PFEIL_ANG="#e53935", PFEIL_UNT="#4fc3f7";
+const PFEIL_MOEGLICH=0.5;
 const SICHER={w:"wahrscheinlich", m:"möglich", u:"unklar"};
 const BASH_WINDOWS=["3h","6h","12h","24h"];
 let axWin="24h";                     // Zeitraum für Äxte und die Ansichten "+ …"
@@ -368,6 +427,8 @@ const dtfTag=new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin", weekday:
 let N=0, vx=null, vy=null, vp=null, vpts=null, vb=null, vname=null, byXY=null;
 let bashTier=null, pSumX=null, pSumY=null, pCount=null;
 let KAMPF=null, kF={}, rowOfPid=new Map(), kampfGebiete=[], kampfSel=[], kampfHits=[];
+let kampfPfeile=[], pfeilHover=null, pfeilFix=null;     // Fokus: {r: Kampfzeile, art: "a"|"u", u: Unterstützer}
+let KRIEG=null, kriegOffen=false, kriegSel=null;        // kriegSel: [Stamm, Stamm] hebt deren Kämpfe hervor
 let pIdx={}, aIdx={}, allyOf=null, growth={}, arrowOf=null, refs={}, tagOf=new Map(), allyById=new Map();
 let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
 let inaday=new Map();                                      // player_id -> {typ: {rank, value, date}}
@@ -590,54 +651,120 @@ function computeKaempfe(){
     else kampfGebiete.push({x, y, sum:r[kF.staerke], sx:x*r[kF.staerke], sy:y*r[kF.staerke], items:[r]});
   }
 }
-/** Pfeil von (x1,y1) nach (x2,y2) in Bildschirmkoordinaten, Spitze kurz vor dem Ziel. */
-function pfeil(x1,y1,x2,y2,farbe,breite,gestrichelt){
-  const d=Math.hypot(x2-x1,y2-y1); if(d<6) return;
-  const ux=(x2-x1)/d, uy=(y2-y1)/d, ex=x2-ux*6, ey=y2-uy*6, k=Math.max(7, breite*2.6);
-  ctx.lineCap="round";
-  for(const [c,w] of [["rgba(0,0,0,.7)", breite+2.5], [farbe, breite]]){
-    ctx.strokeStyle=c; ctx.lineWidth=w; ctx.setLineDash(gestrichelt? [w*2.2, w*2] : []);
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(ex-ux*k*0.6, ey-uy*k*0.6); ctx.stroke();
+/** Zeichen der Kampfart auf dunkler Plakette: gekreuzte Schwerter (Angriff) oder Schild (Unterstützung). */
+function plakette(c, x, y, r, art, rand){
+  c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
+  c.fillStyle="#161616"; c.fill(); c.lineWidth=Math.max(1.5, r*0.22); c.strokeStyle=rand; c.stroke();
+  c.fillStyle="#ffffff"; c.strokeStyle="#ffffff"; c.lineCap="round";
+  if(art==="a"){
+    const q=r*0.55;
+    for(const d of [1,-1]){
+      // Klinge von unten (Griff) nach oben, Parierstange quer dazu kurz über dem Griff
+      const gx=x-d*q, gy=y+q, tx=x+d*q, ty=y-q;
+      c.lineWidth=Math.max(1.3, r*0.2);
+      c.beginPath(); c.moveTo(gx, gy); c.lineTo(tx, ty); c.stroke();
+      const px=gx+(tx-gx)*0.3, py=gy+(ty-gy)*0.3, l=q*0.42;
+      c.lineWidth=Math.max(1, r*0.15);
+      c.beginPath(); c.moveTo(px-l, py-d*l); c.lineTo(px+l, py+d*l); c.stroke();
+    }
+  } else {
+    const w=r*0.52, top=y-r*0.55;
+    c.beginPath(); c.moveTo(x-w, top); c.lineTo(x+w, top); c.lineTo(x+w, y+r*0.02);
+    c.quadraticCurveTo(x+w, y+r*0.45, x, y+r*0.66); c.quadraticCurveTo(x-w, y+r*0.45, x-w, y+r*0.02);
+    c.closePath(); c.fill();
   }
-  ctx.setLineDash([]);
-  ctx.beginPath(); ctx.moveTo(ex,ey);
-  ctx.lineTo(ex-ux*k-uy*k*0.55, ey-uy*k+ux*k*0.55); ctx.lineTo(ex-ux*k+uy*k*0.55, ey-uy*k-ux*k*0.55); ctx.closePath();
-  ctx.fillStyle=farbe; ctx.strokeStyle="rgba(0,0,0,.7)"; ctx.lineWidth=1.2; ctx.fill(); ctx.stroke();
+}
+const PLAKETTE_IMG={};
+for(const art of ["a","u"]){ const c=document.createElement("canvas"); c.width=c.height=32;
+  plakette(c.getContext("2d"), 16, 16, 13, art, "#9e9e9e"); PLAKETTE_IMG[art]="<img alt='' src='"+c.toDataURL()+"'>"; }
+
+/** Pfeil von (x1,y1) nach (x2,y2) in Bildschirmkoordinaten, Spitze kurz vor dem Ziel. art "a" Angriff, "u" Unterstützung. */
+function pfeil(c,x1,y1,x2,y2,farbe,breite,art,alpha,glanz){
+  const d=Math.hypot(x2-x1,y2-y1); if(d<6) return;
+  const ux=(x2-x1)/d, uy=(y2-y1)/d, ex=x2-ux*6, ey=y2-uy*6, k=Math.max(8, breite*2.6);
+  const ende = art==="a"? k*0.6 : k*0.5;
+  c.save(); c.globalAlpha=alpha; c.lineCap= art==="a"? "round" : "butt";
+  const lagen = glanz? [["rgba(255,255,255,.95)", breite+7], ["rgba(0,0,0,.8)", breite+2.5], [farbe, breite]]
+                     : [["rgba(0,0,0,.75)", breite+2.5], [farbe, breite]];
+  for(const [col,w] of lagen){
+    c.strokeStyle=col; c.lineWidth=w;
+    c.setLineDash(art==="u"? [Math.max(5, breite*2.4), Math.max(4, breite*1.6)] : []);
+    c.beginPath(); c.moveTo(x1,y1); c.lineTo(ex-ux*ende, ey-uy*ende); c.stroke();
+  }
+  c.setLineDash([]);
+  c.fillStyle=farbe; c.strokeStyle="rgba(0,0,0,.85)"; c.lineWidth=1.4;
+  c.beginPath();
+  if(art==="a"){
+    c.moveTo(ex,ey);
+    c.lineTo(ex-ux*k-uy*k*0.55, ey-uy*k+ux*k*0.55); c.lineTo(ex-ux*k+uy*k*0.55, ey-uy*k-ux*k*0.55); c.closePath();
+  } else {
+    c.arc(ex-ux*k*0.45, ey-uy*k*0.45, k*0.45, 0, Math.PI*2);
+  }
+  c.fill(); c.stroke();
+  if(d>46){ const pr=Math.max(6.5, Math.min(10, breite+4.5)); plakette(c, x1+(x2-x1)*0.45, y1+(y2-y1)*0.45, pr, art, farbe); }
+  c.restore();
 }
 const strich = v => Math.max(1.5, Math.min(6, Math.log10(Math.max(v,1000)/1000)*1.9+1.5));
+const kMitte=(x,y)=>[sx(x+0.5), sy(y+0.5)];
+/** Stammesfarbe eines Spielers wie in der Ansicht „Stämme“, sonst die Farbe der übrigen Spieler. */
+function pFarbe(pid){ const p=rowOfPid.get(pid); return (p!=null && tribeColorOf(allyOf[p])) || C_OTHER; }
+function pAlly(pid){ const p=rowOfPid.get(pid); return p!=null? allyOf[p] : 0; }
+/** Sichtbare Pfeile eines Kampfes: der wahrscheinlichste Angreifer, Unterstützer außer „unklar“.
+    Unterstützung zuerst, damit der Angriff obenauf liegt. */
+function kampfPfeileVon(r){
+  const out=[], [X,Y]=kMitte(r[kF.x], r[kF.y]);
+  r[kF.u].forEach(u=>{ if(u[2]==="u") return; const [fx,fy]=kMitte(u[3],u[4]);
+    out.push({r, art:"u", u, pid:u[0], x1:fx, y1:fy, x2:X, y2:Y, breite:strich(u[1]), sicher:u[2]!=="w"? PFEIL_MOEGLICH : 1}); });
+  const a=r[kF.a][0];
+  if(a){ const [fx,fy]=kMitte(a[3],a[4]); out.push({r, art:"a", u:null, pid:a[0], x1:fx, y1:fy, x2:X, y2:Y, breite:strich(a[1]),
+          sicher:r[kF.a_sicher]!=="w"? PFEIL_MOEGLICH : 1}); }
+  return out;
+}
+/** Gehört der Kampf zum gewählten Krieg (Angreifer und Verteidiger in den beiden Stämmen)? */
+function imKrieg(r){
+  if(!kriegSel) return true;
+  const a=r[kF.a][0]; if(!a) return false;
+  const sa=pAlly(a[0]), sv=pAlly(r[kF.v]);
+  return (sa===kriegSel[0] && sv===kriegSel[1]) || (sa===kriegSel[1] && sv===kriegSel[0]);
+}
 function drawKaempfe(){
-  kampfHits=[];
+  kampfHits=[]; kampfPfeile=[];
   if(!kampfSel.length) return;
-  const mitte=(x,y)=>[sx(x+0.5), sy(y+0.5)];
   const sichtbar=(X,Y,m)=>X>-m && X<W+m && Y>-m && Y<H+m;
   if(scale<KAMPF_ZOOM){
     for(const g of kampfGebiete){
-      const [X,Y]=mitte(g.x,g.y); if(!sichtbar(X,Y,30)) continue;
+      const [X,Y]=kMitte(g.x,g.y); if(!sichtbar(X,Y,30)) continue;
       const a=Math.max(7, Math.min(22, 6+4.2*Math.log10(Math.max(g.sum,1000)/1000)));
-      drawAxes(ctx, X, Y, a, "#e53935");
+      ctx.save(); if(kriegSel && !g.items.some(imKrieg)) ctx.globalAlpha=0.25;
+      drawAxes(ctx, X, Y, a, "#e53935"); ctx.restore();
       kampfHits.push({X, Y, r:a*1.3, items:g.items});
     }
     return;
   }
   const off=(scale-(scale<2? Math.max(1, scale) : scale*0.84))/2;
   for(const r of kampfSel){
-    const [X,Y]=mitte(r[kF.x], r[kF.y]);
+    const [X,Y]=kMitte(r[kF.x], r[kF.y]);
     if(!sichtbar(X,Y,W)) continue;
+    const blass = imKrieg(r)? 1 : 0.2;
     // getroffene (oder geschätzte) Dörfer weiß umrandet
     ctx.strokeStyle=r[kF.geschaetzt]? "rgba(255,255,255,.55)" : "#ffffff"; ctx.lineWidth=1.5;
+    ctx.globalAlpha=blass;
     for(const c of r[kF.orte]){
       const vx2=sx(Math.floor(c/1000))+off-1, vy2=sy(c%1000)+off-1, sz=scale-2*off+2;
       ctx.strokeRect(vx2, vy2, sz, sz);
     }
-    // Unklare Unterstützer und weitere Angreifer-Kandidaten nur im Infofeld, sonst wird die Karte unlesbar
-    r[kF.u].forEach(u=>{ if(u[2]==="u") return; const [fx,fy]=mitte(u[3],u[4]); pfeil(fx,fy,X,Y,PFEIL_UNT,strich(u[1]),u[2]!=="w"); });
-    const a=r[kF.a][0];
-    if(a){ const [fx,fy]=mitte(a[3],a[4]); pfeil(fx,fy,X,Y,PFEIL_ANG,strich(a[1]),r[kF.a_sicher]!=="w"); }
+    ctx.globalAlpha=1;
+    // weitere Angreifer-Kandidaten und unklare Unterstützer nur im Infofeld, sonst wird die Karte unlesbar
+    for(const f of kampfPfeileVon(r)){
+      pfeil(ctx, f.x1,f.y1,f.x2,f.y2, pFarbe(f.pid), f.breite, f.art, f.sicher*blass, false);
+      if(blass===1) kampfPfeile.push(f);
+    }
   }
   for(const r of kampfSel){
-    const [X,Y]=mitte(r[kF.x], r[kF.y]); if(!sichtbar(X,Y,30)) continue;
+    const [X,Y]=kMitte(r[kF.x], r[kF.y]); if(!sichtbar(X,Y,30)) continue;
     const a=Math.max(6, Math.min(13, 4+3*Math.log10(Math.max(r[kF.staerke],1000)/1000)));
-    drawAxes(ctx, X, Y, a, "#e53935");
+    ctx.save(); if(!imKrieg(r)) ctx.globalAlpha=0.25;
+    drawAxes(ctx, X, Y, a, "#e53935"); ctx.restore();
     kampfHits.push({X, Y, r:a*1.3, items:[r]});
   }
 }
@@ -646,41 +773,154 @@ function kampfAt(px,py){
   for(const h of kampfHits){ const d=Math.hypot(px-h.X, py-h.Y); if(d<=h.r+3 && d<bd){ bd=d; best=h; } }
   return best;
 }
+/** Pfeil unter dem Zeiger: kürzester Abstand zur Strecke, bei Gleichstand der dickere. */
+function pfeilAt(px,py){
+  let best=null, bd=1e9;
+  for(const f of kampfPfeile){
+    const dx=f.x2-f.x1, dy=f.y2-f.y1, l2=dx*dx+dy*dy||1;
+    const t=Math.max(0, Math.min(1, ((px-f.x1)*dx+(py-f.y1)*dy)/l2));
+    const d=Math.hypot(px-(f.x1+t*dx), py-(f.y1+t*dy)) - f.breite/2;
+    if(d<=6 && (d<bd-0.5 || (Math.abs(d-bd)<=0.5 && f.breite>best.breite))){ bd=d; best=f; }
+  }
+  return best;
+}
+const gleicherPfeil=(a,b)=>a===b || (!!a && !!b && a.r===b.r && a.art===b.art && a.u===b.u);
+/** Fokus auf der Zeigerebene: Karte abgedunkelt, die Pfeile des Kampfes darüber, der gewählte hervorgehoben,
+    die angegriffenen Dörfer grob eingekreist. */
+function drawFokus(f){
+  const r=f.r;
+  octx.fillStyle="rgba(0,0,0,.55)"; octx.fillRect(0,0,W,H);
+  // Einkreisung: Schwerpunkt der getroffenen Dörfer, Radius bis zum fernsten plus Rand
+  const pk=[...new Set(r[kF.treffer].length? r[kF.treffer].map(t=>t[0]) : r[kF.orte])].map(c=>[Math.floor(c/1000), c%1000]);
+  const mx=pk.reduce((s,p)=>s+p[0],0)/pk.length, my=pk.reduce((s,p)=>s+p[1],0)/pk.length;
+  const R=Math.max((Math.max(...pk.map(p=>Math.hypot(p[0]-mx, p[1]-my)))+1.6)*scale, 14);
+  const [CX,CY]=kMitte(mx,my);
+  octx.save();
+  octx.beginPath(); octx.arc(CX,CY,R,0,Math.PI*2);
+  octx.fillStyle="rgba(255,255,255,.10)"; octx.fill();
+  octx.setLineDash([7,5]); octx.lineWidth=4; octx.strokeStyle="rgba(0,0,0,.75)"; octx.stroke();
+  octx.lineWidth=2; octx.strokeStyle="#ffffff"; octx.stroke();
+  octx.setLineDash([]);
+  const sz=Math.max(scale*0.84, 4), off=(scale-sz)/2;
+  octx.lineWidth=1.8; octx.strokeStyle="#ffffff";
+  for(const [x,y] of pk) octx.strokeRect(sx(x)+off-1.5, sy(y)+off-1.5, sz+3, sz+3);
+  octx.restore();
+  const alle=kampfPfeileVon(r);
+  for(const p of alle) if(!gleicherPfeil(p,f)) pfeil(octx, p.x1,p.y1,p.x2,p.y2, pFarbe(p.pid), p.breite, p.art, 0.9, false);
+  const g=alle.find(p=>gleicherPfeil(p,f));
+  if(g) pfeil(octx, g.x1,g.y1,g.x2,g.y2, pFarbe(g.pid), g.breite+1.5, g.art, 1, true);
+  const [X,Y]=kMitte(r[kF.x], r[kF.y]);
+  drawAxes(octx, X, Y, 9, "#e53935");
+}
 function pName(pid){
   const p=rowOfPid.get(pid); if(p==null) return "Spieler "+pid;
   const t=tagOf.get(allyOf[p]);
   return P.rows[p][pIdx.name]+(t? " ("+t+")" : "");
 }
-function openKampf(items){
+/** „Do., 29.10. 07:00 bis 10:00 Uhr“, Datum am Ende nur, wenn es wechselt. */
+function zeitraum(von, bis){
+  const a=new Date(von), b=new Date(bis), ta=dtfTag.format(a), tb=dtfTag.format(b);
+  return ta+" "+hmf.format(a)+" bis "+(ta===tb? "" : tb+" ")+hmf.format(b)+" Uhr";
+}
+/** Spielername mit Stammesfarbe als Punkt davor. */
+function nameMitFarbe(pid){
+  const s=el("span","nm"), d=el("i","dot"); d.style.background=pFarbe(pid);
+  s.append(d, document.createTextNode(pName(pid))); return s;
+}
+/** Infofeld am Zeiger für einen Pfeil: wer wen, drei Bashzahlen aus demselben Zeitraum. */
+function showKampfTip(f, px, py){
+  const r=f.r, iv=KAMPF.intervalle[r[kF.i]], a=r[kF.a][0];
+  tip.replaceChildren();
+  const head=el("div","th kart"); head.innerHTML=PLAKETTE_IMG[f.art];
+  head.append(document.createTextNode(f.art==="a"? "Angriff" : "Unterstützung"),
+    el("span",null," · "+(f.art==="a"? SICHER[r[kF.a_sicher]] : SICHER[f.u[2]])));
+  tip.appendChild(head);
+  const satz=el("div","kz"), b=t=>el("b",null,t), t=x=>document.createTextNode(x);
+  if(f.art==="a") satz.append(b(pName(a[0])), t(" greift "), b(pName(r[kF.v])), t(" an"));
+  else satz.append(b(pName(f.u[0])), t(" unterstützt "), b(pName(r[kF.v])),
+    t(a && r[kF.a_sicher]!=="u"? " gegen "+pName(a[0]) : ""));
+  tip.appendChild(satz);
+  tsec("Besiegte Gegner, alle im selben Zeitraum");
+  const zeile=(k,pid,v)=>{ const d=el("div","row"); const l=el("span","k"); l.append(t(k+" "), nameMitFarbe(pid));
+    d.append(l, el("span",null,"+"+nf.format(v))); tip.appendChild(d); };
+  if(a) zeile("Off", a[0], a[1]);
+  zeile("Deff", r[kF.v], r[kF.dv]);
+  r[kF.u].forEach(u=>{ if(u[2]!=="u") zeile("Unterstützt", u[0], u[1]); });
+  trow("Zeitraum", zeitraum(iv.von, iv.bis));
+  const n=new Set(r[kF.treffer].map(x=>x[0])).size;
+  tip.appendChild(el("div","hl",(r[kF.geschaetzt]? "Ziel geschätzt (kein Dorfvergleich). " : n+(n===1? " Dorf" : " Dörfer")+" mit Punktverlust, eingekreist. ")
+    +"Der Server rechnet Bashpunkte alle 3 Stunden neu; die Off enthält auch Kämpfe des Angreifers an anderer Stelle im selben Zeitraum. Klick heftet das Feld an, dort die Dörfer mit Uhrzeit."));
+  tip.style.display="block";
+  const rr=wrap.getBoundingClientRect(), tw=tip.offsetWidth, th=tip.offsetHeight;
+  let left=px+16, top=py+16;
+  if(left+tw>rr.width-8) left=px-tw-16;
+  if(top+th>rr.height-8) top=Math.max(4, rr.height-th-8);
+  tip.style.left=Math.max(4,left)+"px"; tip.style.top=Math.max(4,top)+"px";
+}
+function zentriere(x,y,z){ cx=x+0.5; cy=y+0.5; scale=Math.max(scale, z||10); ownView(); clampView(); draw(); saveUrl(); }
+function openKampf(items, fokus){
   const box=$("kampf"), body=$("kampf-body");
   body.replaceChildren();
-  const zeit=s=>hmf.format(new Date(s));
-  const tag=s=>dtfTag.format(new Date(s));
-  items.slice(0,12).forEach(r=>{
-    const iv=KAMPF.intervalle[r[kF.i]], d=el("div","kb");
-    d.append(el("p","zeit","Zwischen den Ständen "+tag(iv.von)+" "+zeit(iv.von)+" und "+tag(iv.bis)+" "+zeit(iv.bis)+" Uhr"
-      +(r[kF.geschaetzt]? " · Ziel geschätzt" : " · "+r[kF.orte].length+" Dörfer mit Punktverlust")));
-    const v=el("p"); v.append(el("b",null,pName(r[kF.v])), document.createTextNode(" verteidigt, +"+nf.format(r[kF.dv])+" besiegte Gegner"));
+  const liste=fokus? [fokus.r].concat(items.filter(r=>r!==fokus.r)) : items;
+  liste.slice(0,12).forEach(r=>{
+    const iv=KAMPF.intervalle[r[kF.i]], d=el("div","kb"+(fokus && r===fokus.r && liste.length>1? " fokus" : ""));
+    d.append(el("p","zeit","Bashpunkte "+zeitraum(iv.von, iv.bis)+(r[kF.geschaetzt]? " · Ziel geschätzt" : "")));
+    const v=el("p","ver"); v.style.setProperty("--c", pFarbe(r[kF.v]));
+    v.append(el("b",null,pName(r[kF.v])), document.createTextNode(" verteidigt, Deff +"+nf.format(r[kF.dv])));
     d.append(v);
-    if(!r[kF.a].length) d.append(el("p","ang s","Angreifer unklar: kein Kandidat aus einem anderen Stamm in der Nähe"));
+    if(!r[kF.a].length) d.append(el("p","s","Angreifer unklar: kein Kandidat aus einem anderen Stamm in der Nähe"));
     r[kF.a].forEach((a,j)=>{
-      const p=el("p","ang"); p.append(el("b",null,pName(a[0])),
-        document.createTextNode(" +"+nf.format(a[1])+" Off, "+nf1.format(a[2])+(a[2]===1? " Feld " : " Felder ")),
-        el("span","s", j===0? SICHER[r[kF.a_sicher]] : "Kandidat"));
+      const p=el("p","ang kart"); p.style.setProperty("--c", pFarbe(a[0]));
+      if(j===0) p.innerHTML=PLAKETTE_IMG.a;
+      p.append(el("b",null,pName(a[0])),
+        document.createTextNode(" greift an, Off +"+nf.format(a[1])+", "+nf1.format(a[2])+(a[2]===1? " Feld " : " Felder ")),
+        el("span","s", j===0? SICHER[r[kF.a_sicher]] : "weiterer Kandidat"));
       d.append(p);
     });
     r[kF.u].forEach(u=>{
-      const p=el("p","unt"); p.append(el("b",null,pName(u[0])),
+      const p=el("p","unt kart"); p.style.setProperty("--c", pFarbe(u[0])); p.innerHTML=PLAKETTE_IMG.u;
+      p.append(el("b",null,pName(u[0])),
         document.createTextNode(" unterstützt, +"+nf.format(u[1])+" "), el("span","s", SICHER[u[2]]));
       d.append(p);
     });
+    const tr=r[kF.treffer];
+    if(tr.length){
+      const dl=el("details","dl"); dl.append(el("summary",null,"Angegriffene Dörfer ("+new Set(tr.map(x=>x[0])).size+")"));
+      tr.forEach(([c,si,dp])=>{
+        const x=Math.floor(c/1000), y=c%1000, i=byXY.get(c), st=KAMPF.stunden[si];
+        const z=el("div","dorf"); z.title="Karte auf dieses Dorf";
+        z.append(el("span",null,"("+x+"|"+y+") "+(i!=null && vname[i]? vname[i] : "")),
+          el("span","s",(st? zeitraum(st[0], st[1]) : "Zeit unbekannt")+" · "+nf.format(dp)+" Punkte"));
+        z.addEventListener("click", ()=>zentriere(x,y,10));
+        dl.append(z);
+      });
+      d.append(dl);
+    }
     body.appendChild(d);
   });
-  if(items.length>12) body.appendChild(el("p","note","und "+(items.length-12)+" weitere Kämpfe in diesem Gebiet; näher heranzoomen"));
-  $("kampf-title").textContent = items.length>1? items.length+" Kämpfe in diesem Gebiet" : "Kampf";
+  if(liste.length>12) body.appendChild(el("p","note","und "+(liste.length-12)+" weitere Kämpfe in diesem Gebiet; näher heranzoomen"));
+  $("kampf-title").textContent = liste.length>1? liste.length+" Kämpfe in diesem Gebiet" : (fokus && fokus.art==="u"? "Unterstützung" : "Kampf");
   box.hidden=false; box.open=true;
 }
-function closeKampf(){ $("kampf").hidden=true; }
+function closeKampf(){ $("kampf").hidden=true; if(pfeilFix){ pfeilFix=null; drawOverlay(); } }
+
+/* ---------- Namen der Beteiligten ----------
+   In jeder Ansicht: Verteidiger am Ziel, Angreifer und Unterstützer am Ausgangspunkt ihres Pfeils, wenn ihr
+   Zuwachs im Zeitraum mindestens Rot erreicht (p97 der Spieler mit Zuwachs), per „+ mittlere Namen“ ab Gelb. */
+function kampfNamen(){
+  const win=bashWindow(), st=(P&&P.bash_steps)||{}, best=new Map();
+  if(!win) return [];
+  const stufe=(v,art)=>{ const e=st[win+"_"+art]; if(!e) return -1; let s=0; while(s<e.length && v>e[s]) s++; return s; };
+  const nimm=(pid,v,art,x,y)=>{ if(stufe(v,art)<namesFrom) return; const b=best.get(pid); if(!b || b[0]<v) best.set(pid,[v,x,y]); };
+  for(const r of kampfSel){
+    if(!imKrieg(r)) continue;
+    nimm(r[kF.v], r[kF.dv], "def", r[kF.x], r[kF.y]);
+    const a=r[kF.a][0];
+    if(a && r[kF.a_sicher]!=="u") nimm(a[0], a[1], "att", a[3], a[4]);
+    r[kF.u].forEach(u=>{ if(u[2]!=="u") nimm(u[0], u[1], "sup", u[3], u[4]); });
+  }
+  return [...best].map(([pid,[v,x,y]])=>[v, pid, x, y]);
+}
 
 /** Pfeile am oberen rechten Rand des Dorfes: Zuwachs des Spielers, drei Stufen je Richtung. */
 function drawArrows(x0,x1,y0,y1,size){
@@ -735,31 +975,42 @@ function draw(){
   }
   if(scale>=7) drawMarks(x0,x1,y0,y1,size);
   if(scale>=8 && arrowOf) drawArrows(x0,x1,y0,y1,size);
-  if(isBash(view) && bashTier) drawNames();
   drawKaempfe();
+  drawNames();
   drawOverlay();
 }
 
-/** Namen der Spieler ab der gewählten Stufe mittig über dem Schwerpunkt ihrer Dörfer. Größere Werte zuerst,
+/** Namen: zuerst die Beteiligten der sichtbaren Kämpfe (kampfNamen, mit Stammesfarbe als Punkt), in den
+    Bash-Ansichten dazu Spieler ab der gewählten Stufe über dem Schwerpunkt ihrer Dörfer. Größere Werte zuerst,
     ein Name, der einen schon gezeichneten überdecken würde, entfällt. */
 function drawNames(){
-  const liste=[];
-  for(let p=0;p<bashTier.length;p++){
-    if(bashTier[p]<namesFrom || !pCount[p]) continue;
-    const X=sx(pSumX[p]/pCount[p]+0.5), Y=sy(pSumY[p]/pCount[p]+0.5);
-    if(X<-80||X>W+80||Y<-20||Y>H+20) continue;
-    liste.push([bashValue(p), p, X, Y]);
+  const liste=[], kampf=new Set();
+  const imBild=(X,Y)=>X>-80 && X<W+80 && Y>-20 && Y<H+20;
+  if(KAMPF && scale>=1.5) for(const [v, pid, x, y] of kampfNamen()){
+    const X=sx(x+0.5), Y=sy(y+0.5)-Math.max(10, scale*0.9);
+    if(!imBild(X,Y) || rowOfPid.get(pid)==null) continue;
+    kampf.add(pid); liste.push([1, v, rowOfPid.get(pid), X, Y]);
   }
-  liste.sort((a,b)=>b[0]-a[0]);
-  ctx.font="bold 12px system-ui, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
-  ctx.lineJoin="round"; ctx.lineWidth=3.5; ctx.strokeStyle="rgba(0,0,0,.8)"; ctx.fillStyle="#ffffff";
+  if(isBash(view) && bashTier) for(let p=0;p<bashTier.length;p++){
+    if(bashTier[p]<namesFrom || !pCount[p] || kampf.has(P.rows[p][pIdx.id])) continue;
+    const X=sx(pSumX[p]/pCount[p]+0.5), Y=sy(pSumY[p]/pCount[p]+0.5);
+    if(imBild(X,Y)) liste.push([0, bashValue(p), p, X, Y]);
+  }
+  liste.sort((a,b)=>b[0]-a[0] || b[1]-a[1]);
+  ctx.font="bold 12px system-ui, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.lineJoin="round";
   const belegt=[];
-  for(const [, p, X, Y] of liste){
-    const name=P.rows[p][pIdx.name], w=ctx.measureText(name).width+6, h=16;
+  for(const [art, , p, X, Y] of liste){
+    const name=P.rows[p][pIdx.name], tw=ctx.measureText(name).width, punkt=art? 10 : 0, w=tw+6+punkt, h=16;
     const box=[X-w/2, Y-h/2, X+w/2, Y+h/2];
     if(belegt.some(b=>box[0]<b[2] && box[2]>b[0] && box[1]<b[3] && box[3]>b[1])) continue;
     belegt.push(box);
-    ctx.strokeText(name, X, Y); ctx.fillText(name, X, Y);
+    const tx=X+punkt/2;
+    ctx.lineWidth=3.5; ctx.strokeStyle="rgba(0,0,0,.8)"; ctx.fillStyle="#ffffff";
+    ctx.strokeText(name, tx, Y); ctx.fillText(name, tx, Y);
+    if(art){
+      ctx.fillStyle=tribeColorOf(allyOf[p]) || C_OTHER; ctx.strokeStyle="rgba(0,0,0,.85)"; ctx.lineWidth=1.2;
+      ctx.fillRect(tx-tw/2-10, Y-4, 8, 8); ctx.strokeRect(tx-tw/2-10, Y-4, 8, 8);
+    }
   }
 }
 
@@ -768,6 +1019,8 @@ function drawNames(){
 function drawOverlay(){
   octx.clearRect(0,0,W,H);
   if(!N) return;
+  const fk=pfeilFix||pfeilHover;
+  if(fk && KAMPF) drawFokus(fk);
   const size=scale<2? Math.max(1, scale) : scale*0.84, off=(scale-size)/2;
   const x0=wxAt(-2), x1=wxAt(W+2), y0=wyAt(-2), y1=wyAt(H+2);
   if(marked && marked.size){
@@ -972,8 +1225,10 @@ function renderLegend(){
     : "Pfeile für den Punktezuwachs erscheinen ab zwölf Stunden Historie");
   if(KAMPF){
     zeile(AXES_IMG[2], "Kämpfe der letzten "+windowText(axeKey||"24h")+": "+nf.format(kampfSel.length)
-      +". Weit weg ein Symbol je Kampfgebiet, Größe nach besiegten Gegnern; näher heran Pfeile <b style='color:"+PFEIL_ANG+"'>rot</b> vom Angreifer, <b style='color:"+PFEIL_UNT+"'>hellblau</b> vom Unterstützer, gestrichelt wenn nicht eindeutig."
-      +" Klick auf ein Symbol nennt Beteiligte, Mengen und Zeitraum.");
+      +". Weit weg ein Symbol je Kampfgebiet, Größe nach besiegten Gegnern; näher heran Pfeile in der Stammesfarbe des Angreifers bzw. Unterstützers.");
+    zeile(PLAKETTE_IMG.a, "<b>Angriff</b>: durchgezogen, spitze Spitze, Schwerter");
+    zeile(PLAKETTE_IMG.u, "<b>Unterstützung</b>: gestrichelt, runde Spitze, Schild. Blass, wenn nicht eindeutig. Zeiger auf einen Pfeil nennt Beteiligte, Bashpunkte und Zeitraum, Klick heftet an.");
+    zeile("Aa", "Namen der Beteiligten ab Rot, mit „+ mittlere Namen“ ab Gelb (Zuwachs im gewählten Zeitraum)");
   }
   zeile("<i class='raute'></i>", "Links unten: Bonusdorf");
   const hint=document.createElement("li"); hint.className="hint"; hint.textContent="Zeichen am Dorf erscheinen ab mittlerem Zoom.";
@@ -1022,7 +1277,6 @@ function setAxWin(w){
 function setView(v){
   view=v;
   document.querySelectorAll("#views button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
-  $("namesgrp").hidden=!isBash(v);
   const apply=()=>{ computeGrowth(); computeArrows(); computeKaempfe(); buildBuckets(); renderLegend(); draw(); saveUrl(); };
   if(isRank(v) && !deepLoaded){
     $("stand").textContent="Lade vollständige Rangliste …";
@@ -1365,6 +1619,87 @@ function search(qRaw){
   pushUndo(clearMarked);
 }
 
+/* ---------- Kriege (data/krieg.json, collector/krieg.py) ----------
+   Entscheidungen Dennis 29.10.2026: Krieg ab 100.000 besiegten Gegnern in 7 Tagen zwischen zwei Stämmen,
+   ein großer Kampftag reicht (2b); junge Kriege als „Kriegsbeginn“; Frieden erst nach 3 Wochen ohne Kampf (3c). */
+const nfMio=new Intl.NumberFormat("de-DE",{maximumFractionDigits:1});
+const menge = v => v>=1e6? nfMio.format(v/1e6)+" Mio." : nf.format(v);
+const sFarbe = id => tribeColorOf(id) || C_OTHER;
+const sTag = (k,j) => tagOf.get(k.s[j]) || k.tags[j];
+function tageSeit(iso){ return Math.floor((Date.now()-Date.parse(iso))/864e5); }
+function dauerText(t){ return t<1? "seit heute" : t===1? "1 Tag" : t+" Tage"; }
+function setKrieg(offen){
+  kriegOffen=offen;
+  $("kriege").hidden=!offen; $("kriegbtn").setAttribute("aria-pressed", String(offen));
+  if(offen) renderKriege();
+  else if(kriegSel){ kriegSel=null; draw(); }
+  saveUrl();
+}
+function waehleKrieg(k, karte){
+  const gleich = kriegSel && kriegSel[0]===k.s[0] && kriegSel[1]===k.s[1];
+  kriegSel = gleich? null : k.s.slice();
+  if(!gleich && karte && k.ort){ cx=k.ort[0]+0.5; cy=k.ort[1]+0.5; scale=Math.max(scale, KAMPF_ZOOM); ownView(); clampView(); }
+  renderKriege(); draw(); saveUrl();
+}
+function renderKriege(){
+  const body=$("kriege-body"); body.replaceChildren();
+  if(!KRIEG){ body.append(el("p","regel","Kriegsdaten werden geladen oder fehlen noch (entstehen beim nächsten Seitenbau).")); return; }
+  const rg=KRIEG.regeln;
+  const n=KRIEG.anzahl||KRIEG.kriege.length;
+  $("kriege-title").textContent=n+" Stammespaare im Krieg";
+  body.append(el("p","regel","Aus der Kampfauswertung: Krieg ab "+nf.format(rg.min_krieg)+" besiegten Gegnern zwischen zwei Stämmen in "
+    +rg.fenster_tage+" Tagen, ein großer Kampftag reicht. „Kriegsbeginn“ in den ersten "+rg.beginn_tage+" Tagen. Frieden erst nach "
+    +rg.frieden_tage+" Tagen ohne Kampf. Gezählt werden nur wahrscheinliche und mögliche Angreifer. Historie seit "
+    +dtfTag.format(new Date(KRIEG.historie_ab))+(n>KRIEG.kriege.length? ", gezeigt die "+KRIEG.kriege.length+" mit den meisten besiegten Gegnern der letzten 7 Tage." : "")
+    +" Klick auf ein Paar zeigt nur dessen Kämpfe auf der Karte."));
+  KRIEG.kriege.forEach(k=>{
+    const sel = kriegSel && kriegSel[0]===k.s[0] && kriegSel[1]===k.s[1];
+    const box=el("div","kr"+(sel? " sel" : ""));
+    const kt=el("div","kt"); kt.title=sel? "Hervorhebung aufheben" : "Nur diese Kämpfe zeigen und Karte dorthin";
+    const dot=j=>{ const d=el("i","dot"); d.style.background=sFarbe(k.s[j]); return d; };
+    const vs=el("span","vs"); vs.append(dot(0), document.createTextNode(" "+sTag(k,0)+" "), el("span","kart"), document.createTextNode(" "+sTag(k,1)+" "), dot(1));
+    vs.querySelector(".kart").innerHTML=PLAKETTE_IMG.a;
+    kt.append(vs, el("span","badge "+k.status, k.status==="beginn"? "Kriegsbeginn" : "Krieg"));
+    kt.addEventListener("click", ()=>waehleKrieg(k, true));
+    box.append(kt);
+    const t=tageSeit(k.seit), ruhe=tageSeit(k.letzte);
+    const meta=el("div","meta",(k.seit_mindestens? "seit mindestens " : "seit ")+dtfTag.format(new Date(k.seit))+" ("+dauerText(t)+")"
+      +" · "+k.kampftage+(k.kampftage===1? " Kampftag" : " Kampftage")+" · zuletzt "+dtfTag.format(new Date(k.letzte))+" "+hmf.format(new Date(k.letzte)));
+    if(ruhe>=2) meta.append(el("span","ruhe"," · ruhig seit "+ruhe+" Tagen"));
+    box.append(meta);
+    // Verlauf je Tag: oben greift der erste Stamm an, unten der zweite, Höhe nach besiegten Gegnern (Wurzel)
+    const tage=new Map(k.verlauf.map(v=>[v[0], v]));
+    const start=new Date(Math.max(Date.parse(k.verlauf[0][0]), Date.now()-59*864e5)), heute=new Date();
+    const spark=el("div","spark"); const max=Math.sqrt(Math.max(...k.verlauf.map(v=>Math.max(v[1],v[2])),1));
+    for(let d=new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())); d<=heute; d=new Date(d.getTime()+864e5)){
+      const key=d.toISOString().slice(0,10), v=tage.get(key)||[key,0,0];
+      const i=el("i"), o=el("b"), u=el("u");
+      o.style.height=(Math.sqrt(v[1])/max*16)+"px"; o.style.background=sFarbe(k.s[0]);
+      u.style.height=(Math.sqrt(v[2])/max*16)+"px"; u.style.background=sFarbe(k.s[1]);
+      i.title=dtfTag.format(d)+": "+sTag(k,0)+" greift an "+menge(v[1])+" · "+sTag(k,1)+" greift an "+menge(v[2]);
+      i.append(o,u); spark.append(i);
+    }
+    box.append(spark);
+    [0,1].forEach(j=>{
+      const s=k.seiten[j], z=el("div","seite");
+      const l=el("span"); l.append(dot(j), document.createTextNode(" "+sTag(k,j)+" greift an, "+s.kaempfe+" Kämpfe"));
+      z.append(l, el("span",null,"Off "+menge(s.off)));
+      box.append(z, el("div","seite s","dabei Deff "+sTag(k,1-j)+" "+menge(s.deff_gegner)));
+    });
+    const det=el("details"); det.append(el("summary",null,"Einzelheiten: Angreifer, Ziele, Unterstützung im Stamm"));
+    [0,1].forEach(j=>{
+      const s=k.seiten[j], gegner=sTag(k,1-j);
+      const liste=(titel, rows, fmt)=>{ if(!rows.length) return; det.append(el("div","sec",titel));
+        rows.forEach(r=>{ const z=el("div","li"); z.append(el("span",null,fmt(r)), el("span",null,"+"+nf.format(r[r.length-1]))); det.append(z); }); };
+      liste("Angreifer "+sTag(k,j)+" (Off)", s.angreifer, r=>pName(r[0]));
+      liste("Angegriffen in "+gegner+" (Deff)", s.ziele, r=>pName(r[0]));
+      liste("Unterstützung innerhalb "+gegner, s.gegner_unt, r=>pName(r[0])+" → "+pName(r[1]));
+    });
+    box.append(det);
+    body.append(box);
+  });
+}
+
 /* ---------- Adresszeile ---------- */
 let saveTimer=0;
 function saveUrl(){
@@ -1376,6 +1711,7 @@ function saveUrl(){
     if(view!=="tribes") p.set("v", view);
     if(axWin!=="24h") p.set("w", axWin);
     if(namesFrom===NAME_AB_GELB) p.set("n", "gelb");
+    if(kriegOffen) p.set("k", kriegSel? kriegSel.join("-") : "1");
     if(marks.size) p.set("m", [...marks].map(([id,c])=>id+"-"+c.replace("#","")).join(","));
     const q=p.toString();
     history.replaceState(null,"", q? "?"+q : location.pathname);
@@ -1386,6 +1722,8 @@ function readUrl(){
   const v=p.get("v"); if(v && (STEPS[v]||isRank(v)||isBash(v))) view=v;
   const w=p.get("w"); if(BASH_WINDOWS.includes(w)) axWin=w;
   if(p.get("n")==="gelb") namesFrom=NAME_AB_GELB;
+  const k=p.get("k");
+  if(k){ kriegOffen=true; const m=k.match(/^(\d+)-(\d+)$/); if(m) kriegSel=[+m[1], +m[2]]; }
   (p.get("m")||"").split(",").filter(Boolean).forEach(s=>{
     const [id,c]=s.split("-");
     if(/^\d+$/.test(id) && /^[0-9a-fA-F]{6}$/.test(c||"")) marks.set(+id, "#"+c);
@@ -1475,9 +1813,11 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
     KAMPF=k; kF=Object.fromEntries(k.felder.map((f,i)=>[f,i]));
     computeKaempfe(); renderLegend(); draw();
   }).catch(()=>{ /* noch kein Seitenbau mit Kämpfen */ });
+  load("krieg").then(k=>{ KRIEG=k; if(kriegOffen) renderKriege(); }).catch(()=>{ /* noch kein Seitenbau mit Kriegen */ });
 
   if(readUrl()) ownView();
   $("names").setAttribute("aria-pressed", String(namesFrom===NAME_AB_GELB));
+  if(kriegOffen){ $("kriege").hidden=false; $("kriegbtn").setAttribute("aria-pressed","true"); renderKriege(); }
   labelBashButtons();
   resize();
   if(isGrowth(view) && !refs[view.slice(1)]) view="tribes";
@@ -1516,6 +1856,8 @@ $("names").addEventListener("click", ()=>{
   renderLegend(); draw(); saveUrl();
 });
 $("zout").addEventListener("click", ()=>zoomAt(W/2,H/2,1/1.6));
+$("kriegbtn").addEventListener("click", ()=>setKrieg(!kriegOffen));
+$("kriege-close").addEventListener("click", ()=>setKrieg(false));
 $("zfit").addEventListener("click", ()=>{ marked=null; userView=false; fitWorld(); draw(); saveUrl(); updateClearMarkBtn(); });
 $("clearmark").addEventListener("click", clearMarked);
 $("undo").addEventListener("click", doUndo);
@@ -1546,7 +1888,7 @@ wrap.addEventListener("pointerdown", e=>{
   pts.set(e.pointerId,[e.clientX,e.clientY]);
   if(pts.size>1){ dragging=false; wrap.classList.remove("drag"); return; }
   if(e.pointerType==="mouse" && e.button!==0) return;
-  dragging=true; moved=0; lastX=e.clientX; lastY=e.clientY;
+  dragging=true; moved=0; lastX=e.clientX; lastY=e.clientY; wrap.style.cursor="";
   wrap.classList.add("drag"); wrap.setPointerCapture(e.pointerId);
 });
 wrap.addEventListener("pointermove", e=>{
@@ -1569,6 +1911,10 @@ wrap.addEventListener("pointermove", e=>{
     return;
   }
   if(e.pointerType!=="mouse") return;
+  const f = scale>=KAMPF_ZOOM? pfeilAt(px,py) : null;
+  if(!gleicherPfeil(f, pfeilHover)){ pfeilHover=f; if(f) hover=-1; drawOverlay(); }
+  if(f){ showKampfTip(f,px,py); wrap.style.cursor="pointer"; return; }
+  wrap.style.cursor="";
   const i=hit(px,py);
   if(i!==hover){ hover=i; drawOverlay(); }
   if(i>=0) showTip(i,px,py); else tip.style.display="none";
@@ -1581,8 +1927,10 @@ function endPointer(e){
   dragging=false; wrap.classList.remove("drag");
   if(moved>=6) return;
   const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+  const f = scale>=KAMPF_ZOOM? pfeilAt(px,py) : null;
+  if(f){ pfeilFix=f; tip.style.display="none"; openKampf([f.r], f); drawOverlay(); return; }
   const k=kampfAt(px,py);
-  if(k){ openKampf(k.items); return; }
+  if(k){ pfeilFix = k.items.length===1? {r:k.items[0], art:"a", u:null} : null; openKampf(k.items); drawOverlay(); return; }
   closeKampf();
   const i=hit(px,py);
   if(e.pointerType!=="mouse"){
@@ -1598,7 +1946,8 @@ function endPointer(e){
 }
 wrap.addEventListener("pointerup", endPointer);
 wrap.addEventListener("pointercancel", endPointer);
-wrap.addEventListener("pointerleave", e=>{ endPointer(e); tip.style.display="none"; if(hover>=0){ hover=-1; drawOverlay(); } });
+wrap.addEventListener("pointerleave", e=>{ endPointer(e); tip.style.display="none";
+  if(hover>=0 || pfeilHover){ hover=-1; pfeilHover=null; drawOverlay(); } });
 wrap.addEventListener("wheel", e=>{
   e.preventDefault();
   const r=wrap.getBoundingClientRect();

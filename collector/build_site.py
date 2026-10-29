@@ -22,7 +22,7 @@ import subprocess
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from . import config, erfahrung, kampf, moral, net, praegen, store, units, world
+from . import config, erfahrung, kampf, krieg, moral, net, praegen, store, units, world
 
 # Vergleichsfenster: Schlüssel, Länge, Toleranz nach vorn. Ein Vergleichsstand darf höchstens das
 # 1,5-fache der Fensterlänge zurückliegen (MAX_ALTER), sonst gilt das Fenster als ohne Vergleichsstand.
@@ -177,10 +177,18 @@ def kampf_bauen(versions, players_path, vrows, ddir):
     for _vid, _name, x, y, pid, _pts, _bonus in vrows:
         if pid:
             doerfer.setdefault(pid, []).append((x, y))
-    k = kampf.auswerten(staende, doerfer, kampf.verluste_laden(), _iso)
+    ivs = list(kampf.intervalle(staende, doerfer, kampf.verluste_laden(), _iso))
+    k = kampf.als_json(ivs)
     k["data_time_utc"] = _iso(versions[0][1])
     _dump(os.path.join(ddir, "kampf.json"), k)
-    return {"kaempfe": len(k["rows"]), "intervalle": len(k["intervalle"])}
+    # Kriege aus dem Kampfverlauf (data/kampf/kaempfe_*.csv) plus den Intervallen, die der Sammler noch nicht
+    # eingetragen hat (er trägt nur Intervalle aus bereits gespeicherten Ständen ein)
+    live = [dict(zip(krieg.HEADER, map(str, z))) for von, bis, _a, ks in ivs for z in krieg.log_zeilen(von, bis, ks)]
+    tags = {int(r["id"]): r["tag"] for r in store.read_csv(store.dpath("latest", "allies.csv"))}
+    kr = krieg.bauen(live, versions[0][1], tags)
+    _dump(os.path.join(ddir, "krieg.json"), kr)
+    return {"kaempfe": len(k["rows"]), "intervalle": len(k["intervalle"]), "kriege": len(kr["kriege"]),
+            "verlaufszeilen": kr["verlaufszeilen"]}
 
 
 def village_rows():

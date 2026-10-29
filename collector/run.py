@@ -6,7 +6,7 @@ import sys
 import time
 import traceback
 
-from . import config, inaday, net, store, tagessieger, world, worldconfig
+from . import config, inaday, krieg, net, store, tagessieger, world, worldconfig
 
 RUNS_HEADER = ["run_utc", "trigger", "result", "world_changed", "data_last_modified", "players", "villages",
                "allies", "new_conquers", "world_requests", "guest_requests", "inaday_changed_types",
@@ -55,6 +55,13 @@ def main(argv=None):
         errors.append(f"Tagessieger: {e}")
         traceback.print_exc()
 
+    kv = None
+    try:                                         # Kampfverlauf für die Kriegsübersicht, aus der Git-Historie, ohne Netz
+        kv = krieg.update()
+    except Exception as e:
+        errors.append(f"Kampfverlauf: {e}")
+        traceback.print_exc()
+
     duration = round(time.time() - t0, 1)
     result = "fehler" if errors else ("neu" if w.get("changed") else "unverändert")
     status = {
@@ -73,6 +80,7 @@ def main(argv=None):
         "last_full_scrape_utc": state.get("inaday", {}).get("last_full_scrape_utc"),
         "last_deep_scrape_utc": state.get("inaday", {}).get("last_deep_scrape_utc"),
         "requests": {"world": net.Counter.world, "guest": net.Counter.guest},
+        "kampfverlauf_neu": kv,
         "errors": errors,
         "tribe_ids": config.TRIBE_IDS,
     }
