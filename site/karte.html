@@ -792,7 +792,8 @@ function pfeil(c,x1,y1,x2,y2,farbe,breite,art,alpha,glanz){
 const strich = v => Math.max(1.5, Math.min(6, Math.log10(Math.max(v,1000)/1000)*1.9+1.5));
 const kMitte=(x,y)=>[sx(x+0.5), sy(y+0.5)];
 /** Stammesfarbe eines Spielers wie in der Ansicht „Stämme“, sonst die Farbe der übrigen Spieler. */
-function pFarbe(pid){ const p=rowOfPid.get(pid); return (p!=null && tribeColorOf(allyOf[p])) || C_OTHER; }
+// Pfeile immer in der ursprünglichen Stammesfarbe, auch wenn die Suche den Stamm markiert (Dennis 1a, 29.10.2026)
+function pFarbe(pid){ const p=rowOfPid.get(pid); return (p!=null && tribeColor.get(allyOf[p])) || C_OTHER; }
 function pAlly(pid){ const p=rowOfPid.get(pid); return p!=null? allyOf[p] : 0; }
 /** Sichtbare Pfeile eines Kampfes: der wahrscheinlichste Angreifer, Unterstützer außer „unklar“.
     Unterstützung zuerst, damit der Angriff obenauf liegt. */
@@ -1035,16 +1036,12 @@ function kampfLabels(){
   }
   return out;
 }
-// Schwarze Schrift mit hellgoldenem Rand (Wunsch Dennis 29.10.2026): auf dem bunten Dorfteppich klarer als weiße Schrift
-// mit dunklem Rand, die bei 11 px zerfaserte. Fett, damit die Buchstaben den Rand tragen.
+// Schwarze Schrift ohne Rand (Wünsche Dennis 29.10.2026: erst schwarz statt weiß, dann Rand ganz weg). Fett, damit
+// sie auf dem bunten Dorfteppich trägt.
 const NAME_FONT="700 11px system-ui, sans-serif", VS_FONT="700 9px system-ui, sans-serif", WEIT_FONT="700 10.5px system-ui, sans-serif";
 const frei=(belegt, boxen)=>!boxen.some(q=>belegt.some(b=>q[0]<b[2] && q[2]>b[0] && q[1]<b[3] && q[3]>b[1]));
 function namensText(c, t, x, y, farbe){
-  // nur ein Hauch Rand (Dennis: 2,4 px wirkte klotzig): 1,2 px hellgold plus weicher Schein für dunklen Grund
-  c.save(); c.shadowColor="rgba(255,238,178,.9)"; c.shadowBlur=2.5;
-  c.lineWidth=1.2; c.strokeStyle="rgba(255,238,178,.95)"; c.fillStyle=farbe||"#111111";
-  c.strokeText(t, x, y); c.fillText(t, x, y);
-  c.restore();
+  c.fillStyle=farbe||"#111111"; c.fillText(t, x, y);         // ohne Rand (Dennis 29.10.2026)
 }
 /** „Angreifer vs Verteidiger“ weit weg: Namen 10,5 px, „vs“ kleiner und gedämpft. */
 function vsZeile(X, Y, an, vn, belegt){
@@ -1057,7 +1054,7 @@ function vsZeile(X, Y, an, vn, belegt){
   belegt.push(box);
   let x=X-w/2;
   ctx.font=WEIT_FONT; namensText(ctx, an, x, Y); x+=wa;
-  ctx.font=VS_FONT; namensText(ctx, " vs ", x, Y+0.5, "#555555"); x+=ws;
+  ctx.font=VS_FONT; namensText(ctx, " vs ", x, Y+0.5, "#3a3a3a"); x+=ws;
   ctx.font=WEIT_FONT; namensText(ctx, vn, x, Y);
 }
 /** Waagerechte Zeile ohne Zeichen, mittig bei (X,Y). */
