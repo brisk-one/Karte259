@@ -52,6 +52,7 @@
   .pr-legend{display:flex; flex-wrap:wrap; gap:4px 16px; font-size:11.5px; color:var(--ink-2); margin:0 0 6px}
   .pr-legend span{display:inline-flex; align-items:center; gap:6px}
   .pr-legend svg{flex:none}
+  .pr-busy{opacity:.55; transition:opacity .2s}
   .pr-chart{position:relative}
   .pr-chart .mark{font-size:10.5px; font-weight:700; fill:var(--ink)}
   .pr-sched td.l{text-align:left}
@@ -359,7 +360,41 @@ function run() {
   if (!villages.length) { ["p-rec", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
 
   const passive = parsed.villages.filter(v => OFF.has(v.x + "|" + v.y));
-  RESULT = K.planPackages(villages, P, passive);
+  const base = st.textContent;
+  st.textContent = base + " · rechnet …";
+  ["p-rec", "p-more"].forEach(id => $(id).classList.add("pr-busy"));
+  compute(token, villages, P, passive, R => {
+    st.textContent = base;
+    ["p-rec", "p-more"].forEach(id => $(id).classList.remove("pr-busy"));
+    show(token, R, villages, parsed);
+  });
+}
+
+/* Rechnung im Hintergrund (Web Worker, Dennis 4a): die Seite bleibt bedienbar, eine neue Eingabe bricht die
+   laufende Rechnung ab. Ohne Worker (z. B. Datei lokal geöffnet) rechnet die Seite selbst. */
+const CORE_URL = (document.querySelector('script[src*="praegen-core.js"]') || {}).src;
+let WORKER = null, WBUSY = false;
+function compute(token, villages, P, passive, done) {
+  const direkt = () => { if (token === RUN) done(K.planPackages(villages, P, passive)); };
+  if (typeof Worker === "undefined" || !CORE_URL) return void setTimeout(direkt, 0);
+  if (WORKER && WBUSY) { WORKER.terminate(); WORKER = null; }
+  if (!WORKER) {
+    try { WORKER = new Worker("praegen-worker.js"); } catch (e) { WORKER = null; return void setTimeout(direkt, 0); }
+  }
+  WBUSY = true;
+  WORKER.onmessage = e => {
+    WBUSY = false;
+    if (e.data.token !== RUN) return;
+    if (e.data.error) { console.error(e.data.error); direkt(); return; }
+    done(e.data.R);
+  };
+  WORKER.onerror = ev => { ev.preventDefault(); WBUSY = false; WORKER = null; direkt(); };
+  WORKER.postMessage({core: CORE_URL, token, villages, P, passive});
+}
+
+function show(token, R, villages, parsed) {
+  if (token !== RUN) return;
+  RESULT = R;
   RESULT.villages = villages;
   RESULT.allParsed = parsed.villages;
   VIEW = RESULT.recommend;                // nach jeder Neuberechnung die empfohlene Aufstellung zeigen
