@@ -79,6 +79,9 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .legend .keys .sym img{width:19px; height:19px}
 .legend .keys .axe{display:inline-flex; align-items:center; gap:2px; margin-right:10px; white-space:nowrap}
 .legend .keys .axe img{width:21px; height:21px}
+.legend i.bonus{position:relative}
+.legend i.bonus::after{content:""; position:absolute; left:1px; bottom:1px; width:4px; height:4px; background:#f2d16b;
+  border:1px solid rgba(0,0,0,.65); transform:rotate(45deg)}
 .legend .keys .raute{width:8px; height:8px; background:#f2d16b; border:1px solid rgba(0,0,0,.65); transform:rotate(45deg)}
 .legend li.grenzen{white-space:normal; flex-basis:100%; color:var(--muted); font-size:10.5px}
 .legend .keys .hint{color:var(--muted); font-size:10.5px; padding-left:27px}
@@ -1187,9 +1190,10 @@ function renderLegend(){
   if(view==="tribes"){
     $("legend-title").textContent="Stämme";
     [...marks.keys()].forEach(id=>add(marks.get(id), (tagOf.get(id)||"?")+" (gewählt)"));
-    (T.tribe_ids||[]).forEach(id=>{ if(!marks.has(id)) add(C_TRACKED, (tagOf.get(id)||"?")+" (erfasst)"); });
+    (T.tribe_ids||[]).forEach(id=>{ if(!marks.has(id)) add(C_TRACKED, tagOf.get(id)||"?"); });
     tribeList.forEach(a=>{ if(!marks.has(a[0]) && !(T.tribe_ids||[]).includes(a[0])) add(tribeColor.get(a[0]), a[2]||a[1]); });
     add(C_OTHER,"übrige Spieler"); add(C_BARB,"Barbaren"); add(C_BONUS,"Bonusdörfer");
+    items.lastChild.querySelector("i").className="bonus";     // gelbe Raute links unten wie auf der Karte
   } else if(isBash(view)){
     const cfg=BASH[view], steps=bashSteps()||[], colors=BASH_COLORS;
     $("legend-title").textContent = "Besiegte Gegner "+BASH_ART[cfg.art]
