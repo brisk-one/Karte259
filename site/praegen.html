@@ -165,6 +165,14 @@
         <div class="pr-row">
           <label class="pr-check"><input type="checkbox" id="ignoreratio"> Rohstoffverhältnis ignorieren (Händler schicken, was im Dorf liegt)</label>
         </div>
+        <div>
+          <span class="lab">Adelsgeschlechter</span>
+          <div class="pr-row">
+            <label class="pick"><span>Münzen im Vorrat</span><input type="number" id="coinstock" min="0" max="100000" step="1" value="0" aria-label="Münzen im Vorrat"></label>
+            <label class="pick"><span>nächstes kostet</span><input type="number" id="coinnext" min="1" max="10000" step="1" placeholder="Münzen" aria-label="Münzen für das nächste Adelsgeschlecht"></label>
+          </div>
+          <p class="pr-mnote" style="margin-top:4px">Beides im Adelshof ablesen. Jedes weitere Adelsgeschlecht kostet eine Münze mehr als das vorige.</p>
+        </div>
       </div>
       <details class="pr-adv">
         <summary>Erweitert</summary>
@@ -327,6 +335,14 @@ function inputs() {
           minMarket: +$("minmarket").value || 0,
           minPerField: mpf > 0 && Math.abs(mpf - WORLD.base_min_per_field / WORLD.speed) > 1e-6 ? mpf : null};
 }
+
+/* Neue Adelsgeschlechter aus Vorrat plus geprägten Münzen (Dennis 29.10.2026, Regel 1a); ohne „nächstes kostet“ null */
+function adel(coins) {
+  const nx = +$("coinnext").value;
+  return nx > 0 ? K.adelsgeschlechter(+$("coinstock").value || 0, coins, nx) : null;
+}
+const adelZahl = a => a.n === 1 ? "1 neues Adelsgeschlecht" : nf.format(a.n) + " neue Adelsgeschlechter";
+["coinstock", "coinnext"].forEach(id => $(id).addEventListener("input", () => { if (RESULT) { renderRecommendation(); renderCompare(); } }));
 
 /* Berechnungsart: "pct" Prozentpunkte vorgeben (einfache Rechnung wie bis v0.4), "max" Pakete maximieren (v0.5) */
 let MODE = "max";
@@ -526,9 +542,11 @@ function renderRecommendation() {
   title.replaceChildren();
   const names = joinUnd(a.sites.map(siteName));
   title.appendChild(document.createTextNode(n === 1 ? "1 Flaggendoppler in " + names : fdName(n) + ": " + names));
-  const sub = el("small", null, nf.format(Math.round(pk ? pk.detail.coins : a.r.coins)) + " Münzen in 48 h mit "
+  const muenzen = pk ? pk.detail.coins : a.r.coins, ad = adel(muenzen);
+  const sub = el("small", null, nf.format(Math.round(muenzen)) + " Münzen in 48 h mit "
     + (pk ? (pk.chosen === 1 ? "1 Paket" : nf.format(pk.chosen) + " Paketen") : nf.format(P.pkgPct) + " % Rohstoffpaketen")
-    + (P.decreeN === 2 ? ", alle 48 h mit Erlass" : P.decree ? ", die ersten 24 h mit Erlass" : ""));
+    + (P.decreeN === 2 ? ", alle 48 h mit Erlass" : P.decree ? ", die ersten 24 h mit Erlass" : "")
+    + (ad ? ", zusammen mit dem Vorrat " + nf.format(ad.muenzen) + " Münzen für " + adelZahl(ad) : ""));
   title.appendChild(sub);
   $("rec-hint").textContent = (pk ? pakete(pk.chosen) + " zu " + P.pkgSize + " %" : nf.format(P.pkgPct) + " % Pakete") + " · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
     + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.minStorage ? " · Speicher mind. " + P.minStorage : "")
@@ -594,6 +612,9 @@ function renderRecommendation() {
     const v = el("dd", null, dd); if (small) { v.appendChild(document.createTextNode(" ")); v.appendChild(el("small", null, small)); }
     d.appendChild(v); f.appendChild(d);
   };
+  fact("Neue Adelsgeschlechter", ad ? nf.format(ad.n) : "–",
+       ad ? "aus " + nf.format(ad.muenzen) + " Münzen, für das " + nf.format(ad.n + 1) + ". fehlen " + nf.format(ad.fehlen)
+          : "„nächstes kostet“ im Adelshof ablesen");
   if (pk) {
     const last = pk.curve[pk.chosen];
     fact("Münzen", nf.format(Math.round(pk.detail.coins)), "ohne Pakete " + nf.format(Math.round(pk.curve[0].coins)));
@@ -718,9 +739,11 @@ function renderCompare() {
     const o = n => pK[n - 1];
     row("Pakete (optimal)", (x, n) => o(n) ? String(o(n).n) : "–");
     row("Münzen", (x, n) => o(n) ? nf.format(Math.round(o(n).coins)) : "–");
+    if (adel(0)) row("Neue Adelsgeschlechter", (x, n) => o(n) ? nf.format(adel(o(n).coins).n) : "–");
     row("mehr als einer weniger", (x, n) => n > 1 && o(n) && o(n - 1) ? plus((o(n).coins / o(n - 1).coins - 1) * 100) : "");
   } else {
     row("Münzen", (x, n) => nf.format(Math.round(cc[n - 1])));
+    if (adel(0)) row("Neue Adelsgeschlechter", (x, n) => nf.format(adel(cc[n - 1]).n));
     row("mehr als einer weniger", (x, n) => n === 1 ? "" : plus((cc[n - 1] / cc[n - 2] - 1) * 100));
   }
   row("Pakete rechtzeitig", x => pctf(x.r.share));

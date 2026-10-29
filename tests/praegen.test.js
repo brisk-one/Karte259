@@ -379,3 +379,12 @@ test("v0.5 automatisch: jede Aufstellung mit eigener Paketzahl, weiterer Flaggen
   assert.equal(R.pkg.chosen, pK[R.recommend - 1].n);
   assert.equal(K.planPackages(konto63(), V5({pkgCount: 4}), []).pkg.perK, null);   // feste Zahl: einfache Rechnung wählt
 });
+
+test("Adelsgeschlechter: jedes weitere kostet eine Münze mehr (Dennis 1a)", () => {
+  // Vorrat 4 + 50,7 geprägt = 54 ganze Münzen; nächstes kostet 10: 10+11+12+13 = 46, das fünfte (14) bräuchte 60
+  const a = K.adelsgeschlechter(4, 50.7, 10);
+  assert.deepEqual([a.n, a.muenzen, a.verbraucht, a.rest, a.naechstesKostet, a.fehlen], [4, 54, 46, 8, 14, 6]);
+  assert.equal(K.adelsgeschlechter(0, 9.99, 10).n, 0);
+  assert.equal(K.adelsgeschlechter(0, 10, 10).n, 1);
+  assert.equal(K.adelsgeschlechter(0, 6, 1).n, 3);           // 1+2+3
+});

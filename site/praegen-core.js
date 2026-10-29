@@ -791,7 +791,17 @@ function planPackages(villages, P0, passive) {
   return R;
 }
 
-const api = {RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
+/* Neue Adelsgeschlechter aus Münzen (Dennis 29.10.2026, Regel 1a): das nächste kostet `naechstes` Münzen (im
+   Adelshof abgelesen), jedes weitere eine Münze mehr als das vorige. Verfügbar sind Vorrat plus geprägte Münzen,
+   nur ganze Münzen. Ergebnis: Zahl neuer Adelsgeschlechter, verbrauchte Münzen, Rest und was zum nächsten fehlt. */
+function adelsgeschlechter(vorrat, gepraegt, naechstes) {
+  const mz = Math.floor(Math.max(0, vorrat || 0) + Math.max(0, gepraegt || 0) + 1e-9);
+  let n = 0, kosten = Math.max(1, Math.round(naechstes || 1)), summe = 0;
+  while (summe + kosten <= mz) { summe += kosten; n++; kosten++; }
+  return {n, muenzen: mz, verbraucht: summe, rest: mz - summe, naechstesKostet: kosten, fehlen: summe + kosten - mz};
+}
+
+const api = {adelsgeschlechter, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
