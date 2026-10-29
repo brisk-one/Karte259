@@ -89,6 +89,13 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
   color:var(--head-ink); background:var(--head); border-bottom:1px solid var(--edge-soft);
   padding:3px 8px; cursor:pointer; list-style-position:inside}
 .dist:not([open]) summary{border-bottom:0}
+/* größere Klickfläche fürs Einklappen, × rechts im Kopf */
+.legend summary,.dist summary{padding:5px 8px; position:relative}
+.dist summary .dclose{position:absolute; right:3px; top:50%; transform:translateY(-50%); font:inherit; font-weight:700;
+  font-size:14px; letter-spacing:0; cursor:pointer; background:none; color:inherit; border:0; width:24px; height:22px;
+  border-radius:var(--radius)}
+.dist summary .dclose:hover{background:rgba(255,255,255,.18)}
+.kampf summary{padding-right:32px}
 .dist .dbody{padding:5px 8px 6px; max-height:min(52vh,420px); overflow:auto}
 .dist .pair{display:flex; flex-wrap:wrap; gap:2px 10px; align-items:baseline; margin-bottom:4px}
 .dist .pair b{font-weight:700}
@@ -296,7 +303,8 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
       <ul class="keys" id="legend-keys"></ul>
     </details>
     <details class="dist kampf" id="kampf" hidden open>
-      <summary id="kampf-title">Kampf</summary>
+      <summary><span id="kampf-title">Kampf</span>
+        <button type="button" class="dclose" id="kampf-close" title="Schließen" aria-label="Schließen">×</button></summary>
       <div class="dbody" id="kampf-body"></div>
     </details>
     <details class="dist" id="dist" hidden open>
@@ -1513,6 +1521,7 @@ function renderPlayerPanel(pi){
   $("pdet").hidden=false;
 }
 $("pdet-close").addEventListener("click", closePlayerPanel);
+$("kampf-close").addEventListener("click", e=>{ e.preventDefault(); e.stopPropagation(); closeKampf(); });
 
 /* ---------- Stamm markieren ---------- */
 function nextColor(){
@@ -1884,7 +1893,12 @@ $("q").addEventListener("keydown", e=>{ if(e.key==="Escape") $("sugg").hidden=tr
 
 const pts=new Map();
 let dragging=false, lastX=0, lastY=0, moved=0, pinch=0;
+// Legende, Infofelder, Kriegspanel und Zoomknöpfe liegen über der Karte. Ein Zeiger dort gehört ihnen:
+// kein Ziehen, kein Dorf-Treffer, kein Zoom per Rad (sonst landete der Klick auf das Einklapp-Dreieck oder
+// das × über Pointer-Capture bei der Karte und wählte das Dorf darunter).
+const aufPanel = e => !!(e.target.closest && e.target.closest(".legend,.dist,.pdet,.zoom,.kriege"));
 wrap.addEventListener("pointerdown", e=>{
+  if(aufPanel(e)) return;
   pts.set(e.pointerId,[e.clientX,e.clientY]);
   if(pts.size>1){ dragging=false; wrap.classList.remove("drag"); return; }
   if(e.pointerType==="mouse" && e.button!==0) return;
@@ -1892,6 +1906,11 @@ wrap.addEventListener("pointerdown", e=>{
   wrap.classList.add("drag"); wrap.setPointerCapture(e.pointerId);
 });
 wrap.addEventListener("pointermove", e=>{
+  if(!dragging && !pts.size && aufPanel(e)){
+    tip.style.display="none"; wrap.style.cursor="";
+    if(hover>=0 || pfeilHover){ hover=-1; pfeilHover=null; drawOverlay(); }
+    return;
+  }
   if(pts.has(e.pointerId)) pts.set(e.pointerId,[e.clientX,e.clientY]);
   const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
   if(pts.size===2){
@@ -1949,6 +1968,7 @@ wrap.addEventListener("pointercancel", endPointer);
 wrap.addEventListener("pointerleave", e=>{ endPointer(e); tip.style.display="none";
   if(hover>=0 || pfeilHover){ hover=-1; pfeilHover=null; drawOverlay(); } });
 wrap.addEventListener("wheel", e=>{
+  if(aufPanel(e)) return;                    // Infofelder und Panel scrollen selbst
   e.preventDefault();
   const r=wrap.getBoundingClientRect();
   zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0? 1.25 : 1/1.25);
