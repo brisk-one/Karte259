@@ -95,6 +95,13 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .dist .fields{font-weight:700; color:var(--accent-ink); background:var(--btn-on); border:1px solid var(--edge);
   border-radius:var(--radius); padding:0 5px}
 .dist table{width:100%; border-collapse:collapse; font-size:11.5px}
+.kampf .kb{border-top:1px solid var(--edge-line); padding:4px 0 5px}
+.kampf .kb:first-child{border-top:0; padding-top:0}
+.kampf .kb p{margin:1px 0}
+.kampf .kb .zeit{color:var(--muted); font-size:10.5px}
+.kampf .kb .ang{border-left:3px solid #e53935; padding-left:5px}
+.kampf .kb .unt{border-left:3px solid #4fc3f7; padding-left:5px}
+.kampf .kb .s{color:var(--muted); font-size:10.5px}
 .dist th,.dist td{padding:1.5px 5px; text-align:right; white-space:nowrap}
 .dist th{font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700;
   border-bottom:1px solid var(--edge-line); background:none}
@@ -237,6 +244,10 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
       <ul id="legend-items"></ul>
       <ul class="keys" id="legend-keys"></ul>
     </details>
+    <details class="dist kampf" id="kampf" hidden open>
+      <summary id="kampf-title">Kampf</summary>
+      <div class="dbody" id="kampf-body"></div>
+    </details>
     <details class="dist" id="dist" hidden open>
       <summary id="dist-title">Laufzeit</summary>
       <div class="dbody" id="dist-body"></div>
@@ -301,10 +312,15 @@ function bashSteps(v){
 // Spielernamen über dem Schwerpunkt ihrer Dörfer in den Bash-Ansichten: ab Rot (über p97), per Schalter ab Gelb (über p75)
 const NAME_AB_ROT=4, NAME_AB_GELB=2;
 let namesFrom=NAME_AB_ROT;
-// Gekreuzte Äxte am Dorf: besiegte Gegner (Off, Deff, Unterstützung zusammen) im gewählten Zeitraum.
-// Klein grün ab 100, mittel gelb ab 1.000, groß rot ab 5.000 (Vorgabe Dennis 15.09.2026).
-const AXE_STEPS=[100,1000,5000];
+// Gekreuzte Äxte als Kampfsymbol (Kämpfe auf der Karte, 29.10.2026). Die Äxte an einzelnen Dörfern vom
+// 15.09. entfallen; Farben bleiben für die kleinen Bilder in Legende und Knopfleiste.
 const AXE_COLORS=["#00c853","#ffd600","#e53935"];
+// Kämpfe aus data/kampf.json (collector/kampf.py): unter KAMPF_ZOOM ein Symbol je Kampfgebiet (Kämpfe
+// innerhalb KAMPF_GEBIET Feldern zusammengefasst), ab KAMPF_ZOOM Pfeile vom Angreifer (rot) und vom
+// Unterstützer (hellblau) zum Ziel.
+const KAMPF_ZOOM=6, KAMPF_GEBIET=15;
+const PFEIL_ANG="#e53935", PFEIL_UNT="#4fc3f7";
+const SICHER={w:"wahrscheinlich", m:"möglich", u:"unklar"};
 const BASH_WINDOWS=["3h","6h","12h","24h"];
 let axWin="24h";                     // Zeitraum für Äxte und die Ansichten "+ …"
 // Ausbaustufen wie im Hilfe-Wiki: 26 bis 299, 300 bis 999, 1.000 bis 2.999, 3.000 bis 8.999,
@@ -351,7 +367,8 @@ let V=null, P=null, A=null, T=null, UNITS=null, ERF=null;
 const dtfTag=new Intl.DateTimeFormat("de-DE",{timeZone:"Europe/Berlin", weekday:"short", day:"2-digit", month:"2-digit"});
 let N=0, vx=null, vy=null, vp=null, vpts=null, vb=null, vname=null, byXY=null;
 let bashTier=null, pSumX=null, pSumY=null, pCount=null;
-let pIdx={}, aIdx={}, allyOf=null, growth={}, arrowOf=null, bashNewOf=null, refs={}, tagOf=new Map(), allyById=new Map();
+let KAMPF=null, kF={}, rowOfPid=new Map(), kampfGebiete=[], kampfSel=[], kampfHits=[];
+let pIdx={}, aIdx={}, allyOf=null, growth={}, arrowOf=null, refs={}, tagOf=new Map(), allyById=new Map();
 let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
 let inaday=new Map();                                      // player_id -> {typ: {rank, value, date}}
 let rankOf={};                                             // Spielerzeile -> Weltrang in der aktiven Rangliste
@@ -538,9 +555,7 @@ const AXES_IMG=AXE_COLORS.map(color=>{ const c=document.createElement("canvas");
 const windowText = k => k==="24h"? "24 Stunden" : k==="12h"? "12 Stunden" : k==="6h"? "6 Stunden" : k==="3h"? "3 Stunden" : k==="1h"? "einer Stunde" : "";
 const winShort = k => k? k.replace("h"," h") : "";
 
-/** Zeichen am Dorf: Bonusdorf und frisch besiegte Gegner. Die Menge besiegter Gegner steckt nur
-    in der Dorffarbe der Ansichten "Besiegte Gegner", nicht zusätzlich als Rahmen.
-    Bonus als Raute unten links, Kampf als gekreuzte Äxte oben links. */
+/** Zeichen am Dorf: Bonusdorf als Raute unten links. Kämpfe zeigt drawKaempfe. */
 function drawMarks(x0,x1,y0,y1,size){
   const off=(scale-size)/2;
   const r=Math.max(1.6, Math.min(3.4, scale*0.19));
@@ -555,13 +570,117 @@ function drawMarks(x0,x1,y0,y1,size){
       ctx.moveTo(cx2, cy2-r); ctx.lineTo(cx2+r, cy2); ctx.lineTo(cx2, cy2+r); ctx.lineTo(cx2-r, cy2);
       ctx.closePath(); ctx.fill(); if(r>=2.4) ctx.stroke();
     }
-    const n=bashNewOf? bashNewOf[i] : 0;
-    if(n){                                       // hier wurde gekämpft: gekreuzte Äxte oben links
-      const a=Math.max(3.2, Math.min(7.5, scale*0.36)) * [0, 0.85, 1.1, 1.4][n];   // klein, mittel, groß
-      drawAxes(ctx, bx+a*0.3, by+a*0.3, a, AXE_COLORS[n-1]);
-    }
   }
 }
+
+/* ---------- Kämpfe ---------- */
+const kHours = k => k? parseInt(k,10) : 24;
+/** Kämpfe aus Intervallen, die im gewählten Zeitraum enden, und daraus die Kampfgebiete. */
+function computeKaempfe(){
+  kampfSel=[]; kampfGebiete=[];
+  if(!KAMPF) return;
+  const ende=Date.parse(KAMPF.data_time_utc), ab=ende-kHours(bashWindow())*3600e3;
+  const iv=KAMPF.intervalle.map(t=>Date.parse(t.bis)>ab);
+  kampfSel=KAMPF.rows.filter(r=>iv[r[kF.i]]).sort((a,b)=>b[kF.staerke]-a[kF.staerke]);
+  for(const r of kampfSel){
+    const x=r[kF.x], y=r[kF.y];
+    const g=kampfGebiete.find(g=>Math.hypot(g.x-x, g.y-y)<=KAMPF_GEBIET);
+    if(g){ g.items.push(r); g.sum+=r[kF.staerke]; g.sx+=x*r[kF.staerke]; g.sy+=y*r[kF.staerke];
+           g.x=g.sx/g.sum; g.y=g.sy/g.sum; }
+    else kampfGebiete.push({x, y, sum:r[kF.staerke], sx:x*r[kF.staerke], sy:y*r[kF.staerke], items:[r]});
+  }
+}
+/** Pfeil von (x1,y1) nach (x2,y2) in Bildschirmkoordinaten, Spitze kurz vor dem Ziel. */
+function pfeil(x1,y1,x2,y2,farbe,breite,gestrichelt){
+  const d=Math.hypot(x2-x1,y2-y1); if(d<6) return;
+  const ux=(x2-x1)/d, uy=(y2-y1)/d, ex=x2-ux*6, ey=y2-uy*6, k=Math.max(7, breite*2.6);
+  ctx.lineCap="round";
+  for(const [c,w] of [["rgba(0,0,0,.7)", breite+2.5], [farbe, breite]]){
+    ctx.strokeStyle=c; ctx.lineWidth=w; ctx.setLineDash(gestrichelt? [w*2.2, w*2] : []);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(ex-ux*k*0.6, ey-uy*k*0.6); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(ex,ey);
+  ctx.lineTo(ex-ux*k-uy*k*0.55, ey-uy*k+ux*k*0.55); ctx.lineTo(ex-ux*k+uy*k*0.55, ey-uy*k-ux*k*0.55); ctx.closePath();
+  ctx.fillStyle=farbe; ctx.strokeStyle="rgba(0,0,0,.7)"; ctx.lineWidth=1.2; ctx.fill(); ctx.stroke();
+}
+const strich = v => Math.max(1.5, Math.min(6, Math.log10(Math.max(v,1000)/1000)*1.9+1.5));
+function drawKaempfe(){
+  kampfHits=[];
+  if(!kampfSel.length) return;
+  const mitte=(x,y)=>[sx(x+0.5), sy(y+0.5)];
+  const sichtbar=(X,Y,m)=>X>-m && X<W+m && Y>-m && Y<H+m;
+  if(scale<KAMPF_ZOOM){
+    for(const g of kampfGebiete){
+      const [X,Y]=mitte(g.x,g.y); if(!sichtbar(X,Y,30)) continue;
+      const a=Math.max(7, Math.min(22, 6+4.2*Math.log10(Math.max(g.sum,1000)/1000)));
+      drawAxes(ctx, X, Y, a, "#e53935");
+      kampfHits.push({X, Y, r:a*1.3, items:g.items});
+    }
+    return;
+  }
+  const off=(scale-(scale<2? Math.max(1, scale) : scale*0.84))/2;
+  for(const r of kampfSel){
+    const [X,Y]=mitte(r[kF.x], r[kF.y]);
+    if(!sichtbar(X,Y,W)) continue;
+    // getroffene (oder geschätzte) Dörfer weiß umrandet
+    ctx.strokeStyle=r[kF.geschaetzt]? "rgba(255,255,255,.55)" : "#ffffff"; ctx.lineWidth=1.5;
+    for(const c of r[kF.orte]){
+      const vx2=sx(Math.floor(c/1000))+off-1, vy2=sy(c%1000)+off-1, sz=scale-2*off+2;
+      ctx.strokeRect(vx2, vy2, sz, sz);
+    }
+    // Unklare Unterstützer und weitere Angreifer-Kandidaten nur im Infofeld, sonst wird die Karte unlesbar
+    r[kF.u].forEach(u=>{ if(u[2]==="u") return; const [fx,fy]=mitte(u[3],u[4]); pfeil(fx,fy,X,Y,PFEIL_UNT,strich(u[1]),u[2]!=="w"); });
+    const a=r[kF.a][0];
+    if(a){ const [fx,fy]=mitte(a[3],a[4]); pfeil(fx,fy,X,Y,PFEIL_ANG,strich(a[1]),r[kF.a_sicher]!=="w"); }
+  }
+  for(const r of kampfSel){
+    const [X,Y]=mitte(r[kF.x], r[kF.y]); if(!sichtbar(X,Y,30)) continue;
+    const a=Math.max(6, Math.min(13, 4+3*Math.log10(Math.max(r[kF.staerke],1000)/1000)));
+    drawAxes(ctx, X, Y, a, "#e53935");
+    kampfHits.push({X, Y, r:a*1.3, items:[r]});
+  }
+}
+function kampfAt(px,py){
+  let best=null, bd=1e9;
+  for(const h of kampfHits){ const d=Math.hypot(px-h.X, py-h.Y); if(d<=h.r+3 && d<bd){ bd=d; best=h; } }
+  return best;
+}
+function pName(pid){
+  const p=rowOfPid.get(pid); if(p==null) return "Spieler "+pid;
+  const t=tagOf.get(allyOf[p]);
+  return P.rows[p][pIdx.name]+(t? " ("+t+")" : "");
+}
+function openKampf(items){
+  const box=$("kampf"), body=$("kampf-body");
+  body.replaceChildren();
+  const zeit=s=>hmf.format(new Date(s));
+  const tag=s=>dtfTag.format(new Date(s));
+  items.slice(0,12).forEach(r=>{
+    const iv=KAMPF.intervalle[r[kF.i]], d=el("div","kb");
+    d.append(el("p","zeit","Zwischen den Ständen "+tag(iv.von)+" "+zeit(iv.von)+" und "+tag(iv.bis)+" "+zeit(iv.bis)+" Uhr"
+      +(r[kF.geschaetzt]? " · Ziel geschätzt" : " · "+r[kF.orte].length+" Dörfer mit Punktverlust")));
+    const v=el("p"); v.append(el("b",null,pName(r[kF.v])), document.createTextNode(" verteidigt, +"+nf.format(r[kF.dv])+" besiegte Gegner"));
+    d.append(v);
+    if(!r[kF.a].length) d.append(el("p","ang s","Angreifer unklar: kein Kandidat aus einem anderen Stamm in der Nähe"));
+    r[kF.a].forEach((a,j)=>{
+      const p=el("p","ang"); p.append(el("b",null,pName(a[0])),
+        document.createTextNode(" +"+nf.format(a[1])+" Off, "+nf1.format(a[2])+(a[2]===1? " Feld " : " Felder ")),
+        el("span","s", j===0? SICHER[r[kF.a_sicher]] : "Kandidat"));
+      d.append(p);
+    });
+    r[kF.u].forEach(u=>{
+      const p=el("p","unt"); p.append(el("b",null,pName(u[0])),
+        document.createTextNode(" unterstützt, +"+nf.format(u[1])+" "), el("span","s", SICHER[u[2]]));
+      d.append(p);
+    });
+    body.appendChild(d);
+  });
+  if(items.length>12) body.appendChild(el("p","note","und "+(items.length-12)+" weitere Kämpfe in diesem Gebiet; näher heranzoomen"));
+  $("kampf-title").textContent = items.length>1? items.length+" Kämpfe in diesem Gebiet" : "Kampf";
+  box.hidden=false; box.open=true;
+}
+function closeKampf(){ $("kampf").hidden=true; }
 
 /** Pfeile am oberen rechten Rand des Dorfes: Zuwachs des Spielers, drei Stufen je Richtung. */
 function drawArrows(x0,x1,y0,y1,size){
@@ -617,6 +736,7 @@ function draw(){
   if(scale>=7) drawMarks(x0,x1,y0,y1,size);
   if(scale>=8 && arrowOf) drawArrows(x0,x1,y0,y1,size);
   if(isBash(view) && bashTier) drawNames();
+  drawKaempfe();
   drawOverlay();
 }
 
@@ -704,26 +824,19 @@ function arrowWindow(){
   return refs["24h"]? "24h" : (refs["12h"]? "12h" : null);
 }
 function computeArrows(){
-  arrowOf=new Int8Array(N); bashNewOf=new Int8Array(N);
+  arrowOf=new Int8Array(N);
   if(!P) return;
   const key=arrowWindow();
-  const lvl=new Int8Array(P.rows.length), bn=new Int8Array(P.rows.length);
-  const bashKey=bashWindow();
+  const lvl=new Int8Array(P.rows.length);
   P.rows.forEach((r,i)=>{
     if(key){
       const e=STEPS["d"+key], g=pct(r,key);
       if(g!=null) lvl[i] = g>e[3]? 3 : g>e[2]? 2 : g>e[1]? 1 : g<-e[3]? -3 : g<-e[2]? -2 : g<-e[1]? -1 : 0;
     }
-    // Zeichen für frisch besiegte Gegner (Äxte)
-    if(bashKey){
-      const d=(r[pIdx["d"+bashKey+"_att"]]||0)+(r[pIdx["d"+bashKey+"_def"]]||0)+(r[pIdx["d"+bashKey+"_sup"]]||0);
-      bn[i] = d>=AXE_STEPS[2]? 3 : d>=AXE_STEPS[1]? 2 : d>=AXE_STEPS[0]? 1 : 0;
-    }
   });
   for(let i=0;i<N;i++){
     const p=vp[i];
     arrowOf[i]= p>=0? lvl[p] : 0;
-    bashNewOf[i]= p>=0? bn[p] : 0;
   }
 }
 function computeGrowth(){
@@ -857,13 +970,13 @@ function renderLegend(){
   zeile("<b>&#9650;</b><u>&#9660;</u>", key
     ? "Rechts oben: Punktezuwachs über "+VIEW_LABEL["d"+key]+", ein Pfeil ab "+e[1]+" %, zwei ab "+e[2]+" %, drei ab "+e[3]+" %"
     : "Pfeile für den Punktezuwachs erscheinen ab zwölf Stunden Historie");
-  if(axeKey){
-    const stufe=(k,text)=>"<span class='axe'>"+AXES_IMG[k]+text+"</span>";
-    zeile(AXES_IMG[2], "Links oben: besiegte Gegner dazu in "+windowText(axeKey)+"<br>"
-      +stufe(0,"ab "+nf.format(AXE_STEPS[0]))+stufe(1,"ab "+nf.format(AXE_STEPS[1]))+stufe(2,"ab "+nf.format(AXE_STEPS[2])));
+  if(KAMPF){
+    zeile(AXES_IMG[2], "Kämpfe der letzten "+windowText(axeKey||"24h")+": "+nf.format(kampfSel.length)
+      +". Weit weg ein Symbol je Kampfgebiet, Größe nach besiegten Gegnern; näher heran Pfeile <b style='color:"+PFEIL_ANG+"'>rot</b> vom Angreifer, <b style='color:"+PFEIL_UNT+"'>hellblau</b> vom Unterstützer, gestrichelt wenn nicht eindeutig."
+      +" Klick auf ein Symbol nennt Beteiligte, Mengen und Zeitraum.");
   }
   zeile("<i class='raute'></i>", "Links unten: Bonusdorf");
-  const hint=document.createElement("li"); hint.className="hint"; hint.textContent="Zeichen erscheinen ab mittlerem Zoom.";
+  const hint=document.createElement("li"); hint.className="hint"; hint.textContent="Zeichen am Dorf erscheinen ab mittlerem Zoom.";
   keys.appendChild(hint);
   const box=$("legend");
   if(box.hidden){ box.hidden=false; box.open = wrap.clientWidth>=560; }  // auf schmalen Schirmen zugeklappt
@@ -910,7 +1023,7 @@ function setView(v){
   view=v;
   document.querySelectorAll("#views button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===v)));
   $("namesgrp").hidden=!isBash(v);
-  const apply=()=>{ computeGrowth(); computeArrows(); buildBuckets(); renderLegend(); draw(); saveUrl(); };
+  const apply=()=>{ computeGrowth(); computeArrows(); computeKaempfe(); buildBuckets(); renderLegend(); draw(); saveUrl(); };
   if(isRank(v) && !deepLoaded){
     $("stand").textContent="Lade vollständige Rangliste …";
     ensureDeep().then(()=>{ apply(); showStand(); });
@@ -1310,7 +1423,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
     byXY.set(r[0], i);
   });
   allyOf=new Int32Array(P.rows.length);
-  P.rows.forEach((r,i)=>{ allyOf[i]=r[pIdx.ally]||0; });
+  P.rows.forEach((r,i)=>{ allyOf[i]=r[pIdx.ally]||0; rowOfPid.set(r[pIdx.id], i); });
   // Schwerpunkt der Dörfer je Spieler, für die Namen in den Bash-Ansichten
   pSumX=new Float64Array(P.rows.length); pSumY=new Float64Array(P.rows.length); pCount=new Int32Array(P.rows.length);
   for(let i=0;i<N;i++){ const p=vp[i]; if(p>=0){ pSumX[p]+=vx[i]; pSumY[p]+=vy[i]; pCount[p]++; } }
@@ -1349,7 +1462,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   $("axicon").innerHTML=AXES_IMG[2];
   document.querySelectorAll("#axwin button").forEach(b=>{
     if(!refs[b.dataset.w]){ b.disabled=true; b.title="Noch kein Vergleichsstand für dieses Zeitfenster"; }
-    else b.title="Gekreuzte Äxte und Ansichten „+“ über "+windowText(b.dataset.w);
+    else b.title="Kampfsymbole und Ansichten „+“ über "+windowText(b.dataset.w);
   });
   document.querySelectorAll("#views .scale").forEach(s=>{ s.style.background=streifen[s.dataset.scale]||"none"; });
 
@@ -1357,6 +1470,11 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   load("units").then(u=>{ UNITS=u; if(selB>=0) renderDist(); }).catch(()=>{ /* noch kein Abruf gelaufen */ });
   // Stufennamen für die Spieler-Details, ebenfalls ohne die Karte aufzuhalten (STUFE_FALLBACK greift sonst)
   load("erfahrung").then(e=>{ ERF=e; }).catch(()=>{ /* Fallback-Namen reichen */ });
+  // Kämpfe ebenfalls nachgeladen; fehlt die Datei, bleibt die Karte ohne Kampfsymbole
+  load("kampf").then(k=>{
+    KAMPF=k; kF=Object.fromEntries(k.felder.map((f,i)=>[f,i]));
+    computeKaempfe(); renderLegend(); draw();
+  }).catch(()=>{ /* noch kein Seitenbau mit Kämpfen */ });
 
   if(readUrl()) ownView();
   $("names").setAttribute("aria-pressed", String(namesFrom===NAME_AB_GELB));
@@ -1463,6 +1581,9 @@ function endPointer(e){
   dragging=false; wrap.classList.remove("drag");
   if(moved>=6) return;
   const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+  const k=kampfAt(px,py);
+  if(k){ openKampf(k.items); return; }
+  closeKampf();
   const i=hit(px,py);
   if(e.pointerType!=="mouse"){
     hover=i;
@@ -1486,7 +1607,8 @@ wrap.addEventListener("wheel", e=>{
 
 document.addEventListener("keydown", e=>{
   if(e.key==="Escape"){
-    if(undoStack.length) doUndo();
+    if(!$("kampf").hidden) closeKampf();
+    else if(undoStack.length) doUndo();
     else if(selA>=0) selectVillage(-1);
     return;
   }

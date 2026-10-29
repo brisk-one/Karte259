@@ -63,7 +63,7 @@ def main(argv=None):
         "trigger": args.trigger,
         "result": result,
         "duration_s": duration,
-        "world": {k: w.get(k) for k in ("changed", "note", "counts", "new_conquers", "downloads")},
+        "world": {k: w.get(k) for k in ("changed", "note", "counts", "new_conquers", "dorfverluste", "downloads")},
         "data_last_modified": state.get("data_last_modified"),
         "counts": state.get("counts", {}),
         "history_since_utc": state.get("history_since_utc"),

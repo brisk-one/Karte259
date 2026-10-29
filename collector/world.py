@@ -9,6 +9,7 @@ Ablauf pro Lauf:
 import hashlib
 import os
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import unquote_plus
 
 from . import config, net, store
@@ -21,6 +22,10 @@ DAILY_PLAYER_HEADER = ["id", "name", "ally", "villages", "points", "rank", "att"
 ALLY_HEADER = ["id", "name", "tag", "members", "villages", "points", "all_points", "rank"]
 VILLAGE_HEADER = ["id", "name", "x", "y", "player", "points", "bonus"]
 CONQUER_HEADER = ["village_id", "ts", "new_owner", "old_owner", "extra"]
+# Dörfer mit Punktverlust ohne Besitzerwechsel zwischen zwei Läufen (Kämpfe auf der Karte, 29.10.2026).
+# stand_utc und vorher_utc sind die Erzeugungszeiten von player.txt wie in state.json, damit der Seitenbau
+# die Zeilen genau dem Intervall zwischen zwei Ständen von latest/players.csv zuordnen kann.
+VERLUST_HEADER = ["stand_utc", "vorher_utc", "village_id", "x", "y", "player", "points_vorher", "points"]
 
 
 class ValidationError(Exception):
@@ -106,6 +111,25 @@ def parse_conquers(text):
     return out
 
 
+def dorfverluste(alt, neu):
+    """Dörfer, die zwischen zwei Dorfständen (Zeilen nach VILLAGE_HEADER) Punkte verloren haben und denselben
+    Besitzer behalten. Eroberte Dörfer und Barbarendörfer fallen heraus. Zeilen: id, x, y, Spieler, vorher, jetzt."""
+    vorher = {v[0]: v for v in alt}
+    out = []
+    for v in neu:
+        o = vorher.get(v[0])
+        if o and v[4] and o[4] == v[4] and v[5] < o[5]:
+            out.append([v[0], v[2], v[3], v[4], o[5], v[5]])
+    return out
+
+
+def _iso_http(s):
+    try:
+        return parsedate_to_datetime(s).astimezone(timezone.utc).isoformat(timespec="seconds")
+    except (TypeError, ValueError):
+        return None
+
+
 def validate_counts(state, players, villages, allies):
     prev = state.get("counts", {})
     if len(players) < config.MIN_PLAYERS:
@@ -174,6 +198,24 @@ def update(state, now_utc, now_local):
         p = store.dpath("daily", sub, f"{day}.csv.gz")
         if not os.path.exists(p):
             store.write_csv_gz(p, header, rows)
+
+    # Dorfverluste gegen den Dorfstand des vorigen Laufs aus dem Rohdaten-Cache. Nur wenn der Cache genau
+    # den zuletzt gespeicherten Stand enthält (Prüfsumme), sonst stimmte das Intervall nicht.
+    # Ein Fehler hier darf das Speichern des übrigen Datensatzes nicht abbrechen.
+    summary["dorfverluste"] = None
+    try:
+        alt_raw = store.load_raw("village")
+        vorher, jetzt = _iso_http(state.get("data_last_modified")), _iso_http(headers.get("Last-Modified"))
+        if alt_raw and vorher and jetzt and hashlib.sha1(alt_raw).hexdigest() == files.get("village", {}).get("sha1"):
+            alt = parse_villages(net.maybe_gunzip(alt_raw).decode("utf-8", errors="replace"))
+            verluste = dorfverluste(alt, villages)
+            month = now_utc.strftime("%Y-%m")
+            if verluste:
+                store.append_csv(store.dpath("kampf", f"dorfverluste_{month}.csv"), VERLUST_HEADER,
+                                 [[jetzt, vorher] + r for r in verluste])
+            summary["dorfverluste"] = len(verluste)
+    except Exception as e:
+        summary["dorfverluste_fehler"] = repr(e)
 
     # Eroberungen: nur neue Einträge anhängen, getrennt nach Monat (UTC)
     last_ts = int(state.get("conquer_last_ts", 0))

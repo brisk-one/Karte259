@@ -22,7 +22,7 @@ import subprocess
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from . import config, erfahrung, moral, net, praegen, store, units, world
+from . import config, erfahrung, kampf, moral, net, praegen, store, units, world
 
 # Vergleichsfenster: Schlüssel, Länge, Toleranz nach vorn. Ein Vergleichsstand darf höchstens das
 # 1,5-fache der Fensterlänge zurückliegen (MAX_ALTER), sonst gilt das Fenster als ohne Vergleichsstand.
@@ -33,6 +33,7 @@ MAX_ALTER = 1.5
 # je Ansicht und bei jedem Seitenbau neu, gerundet auf 1, 2, 5 × 10^n. Sechs Farben auf der Karte.
 BASH_QUANTILE = [0.50, 0.75, 0.90, 0.97, 0.99]
 BASH_FENSTER = ["3h", "6h", "12h", "24h"]
+KAMPF_FENSTER = 24 * 3600
 DELTA_FIELDS = ["points", "villages", "att", "def", "sup"]
 BASE_FIELDS = ["id", "name", "ally", "villages", "points", "rank", "att", "def", "sup", "all"]
 # Erfahrungs-Stufe (E12 bis E14, Dennis 11.10.2026): Bash-Weltrang und Zahl echter Tagesauszeichnungen
@@ -152,6 +153,34 @@ def tribe_series(versions, players_path, ally_names, top_ids, max_points=56):
             d["points"].append(a[0]); d["att"].append(a[1]); d["def"].append(a[2]); d["all"].append(a[3])
     return {"times": times,
             "tribes": [{"id": tid, "tag": ally_names.get(tid, str(tid)), **data[tid]} for tid in top_ids]}
+
+
+def kampf_staende(versions, secs=KAMPF_FENSTER):
+    """Stände für die Kampfauswertung, aufsteigend: der letzte vor Beginn des Fensters und alle danach.
+    Ein Stand, dessen Erzeugungszeit nicht nach dem vorigen liegt, fällt heraus (der Server lieferte
+    am 28.10. einmal eine ältere Datei aus)."""
+    newest = versions[0][1]
+    asc = []
+    for h, t in reversed(versions):
+        if asc and t <= asc[-1][1]:
+            continue
+        if t <= newest - secs:
+            asc = [(h, t)]
+        else:
+            asc.append((h, t))
+    return asc
+
+
+def kampf_bauen(versions, players_path, vrows, ddir):
+    staende = [(t, kampf.stand(_csv_at(h, players_path))) for h, t in kampf_staende(versions)]
+    doerfer = {}
+    for _vid, _name, x, y, pid, _pts, _bonus in vrows:
+        if pid:
+            doerfer.setdefault(pid, []).append((x, y))
+    k = kampf.auswerten(staende, doerfer, kampf.verluste_laden(), _iso)
+    k["data_time_utc"] = _iso(versions[0][1])
+    _dump(os.path.join(ddir, "kampf.json"), k)
+    return {"kaempfe": len(k["rows"]), "intervalle": len(k["intervalle"])}
 
 
 def village_rows():
@@ -297,6 +326,14 @@ def build(out_dir):
     except Exception as e:  # Karte fehlt, Statusseite bleibt nutzbar
         villages = {"count": 0, "source": None, "error": repr(e)}
 
+    # Kämpfe der letzten 24 h je Intervall zwischen zwei Ständen (collector/kampf.py), ohne Einfluss auf den Rest
+    kampf_info = {"kaempfe": 0}
+    try:
+        if vrows and versions:
+            kampf_info = kampf_bauen(versions, players_path, vrows, ddir)
+    except Exception as e:
+        kampf_info = {"kaempfe": 0, "error": repr(e)}
+
     # Moralrechner: Welteinstellung und geschätzte Spieldauer, ebenfalls ohne Einfluss auf den Rest
     moral_info = {"estimated": 0}
     try:
@@ -405,7 +442,7 @@ def build(out_dir):
     })
     return {"players": len(rows), "refs": sorted(refs), "allies": len(allies),
             "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages, "moral": moral_info, "units": unit_info,
-            "praegen": praegen_info}
+            "praegen": praegen_info, "kampf": kampf_info}
 
 
 def main(argv=None):
