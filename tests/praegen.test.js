@@ -236,3 +236,134 @@ test("Großes Konto: 400 Dörfer, 160 mit Adelshof, Rechnung bleibt schnell", ()
   assert.ok((a < 230) !== (b < 230), "je ein Prägedorf pro Haufen");
   assert.ok(ms < 8000, "Rechnung dauerte " + ms + " ms");
 });
+
+/* ---------- v0.5: Konto im Gleichschritt, Zeitplan der Pakete (Kunstdaten) ---------- */
+// 63 erfundene Dörfer in einem Haufen, jedes dritte mit Adelshof, jedes sechste mit kleinem Markt
+function konto63() {
+  const v = [];
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 63; i++) {
+    v.push({name: "Kunst " + i, x: 630 + Math.round(rnd() * 20), y: 600 + Math.round(rnd() * 45) + i % 3,
+            b: {main: 20, snob: i % 3 === 0 ? 1 : 0, smith: 20, market: i % 6 === 0 ? 8 + (i % 5) : 15 + (i % 11),
+                wood: 27, stone: 27, iron: 26, storage: 25 + (i % 6), farm: 30}});
+  }
+  return v;
+}
+const V5 = extra => K.params(Object.assign({pkgSize: 30, merchantBonus: true, flagLevel: 9, intervalMin: 60, prodFactor: 1.2}, extra), WELT);
+const dorf = (name, x, y, market, storage, snob) =>
+  ({name, x, y, b: {main: 20, snob: snob ? 1 : 0, smith: 20, market, wood: 25, stone: 25, iron: 25, storage}});
+
+test("v0.5: nie mehr als 3 Pakete gleichzeitig, mehr Pakete bringen nie weniger Münzen", () => {
+  const R = K.planPackages(konto63(), V5({}), []);
+  const c = R.pkg.curve;
+  assert.ok(c.length > 10);
+  c.forEach(x => { const cnt = K.toCnt(x.pos, R.pkg.K); assert.ok(Math.max(0, ...cnt) <= 3, "Klick mit " + Math.max(...cnt) + " Paketen"); });
+  for (let n = 1; n < c.length; n++) assert.ok(c[n].coins >= c[n - 1].coins - 1e-6, n + " Pakete bringen weniger als " + (n - 1));
+  assert.equal(K.maxPerClick(V5({})), 3);
+  assert.equal(K.maxPerClick(V5({pkgSize: 50})), 2);
+});
+
+test("v0.5: das Prägedorf läuft nie über", () => {
+  const P = V5({});
+  const src = K.prepare([dorf("Präge", 500, 500, 25, 10, true), dorf("Lieferant", 503, 500, 25, 30)], P);
+  const r = K.lockstep(src, P, [0], K.toCnt([0, 0, 0, 1, 1, 1, 2, 2, 2], K.lastClick(P)), true);
+  assert.equal(r.overflow[0], 0);
+  assert.ok(r.overflow[1] > 0, "der Lieferant mit vollem Speicher läuft dagegen über");
+});
+
+test("v0.5: der optimierte Zeitplan bringt nie weniger als der gleichmäßige Start", () => {
+  const P = V5({});
+  const R = K.plan(konto63(), Object.assign({}, P, {pkgPct: 180}));
+  const sites = R.configs[R.recommend - 1].sites, KK = K.lastClick(P);
+  const f = c => K.lockstep(R.src, P, sites, c).coins;
+  for (const N of [2, 6, 12]) {
+    const start = K.evenSchedule(N, 36, KK, 3);
+    const opt = K.improveSchedule(start, f, KK, 3, 4);
+    assert.ok(opt.coins >= f(K.toCnt(start, KK)) - 1e-9);
+    assert.equal(opt.pos.length, N);
+  }
+});
+
+test("v0.5: ein Dorf mit großem Markt läuft bei gleichmäßigen Abständen nicht über", () => {
+  const P = V5({});
+  const [s] = K.prepare([dorf("Groß", 500, 500, 25, 26)], P);
+  const KK = K.lastClick(P);
+  const r = K.villageRun(s, 0.3, P, K.toCnt(K.evenSchedule(12, 44, KK, 3), KK), s.merchants, null);
+  assert.equal(r.overflow, 0);
+  const [klein] = K.prepare([dorf("Klein", 500, 500, 5, 26)], P);
+  const q = K.villageRun(klein, 0.3, P, K.toCnt(K.evenSchedule(12, 44, KK, 3), KK), klein.merchants, null);
+  assert.ok(q.overflow > 0, "mit Markt 5 dagegen schon");
+});
+
+test("v0.5: Erlass 2× verbilligt bis 48 h, 1× nur bis 24 h", () => {
+  const P1 = V5({decreeN: 1}), P2 = V5({decreeN: 2}), P0 = V5({});
+  near(K.reduction(30, P1), K.reduction(30, P0));
+  near(K.reduction(30, P2), K.reduction(30, P0) + 0.1);
+  near(K.reduction(47.5, P2), K.reduction(47.5, P0) + 0.1);
+  assert.equal(P1.deadline, 24); assert.equal(P2.deadline, 48);
+  assert.equal(K.params({decree: true}, WELT).decreeN, 1);              // alte Eingabe gilt als einmal
+  const v = konto63(), pos = [0, 10, 20, 30];
+  const coins = P => { const R = K.plan(v, Object.assign({}, P, {pkgPct: 120})); return K.lockstep(R.src, P, R.configs[0].sites, K.toCnt(pos, K.lastClick(P))).coins; };
+  assert.ok(coins(P2) > coins(P1) && coins(P1) > coins(P0));
+});
+
+test("v0.5: Mindeststufe Speicher vergrößert die Pakete", () => {
+  const [a] = K.prepare([dorf("D", 500, 500, 20, 20)], V5({}));
+  const [b] = K.prepare([dorf("D", 500, 500, 20, 20)], V5({minStorage: 28}));
+  assert.equal(a.cap, K.storageCap(20)); assert.equal(b.cap, K.storageCap(28));
+  assert.equal([b.storageFrom, b.b.storage].join(), "20,28");
+  const KK = K.lastClick(V5({}));
+  const ra = K.villageRun(a, 0.5, V5({}), K.toCnt([0], KK), a.merchants, null);
+  const rb = K.villageRun(b, 0.5, V5({minStorage: 28}), K.toCnt([0], KK), b.merchants, null);
+  assert.ok(rb.pkgRes > ra.pkgRes * 1.5);
+});
+
+test("v0.5: Rohstoffverhältnis ignorieren schickt den Bestand, geprägt wird nach dem knappsten Rohstoff", () => {
+  const P = V5({ignoreRatio: true, production: false}), KK = K.lastClick(P);
+  const [s] = K.prepare([dorf("Lieferant", 500, 500, 25, 26)], P);
+  const got = [];
+  K.villageRun(s, 0.5, P, K.toCnt([0], KK), s.merchants, (t, a, b, c) => got.push([a, b, c]));
+  near(got[0][0], got[0][1]); near(got[0][1], got[0][2]);                // gleiche Mengen, wie sie im Dorf liegen
+  const R = K.prepare([dorf("Präge", 500, 500, 25, 30, true), dorf("Lieferant", 501, 500, 25, 26)], P);
+  const r = K.lockstep(R, P, [0], K.toCnt([0], KK), true);
+  assert.equal(r.overflow[0], 0);                                       // überschüssiges Holz und Eisen zählt nicht
+  // Münzen nach Lehm (30.000 je Münze): je Dorf 30 % des Speichers Lehm
+  const lehm = 0.3 * (K.storageCap(30) + K.storageCap(26));
+  near(r.coins, lehm / 30000 / (1 - 0.48), 1e-6);
+  // Im Prägeverhältnis dagegen bleibt der Überschuss im Lieferdorf
+  const Q = V5({production: false}), RQ = K.prepare([dorf("Präge", 500, 500, 25, 30, true), dorf("Lieferant", 501, 500, 25, 26)], Q);
+  near(K.lockstep(RQ, Q, [0], K.toCnt([0], KK)).coins, r.coins, 1e-6);
+});
+
+test("v0.5: die Schwelle stoppt die Paketzahl", () => {
+  const v = konto63();
+  const R90 = K.planPackages(v, V5({}), []), R80 = K.planPackages(v, V5({optThreshold: 80}), []);
+  const c = R90.pkg;
+  for (let n = 1; n <= c.optimal; n++) assert.ok(c.curve[n].gain >= 0.9 - 1e-9);
+  assert.ok(c.curve[c.optimal + 1].gain < 0.9);
+  assert.ok(R80.pkg.optimal > c.optimal);
+  assert.ok(c.maximal >= R80.pkg.optimal);
+  assert.ok(c.curve[c.maximal + 1] == null || c.curve[c.maximal + 1].gain < 0.05);
+  assert.equal(R90.pkg.chosen, c.optimal);
+  const fest = K.planPackages(v, V5({pkgCount: 5}), []);
+  assert.equal(fest.pkg.chosen, 5); assert.equal(fest.pkg.pos.length, 5);
+});
+
+test("v0.5: Dörfer ohne Haken bekommen Pakete, ihr Überlauf wird gezeigt, Rechenzeit unter 2 s", () => {
+  const v = konto63(), off = [dorf("Aus", 640, 610, 3, 24)];
+  const t0 = Date.now();
+  const R = K.planPackages(v, V5({}), off);
+  const ms = Date.now() - t0;
+  assert.equal(R.pkg.detail.passive.length, 1);
+  assert.ok(R.pkg.detail.passive[0].pkgRes > 0);
+  assert.ok(ms < 2000, "Rechnung dauerte " + ms + " ms");
+});
+
+test("v0.5: unter 1 h Klickabstand liegt der Zeitplan auf vollen Stunden des Klickrasters", () => {
+  const R = K.planPackages(konto63(), V5({intervalMin: 15}), []);
+  assert.equal(R.pkg.grid, 4);
+  assert.ok(R.pkg.pos.every(k => k % 4 === 0));
+  assert.ok(R.pkg.chosen === R.pkg.optimal && R.pkg.curve[R.pkg.chosen].pos.length === R.pkg.chosen);
+  near(R.pkg.detail.coins, R.pkg.curve[R.pkg.chosen].coins, 1e-6);
+});

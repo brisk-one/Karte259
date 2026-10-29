@@ -53,6 +53,10 @@
   .pr-legend span{display:inline-flex; align-items:center; gap:6px}
   .pr-legend svg{flex:none}
   .pr-chart{position:relative}
+  .pr-chart .mark{font-size:10.5px; font-weight:700; fill:var(--ink)}
+  .pr-sched td.l{text-align:left}
+  .pr-sched{margin-top:10px}
+  .pr-list{margin:6px 0 0; padding-left:18px; font-size:12.5px}
   .pr-chart svg{display:block; width:100%; height:auto; overflow:visible}
   .pr-chart .axis{font-size:10.5px; fill:var(--muted)}
   .pr-chart .grid{stroke:var(--chart-grid); stroke-width:1}
@@ -104,11 +108,13 @@
         placeholder="[001] Dorfname (500|500) K55   10.393   22   25   20   15   0   1   20   1   1   23   30   30   30   30   30   10   20&#10;…"></textarea>
       <div class="pr-ctl">
         <div>
-          <span class="lab">Rohstoffpakete gesamt</span>
+          <span class="lab">Rohstoffpakete</span>
           <div class="pr-row" id="pkg-row">
-            <input type="number" id="pkg" min="0" max="2000" step="1" value="100" aria-label="Rohstoffpakete in Prozent"> <span>% der Speicherkapazität</span>
+            <input type="number" id="pkgsize" min="1" max="100" step="1" value="30" aria-label="Größe eines Pakets in Prozent"> <span>% des Speichers je Paket</span>
           </div>
-          <div class="pr-row" style="margin-top:5px" id="pkg-quick" role="group" aria-label="Schnellwahl Pakete"></div>
+          <div class="pr-row" style="margin-top:5px">
+            <label class="pick"><span>Anzahl</span><select id="pkgcount" aria-label="Anzahl Pakete"></select></label>
+          </div>
         </div>
         <div class="pr-row">
           <label class="pick"><span>Münzkosten-Flagge</span><select id="flag" aria-label="Stufe der Münzkosten-Flagge"></select></label>
@@ -123,7 +129,14 @@
           <label class="pr-check"><input type="checkbox" id="bonus" checked> Händlerbonus (+50 % Tragkraft und Tempo)</label>
         </div>
         <div class="pr-row">
-          <label class="pr-check"><input type="checkbox" id="decree"> Erlass des Adels (−10 % für 24 h)</label>
+          <label class="pick"><span>Speicher mindestens</span><select id="minstorage" aria-label="Mindeststufe Speicher für alle Dörfer"></select></label>
+        </div>
+        <div class="pr-row">
+          <label class="pick"><span>Erlass des Adels</span><select id="decree" aria-label="Erlass des Adels">
+            <option value="0">kein</option><option value="1">1× (−10 % für 24 h)</option><option value="2">2× (−10 % für 48 h)</option></select></label>
+        </div>
+        <div class="pr-row">
+          <label class="pr-check"><input type="checkbox" id="ignoreratio"> Rohstoffverhältnis ignorieren (Händler schicken, was im Dorf liegt)</label>
         </div>
       </div>
       <details class="pr-adv">
@@ -136,6 +149,8 @@
             <span class="note">Rohstoffe, die beim Start schon in den Dörfern liegen</span></label>
           <label>Händler: Minuten je Feld ohne Bonus <input type="number" id="mpf" min="0.5" max="20" step="0.01">
             <span class="note" id="mpf-note"></span></label>
+          <label>Ein weiteres Paket lohnt ab (% seines Höchstwerts) <input type="number" id="thr" min="1" max="200" step="1" value="90">
+            <span class="note">für „automatisch: optimal“; Höchstwert = Paketgröße × Summe der Speicher in Münzen zum Flaggenpreis</span></label>
           <label>Jeder weitere Flaggendoppler ab Mehrertrag (%) <input type="number" id="gain" min="0" max="500" step="1" value="10">
             <span class="note">gegenüber einem weniger, und nur wenn der nicht alles rechtzeitig schafft</span></label>
         </div>
@@ -156,6 +171,22 @@
   </section>
 
   <div class="grid" id="p-more" hidden>
+    <section class="panel c6" aria-labelledby="h-pk">
+      <h2 id="h-pk">Zeitplan der Pakete <span class="hint" id="pk-hint"></span></h2>
+      <div class="body">
+        <div id="pk-table" style="overflow-x:auto"></div>
+        <div id="pk-note"></div>
+      </div>
+    </section>
+
+    <section class="panel c6" aria-labelledby="h-pc">
+      <h2 id="h-pc">Pakete gegen Münzen <span class="hint" id="pc-hint"></span></h2>
+      <div class="body">
+        <div class="pr-legend" id="pc-legend"></div>
+        <div class="pr-chart" id="pc"></div>
+      </div>
+    </section>
+
     <section class="panel c6" aria-labelledby="h-cmp">
       <h2 id="h-cmp">Wie viele Flaggendoppler</h2>
       <div class="body" id="cmp" style="overflow-x:auto"></div>
@@ -233,11 +264,15 @@ let RESULT = null, VIEW = null, STEPS = [], RUN = 0;
 const OFF = new Set();                 // ausgeschlossene Dörfer, Schlüssel "x|y"
 
 /* ---------- Bedienelemente ---------- */
-[10, 30, 50, 100, 150, 300].forEach(p => {
-  const b = el("button", "tw", p + " %"); b.type = "button";
-  b.addEventListener("click", () => { $("pkg").value = p; schedule(); });
-  $("pkg-quick").appendChild(b);
-});
+{
+  const o = document.createElement("option"); o.value = "0"; o.textContent = "automatisch: optimal"; $("pkgcount").appendChild(o);
+  for (let n = 1; n <= 60; n++) { const q = document.createElement("option"); q.value = n; q.textContent = n + (n === 1 ? " Paket" : " Pakete"); $("pkgcount").appendChild(q); }
+}
+for (let L = 0; L <= 30; L++) {
+  const o = document.createElement("option"); o.value = L;
+  o.textContent = L ? "Stufe " + L + " (" + nf.format(K.storageCap(L)) + ")" : "wie im Dorf";
+  $("minstorage").appendChild(o);
+}
 K.FLAG_PCT.forEach((p, lvl) => {
   if (!lvl) return;
   const o = document.createElement("option"); o.value = lvl;
@@ -256,7 +291,9 @@ for (let L = 0; L <= 25; L++) {
 
 function inputs() {
   const mpf = parseFloat($("mpf").value), pf = parseFloat($("pfac").value);
-  return {pkgPct: +$("pkg").value || 0, startPct: +$("start").value || 0, decree: $("decree").checked,
+  return {pkgSize: +$("pkgsize").value || 30, pkgCount: +$("pkgcount").value || null, startPct: +$("start").value || 0,
+          decreeN: +$("decree").value || 0, minStorage: +$("minstorage").value || 0, ignoreRatio: $("ignoreratio").checked,
+          optThreshold: +$("thr").value || 90,
           merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, intervalMin: +$("interval").value,
           production: $("prod").checked, prodFactor: pf > 0 ? pf : null, minGainPct: +$("gain").value || 0,
           minMarket: +$("minmarket").value || 0,
@@ -265,12 +302,12 @@ function inputs() {
 
 let timer = null;
 function schedule() { clearTimeout(timer); timer = setTimeout(run, 250); }
-["paste", "pkg", "start", "mpf", "pfac", "gain"].forEach(id => $(id).addEventListener("input", schedule));
-["flag", "interval", "minmarket", "bonus", "decree", "prod"].forEach(id => $(id).addEventListener("change", schedule));
+["paste", "pkgsize", "start", "mpf", "pfac", "gain", "thr"].forEach(id => $(id).addEventListener("input", schedule));
+["flag", "interval", "minmarket", "minstorage", "pkgcount", "bonus", "decree", "ignoreratio", "prod"].forEach(id => $(id).addEventListener("change", schedule));
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
-document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); } });
+document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } });
 let rsz = null;
-window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { if (RESULT) { renderView(); renderArrival(); renderFreq(); } }, 200); });
+window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } }, 200); });
 
 /* Beispiel: erfundene Dörfer in drei Haufen, damit die Seite ohne eigene Daten ausprobiert werden kann */
 $("example").addEventListener("click", () => {
@@ -289,7 +326,7 @@ $("example").addEventListener("click", () => {
   [[0, 0], [1, 2], [-2, -1], [2, -2], [-1, 3], [3, 1], [-3, 2], [1, -4]]
     .forEach(([dx, dy], i) => add(395 + dx, 440 + dy, i % 3 === 0 ? 1 : 0, 20 - (i % 3) * 2, 27));
   $("paste").value = lines.join("\n");
-  $("pkg").value = 300;
+  $("pkgcount").value = "0";
   schedule();
 });
 
@@ -321,13 +358,16 @@ function run() {
        + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
   if (!villages.length) { ["p-rec", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
 
-  RESULT = K.plan(villages, P);
+  const passive = parsed.villages.filter(v => OFF.has(v.x + "|" + v.y));
+  RESULT = K.planPackages(villages, P, passive);
   RESULT.villages = villages;
   RESULT.allParsed = parsed.villages;
   VIEW = RESULT.recommend;                // nach jeder Neuberechnung die empfohlene Aufstellung zeigen
   STEPS = [];
   ["p-rec", "p-more"].forEach(id => $(id).hidden = false);
   renderRecommendation();
+  renderSchedule();
+  renderCurve();
   renderCompare();
   renderView();
   renderArrival();
@@ -339,7 +379,7 @@ function run() {
   let k = 0;
   const step = () => {
     if (token !== RUN) return;
-    STEPS.push(K.ladderStep(villages, P, K.LADDER[k++], RESULT.configs.length));
+    STEPS.push(K.ladderStep(villages, RESULT.P, K.LADDER[k++], RESULT.configs.length));
     renderFreq();
     if (k < K.LADDER.length) setTimeout(step, 0);
     else { $("freq-hint").textContent = "Anteil der Paket-Rohstoffe, der rechtzeitig ankommt, je Klickabstand"; renderRecommendation(); renderCompare(); }
@@ -394,18 +434,19 @@ function engpass(d) {
 
 /* ---------- Empfehlung ---------- */
 function renderRecommendation() {
-  const R = RESULT, P = R.P, n = R.recommend, a = aufstellung(n), nxt = R.configs[n];
+  const R = RESULT, P = R.P, n = R.recommend, a = aufstellung(n), nxt = R.configs[n], pk = R.pkg;
   const title = $("rec-title");
   title.replaceChildren();
   const names = joinUnd(a.sites.map(siteName));
   title.appendChild(document.createTextNode(n === 1 ? "1 Flaggendoppler in " + names : fdName(n) + ": " + names));
-  const sub = el("small", null, nf.format(Math.round(a.r.coins)) + " Münzen in 48 h"
-    + (P.decree ? ", die ersten 24 h mit Erlass" : ""));
+  const sub = el("small", null, nf.format(Math.round(pk.detail.coins)) + " Münzen in 48 h mit " + (pk.chosen === 1 ? "1 Paket" : nf.format(pk.chosen) + " Paketen")
+    + (P.decreeN === 2 ? ", alle 48 h mit Erlass" : P.decree ? ", die ersten 24 h mit Erlass" : ""));
   title.appendChild(sub);
-  $("rec-hint").textContent = P.pkgPct + " % Pakete · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
-    + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decree ? " · Erlass" : "");
+  $("rec-hint").textContent = pakete(pk.chosen) + " zu " + P.pkgSize + " % · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
+    + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.minStorage ? " · Speicher mind. " + P.minStorage : "")
+    + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decreeN ? " · Erlass " + P.decreeN + "×" : "") + (P.ignoreRatio ? " · Verhältnis ignoriert" : "");
 
-  const frist = P.decree ? "in den 24 h des Erlasses" : "in den 48 h";
+  const frist = P.decreeN === 1 ? "in den 24 h des Erlasses" : "in den 48 h";
   const complete = a.r.share >= 1 - 1e-6;
   const parts = [];
   if (n === 1) parts.push(complete ? "Alle Paket-Rohstoffe kommen " + frist + " im Prägedorf an."
@@ -425,6 +466,11 @@ function renderRecommendation() {
   $("rec-why").textContent = parts.join(" ");
 
   const notes = [];
+  if (P.minStorage) {
+    const up = R.src.filter(s => s.b.storage > s.storageFrom);
+    notes.push(up.length ? "Gerechnet mit Speicher mindestens Stufe " + P.minStorage + ": " + up.length + " Dörfer bauen den Speicher vorher aus, zusammen "
+      + up.reduce((x, s) => x + s.b.storage - s.storageFrom, 0) + " Stufen." : "Alle Dörfer haben schon Speicher Stufe " + P.minStorage + " oder höher.");
+  }
   if (P.minMarket) notes.push(R.marketUp.count
     ? "Gerechnet mit Marktplatz mindestens Stufe " + P.minMarket + ": " + R.marketUp.count + " Dörfer bauen den Marktplatz vorher aus, zusammen "
       + R.marketUp.levels + " Stufen. Erst danach mit dem Münzprägen anfangen."
@@ -447,13 +493,97 @@ function renderRecommendation() {
     const v = el("dd", null, dd); if (small) { v.appendChild(document.createTextNode(" ")); v.appendChild(el("small", null, small)); }
     d.appendChild(v); f.appendChild(d);
   };
-  fact("Münzen", nf.format(Math.round(a.r.coins)));
-  fact("Pakete rechtzeitig", pctf(a.r.share), P.decree ? "bis 24 h" : "bis 48 h");
+  const last = pk.curve[pk.chosen];
+  fact("Münzen", nf.format(Math.round(pk.detail.coins)), "ohne Pakete " + nf.format(Math.round(pk.curve[0].coins)));
+  fact("Pakete", pakete(pk.chosen), (P.pkgCount ? "fest" : "optimal bei " + P.optThreshold + " %") + ", maximal " + pk.maximal);
+  fact("Münzen je Paket", pk.chosen ? nf.format(Math.round((pk.detail.coins - pk.curve[0].coins) / pk.chosen)) : "–",
+       "Höchstwert " + nf.format(Math.round(pk.value)));
+  fact("Grenznutzen letztes Paket", last && last.gain != null ? nf.format(Math.round(last.coins - pk.curve[pk.chosen - 1].coins)) : "–",
+       last && last.gain != null ? gainTxt(last.gain) + " des Höchstwerts" : "");
+  fact("Überlauf", pctf(pk.detail.overflowShare), "der Paket-Rohstoffe");
+  fact("Pakete rechtzeitig", pctf(a.r.share), (P.decreeN === 1 ? "bis 24 h" : "bis 48 h") + ", ohne Speichergrenze");
   fact("90 % angekommen", hrs(share90(a.d)));
   fact("alles angekommen", hrs(a.d.doneAt));
   fact("Nötige Klickfrequenz", needText(n, true), needSmall(n));
   const res = a.r.pkg * P.unitRes;
   fact("Paket-Rohstoffe, prägbar", mio(res), "von " + mio(R.src.reduce((x, s) => x + s.pkg.wood + s.pkg.stone + s.pkg.iron, 0)));
+}
+
+/* ---------- Zeitplan der Pakete ---------- */
+const gainTxt = v => Math.round(v * 100) + " %";
+const pakete = n => n === 1 ? "1 Paket" : nf.format(n) + " Pakete";
+function renderSchedule() {
+  const R = RESULT, P = R.P, pk = R.pkg, d = pk.detail;
+  $("pk-hint").textContent = pakete(pk.chosen) + " zu " + P.pkgSize + " %, " + nf.format(Math.round(d.coins)) + " Münzen, Überlauf " + pctf(d.overflowShare);
+  const box = $("pk-table");
+  if (!d.rows.length) box.replaceChildren(el("p", "empty", "Keine Pakete: schon das erste brächte weniger als " + P.optThreshold + " % seines Höchstwerts."));
+  else {
+    const t = table([["einlösen nach", "l", 1], ["Pakete", "", 1], ["Summe", "", 1], ["erwarteter Überlauf", "", 1]],
+      d.rows.map(r => [[hm(r.h), "l", Math.round(r.h * 60)], [String(r.n), "", r.n], [nf.format(r.sumPct) + " %", "", r.sumPct],
+                       [r.overflow > 0 ? pctf(r.share) + " · " + mio(r.overflow) : "keiner", r.overflow > 0 ? "down" : "", r.share]]), {});
+    t.classList.add("pr-sched");
+    box.replaceChildren(t);
+  }
+  const note = $("pk-note");
+  note.replaceChildren();
+  const lim = d.limiting;
+  if (lim.length) {
+    const p = el("p", "pr-note", lim.length + (lim.length === 1 ? " Dorf begrenzt" : " Dörfer begrenzen") + " den Takt: sie leeren ihren Speicher nicht schnell genug und laufen über.");
+    note.appendChild(p);
+    const ul = el("ul", "pr-list");
+    lim.slice(0, 12).forEach(x => {
+      const s = R.src[x.i];
+      ul.appendChild(el("li", null, siteName(s) + ": " + pctf(x.share) + " Überlauf, Markt " + marketText(s)
+        + (x.need ? ", ab Markt " + x.need + " keiner" : ", auch Markt 25 reicht nicht")));
+    });
+    if (lim.length > 12) ul.appendChild(el("li", null, "und " + (lim.length - 12) + " weitere"));
+    note.appendChild(ul);
+  }
+  const pas = d.passive.filter(x => x.overflow > 0);
+  if (pas.length) note.appendChild(el("p", "pr-note", "Dörfer ohne Haken bekommen die Pakete trotzdem und laufen über: "
+    + pas.map(x => x.name + " " + pctf(x.overflow / x.pkgRes)).join(", ") + ". Das zählt nicht bei der Paketzahl."));
+}
+
+function renderCurve() {
+  if (!RESULT) return;
+  const R = RESULT, pk = R.pkg, c = pk.curve, box = $("pc");
+  const W = Math.max(300, Math.round(box.clientWidth || 620)), H = W < 500 ? 220 : 250;
+  const m = {l: 54, r: 16, t: 14, b: 28};
+  const color = css("--s1"), acc = css("--accent") || color;
+  legend($("pc-legend"), [["Münzen in 48 h", color], ["optimal und maximal", acc, true]]);
+  $("pc-hint").textContent = "optimal " + pk.optimal + ", maximal " + pk.maximal + (R.P.pkgCount ? ", gewählt " + pk.chosen : "");
+  const {svg, tip, iw, ih} = frame(box, W, H, m);
+  svg.setAttribute("aria-label", "Münzen in 48 h je Zahl der Pakete");
+  const X = c.length - 1, Y = Math.max(1, ...c.map(p => p.coins)) * 1.05;
+  const sx = n => m.l + iw * n / Math.max(1, X), sy = v => m.t + ih * (1 - v / Y);
+  [0, .25, .5, .75, 1].forEach(f => {
+    const y = m.t + ih * (1 - f);
+    svg.appendChild(svgEl("line", {x1: m.l, x2: m.l + iw, y1: y, y2: y, class: "grid"}));
+    const t = svgEl("text", {x: m.l - 6, y: y + 3.5, "text-anchor": "end", class: "axis"}); t.textContent = nf.format(Math.round(Y * f)); svg.appendChild(t);
+  });
+  const stepX = Math.max(1, Math.ceil(X / (W < 500 ? 5 : 10)));
+  for (let n = 0; n <= X; n += stepX) { const t = svgEl("text", {x: sx(n), y: H - 8, "text-anchor": "middle", class: "axis"}); t.textContent = n; svg.appendChild(t); }
+  [[pk.optimal, "optimal"], [pk.maximal, "maximal"]].forEach(([n, lab], j) => {
+    if (n == null || n > X) return;
+    svg.appendChild(svgEl("line", {x1: sx(n), x2: sx(n), y1: m.t, y2: m.t + ih, class: "ref"}));
+    const t = svgEl("text", {x: sx(n) + (n > X * 0.85 ? -4 : 4), y: m.t + 10 + j * 12, class: "mark", "text-anchor": n > X * 0.85 ? "end" : "start"}); t.textContent = lab + " " + n; svg.appendChild(t);
+  });
+  svg.appendChild(svgEl("polyline", {points: c.map(p => sx(p.n) + "," + sy(p.coins)).join(" "), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round"}));
+  const surface = css("--surface");
+  svg.appendChild(svgEl("circle", {cx: sx(pk.chosen), cy: sy(c[pk.chosen].coins), r: 4.5, fill: color, stroke: surface, "stroke-width": 2}));
+  const cross = svgEl("line", {y1: m.t, y2: m.t + ih, class: "cross", visibility: "hidden"});
+  svg.appendChild(cross);
+  const hit = svgEl("rect", {x: m.l, y: m.t, width: iw, height: ih, fill: "transparent"});
+  svg.appendChild(hit);
+  hit.addEventListener("pointermove", ev => {
+    const r = svg.getBoundingClientRect(), k = W / r.width;
+    const n = Math.max(0, Math.min(X, Math.round(((ev.clientX - r.left) * k - m.l) / iw * X)));
+    cross.setAttribute("x1", sx(n)); cross.setAttribute("x2", sx(n)); cross.setAttribute("visibility", "visible");
+    const p = c[n];
+    showTip(box, tip, ev.clientX - r.left, ev.clientY - r.top, [{label: pakete(n)}, {color, value: nf.format(Math.round(p.coins)), label: "Münzen"}]
+      .concat(p.gain != null ? [{label: "das " + n + ". Paket: +" + nf.format(Math.round(p.coins - c[n - 1].coins)) + " (" + gainTxt(p.gain) + " des Höchstwerts)"}] : []));
+  });
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
 }
 
 /* ---------- Vergleich ---------- */
@@ -472,8 +602,9 @@ function renderCompare() {
     tb.appendChild(tr);
   };
   row("Prägedorf", x => x.sites.map(siteName).join(" + "));
-  row("Münzen", x => nf.format(Math.round(x.r.coins)));
-  row("mehr als einer weniger", x => x.r.gainPct == null ? "" : plus(x.r.gainPct));
+  const cc = R.pkg.configCoins;
+  row("Münzen", (x, n) => nf.format(Math.round(cc[n - 1])));
+  row("mehr als einer weniger", (x, n) => n === 1 ? "" : plus((cc[n - 1] / cc[n - 2] - 1) * 100));
   row("Pakete rechtzeitig", x => pctf(x.r.share));
   row("90 % angekommen", x => hrs(share90(x.d)));
   row("alles angekommen", x => hrs(x.d.doneAt));
@@ -590,23 +721,31 @@ function renderVillages() {
   const R = RESULT, a = aufstellung(VIEW), box = $("vil");
   const byKey = new Map(a.d.rows.map(r => [R.src[r.i].x + "|" + R.src[r.i].y, r]));
   const cols = [["dabei", "l"], ["Dorf", "l"], ["Koordinaten", "l"], ["Status", "l", 1], ["rechtzeitig", "", 1], ["alles da nach", "", 1],
-                ["Laufzeit", "", 1], ["Markt (Händler)", "", 1], ["Speicher", "", 1], ["Paket prägbar", "", 1], ["Prägedorf", "l"]];
+                ["Laufzeit", "", 1], ["Markt (Händler)", "", 1], ["Speicher", "", 1], ["Überlauf", "", 1], ["Paket prägbar", "", 1], ["Prägedorf", "l"]];
+  const det = R.pkg.detail, recView = VIEW === R.recommend;
+  const pasBy = new Map(det.passive.map(x => [x.x + "|" + x.y, x]));
+  const ovCell = (ov, res) => res > 0 ? [ov > 0 ? pctf(ov / res) : "0 %", ov / res > 0.01 ? "down" : "", Math.round(ov / res * 10000)] : ["", "", -1];
+  const storText = s => s.b.storage > s.storageFrom ? s.storageFrom + " → " + s.b.storage : String(s.b.storage);
   const rows = R.allParsed.map(v => {
     const key = v.x + "|" + v.y, r = byKey.get(key), off = OFF.has(key);
     const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !off;
     cb.title = off ? "wieder einbeziehen" : "dieses Dorf nicht berücksichtigen";
     cb.setAttribute("aria-label", v.name + " einbeziehen");
     cb.addEventListener("change", () => { if (cb.checked) OFF.delete(key); else OFF.add(key); schedule(); });
-    if (!r) return [[cb, "l"], [v.name, "l name"], [coord(v), "l"], ["ausgeschlossen", "l"], ["", ""], ["", ""], ["", ""],
-                    [v.b.market + " (" + nf.format(K.merchantsAt(v.b.market)) + ")", "", v.b.market], [String(v.b.storage), "", v.b.storage],
-                    ["", ""], ["", "l"]];
+    if (!r) {
+      const q = pasBy.get(key);
+      return [[cb, "l"], [v.name, "l name"], [coord(v), "l"], ["ausgeschlossen", "l"], ["", ""], ["", ""], ["", ""],
+              [v.b.market + " (" + nf.format(K.merchantsAt(v.b.market)) + ")", "", v.b.market], [String(v.b.storage), "", v.b.storage],
+              q ? ovCell(q.overflow, q.pkgRes) : ["", "", -1], ["", ""], ["", "l"]];
+    }
     const site = R.src[r.site];
     const share = r.pkgUnits > 0 ? r.inTime / r.pkgUnits : 1;
     return [[cb, "l"], [v.name, "l name"], [coord(v), "l"], [statusTag(r), "l", {ok: 0, markt: 1, weit: 2}[r.status]],
             [pct0(share), share < 1 - 1e-9 ? "down" : "", Math.round(share * 10000)],
             [hrs(r.doneAt), "", isFinite(r.doneAt) ? Math.round(r.doneAt * 60) : 999999999],
             [r.i === r.site ? "0:00 h" : hm(r.tau), "", Math.round(r.tau * 3600)],
-            [marketText(R.src[r.i]) + " (" + nf.format(r.merchants) + ")", "", R.src[r.i].b.market], [String(v.b.storage), "", v.b.storage],
+            [marketText(R.src[r.i]) + " (" + nf.format(r.merchants) + ")", "", R.src[r.i].b.market], [storText(R.src[r.i]), "", R.src[r.i].b.storage],
+            recView ? (r.i === r.site ? ["Prägedorf", "", 0] : ovCell(det.overflow[r.i], det.pkgRes[r.i])) : ["–", "", -1],
             [mio(r.pkgUnits * R.P.unitRes), "", Math.round(r.pkgUnits * 1000)],
             [r.i === r.site ? "selbst (Prägedorf)" : site.name, "l"]];
   });
@@ -685,7 +824,7 @@ function renderArrival() {
     const t = svgEl("text", {x: sx(x), y: H - 8, "text-anchor": "middle", class: "axis"}); t.textContent = x + " h"; svg.appendChild(t);
   }
   const refs = [[48, "Ende Flaggendoppler"]];
-  if (P.decree) refs.unshift([24, "Ende Erlass"]);
+  if (P.decreeN === 1) refs.unshift([24, "Ende Erlass"]);
   refs.forEach(([x, lab]) => {
     svg.appendChild(svgEl("line", {x1: sx(x), x2: sx(x), y1: m.t, y2: m.t + ih, class: "ref"}));
     const t = svgEl("text", {x: sx(x) + 4, y: m.t + 10, class: "reflab"}); t.textContent = lab; svg.appendChild(t);
@@ -766,15 +905,21 @@ function renderFreq() {
 function renderAssumptions() {
   const P = RESULT.P, w = WORLD;
   const items = [
-    "Rohstoffpakete bringen je Rohstoff " + P.pkgPct + " % der Speicherkapazität in jedes Dorf. Pakete über 100 % gelten als nach und nach eingelöst, sobald Platz im Speicher ist; Überlauf in kleinen Dörfern wird nicht abgezogen.",
-    "Verschickt wird nur im Prägeverhältnis Holz : Lehm : Eisen = " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + ". Der Überschuss, meist Holz und Eisen, bleibt im Dorf.",
+    "Ein Rohstoffpaket bringt je Rohstoff " + P.pkgSize + " % der Speicherkapazität in jedes Dorf, auch in Dörfer ohne Haken. Gerechnet wird das ganze Konto im Gleichschritt auf dem Klickraster: an jedem Klick erst Pakete einlösen, dann verschicken. Was über den Speicher geht, ist verloren (Überlauf); die laufende Produktion ebenfalls nur bis zur Speichergrenze. Höchstens " + K.maxPerClick(P) + " Pakete auf einmal.",
+    "Zeitplan: Für jede Paketzahl werden die Pakete zuerst gleichmäßig von 0 h bis zum letzten sinnvollen Zeitpunkt (hier " + hm(RESULT.pkg.L * P.interval) + ") verteilt und dann einzeln um 1 bis 3 Klicks verschoben, solange die Münzen bis 48 h steigen. Das bestraft Überlauf und zu späte Ankunft zugleich. Verglichen wird zusätzlich mit dem Plan für ein Paket weniger plus einem Paket am besten Klick, damit mehr Pakete nie weniger Münzen bringen. Jenseits von „optimal“ zeigt die Kurve nur diese schnelle Variante.",
+    "Paketzahl „optimal“: so lange ein weiteres Paket dazu, wie es noch mindestens " + P.optThreshold + " % seines Höchstwerts bringt. Höchstwert = Paketgröße × Summe der Speicher der beteiligten Dörfer, in Münzen zum Flaggenpreis (" + nf.format(Math.round(RESULT.pkg.value)) + " Münzen). „maximal“: bis ein weiteres weniger als 5 % bringt.",
+    "Die Prägedörfer stammen weiter aus der einfachen Rechnung ohne Speichergrenze mit allen Paketen auf einmal (Paketvolumen = Anzahl × Größe), die Münzen und der Zeitplan aus dem Gleichschritt. Das ist eine Näherung: mit Speichergrenzen könnte eine andere Aufstellung knapp besser sein. „Pakete rechtzeitig“ und die Diagramme zu Ankunft und Klickfrequenz kommen aus der einfachen Rechnung.",
+    P.ignoreRatio ? "Rohstoffverhältnis ignoriert: Händler schicken Holz, Lehm und Eisen so, wie sie im Dorf liegen. Im Prägedorf wird weiter im Verhältnis " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + " geprägt, die Münzen richten sich nach dem knappsten Rohstoff; überschüssiges Holz oder Eisen darf dort überlaufen und zählt nicht als Überlauf."
+      : "Verschickt wird nur im Prägeverhältnis Holz : Lehm : Eisen = " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + ". Der Überschuss, meist Holz und Eisen, bleibt im Dorf und kann dort überlaufen.",
+    "Das Prägedorf prägt sofort, was ankommt, und läuft nicht über.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",
     "Klick auf „Rohstoffe anfordern“ beim Start und dann alle " + ivl(P.intervalMin) + ". Jeder Klick schickt alle freien Händler aller Dörfer los. Jedes Dorf beliefert das nächstgelegene Prägedorf.",
-    "Münzpreis: Flagge Stufe " + P.flagLevel + " verdoppelt −" + 2 * K.FLAG_PCT[P.flagLevel] + " %" + (P.decree ? ", in den ersten 24 h zusätzlich −10 % durch den Erlass (die Werte addieren sich)" : "") + ". Geprägt wird, was bis zum Ende der 48 h ankommt (Dauermünzprägen).",
-    "„Pakete rechtzeitig“ zählt die Paket-Rohstoffe, die " + (P.decree ? "innerhalb der 24 h des Erlasses" : "innerhalb der 48 h") + " ankommen. Die laufende Produktion wird nach den Paketen verschickt und zählt nur bei den Münzen.",
+    "Münzpreis: Flagge Stufe " + P.flagLevel + " verdoppelt −" + 2 * K.FLAG_PCT[P.flagLevel] + " %" + (P.decreeN === 2 ? ", alle 48 h zusätzlich −10 % durch zwei Erlasse hintereinander" : P.decree ? ", in den ersten 24 h zusätzlich −10 % durch den Erlass (die Werte addieren sich)" : "") + ". Geprägt wird, was bis zum Ende der 48 h ankommt (Dauermünzprägen).",
+    "„Pakete rechtzeitig“ zählt die Paket-Rohstoffe, die " + (P.decreeN === 1 ? "innerhalb der 24 h des Erlasses" : "innerhalb der 48 h") + " ankommen. Die laufende Produktion wird nach den Paketen verschickt und zählt nur bei den Münzen.",
     "Jedes Prägedorf braucht einen Adelshof, einen Flaggendoppler und eine Münzkosten-Flagge; der Rechner nimmt für alle dieselbe Flaggenstufe an. Bis zwei Prägedörfer prüft er jede Kombination, ab drei sucht er mit Startaufstellungen und Tauschen. Das findet sehr gute, aber nicht garantiert die beste Aufstellung.",
     "„Markt zu klein“: Das Dorf schafft seinen Anteil mit der genannten Marktstufe rechtzeitig. „zu weit weg oder zu selten geklickt“: auch Markt 25 reicht bei diesem Klickabstand nicht.",
   ];
+  if (P.minStorage) items.push("Speicher mindestens Stufe " + P.minStorage + " (" + nf.format(K.storageCap(P.minStorage)) + "): Dörfer darunter rechnen mit dieser Stufe, also mit größeren Paketen und mehr Platz, als wäre der Ausbau vor dem Start fertig.");
   if (P.minMarket) items.push("Marktplatz mindestens Stufe " + P.minMarket + " (" + nf.format(K.merchantsAt(P.minMarket)) + " Händler): Dörfer darunter rechnen mit dieser Stufe, als wäre der Ausbau vor dem Start fertig. Bauzeit und Baukosten sind nicht eingerechnet. In der Dorftabelle steht der Ausbau als „alt → neu“.");
   $("assume").replaceChildren(...items.map(t => el("li", null, t)));
 }

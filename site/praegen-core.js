@@ -6,7 +6,7 @@
    - Münzkosten-Flagge Stufe 1 bis 9: 10, 12, 14, 16, 18, 20, 22, 23, 24 % (Hilfe-Wiki „Flags“).
    - Flaggendoppler verdoppelt die Flagge eines Dorfes für 48 h, Erlass des Adels senkt die Münzkosten
      24 h lang um weitere 10 Prozentpunkte in allen Dörfern (InnoGames-Hilfe „Village Items“). Flagge und
-     Erlass addieren sich (laut Dennis, Stufe 9: 48 % + 10 % = 58 %).
+     Erlass addieren sich (laut Dennis, Stufe 9: 48 % + 10 % = 58 %). Zwei Erlasse hintereinander gelten 48 h.
    - Rohstoffpakete: x % der Speicherkapazität je Rohstoff in jedes Dorf (InnoGames-Hilfe „Resource packages“).
    - Händler tragen 1.000 Rohstoffe und brauchen 6 Minuten je Feld geteilt durch die Weltgeschwindigkeit,
      die Einheitengeschwindigkeit wirkt nicht. Händlerbonus: Tragkraft und Tempo je × 1,5. Bestätigt am
@@ -97,7 +97,8 @@ function params(input, world) {
   const P = {
     pkgPct: Math.max(0, +input.pkgPct || 0),
     startPct: Math.max(0, +input.startPct || 0),
-    decree: !!input.decree,
+    // Erlass des Adels: 0 kein, 1 einmal (24 h), 2 zweimal hintereinander (48 h); decree: true heißt einmal
+    decreeN: input.decreeN != null ? Math.max(0, Math.min(2, input.decreeN | 0)) : (input.decree ? 1 : 0),
     merchantBonus: !!input.merchantBonus,
     flagLevel: Math.max(0, Math.min(9, input.flagLevel | 0)),
     intervalMin: Math.max(1, +input.intervalMin || 60),
@@ -105,6 +106,12 @@ function params(input, world) {
     prodFactor: +input.prodFactor > 0 ? +input.prodFactor : 1,
     minGainPct: Math.max(0, +(input.minGainPct != null ? input.minGainPct : 10)),
     minMarket: Math.max(0, Math.min(25, input.minMarket | 0)),   // 0: Marktstufen wie im Dorf
+    minStorage: Math.max(0, Math.min(30, input.minStorage | 0)), // 0: Speicherstufen wie im Dorf
+    ignoreRatio: !!input.ignoreRatio,                             // Händler schicken, was im Dorf liegt
+    pkgSize: +input.pkgSize > 0 ? Math.min(100, +input.pkgSize) : 30,        // Größe eines Pakets in %
+    pkgCount: +input.pkgCount > 0 ? Math.round(+input.pkgCount) : null,      // null: automatisch optimal
+    optThreshold: Math.max(0, +(input.optThreshold != null ? input.optThreshold : 90)),
+    maxThreshold: 5,
 
     speed: +w.speed || 1,
     coin: w.coin,
@@ -114,27 +121,31 @@ function params(input, world) {
   };
   if (input.minPerField > 0) P.minPerField = +input.minPerField / bonus;   // Feld „ohne Bonus“ überschreibt
   P.interval = P.intervalMin / 60;
-  P.deadline = P.decree ? DECREE_HOURS : DOUBLER_HOURS;
+  P.decree = P.decreeN > 0;
+  P.decreeHours = DECREE_HOURS * P.decreeN;
+  P.deadline = P.decreeN === 1 ? DECREE_HOURS : DOUBLER_HOURS;
   P.unitRes = P.coin.wood + P.coin.stone + P.coin.iron;
   return P;
 }
 
 const reduction = (t, P) => Math.min(0.95, 2 * FLAG_PCT[P.flagLevel] / 100
-                                           + (P.decree && t <= DECREE_HOURS + EPS ? DECREE_PCT / 100 : 0));
+                                           + (P.decree && t <= P.decreeHours + EPS ? DECREE_PCT / 100 : 0));
 const coinPrice = (t, P) => P.unitRes * (1 - reduction(t, P));
 
 /* ---------- Dörfer vorbereiten ----------
    Mit P.minMarket rechnet jedes Dorf mindestens mit dieser Marktstufe (Ausbau vor dem Start, Wunsch Dennis
-   28.10.2026). b.market ist dann die gerechnete Stufe, marketFrom die Stufe aus der Übersicht. */
+   28.10.2026). b.market ist dann die gerechnete Stufe, marketFrom die Stufe aus der Übersicht. Ebenso
+   P.minStorage für den Speicher (v0.5, 29.10.2026): größerer Speicher heißt größere Pakete und mehr Platz. */
 function prepare(villages, P) {
   return villages.map((v, i) => {
-    const cap = storageCap(v.b.storage);
+    const storFrom = v.b.storage | 0, storage = Math.max(storFrom, P.minStorage || 0);
+    const cap = storageCap(storage);
     const per = cap * (P.pkgPct + P.startPct) / 100;
     const prod = {};
     RES.forEach(r => { prod[r] = P.production ? baseProd(v.b[r]) * P.speed * P.prodFactor : 0; });
     const from = v.b.market | 0, market = Math.max(from, P.minMarket || 0);
-    const b = market > from ? Object.assign({}, v.b, {market}) : v.b;
-    return {i, name: v.name, x: v.x, y: v.y, b, marketFrom: from, cap, merchants: merchantsAt(market),
+    const b = market > from || storage > storFrom ? Object.assign({}, v.b, {market, storage}) : v.b;
+    return {i, name: v.name, x: v.x, y: v.y, b, marketFrom: from, storageFrom: storFrom, cap, merchants: merchantsAt(market),
             snob: (v.b.snob || 0) >= 1, pkg: {wood: per, stone: per, iron: per}, prod};
   });
 }
@@ -151,7 +162,9 @@ function simulate(s, tau, P, horizon, merchants, keepArrivals) {
   const cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, C = P.carry, T = P.interval;
   const M = merchants != null ? merchants : s.merchants;
   let pw = s.pkg.wood, ps = s.pkg.stone, pi = s.pkg.iron, lastProd = 0;
-  const pkgUnits = Math.min(pw / cw, ps / cs, pi / ci);
+  // Mit P.ignoreRatio schicken die Händler alles, was im Dorf liegt; gerechnet in Rohstoffen / Münzpreis
+  const avail = () => P.ignoreRatio ? (pw + ps + pi) / P.unitRes : Math.min(pw / cw, ps / cs, pi / ci);
+  const pkgUnits = avail();
   let shipped = 0, coins = 0, inTime = 0, doneAt = pkgUnits <= EPS ? 0 : Infinity, lastArrival = 0;
   const qT = [], qN = [];
   let qh = 0, busy = 0;
@@ -167,13 +180,14 @@ function simulate(s, tau, P, horizon, merchants, keepArrivals) {
     }
     while (qh < qT.length && qT[qh] <= t + EPS) { busy -= qN[qh]; qh++; }
     const freeCap = tau === 0 ? Infinity : (M - busy) * C;
-    const units = Math.min(pw / cw, ps / cs, pi / ci, freeCap / P.unitRes);
+    const units = Math.min(avail(), freeCap / P.unitRes);
     if (units > EPS) {
       if (tau > 0) {
         const used = Math.ceil(units * P.unitRes / C - 1e-7);
         busy += used; qT.push(t + 2 * tau); qN.push(used);
       }
-      pw -= units * cw; ps -= units * cs; pi -= units * ci;
+      if (P.ignoreRatio) { const f = units * P.unitRes / (pw + ps + pi); pw -= pw * f; ps -= ps * f; pi -= pi * f; }
+      else { pw -= units * cw; ps -= units * cs; pi -= units * ci; }
       const ta = t + tau, pkgPart = Math.max(0, Math.min(units, pkgUnits - shipped));
       shipped += units;
       if (pkgPart > 0 && doneAt === Infinity && shipped >= pkgUnits - 1e-7) doneAt = ta;
@@ -427,9 +441,329 @@ function requiredInterval(steps, k) {
   return {kind: "plateau", min: Math.max(...near.map(s => s.min)), top};
 }
 
+/* ---------- Konto im Gleichschritt (v0.5, Wunsch Dennis 29.10.2026) ----------
+   Statt „alle Pakete bei 0 h ohne Speichergrenze“ läuft das ganze Konto auf dem Klickraster 0, T, 2T, … < 48 h:
+   - Ein Paket geht an alle Dörfer gleichzeitig: je Rohstoff Paketgröße × Speicherkapazität. Was über den
+     Speicher geht, ist verloren (Überlauf). Laufende Produktion ebenfalls nur bis zur Speichergrenze.
+   - Je Klick erst Pakete einlösen, dann Händler zurücknehmen und verschicken. Höchstens 3 Pakete je Klick.
+   - Das Prägedorf prägt sofort, was ankommt oder dort liegt, und läuft nie über. Was nach dem Prägen über
+     den Speicher geht (Rest außerhalb des Prägeverhältnisses), zählt nicht als Überlauf.
+   - Mit P.ignoreRatio schicken die Händler Holz, Lehm und Eisen im Verhältnis des Dorfbestands; geprägt wird
+     im Prägedorf weiter nach dem knappsten Rohstoff.
+   cnt[k] = Zahl der Pakete am Klick k. */
+const MAX_PER_CLICK = 3;
+const maxPerClick = P => Math.max(1, Math.min(MAX_PER_CLICK, Math.floor(100 / P.pkgSize + 1e-9)));
+const lastClick = P => Math.max(0, Math.floor((P.window - EPS) / P.interval));
+const COIN = P => [P.coin.wood, P.coin.stone, P.coin.iron];
+
+/* Ein Herkunftsdorf: Bestand, Pakete, Händler. Jede Lieferung geht an sink(Ankunftszeit, Holz, Lehm, Eisen).
+   M = Händler; send = false: das Dorf verschickt nichts (nicht dabei), nur Bestand und Überlauf.
+   ovClick (optional) sammelt den Überlauf je Klick. */
+const ST = new Float64Array(3), QT = [], QN = [];
+function villageRun(s, tau, P, cnt, M, sink, send, ovClick) {
+  const T = P.interval, C = P.carry, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
+  const add1 = P.pkgSize / 100 * cap, start = Math.min(cap, cap * P.startPct / 100);
+  const p0 = s.prod.wood * T, p1 = s.prod.stone * T, p2 = s.prod.iron * T;
+  let w = start, st = start, ir = start, qh = 0, qn = 0, busy = 0, overflow = 0, pkgRes = 0;
+  for (let k = 0; k < cnt.length; k++) {
+    const t = k * T;
+    if (k > 0) { w = Math.min(cap, w + p0); st = Math.min(cap, st + p1); ir = Math.min(cap, ir + p2); }
+    const n = cnt[k];
+    if (n) {
+      const add = n * add1;
+      pkgRes += 3 * add;
+      let ov = 0;
+      w += add; if (w > cap) { ov += w - cap; w = cap; }
+      st += add; if (st > cap) { ov += st - cap; st = cap; }
+      ir += add; if (ir > cap) { ov += ir - cap; ir = cap; }
+      overflow += ov;
+      if (ovClick) ovClick[k] += ov;
+    }
+    if (send === false) continue;
+    while (qh < qn && QT[qh] <= t + EPS) { busy -= QN[qh]; qh++; }
+    const free = (M - busy) * C;
+    if (free <= EPS) continue;
+    let a0, a1, a2;
+    if (P.ignoreRatio) {
+      const tot = w + st + ir;
+      if (tot <= EPS) continue;
+      const q = Math.min(1, free / tot);
+      a0 = w * q; a1 = st * q; a2 = ir * q;
+    } else {
+      const u = Math.min(w / cw, st / cs, ir / ci, free / P.unitRes);
+      if (u <= EPS) continue;
+      a0 = u * cw; a1 = u * cs; a2 = u * ci;
+    }
+    const amt = a0 + a1 + a2;
+    if (amt <= EPS) continue;
+    const used = Math.ceil(amt / C - 1e-7);
+    busy += used; QT[qn] = t + 2 * tau; QN[qn] = used; qn++;
+    w -= a0; st -= a1; ir -= a2;
+    if (sink && t + tau <= P.window + EPS) sink(t + tau, a0, a1, a2);
+  }
+  return {overflow, pkgRes};
+}
+
+/* Prägedorf: eigene Klicks (Produktion, Pakete) und Ankünfte in zeitlicher Folge (Fächer je Klickabstand),
+   sofort prägen, was im Prägeverhältnis da ist. bins[k] = Ankünfte im Abstand [kT, (k+1)T). */
+function siteRun(s, P, cnt, bins) {
+  const T = P.interval, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
+  const add1 = P.pkgSize / 100 * cap, start = Math.min(cap, cap * P.startPct / 100);
+  let w = start, st = start, ir = start, coins = 0, pkgRes = 0;
+  const mint = t => {
+    const u = Math.min(w / cw, st / cs, ir / ci);
+    if (u > EPS && t <= P.window + EPS) { coins += u / (1 - reduction(t, P)); w -= u * cw; st -= u * cs; ir -= u * ci; }
+    if (w > cap) w = cap; if (st > cap) st = cap; if (ir > cap) ir = cap;
+  };
+  const K = cnt.length;
+  for (let k = 0; k <= K; k++) {
+    if (k < K) {
+      const add = cnt[k] * add1;
+      pkgRes += 3 * add;
+      w += (k > 0 ? s.prod.wood * T : 0) + add; st += (k > 0 ? s.prod.stone * T : 0) + add; ir += (k > 0 ? s.prod.iron * T : 0) + add;
+      mint(k * T);
+    }
+    const b = bins && bins[k];
+    if (b) for (let j = 0; j < b.length; j += 4) { w += b[j + 1]; st += b[j + 2]; ir += b[j + 3]; mint(b[j]); }
+  }
+  return {coins, pkgRes};
+}
+
+function nearestSite(src, i, sites) {
+  let best = sites[0], bd = Infinity;
+  for (const c of sites) { const d = dist(src[i], src[c]); if (d < bd - EPS) { bd = d; best = c; } }
+  return best;
+}
+
+/* Ganzes Konto für einen Zeitplan. Im Prägeverhältnis kommt jede Lieferung im Verhältnis an und wird sofort
+   ganz geprägt, die Münzen werden deshalb direkt beim Versand gezählt. Mit ignoreRatio sammelt das Prägedorf
+   die Lieferungen und prägt nach dem knappsten Rohstoff. detail: Überlauf je Dorf und je Klick. */
+function lockstep(src, P, sites, cnt, detail) {
+  const n = src.length, K = cnt.length;
+  const key = sites.join(",");
+  if (!src._ls || src._ls.key !== key || src._ls.P !== P) {
+    const site = src.map((_, i) => nearestSite(src, i, sites));
+    src._ls = {key, P, site, tau: src.map((s, i) => site[i] === i ? 0 : travelHours(s, src[site[i]], P))};
+  }
+  const {site, tau} = src._ls;
+  const out = detail ? {overflow: new Float64Array(n), pkgRes: new Float64Array(n), ovClick: new Float64Array(K), site} : null;
+  let coins = 0;
+  const bins = P.ignoreRatio ? new Map(sites.map(j => [j, new Array(K + 1)])) : null;
+  let cur = null;
+  const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, P)); };
+  const sinkBin = (ta, a0, a1, a2) => {
+    const k = Math.min(K, Math.floor(ta / P.interval + EPS));
+    (cur[k] || (cur[k] = [])).push(ta, a0, a1, a2);
+  };
+  for (let i = 0; i < n; i++) {
+    if (site[i] === i) continue;
+    if (bins) cur = bins.get(site[i]);
+    const r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, bins ? sinkBin : sinkRatio, true, out && out.ovClick);
+    if (out) { out.overflow[i] = r.overflow; out.pkgRes[i] = r.pkgRes; }
+  }
+  for (const j of sites) {
+    const r = siteRun(src[j], P, cnt, bins ? bins.get(j) : null);
+    coins += r.coins;
+    if (out) out.pkgRes[j] = r.pkgRes;
+  }
+  if (out) { out.coins = coins; return out; }
+  return {coins};
+}
+
+/* Höchstwert eines Pakets: Paketgröße × Summe der Speicher, in Münzen zum Flaggenpreis (Flagge verdoppelt). */
+function packageValue(src, P) {
+  const capSum = src.reduce((a, s) => a + s.cap, 0);
+  return P.pkgSize / 100 * capSum / Math.max(...COIN(P)) / (1 - Math.min(0.95, 2 * FLAG_PCT[P.flagLevel] / 100));
+}
+
+/* Letzter sinnvoller Einlöseklick: 48 h minus der Zeit, die ein Dorf für ein Paket braucht (Median nach
+   Speichergröße über die Herkunftsdörfer: erste Laufzeit plus weitere Fahrten). */
+function lastUsefulClick(src, P, sites) {
+  const T = P.interval, need = [];
+  src.forEach((s, i) => {
+    const j = nearestSite(src, i, sites);
+    if (j === i) return;
+    const tau = travelHours(s, src[j], P), cap = s.merchants * P.carry;
+    const vol = P.pkgSize / 100 * s.cap * 3;
+    const trips = cap > 0 ? Math.ceil(vol / cap - 1e-9) : 99;
+    need.push([tau + (trips - 1) * Math.max(T, 2 * tau), s.cap]);
+  });
+  if (!need.length) return lastClick(P);
+  need.sort((a, b) => a[0] - b[0]);
+  const half = need.reduce((a, x) => a + x[1], 0) / 2;
+  let acc = 0, h = need[need.length - 1][0];
+  for (const [t, w] of need) { acc += w; if (acc >= half) { h = t; break; } }
+  return Math.max(0, Math.min(lastClick(P), Math.floor((P.window - h) / T + EPS)));
+}
+
+const toCnt = (pos, K) => { const c = new Int8Array(K + 1); pos.forEach(k => c[k]++); return c; };
+
+/* N Pakete gleichmäßig auf die Klicks 0 … L, je Klick höchstens maxPer */
+function evenSchedule(N, L, K, maxPer) {
+  const c = new Int8Array(K + 1), pos = [];
+  for (let j = 0; j < N; j++) {
+    let k = N === 1 ? 0 : Math.round(j * L / (N - 1));
+    while (k <= K && c[k] >= maxPer) k++;
+    if (k > K) { k = 0; while (k <= K && c[k] >= maxPer) k++; }
+    if (k > K) break;
+    c[k]++; pos.push(k);
+  }
+  return pos.sort((a, b) => a - b);
+}
+
+/* Einzelne Pakete um 1 bis 3 Klicks verschieben, solange die Münzen steigen */
+function improveSchedule(pos, evalFn, K, maxPer, rounds) {
+  pos = pos.slice();
+  const c = toCnt(pos, K);
+  let best = evalFn(c);
+  for (let round = 0; round < (rounds || 8); round++) {
+    let changed = false;
+    for (let j = 0; j < pos.length; j++) {
+      for (const d of [-1, 1, -2, 2, -3, 3]) {
+        const k = pos[j] + d;
+        if (k < 0 || k > K || c[k] >= maxPer) continue;
+        c[pos[j]]--; c[k]++;
+        const v = evalFn(c);
+        if (v > best + 1e-6) { best = v; pos[j] = k; changed = true; break; }
+        c[k]--; c[pos[j]]++;
+      }
+    }
+    if (!changed) break;
+  }
+  return {pos: pos.sort((a, b) => a - b), coins: best};
+}
+
+/* Kurve Pakete gegen Münzen.
+   Bis „optimal“ und für eine feste Paketzahl je N voll: gleichmäßiger Start und Start aus dem Plan für N − 1 plus
+   ein Paket am besten Klick, beide verschoben, der bessere gilt (so bringen mehr Pakete nie weniger Münzen).
+   Danach bis „maximal“ nur noch das weitere Paket am besten Klick eingefügt (Näherung für die Kurve).
+   optimal: N erhöhen, solange das N-te Paket mindestens optThreshold % des Höchstwerts bringt.
+   maximal: dasselbe mit maxThreshold (5 %). */
+const N_MAX = 150;
+function packageCurve(src, P, sites, untilMax, state) {
+  const K = lastClick(P), maxPer = maxPerClick(P);
+  const evalFn = c => lockstep(src, P, sites, c).coins;
+  const cv = state || {curve: [{n: 0, pos: [], coins: evalFn(toCnt([], K)), gain: null}], optimal: null, maximal: null,
+                       value: packageValue(src, P), K, L: lastUsefulClick(src, P, sites), maxPer};
+  const limit = Math.min(N_MAX, maxPer * (K + 1));
+  for (let N = cv.curve.length; N <= limit; N++) {
+    if (cv.maximal != null && (!P.pkgCount || N > P.pkgCount)) break;
+    if (!untilMax && cv.optimal != null && (!P.pkgCount || N > P.pkgCount)) break;
+    const prev = cv.curve[N - 1], full = cv.optimal == null || N === P.pkgCount;
+    const c = toCnt(prev.pos, K);
+    let warm = null;
+    const step = full ? 1 : Math.max(1, Math.round(2 / P.interval));
+    for (let k = 0; k <= K; k += step) {
+      if (c[k] >= maxPer) continue;
+      c[k]++;
+      const v = evalFn(c);
+      c[k]--;
+      if (!warm || v > warm.coins) warm = {pos: prev.pos.concat([k]).sort((a, b) => a - b), coins: v};
+    }
+    let best = warm || {pos: prev.pos, coins: prev.coins};
+    if (full) {
+      const a = improveSchedule(evenSchedule(N, cv.L, K, maxPer), evalFn, K, maxPer, 4);
+      const b = warm ? improveSchedule(warm.pos, evalFn, K, maxPer, 2) : a;
+      best = b.coins > a.coins ? b : a;
+    }
+    const gain = (best.coins - prev.coins) / cv.value;
+    cv.curve.push({n: N, pos: best.pos, coins: best.coins, gain, full});
+    if (cv.optimal == null && gain < P.optThreshold / 100 - 1e-9) cv.optimal = N - 1;
+    if (cv.maximal == null && gain < P.maxThreshold / 100 - 1e-9) cv.maximal = N - 1;
+  }
+  if (untilMax && cv.maximal == null) cv.maximal = cv.curve.length - 1;
+  if (cv.optimal == null) cv.optimal = cv.curve.length - 1;
+  return cv;
+}
+
+/* Einzelheiten zum gewählten Zeitplan: Tabelle je Einlöseklick, Überlauf je Dorf, Dörfer, die den Takt begrenzen
+   (Überlauf über 1 % ihrer Paketmenge) mit der Marktstufe, ab der sie nicht mehr überlaufen. */
+function scheduleDetails(src, P, sites, pos, passive) {
+  const K = lastClick(P), cnt = toCnt(pos, K), r = lockstep(src, P, sites, cnt, true);
+  const rows = [];
+  let sum = 0;
+  for (let k = 0; k <= K; k++) {
+    if (!cnt[k]) continue;
+    sum += cnt[k];
+    let pk = 0;
+    src.forEach(s => { pk += cnt[k] * P.pkgSize / 100 * s.cap * 3; });
+    rows.push({h: k * P.interval, n: cnt[k], sumPct: sum * P.pkgSize, overflow: r.ovClick[k], share: pk > 0 ? r.ovClick[k] / pk : 0});
+  }
+  const limiting = [];
+  src.forEach((s, i) => {
+    if (r.site[i] === i || r.pkgRes[i] <= 0 || r.overflow[i] / r.pkgRes[i] <= 0.01) return;
+    const tau = travelHours(s, src[r.site[i]], P);
+    let need = null;
+    for (let L = s.b.market + 1; L <= 25; L++) {
+      const q = villageRun(s, tau, P, cnt, merchantsAt(L), null);
+      if (q.overflow / q.pkgRes <= 0.01) { need = L; break; }
+    }
+    limiting.push({i, share: r.overflow[i] / r.pkgRes[i], need});
+  });
+  limiting.sort((a, b) => b.share - a.share);
+  const pas = (passive || []).map(s => { const q = villageRun(s, 0, P, cnt, 0, null, false); return {name: s.name, x: s.x, y: s.y, overflow: q.overflow, pkgRes: q.pkgRes}; });
+  const pkgTotal = r.pkgRes.reduce((a, v) => a + v, 0), ovTotal = r.overflow.reduce((a, v) => a + v, 0);
+  return {coins: r.coins, cnt, rows, overflow: r.overflow, pkgRes: r.pkgRes, limiting, passive: pas,
+          overflowShare: pkgTotal > 0 ? ovTotal / pkgTotal : 0};
+}
+
+/* Gesamtrechnung v0.5: Prägedörfer aus der statischen Rechnung mit Paketvolumen = Anzahl × Größe, Paketzahl und
+   Zeitplan aus dem Gleichschritt. Bei „automatisch“ wird die Aufstellung einmal mit der gefundenen Zahl nachgerechnet.
+   passive: Dörfer ohne Haken „dabei“; sie bekommen die Pakete trotzdem, ihr Überlauf wird nur angezeigt. */
+/* Unter 60 Minuten Klickabstand wird der Zeitplan auf einem gröberen Raster gesucht (Vielfaches des Klickabstands
+   ab 60 Minuten, also weiter echte Klickzeitpunkte), sonst dauert die Suche viele Sekunden. Jeder Punkt der Kurve
+   wird danach mit dem echten Klickabstand nachgerechnet, optimal und maximal folgen aus diesen Werten. */
+function coarse(P) {
+  if (P.intervalMin >= 60) return {Pc: P, m: 1};
+  const m = Math.ceil(60 / P.intervalMin - 1e-9);
+  return {Pc: Object.assign({}, P, {intervalMin: P.intervalMin * m, interval: P.interval * m}), m};
+}
+function refine(src, P, sites, cv, m) {
+  if (m === 1) return cv;
+  const K = lastClick(P), evalFn = pos => lockstep(src, P, sites, toCnt(pos, K)).coins;
+  const curve = cv.curve.map(x => ({n: x.n, pos: x.pos.map(k => k * m), coins: evalFn(x.pos.map(k => k * m)), gain: null, full: x.full}));
+  let optimal = null, maximal = null;
+  for (let n = 1; n < curve.length; n++) {
+    curve[n].gain = (curve[n].coins - curve[n - 1].coins) / cv.value;
+    if (optimal == null && curve[n].gain < P.optThreshold / 100 - 1e-9) optimal = n - 1;
+    if (maximal == null && curve[n].gain < P.maxThreshold / 100 - 1e-9) maximal = n - 1;
+  }
+  return Object.assign({}, cv, {curve, K, L: cv.L * m, maxPer: cv.maxPer,
+                                optimal: optimal == null ? curve.length - 1 : optimal, maximal: maximal == null ? curve.length - 1 : maximal});
+}
+
+function planPackages(villages, P0, passive) {
+  let N = P0.pkgCount || 3, R = null, cur = null, key = null, Pc = null, m = 1;
+  for (let it = 0; it < 3; it++) {
+    const P = Object.assign({}, P0, {pkgPct: Math.max(1, N) * P0.pkgSize});
+    R = plan(villages, P);
+    if (!R.src.length) return R;
+    const sites = R.configs[R.recommend - 1].sites;
+    if (cur && key === sites.join(",")) { R.P = cur.P; R.src = cur.src; break; }   // gleiche Prägedörfer: Kurve bleibt gültig
+    ({Pc, m} = coarse(P));
+    cur = packageCurve(R.src, Pc, sites, false);
+    cur.P = P; cur.src = R.src; key = sites.join(",");
+    const next = P0.pkgCount || refine(R.src, P, sites, cur, m).optimal;
+    if (next === N) break;
+    N = next;
+  }
+  const P = cur.P, src = cur.src, sites = R.configs[R.recommend - 1].sites;
+  R.P = P; R.src = src;
+  packageCurve(src, Pc, sites, true, cur);
+  const cv = refine(src, P, sites, cur, m);
+  const chosen = Math.min(P0.pkgCount || cv.optimal, cv.curve.length - 1);
+  const pos = cv.curve[chosen].pos;
+  R.pkg = Object.assign({}, cv, {chosen, pos, grid: m,
+    detail: scheduleDetails(src, P, sites, pos, prepare(passive || [], P)),
+    configCoins: R.configs.map(c => lockstep(src, P, c.sites, toCnt(pos, cv.K)).coins)});
+  return R;
+}
+
 const api = {RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
-             coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval};
+             coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
+             MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
+             toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, planPackages};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Praegen = api;
 })(typeof window !== "undefined" ? window : globalThis);
