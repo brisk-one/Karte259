@@ -1040,8 +1040,11 @@ function kampfLabels(){
 const NAME_FONT="700 11px system-ui, sans-serif", VS_FONT="700 9px system-ui, sans-serif", WEIT_FONT="700 10.5px system-ui, sans-serif";
 const frei=(belegt, boxen)=>!boxen.some(q=>belegt.some(b=>q[0]<b[2] && q[2]>b[0] && q[1]<b[3] && q[3]>b[1]));
 function namensText(c, t, x, y, farbe){
-  c.lineWidth=2.4; c.strokeStyle="rgba(255,238,178,.95)"; c.fillStyle=farbe||"#111111";
+  // nur ein Hauch Rand (Dennis: 2,4 px wirkte klotzig): 1,2 px hellgold plus weicher Schein für dunklen Grund
+  c.save(); c.shadowColor="rgba(255,238,178,.9)"; c.shadowBlur=2.5;
+  c.lineWidth=1.2; c.strokeStyle="rgba(255,238,178,.95)"; c.fillStyle=farbe||"#111111";
   c.strokeText(t, x, y); c.fillText(t, x, y);
+  c.restore();
 }
 /** „Angreifer vs Verteidiger“ weit weg: Namen 10,5 px, „vs“ kleiner und gedämpft. */
 function vsZeile(X, Y, an, vn, belegt){
