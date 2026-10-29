@@ -732,30 +732,61 @@ function refine(src, P, sites, cv, m) {
                                 optimal: optimal == null ? curve.length - 1 : optimal, maximal: maximal == null ? curve.length - 1 : maximal});
 }
 
-function planPackages(villages, P0, passive) {
-  let N = P0.pkgCount || 3, R = null, cur = null, key = null, Pc = null, m = 1;
+/* Optimale Paketzahl für die Aufstellung mit k Prägedörfern. Die Prägedörfer kommen aus der einfachen Rechnung
+   mit Paketvolumen = Anzahl × Größe; ändert sich dadurch die Aufstellung, wird mit der neuen Paketzahl nachgerechnet
+   (höchstens dreimal). Mit fester Paketzahl (P0.pkgCount) gilt die empfohlene Aufstellung der einfachen Rechnung. */
+function bestForK(villages, P0, k, N0) {
+  let N = N0, R = null, cur = null, key = null, Pc = null, m = 1, cv = null;
   for (let it = 0; it < 3; it++) {
     const P = Object.assign({}, P0, {pkgPct: Math.max(1, N) * P0.pkgSize});
-    R = plan(villages, P);
-    if (!R.src.length) return R;
-    const sites = R.configs[R.recommend - 1].sites;
-    if (cur && key === sites.join(",")) { R.P = cur.P; R.src = cur.src; break; }   // gleiche Prägedörfer: Kurve bleibt gültig
+    const Rn = plan(villages, P);
+    if (!Rn.src.length) return {R: Rn};
+    const kk = k || Rn.recommend;
+    if (Rn.configs.length < kk) break;
+    const sites = Rn.configs[kk - 1].sites;
+    if (cur && key === sites.join(",")) break;          // gleiche Prägedörfer: Kurve bleibt gültig
+    R = Rn; R.k = kk;
     ({Pc, m} = coarse(P));
     cur = packageCurve(R.src, Pc, sites, false);
     cur.P = P; cur.src = R.src; key = sites.join(",");
-    const next = P0.pkgCount || refine(R.src, P, sites, cur, m).optimal;
+    cv = refine(R.src, P, sites, cur, m);
+    const next = P0.pkgCount || cv.optimal;
     if (next === N) break;
     N = next;
   }
-  const P = cur.P, src = cur.src, sites = R.configs[R.recommend - 1].sites;
-  R.P = P; R.src = src;
-  packageCurve(src, Pc, sites, true, cur);
-  const cv = refine(src, P, sites, cur, m);
+  if (!R) return null;
+  R.P = cur.P; R.src = cur.src;
+  const n = Math.min(P0.pkgCount || cv.optimal, cv.curve.length - 1);
+  return {R, k: R.k, cur, cv, Pc, m, sites: R.configs[R.k - 1].sites, n, coins: cv.curve[n].coins};
+}
+
+/* Gesamtrechnung v0.5. „automatisch“ (Dennis 3a, 29.10.2026): je Zahl der Flaggendoppler die eigene optimale
+   Paketzahl; ein weiterer Flaggendoppler wird empfohlen, solange er damit mindestens minGainPct mehr Münzen bringt
+   (Regel 9.1a auf den Gleichschritt übertragen). Gerechnet wird bis zur ersten Aufstellung unter dieser Schwelle. */
+function planPackages(villages, P0, passive) {
+  let best, perK = null;
+  if (P0.pkgCount) best = bestForK(villages, P0, 0, P0.pkgCount);
+  else {
+    perK = [];
+    for (let k = 1; k <= K_MAX; k++) {
+      const o = bestForK(villages, P0, k, best ? best.n || 1 : 3);
+      if (!o || !o.cur) { if (!best) best = o; break; }
+      perK.push(o);
+      if (best && o.coins < best.coins * (1 + P0.minGainPct / 100) - 1e-9) break;
+      best = o;
+    }
+  }
+  if (!best || !best.cur) return best ? best.R : plan(villages, P0);
+  const R = best.R, P = R.P, src = R.src, sites = best.sites;
+  R.recommend = best.k;
+  packageCurve(src, best.Pc, sites, true, best.cur);
+  const cv = refine(src, P, sites, best.cur, best.m);
   const chosen = Math.min(P0.pkgCount || cv.optimal, cv.curve.length - 1);
   const pos = cv.curve[chosen].pos;
-  R.pkg = Object.assign({}, cv, {chosen, pos, grid: m,
+  R.pkg = Object.assign({}, cv, {chosen, pos, grid: best.m,
     detail: scheduleDetails(src, P, sites, pos, prepare(passive || [], P)),
-    configCoins: R.configs.map(c => lockstep(src, P, c.sites, toCnt(pos, cv.K)).coins)});
+    configCoins: R.configs.map(c => lockstep(src, P, c.sites, toCnt(pos, cv.K)).coins),
+    perK: perK && perK.map(o => ({k: o.k, n: o.n, coins: o.coins, sites: o.sites.map(i => o.R.src[i])}))});
   return R;
 }
 
@@ -763,7 +794,7 @@ const api = {RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DEC
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
-             toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, planPackages};
+             toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Praegen = api;
 })(typeof window !== "undefined" ? window : globalThis);

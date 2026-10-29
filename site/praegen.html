@@ -449,7 +449,19 @@ function renderRecommendation() {
   const frist = P.decreeN === 1 ? "in den 24 h des Erlasses" : "in den 48 h";
   const complete = a.r.share >= 1 - 1e-6;
   const parts = [];
-  if (n === 1) parts.push(complete ? "Alle Paket-Rohstoffe kommen " + frist + " im Prägedorf an."
+  const pK = pk.perK;
+  if (pK) {
+    // „automatisch“ (Dennis 3a): jede Aufstellung mit ihrer eigenen optimalen Paketzahl
+    const mit = o => mitFD(o.k) + " und " + (o.n === 1 ? "1 Paket" : o.n + " Paketen");
+    const cur = pK[n - 1], prev = pK[n - 2], next = pK[n];
+    if (prev) parts.push("Mit " + mit(prev) + " wären " + nf.format(Math.round(prev.coins)) + " Münzen möglich, mit "
+      + mit(cur) + " sind es " + nf.format(Math.round(cur.coins)) + " (" + plus((cur.coins / prev.coins - 1) * 100) + ").");
+    else parts.push("Mit " + mit(cur) + " sind " + nf.format(Math.round(cur.coins)) + " Münzen möglich.");
+    if (next) parts.push("Ein weiterer Flaggendoppler brächte mit " + (next.n === 1 ? "1 Paket" : next.n + " Paketen") + " nur "
+      + plus((next.coins / cur.coins - 1) * 100) + ", die Schwelle liegt bei " + P.minGainPct + " %.");
+    else if (n >= R.ahCount && R.ahCount > 0) parts.push("Für weitere Prägedörfer fehlen Dörfer mit Adelshof.");
+  }
+  else if (n === 1) parts.push(complete ? "Alle Paket-Rohstoffe kommen " + frist + " im Prägedorf an."
                                    : "Mit einem Flaggendoppler kommen " + pctf(a.r.share) + " der Paket-Rohstoffe " + frist + " an.");
   else {
     const prev = aufstellung(n - 1);
@@ -457,12 +469,13 @@ function renderRecommendation() {
       + n + " Prägedörfer schaffen " + pctf(a.r.share) + " und bringen " + plus(a.r.gainPct) + " Münzen ("
       + nf.format(Math.round(a.r.coins - prev.r.coins)) + " mehr).");
   }
-  if (complete) parts.push(n === 1 ? "Ein weiterer Flaggendoppler bringt nichts." : "Damit kommt alles rechtzeitig an, ein weiterer bringt nichts.");
+  if (pK) { /* oben begründet */ }
+  else if (complete) parts.push(n === 1 ? "Ein weiterer Flaggendoppler bringt nichts." : "Damit kommt alles rechtzeitig an, ein weiterer bringt nichts.");
   else if (nxt) parts.push("Ein weiterer Flaggendoppler brächte nur " + plus(nxt.gainPct) + " Münzen, die Schwelle liegt bei " + P.minGainPct + " %.");
   else if (n >= R.ahCount && R.ahCount > 0) parts.push("Für weitere Prägedörfer fehlen Dörfer mit Adelshof.");
   if (n > 1) parts.push("Dafür braucht es " + n + " Flaggendoppler und " + n + " Münzkosten-Flaggen.");
   const e = engpass(a.d);
-  if (e.m || e.w) parts.push("Engpass: " + [e.m ? e.m + " Dörfer mit zu kleinem Markt" : "", e.w ? e.w + " Dörfer zu weit weg" : ""].filter(Boolean).join(", ") + ".");
+  if (e.m || e.w) parts.push("Engpass: " + [e.m ? e.m + (e.m === 1 ? " Dorf" : " Dörfer") + " mit zu kleinem Markt" : "", e.w ? e.w + (e.w === 1 ? " Dorf" : " Dörfer") + " zu weit weg" : ""].filter(Boolean).join(", ") + ".");
   $("rec-why").textContent = parts.join(" ");
 
   const notes = [];
@@ -601,10 +614,19 @@ function renderCompare() {
     A.forEach((x, i) => tr.appendChild(el("td", R.recommend === i + 1 ? "rec" : "", f(x, i + 1))));
     tb.appendChild(tr);
   };
-  row("Prägedorf", x => x.sites.map(siteName).join(" + "));
+  row("Prägedorf", (x, n) => (R.pkg.perK && R.pkg.perK[n - 1] ? R.pkg.perK[n - 1].sites : x.sites).map(siteName).join(" + "));
   const cc = R.pkg.configCoins;
-  row("Münzen", (x, n) => nf.format(Math.round(cc[n - 1])));
-  row("mehr als einer weniger", (x, n) => n === 1 ? "" : plus((cc[n - 1] / cc[n - 2] - 1) * 100));
+  const pK = R.pkg.perK;
+  if (pK) {
+    // „automatisch“: je Aufstellung die eigene optimale Paketzahl; ohne Wert, wo nicht gerechnet wurde
+    const o = n => pK[n - 1];
+    row("Pakete (optimal)", (x, n) => o(n) ? String(o(n).n) : "–");
+    row("Münzen", (x, n) => o(n) ? nf.format(Math.round(o(n).coins)) : "–");
+    row("mehr als einer weniger", (x, n) => n > 1 && o(n) && o(n - 1) ? plus((o(n).coins / o(n - 1).coins - 1) * 100) : "");
+  } else {
+    row("Münzen", (x, n) => nf.format(Math.round(cc[n - 1])));
+    row("mehr als einer weniger", (x, n) => n === 1 ? "" : plus((cc[n - 1] / cc[n - 2] - 1) * 100));
+  }
   row("Pakete rechtzeitig", x => pctf(x.r.share));
   row("90 % angekommen", x => hrs(share90(x.d)));
   row("alles angekommen", x => hrs(x.d.doneAt));
@@ -613,7 +635,9 @@ function renderCompare() {
   row("zu weit weg", x => String(engpass(x.d).w));
   t.appendChild(tb);
   box.appendChild(t);
-  const p = el("p", "empty", "Regel: Ein weiterer Flaggendoppler nur, wenn die Aufstellung mit einem weniger nicht alles rechtzeitig schafft und der weitere mindestens "
+  const p = el("p", "empty", R.pkg.perK ? "Regel bei „automatisch“: jede Aufstellung mit ihrer eigenen optimalen Paketzahl; ein weiterer Flaggendoppler nur, wenn er damit mindestens "
+    + R.P.minGainPct + " % mehr Münzen bringt. Die Zeilen „rechtzeitig“ bis „zu weit weg“ stammen aus der einfachen Rechnung mit " + (R.pkg.chosen === 1 ? "1 Paket" : R.pkg.chosen + " Paketen") + ". Jedes Dorf beliefert das nächstgelegene Prägedorf."
+    : "Regel: Ein weiterer Flaggendoppler nur, wenn die Aufstellung mit einem weniger nicht alles rechtzeitig schafft und der weitere mindestens "
     + R.P.minGainPct + " % mehr Münzen bringt. Gerechnet wird bis zur ersten Aufstellung unter dieser Schwelle. Jedes Dorf beliefert das nächstgelegene Prägedorf.");
   p.style.padding = "8px 0 0"; box.appendChild(p);
 }

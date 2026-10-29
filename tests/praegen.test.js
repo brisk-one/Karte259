@@ -367,3 +367,15 @@ test("v0.5: unter 1 h Klickabstand liegt der Zeitplan auf vollen Stunden des Kli
   assert.ok(R.pkg.chosen === R.pkg.optimal && R.pkg.curve[R.pkg.chosen].pos.length === R.pkg.chosen);
   near(R.pkg.detail.coins, R.pkg.curve[R.pkg.chosen].coins, 1e-6);
 });
+
+test("v0.5 automatisch: jede Aufstellung mit eigener Paketzahl, weiterer Flaggendoppler nur ab Mehrertrag", () => {
+  const R = K.planPackages(konto63(), V5({}), []);
+  const pK = R.pkg.perK;
+  assert.ok(pK.length >= 1 && pK[0].k === 1);
+  for (let k = 2; k <= R.recommend; k++) assert.ok(pK[k - 1].coins >= pK[k - 2].coins * 1.1 - 1e-6, k + " Flaggendoppler ohne 10 % Mehrertrag");
+  const nxt = pK[R.recommend];
+  if (nxt) assert.ok(nxt.coins < pK[R.recommend - 1].coins * 1.1);
+  near(R.pkg.detail.coins, pK[R.recommend - 1].coins, 1e-6);
+  assert.equal(R.pkg.chosen, pK[R.recommend - 1].n);
+  assert.equal(K.planPackages(konto63(), V5({pkgCount: 4}), []).pkg.perK, null);   // feste Zahl: einfache Rechnung wählt
+});
