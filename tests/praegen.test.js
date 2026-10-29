@@ -388,3 +388,58 @@ test("Adelsgeschlechter: jedes weitere kostet eine Münze mehr (Dennis 1a)", () 
   assert.equal(K.adelsgeschlechter(0, 10, 10).n, 1);
   assert.equal(K.adelsgeschlechter(0, 6, 1).n, 3);           // 1+2+3
 });
+
+/* ---------- 10.11 Überlaufgrenze und Zeitplan in Berechnung 1 ---------- */
+test("10.11: der gewählte Plan liegt nie über der Grenze, wenn ein zulässiger Plan existiert", () => {
+  for (const g of [3, 1, 0.5]) {
+    const R = K.planPackages(konto63(), V5({maxOverflow: g}), []);
+    assert.ok(R.pkg.grenze.ok, "Grenze " + g + " nicht eingehalten");
+    assert.ok(R.pkg.detail.overflowShare * 100 <= g + 1e-9, "Überlauf " + R.pkg.detail.overflowShare * 100 + " über " + g);
+    R.pkg.curve.slice(0, R.pkg.optimal + 1).forEach(c => assert.ok(c.ok, c.n + " Pakete bis optimal unzulässig"));
+  }
+});
+
+test("10.11: eine kleinere Grenze erhöht weder den Überlauf noch die Paketzahl „optimal“", () => {
+  let vor = null;
+  for (const g of [100, 3, 1, 0.3, 0]) {
+    const pk = K.planPackages(konto63(), V5({maxOverflow: g}), []).pkg;
+    const jetzt = {ov: pk.detail.overflowShare, n: pk.chosen};
+    if (vor) {
+      assert.ok(jetzt.ov <= vor.ov + 1e-9, "Grenze " + g + ": Überlauf steigt");
+      assert.ok(jetzt.n <= vor.n, "Grenze " + g + ": mehr Pakete");
+    }
+    vor = jetzt;
+  }
+});
+
+test("10.11: nicht erreichbare Grenze liefert den Plan mit kleinstem Überlauf und die Angaben für den Hinweis", () => {
+  const frei = K.planPackages(konto63(), V5({pkgCount: 12}), []).pkg;
+  const pk = K.planPackages(konto63(), V5({pkgCount: 12, maxOverflow: 1}), []).pkg;
+  assert.equal(pk.chosen, 12);
+  assert.equal(pk.grenze.ok, false);
+  assert.ok(pk.grenze.ov * 100 > 1);
+  assert.ok(pk.detail.overflowShare <= frei.detail.overflowShare + 1e-9, "Überlauf nicht kleiner als ohne Grenze");
+  assert.ok(pk.grenze.maxOk >= 1 && pk.grenze.maxOk < 12);
+  assert.ok(pk.curve[pk.grenze.maxOk].ok);
+});
+
+test("10.11: Berechnung 1 rechnet N aus Prozentpunkten und Paketgröße und liefert einen Zeitplan", () => {
+  const P = V5({mode: "pct", pkgPct: 100, maxOverflow: 1});
+  const R = K.planPct(konto63(), P, []);
+  assert.equal(R.zeitplan.n, 3);                       // 100 % ÷ 30 % = 3,33 → 3 Pakete = 90 %
+  assert.equal(R.zeitplan.sumPct, 90);
+  assert.equal(R.zeitplan.detail.rows.reduce((a, r) => a + r.n, 0), 3);
+  assert.ok(R.zeitplan.detail.coins > 0 && R.configs[R.recommend - 1].coins > 0);
+  assert.equal(K.planPct(konto63(), V5({mode: "pct", pkgPct: 50, pkgSize: 20}), []).zeitplan.n, 3);   // 2,5 → 3
+  assert.equal(K.planPct(konto63(), V5({mode: "pct", pkgPct: 10}), []).zeitplan.n, 0);
+  assert.equal(K.planPct(konto63(), V5({mode: "pct", pkgPct: 10}), []).zeitplan.detail.rows.length, 0);
+});
+
+test("10.11: Grenze 100 % ergibt das bisherige Ergebnis", () => {
+  const a = K.planPackages(konto63(), V5({}), []).pkg, b = K.planPackages(konto63(), V5({maxOverflow: 100}), []).pkg;
+  const kurz = pk => JSON.stringify([pk.chosen, pk.optimal, pk.maximal, pk.pos, pk.curve.map(c => [c.n, c.pos, Math.round(c.coins)])]);
+  assert.equal(kurz(b), kurz(a));
+  assert.equal(V5({}).maxOverflow, 100);
+  assert.equal(V5({maxOverflow: 1}).maxOverflow, 1);
+  assert.equal(V5({maxOverflow: 250}).maxOverflow, 100);
+});

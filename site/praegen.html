@@ -122,6 +122,12 @@
       <div class="pr-ctl">
         <div>
           <span class="lab">Berechnung</span>
+          <div class="pr-row" id="pkg-row" style="margin-bottom:6px">
+            <label class="pick"><span>Paketgröße</span><input type="number" id="pkgsize" min="1" max="100" step="1" value="30" aria-label="Größe eines Pakets in Prozent des Speichers"></label>
+            <span>% des Speichers</span>
+            <label class="pick" style="margin-left:8px"><span>Überlauf höchstens</span><input type="number" id="maxov" min="0" max="100" step="0.1" value="1" aria-label="Überlauf höchstens in Prozent der Paket-Rohstoffe"></label>
+            <span>%</span>
+          </div>
           <div class="pr-modes" role="radiogroup" aria-label="Berechnung">
             <div class="pr-mode" id="mode-pct">
               <label class="pr-mhead"><input type="radio" name="mode" value="pct"> 1 · Rohstoffprozentpunkte vorgeben</label>
@@ -129,13 +135,11 @@
                 <input type="number" id="pkgpct" min="0" max="2000" step="10" value="300" aria-label="Rohstoffpakete in Prozent der Speicherkapazität"> <span>% der Speicherkapazität</span>
               </div>
               <div class="pr-row" id="pct-quick" role="group" aria-label="Schnellwahl Prozentpunkte"></div>
-              <p class="pr-mnote">Alle Pakete auf einmal, ohne Speichergrenze. Prägedörfer, Münzen und Klickfrequenz werden daraus errechnet.</p>
+              <p class="pr-mnote" id="pct-n"></p>
+              <p class="pr-mnote">Prägedörfer, Münzen und Klickfrequenz: alle Pakete auf einmal, ohne Speichergrenze. Dazu ein Zeitplan der Pakete mit Speichergrenze.</p>
             </div>
             <div class="pr-mode" id="mode-max">
               <label class="pr-mhead"><input type="radio" name="mode" value="max" checked> 2 · Rohstoffpakete maximieren</label>
-              <div class="pr-row" id="pkg-row">
-                <input type="number" id="pkgsize" min="1" max="100" step="1" value="30" aria-label="Größe eines Pakets in Prozent"> <span>% des Speichers je Paket</span>
-              </div>
               <div class="pr-row">
                 <label class="pick"><span>Anzahl</span><select id="pkgcount" aria-label="Anzahl Pakete"></select></label>
               </div>
@@ -326,7 +330,8 @@ for (let L = 0; L <= 25; L++) {
 
 function inputs() {
   const mpf = parseFloat($("mpf").value), pf = parseFloat($("pfac").value);
-  return {mode: MODE, pkgPct: Math.max(0, +$("pkgpct").value || 0),
+  const mo = $("maxov").value.trim();
+  return {mode: MODE, pkgPct: Math.max(0, +$("pkgpct").value || 0), maxOverflow: mo === "" || !isFinite(+mo) ? 1 : +mo,
           pkgSize: +$("pkgsize").value || 30, pkgCount: +$("pkgcount").value || null, startPct: +$("start").value || 0,
           decreeN: +$("decree").value || 0, minStorage: +$("minstorage").value || 0, ignoreRatio: $("ignoreratio").checked,
           optThreshold: +$("thr").value || 90,
@@ -362,16 +367,26 @@ function setMode(m) {
 }));
 [100, 200, 300, 500, 1000].forEach(v => {
   const b = el("button", "tw small", v + " %"); b.type = "button";
-  b.addEventListener("click", () => { $("pkgpct").value = v; if (MODE !== "pct") setMode("pct"); else schedule(); });
+  b.addEventListener("click", () => { $("pkgpct").value = v; pctPakete(); if (MODE !== "pct") setMode("pct"); else schedule(); });
   $("pct-quick").appendChild(b);
 });
 
 let timer = null;
 function schedule() { clearTimeout(timer); timer = setTimeout(run, 250); }
-["paste", "pkgpct", "pkgsize", "start", "mpf", "pfac", "gain", "thr"].forEach(id => $(id).addEventListener("input", schedule));
+const nfG = new Intl.NumberFormat("de-DE", {maximumFractionDigits: 2});   // Überlaufgrenze ohne überflüssige Nullen
+/* Berechnung 1: ganze Pakete aus Prozentpunkten und Paketgröße, live unter dem Feld */
+function pctPakete() {
+  const pct = Math.max(0, +$("pkgpct").value || 0), size = +$("pkgsize").value > 0 ? Math.min(100, +$("pkgsize").value) : 30;
+  const n = Math.round(pct / size + 1e-9);
+  $("pct-n").textContent = "= " + (n === 1 ? "1 Paket" : nf.format(n) + " Pakete") + " zu " + nf.format(size) + " %"
+    + (Math.abs(n * size - pct) > 1e-9 ? " (" + nf.format(n * size) + " % statt " + nf.format(pct) + " %)" : "");
+}
+["pkgpct", "pkgsize"].forEach(id => $(id).addEventListener("input", pctPakete));
+["paste", "maxov", "pkgpct", "pkgsize", "start", "mpf", "pfac", "gain", "thr"].forEach(id => $(id).addEventListener("input", schedule));
 ["flag", "interval", "minmarket", "minstorage", "pkgcount", "bonus", "decree", "ignoreratio", "prod"].forEach(id => $(id).addEventListener("change", schedule));
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
 setMode("max");
+pctPakete();
 document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } });
 let rsz = null;
 window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } }, 200); });
@@ -441,7 +456,7 @@ function run() {
 const CORE_URL = (document.querySelector('script[src*="praegen-core.js"]') || {}).src;
 let WORKER = null, WBUSY = false;
 function compute(token, villages, P, passive, done) {
-  const rechne = () => P.mode === "pct" ? K.plan(villages, P) : K.planPackages(villages, P, passive);
+  const rechne = () => P.mode === "pct" ? K.planPct(villages, P, passive) : K.planPackages(villages, P, passive);
   const direkt = () => { if (token === RUN) done(rechne()); };
   if (typeof Worker === "undefined" || !CORE_URL) return void setTimeout(direkt, 0);
   if (WORKER && WBUSY) { WORKER.terminate(); WORKER = null; }
@@ -467,7 +482,8 @@ function show(token, R, villages, parsed) {
   VIEW = RESULT.recommend;                // nach jeder Neuberechnung die empfohlene Aufstellung zeigen
   STEPS = [];
   ["p-rec", "p-more"].forEach(id => $(id).hidden = false);
-  ["p-pk", "p-pc"].forEach(id => $(id).hidden = !R.pkg);       // Zeitplan und Kurve nur bei „maximieren“
+  $("p-pk").hidden = !(R.pkg || R.zeitplan);                    // Zeitplan in beiden Berechnungsarten (10.11)
+  $("p-pc").hidden = !R.pkg;                                     // Kurve nur bei „maximieren“
   renderRecommendation();
   renderSchedule();
   renderCurve();
@@ -585,6 +601,8 @@ function renderRecommendation() {
   $("rec-why").textContent = parts.join(" ");
 
   const notes = [];
+  const gh = grenzeHinweis(pk || R.zeitplan);
+  if (gh) notes.push(gh);
   if (P.minStorage) {
     const up = R.src.filter(s => s.b.storage > s.storageFrom);
     notes.push(up.length ? "Gerechnet mit Speicher mindestens Stufe " + P.minStorage + ": " + up.length + " Dörfer bauen den Speicher vorher aus, zusammen "
@@ -623,10 +641,15 @@ function renderRecommendation() {
          "Höchstwert " + nf.format(Math.round(pk.value)));
     fact("Grenznutzen letztes Paket", last && last.gain != null ? nf.format(Math.round(last.coins - pk.curve[pk.chosen - 1].coins)) : "–",
          last && last.gain != null ? gainTxt(last.gain) + " des Höchstwerts" : "");
-    fact("Überlauf", pctf(pk.detail.overflowShare), "der Paket-Rohstoffe");
+    fact("Überlauf", pctf(pk.detail.overflowShare), "der Paket-Rohstoffe, höchstens " + nfG.format(P.maxOverflow) + " %");
   } else {
-    fact("Münzen", nf.format(Math.round(a.r.coins)), "in 48 h");
+    const z = R.zeitplan;
+    fact("Münzen", nf.format(Math.round(a.r.coins)), "in 48 h, ohne Speichergrenze");
     fact("Rohstoffpakete", nf.format(P.pkgPct) + " %", "der Speicherkapazität, auf einmal");
+    if (z) {
+      fact("Münzen laut Zeitplan", nf.format(Math.round(z.detail.coins)), pakete(z.n) + " zu " + nf.format(z.size) + " %, mit Speichergrenze");
+      fact("Überlauf laut Zeitplan", pctf(z.detail.overflowShare), "höchstens " + nfG.format(P.maxOverflow) + " %");
+    }
   }
   fact("Pakete rechtzeitig", pctf(a.r.share), (P.decreeN === 1 ? "bis 24 h" : "bis 48 h") + ", ohne Speichergrenze");
   fact("90 % angekommen", hrs(share90(a.d)));
@@ -639,13 +662,23 @@ function renderRecommendation() {
 /* ---------- Zeitplan der Pakete ---------- */
 const gainTxt = v => Math.round(v * 100) + " %";
 const pakete = n => n === 1 ? "1 Paket" : nf.format(n) + " Pakete";
+/* Hinweis, wenn die Überlaufgrenze mit der gewählten Paketzahl nicht erreichbar ist (10.11) */
+function grenzeHinweis(x) {
+  const g = x && x.grenze;
+  if (!g || g.ok) return "";
+  return "Mit " + (g.n === 1 ? "1 Paket" : nf.format(g.n) + " Paketen") + " geht es nicht unter " + pctf(g.ov)
+    + " Überlauf, unter der Grenze von " + nfG.format(g.grenze) + " % gehen höchstens " + pakete(g.maxOk) + ".";
+}
 function renderSchedule() {
-  const R = RESULT, P = R.P, pk = R.pkg;
+  const R = RESULT, P = R.P, z = R.zeitplan, pk = R.pkg || z;
   if (!pk) return;
-  const d = pk.detail;
-  $("pk-hint").textContent = pakete(pk.chosen) + " zu " + P.pkgSize + " %, " + nf.format(Math.round(d.coins)) + " Münzen, Überlauf " + pctf(d.overflowShare);
+  const d = pk.detail, n = R.pkg ? pk.chosen : z.n;
+  $("pk-hint").textContent = pakete(n) + " zu " + nf.format(P.pkgSize) + " %" + (z ? " (= " + nf.format(z.sumPct) + " %)" : "")
+    + ", " + nf.format(Math.round(d.coins)) + " Münzen, Überlauf " + pctf(d.overflowShare) + " (höchstens " + nfG.format(P.maxOverflow) + " %)";
   const box = $("pk-table");
-  if (!d.rows.length) box.replaceChildren(el("p", "empty", "Keine Pakete: schon das erste brächte weniger als " + P.optThreshold + " % seines Höchstwerts."));
+  if (!d.rows.length) box.replaceChildren(el("p", "empty", z
+    ? "Keine Pakete: " + nf.format(z.pct) + " Prozentpunkte ergeben bei " + nf.format(z.size) + " % Paketgröße kein ganzes Paket."
+    : "Keine Pakete: schon das erste brächte weniger als " + P.optThreshold + " % seines Höchstwerts."));
   else {
     const t = table([["einlösen nach", "l", 1], ["Pakete", "", 1], ["Summe", "", 1], ["erwarteter Überlauf", "", 1]],
       d.rows.map(r => [[hm(r.h), "l", Math.round(r.h * 60)], [String(r.n), "", r.n], [nf.format(r.sumPct) + " %", "", r.sumPct],
@@ -655,6 +688,16 @@ function renderSchedule() {
   }
   const note = $("pk-note");
   note.replaceChildren();
+  const gh = grenzeHinweis(pk);
+  if (gh) note.appendChild(el("p", "pr-note", gh));
+  if (z) {
+    // Berechnung 1: zwei verschieden gerechnete Münzzahlen, deutlich benannt (10.11)
+    if (Math.abs(z.sumPct - z.pct) > 1e-9) note.appendChild(el("p", "pr-note", nf.format(z.pct) + " Prozentpunkte ergeben bei "
+      + nf.format(z.size) + " % Paketgröße " + pakete(z.n) + ", zusammen " + nf.format(z.sumPct) + " %."));
+    note.appendChild(el("p", "pr-note", "Verschieden gerechnet: Die " + nf.format(Math.round(d.coins)) + " Münzen hier rechnet der Zeitplan mit Speichergrenze, "
+      + "Überlauf und diesen Einlösezeiten. Die " + nf.format(Math.round(R.configs[R.recommend - 1].coins)) + " Münzen der Empfehlung stammen aus der einfachen Rechnung "
+      + "mit " + nf.format(z.pct) + " % auf einmal und ohne Speichergrenze."));
+  }
   const lim = d.limiting;
   if (lim.length) {
     const p = el("p", "pr-note", lim.length + (lim.length === 1 ? " Dorf begrenzt" : " Dörfer begrenzen") + " den Takt: sie leeren ihren Speicher nicht schnell genug und laufen über.");
@@ -865,7 +908,7 @@ function renderVillages() {
   const byKey = new Map(a.d.rows.map(r => [R.src[r.i].x + "|" + R.src[r.i].y, r]));
   const cols = [["dabei", "l"], ["Dorf", "l"], ["Koordinaten", "l"], ["Status", "l", 1], ["rechtzeitig", "", 1], ["alles da nach", "", 1],
                 ["Laufzeit", "", 1], ["Markt (Händler)", "", 1], ["Speicher", "", 1], ["Überlauf", "", 1], ["Paket prägbar", "", 1], ["Prägedorf", "l"]];
-  const det = R.pkg && R.pkg.detail, recView = !!det && VIEW === R.recommend;
+  const det = (R.pkg || R.zeitplan || {}).detail, recView = !!det && VIEW === R.recommend;
   const pasBy = new Map(det ? det.passive.map(x => [x.x + "|" + x.y, x]) : []);
   const ovCell = (ov, res) => res > 0 ? [ov > 0 ? pctf(ov / res) : "0 %", ov / res > 0.01 ? "down" : "", Math.round(ov / res * 10000)] : ["", "", -1];
   const storText = s => s.b.storage > s.storageFrom ? s.storageFrom + " → " + s.b.storage : String(s.b.storage);
@@ -1048,13 +1091,15 @@ function renderFreq() {
 function renderAssumptions() {
   const P = RESULT.P, w = WORLD;
   const items = !RESULT.pkg ? [
-    "Berechnung „Rohstoffprozentpunkte vorgeben“: jedes Dorf hat zum Start zusätzlich " + nf.format(P.pkgPct) + " % seiner Speicherkapazität je Rohstoff, ohne Speichergrenze (einfache Rechnung wie bis Version 0.4). Überlauf und Zeitplan der Pakete werden nicht gerechnet, dafür „Rohstoffpakete maximieren“ wählen.",
+    "Berechnung „Rohstoffprozentpunkte vorgeben“: Prägedörfer, Münzen und Klickfrequenz stammen aus der einfachen Rechnung, in der jedes Dorf zum Start zusätzlich " + nf.format(P.pkgPct) + " % seiner Speicherkapazität je Rohstoff hat, ohne Speichergrenze (wie bis Version 0.4).",
+    "Zeitplan in Berechnung 1: Die Prozentpunkte werden in ganze Pakete der eingestellten Größe umgerechnet (" + nf.format(P.pkgPct) + " % ÷ " + nf.format(P.pkgSize) + " %, gerundet). Für die empfohlene Aufstellung wird dann wie bei „maximieren“ im Gleichschritt mit Speichergrenze gerechnet, wann diese Pakete einzulösen sind. Die Münzen dieses Zeitplans weichen deshalb von den Münzen der Empfehlung ab.",
   ] : [
     "Ein Rohstoffpaket bringt je Rohstoff " + P.pkgSize + " % der Speicherkapazität in jedes Dorf, auch in Dörfer ohne Haken. Gerechnet wird das ganze Konto im Gleichschritt auf dem Klickraster: an jedem Klick erst Pakete einlösen, dann verschicken. Was über den Speicher geht, ist verloren (Überlauf); die laufende Produktion ebenfalls nur bis zur Speichergrenze. Höchstens " + K.maxPerClick(P) + " Pakete auf einmal.",
-    "Zeitplan: Für jede Paketzahl werden die Pakete zuerst gleichmäßig von 0 h bis zum letzten sinnvollen Zeitpunkt (hier " + hm(RESULT.pkg.L * P.interval) + ") verteilt und dann einzeln um 1 bis 3 Klicks verschoben, solange die Münzen bis 48 h steigen. Das bestraft Überlauf und zu späte Ankunft zugleich. Verglichen wird zusätzlich mit dem Plan für ein Paket weniger plus einem Paket am besten Klick, damit mehr Pakete nie weniger Münzen bringen. Jenseits von „optimal“ zeigt die Kurve nur diese schnelle Variante.",
+    "Zeitplan: Für jede Paketzahl werden die Pakete zuerst gleichmäßig von 0 h bis zum letzten sinnvollen Zeitpunkt (hier " + hm(RESULT.pkg.L * P.interval) + ") verteilt und dann einzeln um 1 bis 3 Klicks verschoben, solange der Plan besser wird (erst Überlaufgrenze, dann Münzen bis 48 h). Das bestraft Überlauf und zu späte Ankunft zugleich. Verglichen wird zusätzlich mit dem Plan für ein Paket weniger plus einem Paket am besten Klick, damit mehr Pakete nie weniger Münzen bringen. Jenseits von „optimal“ zeigt die Kurve nur diese schnelle Variante.",
     "Paketzahl „optimal“: so lange ein weiteres Paket dazu, wie es noch mindestens " + P.optThreshold + " % seines Höchstwerts bringt. Höchstwert = Paketgröße × Summe der Speicher der beteiligten Dörfer, in Münzen zum Flaggenpreis (" + nf.format(Math.round(RESULT.pkg.value)) + " Münzen). „maximal“: bis ein weiteres weniger als 5 % bringt.",
     "Die Prägedörfer stammen weiter aus der einfachen Rechnung ohne Speichergrenze mit allen Paketen auf einmal (Paketvolumen = Anzahl × Größe), die Münzen und der Zeitplan aus dem Gleichschritt. Das ist eine Näherung: mit Speichergrenzen könnte eine andere Aufstellung knapp besser sein. „Pakete rechtzeitig“ und die Diagramme zu Ankunft und Klickfrequenz kommen aus der einfachen Rechnung.",
   ];
+  items.push("Überlauf höchstens " + nfG.format(P.maxOverflow) + " %: gemeint ist der Überlauf insgesamt, also der Anteil der Paket-Rohstoffe aller beteiligten Dörfer, der über den Speicher geht; Dörfer ohne Haken „dabei“ zählen nicht. Ein Zeitplan mit höchstens so viel Überlauf ist zulässig. Gesucht wird erst ein zulässiger Plan, dann der mit den meisten Münzen; reichen Verschiebungen um 1 bis 3 Klicks nicht, darf ein Paket an jeden Klick wandern. „optimal“ und „maximal“ zählen nur Paketzahlen mit zulässigem Plan. Ist die Grenze mit einer festen Anzahl nicht erreichbar, zeigt der Rechner den Plan mit dem kleinsten Überlauf und sagt, wie viele Pakete unter der Grenze höchstens gehen.");
   items.push(    P.ignoreRatio ? "Rohstoffverhältnis ignoriert: Händler schicken Holz, Lehm und Eisen so, wie sie im Dorf liegen. Im Prägedorf wird weiter im Verhältnis " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + " geprägt, die Münzen richten sich nach dem knappsten Rohstoff; überschüssiges Holz oder Eisen darf dort überlaufen und zählt nicht als Überlauf."
       : "Verschickt wird nur im Prägeverhältnis Holz : Lehm : Eisen = " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + ". Der Überschuss, meist Holz und Eisen, bleibt im Dorf und kann dort überlaufen.",
     "Das Prägedorf prägt sofort, was ankommt, und läuft nicht über.",

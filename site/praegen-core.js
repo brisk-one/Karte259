@@ -113,6 +113,10 @@ function params(input, world) {
     pkgCount: +input.pkgCount > 0 ? Math.round(+input.pkgCount) : null,      // null: automatisch optimal
     optThreshold: Math.max(0, +(input.optThreshold != null ? input.optThreshold : 90)),
     maxThreshold: 5,
+    // Überlauf höchstens … % der Paket-Rohstoffe (10.11). Ohne Angabe 100 %, also keine Grenze wie bis v0.5;
+    // die Seite schickt ihren Startwert 1 %.
+    maxOverflow: input.maxOverflow != null && input.maxOverflow !== "" && isFinite(+input.maxOverflow)
+      ? Math.max(0, Math.min(100, +input.maxOverflow)) : 100,
 
     speed: +w.speed || 1,
     coin: w.coin,
@@ -548,7 +552,7 @@ function lockstep(src, P, sites, cnt, detail) {
   }
   const {site, tau} = src._ls;
   const out = detail ? {overflow: new Float64Array(n), pkgRes: new Float64Array(n), ovClick: new Float64Array(K), site} : null;
-  let coins = 0;
+  let coins = 0, ovSum = 0, pkSum = 0;
   const bins = P.ignoreRatio ? new Map(sites.map(j => [j, new Array(K + 1)])) : null;
   let cur = null;
   const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, P)); };
@@ -560,15 +564,17 @@ function lockstep(src, P, sites, cnt, detail) {
     if (site[i] === i) continue;
     if (bins) cur = bins.get(site[i]);
     const r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, bins ? sinkBin : sinkRatio, true, out && out.ovClick);
+    ovSum += r.overflow; pkSum += r.pkgRes;
     if (out) { out.overflow[i] = r.overflow; out.pkgRes[i] = r.pkgRes; }
   }
   for (const j of sites) {
     const r = siteRun(src[j], P, cnt, bins ? bins.get(j) : null);
-    coins += r.coins;
+    coins += r.coins; pkSum += r.pkgRes;
     if (out) out.pkgRes[j] = r.pkgRes;
   }
-  if (out) { out.coins = coins; return out; }
-  return {coins};
+  const ov = pkSum > 0 ? ovSum / pkSum : 0;
+  if (out) { out.coins = coins; out.ov = ov; return out; }
+  return {coins, ov};
 }
 
 /* Höchstwert eines Pakets: Paketgröße × Summe der Speicher, in Münzen zum Flaggenpreis (Flagge verdoppelt). */
@@ -612,26 +618,48 @@ function evenSchedule(N, L, K, maxPer) {
   return pos.sort((a, b) => a - b);
 }
 
-/* Einzelne Pakete um 1 bis 3 Klicks verschieben, solange die Münzen steigen */
-function improveSchedule(pos, evalFn, K, maxPer, rounds) {
+/* Bewertung eines Zeitplans nach der Überlaufgrenze (10.11), lexikographisch: zulässig (Überlauf höchstens
+   P.maxOverflow %) vor unzulässig; unter zulässigen mehr Münzen, unter unzulässigen weniger Überlauf. Mit Grenze
+   100 % ist jeder Plan zulässig und es zählen nur die Münzen wie bis v0.5. */
+const zulaessig = (r, P) => r.ov * 100 <= P.maxOverflow + 1e-9;
+function besser(a, b, P, eps = 1e-6) {
+  const za = zulaessig(a, P), zb = zulaessig(b, P);
+  if (za !== zb) return za;
+  if (za) return a.coins > b.coins + eps;
+  return a.ov < b.ov - 1e-9 || (Math.abs(a.ov - b.ov) <= 1e-9 && a.coins > b.coins + eps);
+}
+
+/* Einzelne Pakete um 1 bis 3 Klicks verschieben, solange der Plan besser wird. Ist er danach noch unzulässig,
+   darf ein Paket an jeden Klick wandern (10.11), danach wieder die kurzen Schritte. */
+function improveSchedule(pos, evalFn0, K, maxPer, rounds, P, nurKurz) {
+  // auch in der alten Form aufrufbar: evalFn liefert nur Münzen, ohne P keine Grenze
+  const evalFn = c => { const v = evalFn0(c); return typeof v === "number" ? {coins: v, ov: 0} : v; };
+  P = P || {maxOverflow: 100};
   pos = pos.slice();
   const c = toCnt(pos, K);
   let best = evalFn(c);
-  for (let round = 0; round < (rounds || 8); round++) {
-    let changed = false;
-    for (let j = 0; j < pos.length; j++) {
-      for (const d of [-1, 1, -2, 2, -3, 3]) {
-        const k = pos[j] + d;
-        if (k < 0 || k > K || c[k] >= maxPer) continue;
-        c[pos[j]]--; c[k]++;
-        const v = evalFn(c);
-        if (v > best + 1e-6) { best = v; pos[j] = k; changed = true; break; }
-        c[k]--; c[pos[j]]++;
+  const lauf = (weit, maxRounds) => {
+    for (let round = 0; round < maxRounds; round++) {
+      let changed = false;
+      for (let j = 0; j < pos.length; j++) {
+        const ziele = weit ? Array.from({length: K + 1}, (_, k) => k - pos[j]).filter(d => d) : [-1, 1, -2, 2, -3, 3];
+        let wahl = null;
+        for (const d of ziele) {
+          const k = pos[j] + d;
+          if (k < 0 || k > K || c[k] >= maxPer) continue;
+          c[pos[j]]--; c[k]++;
+          const v = evalFn(c);
+          c[k]--; c[pos[j]]++;
+          if (besser(v, wahl ? wahl.v : best, P)) { wahl = {v, k}; if (!weit) break; }
+        }
+        if (wahl) { c[pos[j]]--; c[wahl.k]++; pos[j] = wahl.k; best = wahl.v; changed = true; }
       }
+      if (!changed) break;
     }
-    if (!changed) break;
-  }
-  return {pos: pos.sort((a, b) => a - b), coins: best};
+  };
+  lauf(false, rounds || 8);
+  if (!nurKurz && !zulaessig(best, P)) { lauf(true, 3); lauf(false, rounds || 8); }
+  return {pos: pos.sort((a, b) => a - b), coins: best.coins, ov: best.ov};
 }
 
 /* Kurve Pakete gegen Münzen.
@@ -643,8 +671,9 @@ function improveSchedule(pos, evalFn, K, maxPer, rounds) {
 const N_MAX = 150;
 function packageCurve(src, P, sites, untilMax, state) {
   const K = lastClick(P), maxPer = maxPerClick(P);
-  const evalFn = c => lockstep(src, P, sites, c).coins;
-  const cv = state || {curve: [{n: 0, pos: [], coins: evalFn(toCnt([], K)), gain: null}], optimal: null, maximal: null,
+  const evalFn = c => lockstep(src, P, sites, c);
+  const r0 = evalFn(toCnt([], K));
+  const cv = state || {curve: [{n: 0, pos: [], coins: r0.coins, ov: r0.ov, ok: zulaessig(r0, P), gain: null}], optimal: null, maximal: null,
                        value: packageValue(src, P), K, L: lastUsefulClick(src, P, sites), maxPer};
   const limit = Math.min(N_MAX, maxPer * (K + 1));
   for (let N = cv.curve.length; N <= limit; N++) {
@@ -659,18 +688,21 @@ function packageCurve(src, P, sites, untilMax, state) {
       c[k]++;
       const v = evalFn(c);
       c[k]--;
-      if (!warm || v > warm.coins) warm = {pos: prev.pos.concat([k]).sort((a, b) => a - b), coins: v};
+      if (!warm || besser(v, warm, P, 0)) warm = {pos: prev.pos.concat([k]).sort((a, b) => a - b), coins: v.coins, ov: v.ov};
     }
-    let best = warm || {pos: prev.pos, coins: prev.coins};
+    let best = warm || {pos: prev.pos, coins: prev.coins, ov: prev.ov};
     if (full) {
-      const a = improveSchedule(evenSchedule(N, cv.L, K, maxPer), evalFn, K, maxPer, 4);
-      const b = warm ? improveSchedule(warm.pos, evalFn, K, maxPer, 2) : a;
-      best = b.coins > a.coins ? b : a;
+      const a = improveSchedule(evenSchedule(N, cv.L, K, maxPer), evalFn, K, maxPer, 4, P, true);
+      const b = warm ? improveSchedule(warm.pos, evalFn, K, maxPer, 2, P, true) : a;
+      best = besser(b, a, P, 0) ? b : a;           // ohne Toleranz wie bis v0.5
+      // weite Verschiebungen nur, wenn beide Starts über der Grenze bleiben, und nur am besseren
+      if (!zulaessig(best, P)) best = improveSchedule(best.pos, evalFn, K, maxPer, 2, P);
     }
-    const gain = (best.coins - prev.coins) / cv.value;
-    cv.curve.push({n: N, pos: best.pos, coins: best.coins, gain, full});
-    if (cv.optimal == null && gain < P.optThreshold / 100 - 1e-9) cv.optimal = N - 1;
-    if (cv.maximal == null && gain < P.maxThreshold / 100 - 1e-9) cv.maximal = N - 1;
+    const gain = (best.coins - prev.coins) / cv.value, ok = zulaessig(best, P);
+    cv.curve.push({n: N, pos: best.pos, coins: best.coins, ov: best.ov, ok, gain, full});
+    // optimal und maximal nur mit zulässigem Plan (10.11): ein unzulässiges N beendet beide
+    if (cv.optimal == null && (!ok || gain < P.optThreshold / 100 - 1e-9)) cv.optimal = N - 1;
+    if (cv.maximal == null && (!ok || gain < P.maxThreshold / 100 - 1e-9)) cv.maximal = N - 1;
   }
   if (untilMax && cv.maximal == null) cv.maximal = cv.curve.length - 1;
   if (cv.optimal == null) cv.optimal = cv.curve.length - 1;
@@ -721,13 +753,14 @@ function coarse(P) {
 }
 function refine(src, P, sites, cv, m) {
   if (m === 1) return cv;
-  const K = lastClick(P), evalFn = pos => lockstep(src, P, sites, toCnt(pos, K)).coins;
-  const curve = cv.curve.map(x => ({n: x.n, pos: x.pos.map(k => k * m), coins: evalFn(x.pos.map(k => k * m)), gain: null, full: x.full}));
+  const K = lastClick(P), evalFn = pos => lockstep(src, P, sites, toCnt(pos, K));
+  const curve = cv.curve.map(x => { const pos = x.pos.map(k => k * m), r = evalFn(pos);
+    return {n: x.n, pos, coins: r.coins, ov: r.ov, ok: zulaessig(r, P), gain: null, full: x.full}; });
   let optimal = null, maximal = null;
   for (let n = 1; n < curve.length; n++) {
     curve[n].gain = (curve[n].coins - curve[n - 1].coins) / cv.value;
-    if (optimal == null && curve[n].gain < P.optThreshold / 100 - 1e-9) optimal = n - 1;
-    if (maximal == null && curve[n].gain < P.maxThreshold / 100 - 1e-9) maximal = n - 1;
+    if (optimal == null && (!curve[n].ok || curve[n].gain < P.optThreshold / 100 - 1e-9)) optimal = n - 1;
+    if (maximal == null && (!curve[n].ok || curve[n].gain < P.maxThreshold / 100 - 1e-9)) maximal = n - 1;
   }
   return Object.assign({}, cv, {curve, K, L: cv.L * m, maxPer: cv.maxPer,
                                 optimal: optimal == null ? curve.length - 1 : optimal, maximal: maximal == null ? curve.length - 1 : maximal});
@@ -784,7 +817,7 @@ function planPackages(villages, P0, passive) {
   const cv = refine(src, P, sites, best.cur, best.m);
   const chosen = Math.min(P0.pkgCount || cv.optimal, cv.curve.length - 1);
   const pos = cv.curve[chosen].pos;
-  R.pkg = Object.assign({}, cv, {chosen, pos, grid: best.m,
+  R.pkg = Object.assign({}, cv, {chosen, pos, grid: best.m, grenze: grenzeInfo(cv, chosen, P),
     detail: scheduleDetails(src, P, sites, pos, prepare(passive || [], P)),
     configCoins: R.configs.map(c => lockstep(src, P, c.sites, toCnt(pos, cv.K)).coins),
     perK: perK && perK.map(o => ({k: o.k, n: o.n, coins: o.coins, sites: o.sites.map(i => o.R.src[i])}))});
@@ -801,7 +834,36 @@ function adelsgeschlechter(vorrat, gepraegt, naechstes) {
   return {n, muenzen: mz, verbraucht: summe, rest: mz - summe, naechstesKostet: kosten, fehlen: summe + kosten - mz};
 }
 
-const api = {adelsgeschlechter, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
+/* Hinweis zur Überlaufgrenze für die gewählte Paketzahl: erreicht oder nicht, kleinster erreichter Überlauf und
+   wie viele Pakete höchstens unter der Grenze gehen (größtes zulässiges n der Kurve bis zur gewählten Zahl). */
+function grenzeInfo(cv, chosen, P) {
+  const c = cv.curve[chosen];
+  let maxOk = 0;
+  for (let n = 0; n <= chosen && n < cv.curve.length; n++) if (cv.curve[n].ok) maxOk = n;
+  return {grenze: P.maxOverflow, ok: c.ok, ov: c.ov, n: chosen, maxOk};
+}
+
+/* Berechnung 1 (10.11): Prägedörfer, Münzen und Klickfrequenz aus der einfachen Rechnung mit den vorgegebenen
+   Prozentpunkten; dazu ein Zeitplan für die empfohlene Aufstellung mit N = Prozentpunkte ÷ Paketgröße (gerundet),
+   gerechnet im Gleichschritt mit Speichergrenze und Überlaufgrenze. */
+function planPct(villages, P0, passive) {
+  const R = plan(villages, P0);
+  const N = Math.max(0, Math.round(P0.pkgPct / P0.pkgSize + 1e-9));
+  if (!R.src.length || !R.configs) return R;
+  const sites = R.configs[R.recommend - 1].sites;
+  const P = Object.assign({}, P0, {pkgCount: N || null});
+  const {Pc, m} = coarse(P);
+  let cv;
+  if (N) cv = refine(R.src, P, sites, packageCurve(R.src, Pc, sites, false), m);
+  else { const K = lastClick(P), r = lockstep(R.src, P, sites, toCnt([], K));
+         cv = {curve: [{n: 0, pos: [], coins: r.coins, ov: r.ov, ok: zulaessig(r, P)}], K}; }
+  const chosen = Math.min(N, cv.curve.length - 1), pos = cv.curve[chosen].pos;
+  R.zeitplan = {n: chosen, size: P0.pkgSize, sumPct: chosen * P0.pkgSize, pct: P0.pkgPct, pos, grid: m,
+                grenze: grenzeInfo(cv, chosen, P), detail: scheduleDetails(R.src, P, sites, pos, prepare(passive || [], P))};
+  return R;
+}
+
+const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
