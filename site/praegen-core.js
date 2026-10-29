@@ -111,6 +111,8 @@ function params(input, world) {
     ignoreRatio: !!input.ignoreRatio,                             // Händler schicken, was im Dorf liegt
     pkgSize: +input.pkgSize > 0 ? Math.min(100, +input.pkgSize) : 30,        // Größe eines Pakets in %
     pkgCount: +input.pkgCount > 0 ? Math.round(+input.pkgCount) : null,      // null: automatisch optimal
+    // Zahl der Flaggendoppler vorgegeben (Dennis 1b, 29.10.2026), nur bei „Rohstoffpakete maximieren“; null: automatisch
+    fdCount: input.mode !== "pct" && +input.fdCount >= 1 ? Math.min(3, Math.round(+input.fdCount)) : null,
     optThreshold: Math.max(0, +(input.optThreshold != null ? input.optThreshold : 90)),
     maxThreshold: 5,
     // Überlauf höchstens … % der Paket-Rohstoffe (10.11). Ohne Angabe 100 %, also keine Grenze wie bis v0.5;
@@ -379,7 +381,7 @@ function search(src, P, pl) {
   const r1 = pl.bestSingle(cands1);
   r1.needsSnob = !ah.length; r1.gainPct = null;
   configs.push(r1);
-  let recommend = 1;
+  let recommend = 1, frei = true;
   for (let k = 2; k <= K_MAX && k <= candsK.length; k++) {
     const prev = configs[k - 2];
     const next = pl.bestK(candsK, k, prev.sites);
@@ -387,9 +389,12 @@ function search(src, P, pl) {
     next.needsSnob = ah.length < k;
     next.gainPct = (next.coins / prev.coins - 1) * 100;
     configs.push(next);
-    if (prev.share >= 1 - 1e-6 || next.gainPct < P.minGainPct - 1e-9) break;
-    recommend = k;
+    const stop = prev.share >= 1 - 1e-6 || next.gainPct < P.minGainPct - 1e-9;
+    if (stop) frei = false;
+    if (frei) recommend = k;
+    if (stop && k >= (P.fdCount || 0)) break;          // bei Vorgabe mindestens bis zu dieser Zahl rechnen
   }
+  if (P.fdCount) recommend = Math.min(P.fdCount, configs.length);
   return {configs, recommend, ah, all};
 }
 function plan(villages, P) {
@@ -799,14 +804,15 @@ function bestForK(villages, P0, k, N0) {
    (Regel 9.1a auf den Gleichschritt übertragen). Gerechnet wird bis zur ersten Aufstellung unter dieser Schwelle. */
 function planPackages(villages, P0, passive) {
   let best, perK = null;
-  if (P0.pkgCount) best = bestForK(villages, P0, 0, P0.pkgCount);
+  if (P0.pkgCount) best = bestForK(villages, P0, P0.fdCount || 0, P0.pkgCount);
   else {
+    // automatisch: weiterer Flaggendoppler ab Mehrertrag; vorgegebene Zahl (fdCount): genau bis dorthin
     perK = [];
-    for (let k = 1; k <= K_MAX; k++) {
+    for (let k = 1; k <= (P0.fdCount || K_MAX); k++) {
       const o = bestForK(villages, P0, k, best ? best.n || 1 : 3);
       if (!o || !o.cur) { if (!best) best = o; break; }
       perK.push(o);
-      if (best && o.coins < best.coins * (1 + P0.minGainPct / 100) - 1e-9) break;
+      if (!P0.fdCount && best && o.coins < best.coins * (1 + P0.minGainPct / 100) - 1e-9) break;
       best = o;
     }
   }

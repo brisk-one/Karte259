@@ -489,3 +489,22 @@ test("10.12: Zwischenspeicher wird bei geänderter Eingabe verworfen", () => {
   assert.equal(c.size(), 0);
   assert.equal(c.get("a", 2), undefined);
 });
+
+/* ---------- Zahl der Flaggendoppler vorgeben (Dennis 1b, 29.10.2026) ---------- */
+test("Vorgabe Flaggendoppler: genau diese Zahl, auch gegen die automatische Regel", () => {
+  const v = konto63(), auto = K.planPackages(v, V5({}), []);
+  for (const f of [1, 2, 3]) {
+    const P = V5({fdCount: f}), R = K.planPackages(v, P, []);
+    assert.equal(R.recommend, f, "Vorgabe " + f);
+    assert.equal(R.configs[f - 1].sites.length, f);
+    assert.equal(R.pkg.perK.length, f);
+    const x = K.packagesForK(v, P, f, [], R.pkg.perK);          // nachgerechnet wie die Gesamtrechnung
+    near(x.pkg.detail.coins, R.pkg.detail.coins, 1e-6);
+    if (f === auto.recommend) near(R.pkg.detail.coins, auto.pkg.detail.coins, 1e-6);
+  }
+  const fest = K.planPackages(v, V5({fdCount: 3, pkgCount: 4}), []);
+  assert.equal(fest.recommend, 3);
+  assert.equal(fest.pkg.chosen, 4);
+  assert.equal(V5({fdCount: 2, mode: "pct"}).fdCount, null);    // nur bei „maximieren“
+  assert.equal(V5({fdCount: 0}).fdCount, null);
+});

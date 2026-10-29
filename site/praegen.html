@@ -150,6 +150,11 @@
               <div class="pr-row">
                 <label class="pick"><span>Anzahl</span><select id="pkgcount" aria-label="Anzahl Pakete"></select></label>
               </div>
+              <div class="pr-row">
+                <label class="pick"><span>Flaggendoppler</span><select id="fdcount" aria-label="Zahl der Flaggendoppler">
+                  <option value="0">automatisch</option><option value="1">1 Flaggendoppler</option>
+                  <option value="2">2 Flaggendoppler</option><option value="3">3 Flaggendoppler</option></select></label>
+              </div>
               <p class="pr-mnote">Zahl und Zeitplan der Pakete werden mit Speichergrenze und Überlauf optimiert.</p>
             </div>
           </div>
@@ -340,7 +345,7 @@ function inputs() {
   const mpf = parseFloat($("mpf").value), pf = parseFloat($("pfac").value);
   const mo = $("maxov").value.trim();
   return {mode: MODE, pkgPct: Math.max(0, +$("pkgpct").value || 0), maxOverflow: mo === "" || !isFinite(+mo) ? 1 : +mo,
-          pkgSize: +$("pkgsize").value || 30, pkgCount: +$("pkgcount").value || null, startPct: +$("start").value || 0,
+          pkgSize: +$("pkgsize").value || 30, pkgCount: +$("pkgcount").value || null, fdCount: +$("fdcount").value || null, startPct: +$("start").value || 0,
           decreeN: +$("decree").value || 0, minStorage: +$("minstorage").value || 0, ignoreRatio: $("ignoreratio").checked,
           optThreshold: +$("thr").value || 90,
           merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, intervalMin: +$("interval").value,
@@ -391,7 +396,7 @@ function pctPakete() {
 }
 ["pkgpct", "pkgsize"].forEach(id => $(id).addEventListener("input", pctPakete));
 ["paste", "maxov", "pkgpct", "pkgsize", "start", "mpf", "pfac", "gain", "thr"].forEach(id => $(id).addEventListener("input", schedule));
-["flag", "interval", "minmarket", "minstorage", "pkgcount", "bonus", "decree", "ignoreratio", "prod"].forEach(id => $(id).addEventListener("change", schedule));
+["flag", "interval", "minmarket", "minstorage", "pkgcount", "fdcount", "bonus", "decree", "ignoreratio", "prod"].forEach(id => $(id).addEventListener("change", schedule));
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
 setMode("max");
 pctPakete();
@@ -487,7 +492,8 @@ function compute(token, villages, P, passive, done) {
 
 function show(token, R, villages, parsed) {
   if (token !== RUN) return;
-  const vorher = VIEW;
+  // neue Vorgabe der Flaggendoppler: Ansicht springt auf die Vorgabe, sonst bleibt die Wahl
+  const vorher = RESULT && RESULT.Pin && R.Pin && RESULT.Pin.fdCount !== R.Pin.fdCount ? null : VIEW;
   RESULT = R;
   RESULT.villages = villages;
   RESULT.allParsed = parsed.villages;
@@ -616,7 +622,7 @@ function renderRecommendation() {
     + (P.decreeN === 2 ? ", alle 48 h mit Erlass" : P.decree ? ", die ersten 24 h mit Erlass" : "")
     + (ad ? ", zusammen mit dem Vorrat " + nf.format(ad.muenzen) + " Münzen für " + adelZahl(ad) : ""));
   title.appendChild(sub);
-  $("rec-hint").textContent = (pk ? pakete(pk.chosen) + " zu " + P.pkgSize + " %" : nf.format(P.pkgPct) + " % Pakete") + " · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
+  $("rec-hint").textContent = (P.fdCount ? fdName(P.fdCount) + " vorgegeben · " : "") + (pk ? pakete(pk.chosen) + " zu " + P.pkgSize + " %" : nf.format(P.pkgPct) + " % Pakete") + " · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
     + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.minStorage ? " · Speicher mind. " + P.minStorage : "")
     + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decreeN ? " · Erlass " + P.decreeN + "×" : "") + (P.ignoreRatio ? " · Verhältnis ignoriert" : "");
 
@@ -624,6 +630,7 @@ function renderRecommendation() {
   const complete = a.r.share >= 1 - 1e-6;
   const parts = [];
   const pK = pk && pk.perK;
+  if (P.fdCount) parts.push("Vorgegeben: " + fdName(P.fdCount) + (n < P.fdCount ? ", gerechnet werden konnten nur " + n : "") + ".");
   if (pK) {
     // „automatisch“ (Dennis 3a): jede Aufstellung mit ihrer eigenen optimalen Paketzahl
     const mit = o => mitFD(o.k) + " und " + (o.n === 1 ? "1 Paket" : o.n + " Paketen");
@@ -633,7 +640,7 @@ function renderRecommendation() {
     else parts.push("Mit " + mit(cur) + " sind " + nf.format(Math.round(cur.coins)) + " Münzen möglich.");
     if (next) parts.push("Ein weiterer Flaggendoppler brächte mit " + (next.n === 1 ? "1 Paket" : next.n + " Paketen") + " nur "
       + plus((next.coins / cur.coins - 1) * 100) + ", die Schwelle liegt bei " + P.minGainPct + " %.");
-    else if (n >= R.ahCount && R.ahCount > 0) parts.push("Für weitere Prägedörfer fehlen Dörfer mit Adelshof.");
+    else if (!P.fdCount && n >= R.ahCount && R.ahCount > 0) parts.push("Für weitere Prägedörfer fehlen Dörfer mit Adelshof.");
   }
   else if (n === 1) parts.push(complete ? "Alle Paket-Rohstoffe kommen " + frist + " im Prägedorf an."
                                    : "Mit einem Flaggendoppler kommen " + pctf(a.r.share) + " der Paket-Rohstoffe " + frist + " an.");
@@ -656,9 +663,10 @@ function renderRecommendation() {
   const sel = gewaehlt(), sa = sel.a, spk = sel.pk, sz = sel.z;
   const zeile = $("rec-sel");
   zeile.replaceChildren(document.createTextNode("Kennzahlen für: "), el("b", null, fdName(sel.k)),
-    document.createTextNode(sel.rec ? " (Empfehlung)" : " (gewählt, Empfehlung: " + R.recommend + ")"));
+    document.createTextNode(sel.rec ? (P.fdCount ? " (Vorgabe)" : " (Empfehlung)")
+      : " (gewählt, " + (P.fdCount ? "Vorgabe: " : "Empfehlung: ") + R.recommend + ")"));
   if (!sel.rec) {
-    const b = el("button", "tw small", "zur Empfehlung"); b.type = "button";
+    const b = el("button", "tw small", P.fdCount ? "zur Vorgabe" : "zur Empfehlung"); b.type = "button";
     b.addEventListener("click", () => setWahl(R.recommend));
     zeile.appendChild(b);
   }
