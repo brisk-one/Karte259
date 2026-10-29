@@ -21,6 +21,18 @@
   .pr-ctl .lab{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700;
     display:block; margin-bottom:3px}
   .pr-row{display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+  /* Zwei Berechnungsarten nebeneinander, nur eine aktiv (Dennis 29.10.2026); die andere blass, Klick darauf
+     schaltet um */
+  .pr-modes{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  @media (max-width:560px){ .pr-modes{grid-template-columns:1fr} }
+  .pr-mode{display:grid; gap:6px; align-content:start; padding:8px 10px; border:1px solid var(--edge);
+    border-radius:var(--radius); background:var(--panel-2); transition:opacity .15s}
+  .pr-mode.on{border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent)}
+  .pr-mode.off{opacity:.42; cursor:pointer}
+  .pr-mode.off:hover{opacity:.7}
+  .pr-mhead{display:flex; gap:6px; align-items:center; font-size:12px; font-weight:700; cursor:pointer}
+  .pr-mhead input{accent-color:var(--accent); margin:0}
+  .pr-mnote{margin:0; font-size:11px; color:var(--muted); line-height:1.35}
   .pr-row input[type="number"]{width:84px}
   .pr-ctl input[type="number"],.pr-adv input[type="number"]{font:inherit; font-size:12px; padding:2px 6px; color:var(--ink);
     background:var(--field); border:1px solid var(--edge); border-radius:var(--radius)}
@@ -109,12 +121,26 @@
         placeholder="[001] Dorfname (500|500) K55   10.393   22   25   20   15   0   1   20   1   1   23   30   30   30   30   30   10   20&#10;…"></textarea>
       <div class="pr-ctl">
         <div>
-          <span class="lab">Rohstoffpakete</span>
-          <div class="pr-row" id="pkg-row">
-            <input type="number" id="pkgsize" min="1" max="100" step="1" value="30" aria-label="Größe eines Pakets in Prozent"> <span>% des Speichers je Paket</span>
-          </div>
-          <div class="pr-row" style="margin-top:5px">
-            <label class="pick"><span>Anzahl</span><select id="pkgcount" aria-label="Anzahl Pakete"></select></label>
+          <span class="lab">Berechnung</span>
+          <div class="pr-modes" role="radiogroup" aria-label="Berechnung">
+            <div class="pr-mode" id="mode-pct">
+              <label class="pr-mhead"><input type="radio" name="mode" value="pct"> 1 · Rohstoffprozentpunkte vorgeben</label>
+              <div class="pr-row">
+                <input type="number" id="pkgpct" min="0" max="2000" step="10" value="300" aria-label="Rohstoffpakete in Prozent der Speicherkapazität"> <span>% der Speicherkapazität</span>
+              </div>
+              <div class="pr-row" id="pct-quick" role="group" aria-label="Schnellwahl Prozentpunkte"></div>
+              <p class="pr-mnote">Alle Pakete auf einmal, ohne Speichergrenze. Prägedörfer, Münzen und Klickfrequenz werden daraus errechnet.</p>
+            </div>
+            <div class="pr-mode" id="mode-max">
+              <label class="pr-mhead"><input type="radio" name="mode" value="max" checked> 2 · Rohstoffpakete maximieren</label>
+              <div class="pr-row" id="pkg-row">
+                <input type="number" id="pkgsize" min="1" max="100" step="1" value="30" aria-label="Größe eines Pakets in Prozent"> <span>% des Speichers je Paket</span>
+              </div>
+              <div class="pr-row">
+                <label class="pick"><span>Anzahl</span><select id="pkgcount" aria-label="Anzahl Pakete"></select></label>
+              </div>
+              <p class="pr-mnote">Zahl und Zeitplan der Pakete werden mit Speichergrenze und Überlauf optimiert.</p>
+            </div>
           </div>
         </div>
         <div class="pr-row">
@@ -172,7 +198,7 @@
   </section>
 
   <div class="grid" id="p-more" hidden>
-    <section class="panel c6" aria-labelledby="h-pk">
+    <section class="panel c6" aria-labelledby="h-pk" id="p-pk">
       <h2 id="h-pk">Zeitplan der Pakete <span class="hint" id="pk-hint"></span></h2>
       <div class="body">
         <div id="pk-table" style="overflow-x:auto"></div>
@@ -180,7 +206,7 @@
       </div>
     </section>
 
-    <section class="panel c6" aria-labelledby="h-pc">
+    <section class="panel c6" aria-labelledby="h-pc" id="p-pc">
       <h2 id="h-pc">Pakete gegen Münzen <span class="hint" id="pc-hint"></span></h2>
       <div class="body">
         <div class="pr-legend" id="pc-legend"></div>
@@ -292,7 +318,8 @@ for (let L = 0; L <= 25; L++) {
 
 function inputs() {
   const mpf = parseFloat($("mpf").value), pf = parseFloat($("pfac").value);
-  return {pkgSize: +$("pkgsize").value || 30, pkgCount: +$("pkgcount").value || null, startPct: +$("start").value || 0,
+  return {mode: MODE, pkgPct: Math.max(0, +$("pkgpct").value || 0),
+          pkgSize: +$("pkgsize").value || 30, pkgCount: +$("pkgcount").value || null, startPct: +$("start").value || 0,
           decreeN: +$("decree").value || 0, minStorage: +$("minstorage").value || 0, ignoreRatio: $("ignoreratio").checked,
           optThreshold: +$("thr").value || 90,
           merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, intervalMin: +$("interval").value,
@@ -301,11 +328,34 @@ function inputs() {
           minPerField: mpf > 0 && Math.abs(mpf - WORLD.base_min_per_field / WORLD.speed) > 1e-6 ? mpf : null};
 }
 
+/* Berechnungsart: "pct" Prozentpunkte vorgeben (einfache Rechnung wie bis v0.4), "max" Pakete maximieren (v0.5) */
+let MODE = "max";
+function setMode(m) {
+  MODE = m;
+  [["pct", "mode-pct"], ["max", "mode-max"]].forEach(([k, id]) => {
+    const on = k === m, box = $(id);
+    box.classList.toggle("on", on); box.classList.toggle("off", !on);
+    box.querySelector("input[type=radio]").checked = on;
+    box.title = on ? "" : "Klicken, um diese Berechnung zu verwenden";
+  });
+  schedule();
+}
+["mode-pct", "mode-max"].forEach(id => $(id).addEventListener("click", e => {
+  const m = id === "mode-pct" ? "pct" : "max";
+  if (MODE !== m) { setMode(m); if (e.target.tagName === "INPUT" && e.target.type === "number") e.target.focus(); }
+}));
+[100, 200, 300, 500, 1000].forEach(v => {
+  const b = el("button", "tw small", v + " %"); b.type = "button";
+  b.addEventListener("click", () => { $("pkgpct").value = v; if (MODE !== "pct") setMode("pct"); else schedule(); });
+  $("pct-quick").appendChild(b);
+});
+
 let timer = null;
 function schedule() { clearTimeout(timer); timer = setTimeout(run, 250); }
-["paste", "pkgsize", "start", "mpf", "pfac", "gain", "thr"].forEach(id => $(id).addEventListener("input", schedule));
+["paste", "pkgpct", "pkgsize", "start", "mpf", "pfac", "gain", "thr"].forEach(id => $(id).addEventListener("input", schedule));
 ["flag", "interval", "minmarket", "minstorage", "pkgcount", "bonus", "decree", "ignoreratio", "prod"].forEach(id => $(id).addEventListener("change", schedule));
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
+setMode("max");
 document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } });
 let rsz = null;
 window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } }, 200); });
@@ -375,7 +425,8 @@ function run() {
 const CORE_URL = (document.querySelector('script[src*="praegen-core.js"]') || {}).src;
 let WORKER = null, WBUSY = false;
 function compute(token, villages, P, passive, done) {
-  const direkt = () => { if (token === RUN) done(K.planPackages(villages, P, passive)); };
+  const rechne = () => P.mode === "pct" ? K.plan(villages, P) : K.planPackages(villages, P, passive);
+  const direkt = () => { if (token === RUN) done(rechne()); };
   if (typeof Worker === "undefined" || !CORE_URL) return void setTimeout(direkt, 0);
   if (WORKER && WBUSY) { WORKER.terminate(); WORKER = null; }
   if (!WORKER) {
@@ -400,6 +451,7 @@ function show(token, R, villages, parsed) {
   VIEW = RESULT.recommend;                // nach jeder Neuberechnung die empfohlene Aufstellung zeigen
   STEPS = [];
   ["p-rec", "p-more"].forEach(id => $(id).hidden = false);
+  ["p-pk", "p-pc"].forEach(id => $(id).hidden = !R.pkg);       // Zeitplan und Kurve nur bei „maximieren“
   renderRecommendation();
   renderSchedule();
   renderCurve();
@@ -474,17 +526,18 @@ function renderRecommendation() {
   title.replaceChildren();
   const names = joinUnd(a.sites.map(siteName));
   title.appendChild(document.createTextNode(n === 1 ? "1 Flaggendoppler in " + names : fdName(n) + ": " + names));
-  const sub = el("small", null, nf.format(Math.round(pk.detail.coins)) + " Münzen in 48 h mit " + (pk.chosen === 1 ? "1 Paket" : nf.format(pk.chosen) + " Paketen")
+  const sub = el("small", null, nf.format(Math.round(pk ? pk.detail.coins : a.r.coins)) + " Münzen in 48 h mit "
+    + (pk ? (pk.chosen === 1 ? "1 Paket" : nf.format(pk.chosen) + " Paketen") : nf.format(P.pkgPct) + " % Rohstoffpaketen")
     + (P.decreeN === 2 ? ", alle 48 h mit Erlass" : P.decree ? ", die ersten 24 h mit Erlass" : ""));
   title.appendChild(sub);
-  $("rec-hint").textContent = pakete(pk.chosen) + " zu " + P.pkgSize + " % · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
+  $("rec-hint").textContent = (pk ? pakete(pk.chosen) + " zu " + P.pkgSize + " %" : nf.format(P.pkgPct) + " % Pakete") + " · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
     + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.minStorage ? " · Speicher mind. " + P.minStorage : "")
     + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decreeN ? " · Erlass " + P.decreeN + "×" : "") + (P.ignoreRatio ? " · Verhältnis ignoriert" : "");
 
   const frist = P.decreeN === 1 ? "in den 24 h des Erlasses" : "in den 48 h";
   const complete = a.r.share >= 1 - 1e-6;
   const parts = [];
-  const pK = pk.perK;
+  const pK = pk && pk.perK;
   if (pK) {
     // „automatisch“ (Dennis 3a): jede Aufstellung mit ihrer eigenen optimalen Paketzahl
     const mit = o => mitFD(o.k) + " und " + (o.n === 1 ? "1 Paket" : o.n + " Paketen");
@@ -541,14 +594,19 @@ function renderRecommendation() {
     const v = el("dd", null, dd); if (small) { v.appendChild(document.createTextNode(" ")); v.appendChild(el("small", null, small)); }
     d.appendChild(v); f.appendChild(d);
   };
-  const last = pk.curve[pk.chosen];
-  fact("Münzen", nf.format(Math.round(pk.detail.coins)), "ohne Pakete " + nf.format(Math.round(pk.curve[0].coins)));
-  fact("Pakete", pakete(pk.chosen), (P.pkgCount ? "fest" : "optimal bei " + P.optThreshold + " %") + ", maximal " + pk.maximal);
-  fact("Münzen je Paket", pk.chosen ? nf.format(Math.round((pk.detail.coins - pk.curve[0].coins) / pk.chosen)) : "–",
-       "Höchstwert " + nf.format(Math.round(pk.value)));
-  fact("Grenznutzen letztes Paket", last && last.gain != null ? nf.format(Math.round(last.coins - pk.curve[pk.chosen - 1].coins)) : "–",
-       last && last.gain != null ? gainTxt(last.gain) + " des Höchstwerts" : "");
-  fact("Überlauf", pctf(pk.detail.overflowShare), "der Paket-Rohstoffe");
+  if (pk) {
+    const last = pk.curve[pk.chosen];
+    fact("Münzen", nf.format(Math.round(pk.detail.coins)), "ohne Pakete " + nf.format(Math.round(pk.curve[0].coins)));
+    fact("Pakete", pakete(pk.chosen), (P.pkgCount ? "fest" : "optimal bei " + P.optThreshold + " %") + ", maximal " + pk.maximal);
+    fact("Münzen je Paket", pk.chosen ? nf.format(Math.round((pk.detail.coins - pk.curve[0].coins) / pk.chosen)) : "–",
+         "Höchstwert " + nf.format(Math.round(pk.value)));
+    fact("Grenznutzen letztes Paket", last && last.gain != null ? nf.format(Math.round(last.coins - pk.curve[pk.chosen - 1].coins)) : "–",
+         last && last.gain != null ? gainTxt(last.gain) + " des Höchstwerts" : "");
+    fact("Überlauf", pctf(pk.detail.overflowShare), "der Paket-Rohstoffe");
+  } else {
+    fact("Münzen", nf.format(Math.round(a.r.coins)), "in 48 h");
+    fact("Rohstoffpakete", nf.format(P.pkgPct) + " %", "der Speicherkapazität, auf einmal");
+  }
   fact("Pakete rechtzeitig", pctf(a.r.share), (P.decreeN === 1 ? "bis 24 h" : "bis 48 h") + ", ohne Speichergrenze");
   fact("90 % angekommen", hrs(share90(a.d)));
   fact("alles angekommen", hrs(a.d.doneAt));
@@ -561,7 +619,9 @@ function renderRecommendation() {
 const gainTxt = v => Math.round(v * 100) + " %";
 const pakete = n => n === 1 ? "1 Paket" : nf.format(n) + " Pakete";
 function renderSchedule() {
-  const R = RESULT, P = R.P, pk = R.pkg, d = pk.detail;
+  const R = RESULT, P = R.P, pk = R.pkg;
+  if (!pk) return;
+  const d = pk.detail;
   $("pk-hint").textContent = pakete(pk.chosen) + " zu " + P.pkgSize + " %, " + nf.format(Math.round(d.coins)) + " Münzen, Überlauf " + pctf(d.overflowShare);
   const box = $("pk-table");
   if (!d.rows.length) box.replaceChildren(el("p", "empty", "Keine Pakete: schon das erste brächte weniger als " + P.optThreshold + " % seines Höchstwerts."));
@@ -593,7 +653,7 @@ function renderSchedule() {
 }
 
 function renderCurve() {
-  if (!RESULT) return;
+  if (!RESULT || !RESULT.pkg) return;
   const R = RESULT, pk = R.pkg, c = pk.curve, box = $("pc");
   const W = Math.max(300, Math.round(box.clientWidth || 620)), H = W < 500 ? 220 : 250;
   const m = {l: 54, r: 16, t: 14, b: 28};
@@ -649,9 +709,10 @@ function renderCompare() {
     A.forEach((x, i) => tr.appendChild(el("td", R.recommend === i + 1 ? "rec" : "", f(x, i + 1))));
     tb.appendChild(tr);
   };
-  row("Prägedorf", (x, n) => (R.pkg.perK && R.pkg.perK[n - 1] ? R.pkg.perK[n - 1].sites : x.sites).map(siteName).join(" + "));
-  const cc = R.pkg.configCoins;
-  const pK = R.pkg.perK;
+  const pk = R.pkg;
+  row("Prägedorf", (x, n) => (pk && pk.perK && pk.perK[n - 1] ? pk.perK[n - 1].sites : x.sites).map(siteName).join(" + "));
+  const cc = pk ? pk.configCoins : R.configs.map(c => c.coins);
+  const pK = pk && pk.perK;
   if (pK) {
     // „automatisch“: je Aufstellung die eigene optimale Paketzahl; ohne Wert, wo nicht gerechnet wurde
     const o = n => pK[n - 1];
@@ -670,7 +731,7 @@ function renderCompare() {
   row("zu weit weg", x => String(engpass(x.d).w));
   t.appendChild(tb);
   box.appendChild(t);
-  const p = el("p", "empty", R.pkg.perK ? "Regel bei „automatisch“: jede Aufstellung mit ihrer eigenen optimalen Paketzahl; ein weiterer Flaggendoppler nur, wenn er damit mindestens "
+  const p = el("p", "empty", pK ? "Regel bei „automatisch“: jede Aufstellung mit ihrer eigenen optimalen Paketzahl; ein weiterer Flaggendoppler nur, wenn er damit mindestens "
     + R.P.minGainPct + " % mehr Münzen bringt. Die Zeilen „rechtzeitig“ bis „zu weit weg“ stammen aus der einfachen Rechnung mit " + (R.pkg.chosen === 1 ? "1 Paket" : R.pkg.chosen + " Paketen") + ". Jedes Dorf beliefert das nächstgelegene Prägedorf."
     : "Regel: Ein weiterer Flaggendoppler nur, wenn die Aufstellung mit einem weniger nicht alles rechtzeitig schafft und der weitere mindestens "
     + R.P.minGainPct + " % mehr Münzen bringt. Gerechnet wird bis zur ersten Aufstellung unter dieser Schwelle. Jedes Dorf beliefert das nächstgelegene Prägedorf.");
@@ -781,8 +842,8 @@ function renderVillages() {
   const byKey = new Map(a.d.rows.map(r => [R.src[r.i].x + "|" + R.src[r.i].y, r]));
   const cols = [["dabei", "l"], ["Dorf", "l"], ["Koordinaten", "l"], ["Status", "l", 1], ["rechtzeitig", "", 1], ["alles da nach", "", 1],
                 ["Laufzeit", "", 1], ["Markt (Händler)", "", 1], ["Speicher", "", 1], ["Überlauf", "", 1], ["Paket prägbar", "", 1], ["Prägedorf", "l"]];
-  const det = R.pkg.detail, recView = VIEW === R.recommend;
-  const pasBy = new Map(det.passive.map(x => [x.x + "|" + x.y, x]));
+  const det = R.pkg && R.pkg.detail, recView = !!det && VIEW === R.recommend;
+  const pasBy = new Map(det ? det.passive.map(x => [x.x + "|" + x.y, x]) : []);
   const ovCell = (ov, res) => res > 0 ? [ov > 0 ? pctf(ov / res) : "0 %", ov / res > 0.01 ? "down" : "", Math.round(ov / res * 10000)] : ["", "", -1];
   const storText = s => s.b.storage > s.storageFrom ? s.storageFrom + " → " + s.b.storage : String(s.b.storage);
   const rows = R.allParsed.map(v => {
@@ -963,12 +1024,15 @@ function renderFreq() {
 /* ---------- Annahmen ---------- */
 function renderAssumptions() {
   const P = RESULT.P, w = WORLD;
-  const items = [
+  const items = !RESULT.pkg ? [
+    "Berechnung „Rohstoffprozentpunkte vorgeben“: jedes Dorf hat zum Start zusätzlich " + nf.format(P.pkgPct) + " % seiner Speicherkapazität je Rohstoff, ohne Speichergrenze (einfache Rechnung wie bis Version 0.4). Überlauf und Zeitplan der Pakete werden nicht gerechnet, dafür „Rohstoffpakete maximieren“ wählen.",
+  ] : [
     "Ein Rohstoffpaket bringt je Rohstoff " + P.pkgSize + " % der Speicherkapazität in jedes Dorf, auch in Dörfer ohne Haken. Gerechnet wird das ganze Konto im Gleichschritt auf dem Klickraster: an jedem Klick erst Pakete einlösen, dann verschicken. Was über den Speicher geht, ist verloren (Überlauf); die laufende Produktion ebenfalls nur bis zur Speichergrenze. Höchstens " + K.maxPerClick(P) + " Pakete auf einmal.",
     "Zeitplan: Für jede Paketzahl werden die Pakete zuerst gleichmäßig von 0 h bis zum letzten sinnvollen Zeitpunkt (hier " + hm(RESULT.pkg.L * P.interval) + ") verteilt und dann einzeln um 1 bis 3 Klicks verschoben, solange die Münzen bis 48 h steigen. Das bestraft Überlauf und zu späte Ankunft zugleich. Verglichen wird zusätzlich mit dem Plan für ein Paket weniger plus einem Paket am besten Klick, damit mehr Pakete nie weniger Münzen bringen. Jenseits von „optimal“ zeigt die Kurve nur diese schnelle Variante.",
     "Paketzahl „optimal“: so lange ein weiteres Paket dazu, wie es noch mindestens " + P.optThreshold + " % seines Höchstwerts bringt. Höchstwert = Paketgröße × Summe der Speicher der beteiligten Dörfer, in Münzen zum Flaggenpreis (" + nf.format(Math.round(RESULT.pkg.value)) + " Münzen). „maximal“: bis ein weiteres weniger als 5 % bringt.",
     "Die Prägedörfer stammen weiter aus der einfachen Rechnung ohne Speichergrenze mit allen Paketen auf einmal (Paketvolumen = Anzahl × Größe), die Münzen und der Zeitplan aus dem Gleichschritt. Das ist eine Näherung: mit Speichergrenzen könnte eine andere Aufstellung knapp besser sein. „Pakete rechtzeitig“ und die Diagramme zu Ankunft und Klickfrequenz kommen aus der einfachen Rechnung.",
-    P.ignoreRatio ? "Rohstoffverhältnis ignoriert: Händler schicken Holz, Lehm und Eisen so, wie sie im Dorf liegen. Im Prägedorf wird weiter im Verhältnis " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + " geprägt, die Münzen richten sich nach dem knappsten Rohstoff; überschüssiges Holz oder Eisen darf dort überlaufen und zählt nicht als Überlauf."
+  ];
+  items.push(    P.ignoreRatio ? "Rohstoffverhältnis ignoriert: Händler schicken Holz, Lehm und Eisen so, wie sie im Dorf liegen. Im Prägedorf wird weiter im Verhältnis " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + " geprägt, die Münzen richten sich nach dem knappsten Rohstoff; überschüssiges Holz oder Eisen darf dort überlaufen und zählt nicht als Überlauf."
       : "Verschickt wird nur im Prägeverhältnis Holz : Lehm : Eisen = " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + ". Der Überschuss, meist Holz und Eisen, bleibt im Dorf und kann dort überlaufen.",
     "Das Prägedorf prägt sofort, was ankommt, und läuft nicht über.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",
@@ -977,7 +1041,7 @@ function renderAssumptions() {
     "„Pakete rechtzeitig“ zählt die Paket-Rohstoffe, die " + (P.decreeN === 1 ? "innerhalb der 24 h des Erlasses" : "innerhalb der 48 h") + " ankommen. Die laufende Produktion wird nach den Paketen verschickt und zählt nur bei den Münzen.",
     "Jedes Prägedorf braucht einen Adelshof, einen Flaggendoppler und eine Münzkosten-Flagge; der Rechner nimmt für alle dieselbe Flaggenstufe an. Bis zwei Prägedörfer prüft er jede Kombination, ab drei sucht er mit Startaufstellungen und Tauschen. Das findet sehr gute, aber nicht garantiert die beste Aufstellung.",
     "„Markt zu klein“: Das Dorf schafft seinen Anteil mit der genannten Marktstufe rechtzeitig. „zu weit weg oder zu selten geklickt“: auch Markt 25 reicht bei diesem Klickabstand nicht.",
-  ];
+  );
   if (P.minStorage) items.push("Speicher mindestens Stufe " + P.minStorage + " (" + nf.format(K.storageCap(P.minStorage)) + "): Dörfer darunter rechnen mit dieser Stufe, also mit größeren Paketen und mehr Platz, als wäre der Ausbau vor dem Start fertig.");
   if (P.minMarket) items.push("Marktplatz mindestens Stufe " + P.minMarket + " (" + nf.format(K.merchantsAt(P.minMarket)) + " Händler): Dörfer darunter rechnen mit dieser Stufe, als wäre der Ausbau vor dem Start fertig. Bauzeit und Baukosten sind nicht eingerechnet. In der Dorftabelle steht der Ausbau als „alt → neu“.");
   $("assume").replaceChildren(...items.map(t => el("li", null, t)));

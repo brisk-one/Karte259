@@ -95,6 +95,7 @@ function params(input, world) {
   const w = Object.assign({}, WORLD_DEFAULT, world || {});
   const bonus = input.merchantBonus ? 1.5 : 1;
   const P = {
+    mode: input.mode === "pct" ? "pct" : "max",          // pct: Prozentpunkte vorgeben, max: Pakete maximieren
     pkgPct: Math.max(0, +input.pkgPct || 0),
     startPct: Math.max(0, +input.startPct || 0),
     // Erlass des Adels: 0 kein, 1 einmal (24 h), 2 zweimal hintereinander (48 h); decree: true heißt einmal

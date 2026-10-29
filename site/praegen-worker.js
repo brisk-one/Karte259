@@ -8,7 +8,8 @@ self.onmessage = e => {
   const m = e.data;
   try {
     if (loaded !== m.core) { importScripts(m.core); loaded = m.core; }
-    const R = self.Praegen.planPackages(m.villages, m.P, m.passive);
+    // „Rohstoffprozentpunkte vorgeben“ rechnet einfach wie bis v0.4, „maximieren“ mit Zeitplan (v0.5)
+    const R = m.P.mode === "pct" ? self.Praegen.plan(m.villages, m.P) : self.Praegen.planPackages(m.villages, m.P, m.passive);
     if (R.src) delete R.src._ls;                     // Zwischenspeicher des Rechenkerns, wird nicht übertragen
     self.postMessage({token: m.token, R});
   } catch (err) {
