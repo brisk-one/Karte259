@@ -187,8 +187,30 @@ def kampf_bauen(versions, players_path, vrows, ddir):
     tags = {int(r["id"]): r["tag"] for r in store.read_csv(store.dpath("latest", "allies.csv"))}
     kr = krieg.bauen(live, versions[0][1], tags)
     _dump(os.path.join(ddir, "krieg.json"), kr)
+    tage = kampf_tage_bauen(ivs, ddir)
     return {"kaempfe": len(k["rows"]), "intervalle": len(k["intervalle"]), "kriege": len(kr["kriege"]),
-            "verlaufszeilen": kr["verlaufszeilen"]}
+            "verlaufszeilen": kr["verlaufszeilen"], "tage": tage}
+
+
+def kampf_tage_bauen(ivs, ddir, data_dir=None):
+    """Kampfansicht vergangener Tage: je Kalendertag (Europe/Berlin, nach Intervallende) eine Datei
+    data/kampf_tage/JJJJ-MM-TT.json im Format von kampf.json, dazu data/kampf_tage.json mit Menge je Tag.
+    Quelle sind die Kampfdetails des Sammlers plus die Intervalle, die er noch nicht eingetragen hat."""
+    det = krieg.details_laden(data_dir)
+    bekannt = datetime.fromisoformat(det[-1]["bis"]).timestamp() if det else 0
+    det += [krieg.detail(*iv) for iv in ivs if datetime.fromisoformat(iv[1]).timestamp() > bekannt]
+    tage = {}
+    for d in det:
+        tage.setdefault(datetime.fromisoformat(d["bis"]).astimezone(store.TZ).date().isoformat(), []).append(d)
+    index = []
+    for tag, ds in sorted(tage.items()):
+        k = kampf.zusammenfuegen(ds)
+        k["tag"] = tag
+        _dump(os.path.join(ddir, "kampf_tage", f"{tag}.json"), k)
+        index.append({"tag": tag, "von": ds[0]["von"], "bis": ds[-1]["bis"], "intervalle": len(ds),
+                      "kaempfe": len(k["rows"]), "deff": sum(r[2] for r in k["rows"])})
+    _dump(os.path.join(ddir, "kampf_tage.json"), {"tage": index})
+    return len(index)
 
 
 def village_rows():

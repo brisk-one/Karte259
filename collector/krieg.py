@@ -9,12 +9,17 @@
    nach FRIEDEN_TAGE ohne Kampf ab. Krieg, sobald in der Serie ein Fenster von FENSTER_TAGE zusammen
    MIN_KRIEG besiegte Gegner der Verteidiger (beide Richtungen) erreicht; schon ein großer Kampftag reicht.
    „Kriegsbeginn“, solange der Krieg jünger als BEGINN_TAGE ist.
+3. Kampfdetails: im selben Durchgang je Intervall alle Kämpfe in voller Form wie data/kampf.json (Dörfer,
+   Treffer, alle Angreifer) nach data/kampf/details_JJJJ-MM.jsonl.gz, eine Zeile je Intervall, angehängt als
+   eigenes gzip-Glied. Daraus baut die Seite die Kampfansicht vergangener Tage. Fehlen sie, rechnet der nächste
+   Lauf die ganze Historie nach; der Kampfverlauf bekommt dabei nur Intervalle, die er noch nicht hat.
 
 Nur Angriffe mit wahrscheinlichem oder möglichem Angreifer zählen. Keine Netzabrufe.
 """
 import csv
 import gzip
 import io
+import json
 import os
 import subprocess
 from collections import defaultdict
@@ -65,6 +70,47 @@ def verlauf_laden(data_dir=None):
     return rows
 
 
+def detail(von, bis, alle, kaempfe):
+    """Ein Intervall für data/kampf/details_*.jsonl.gz: Zeilen wie in data/kampf.json mit Intervall 0."""
+    k = kampf.als_json([(von, bis, alle, kaempfe)])
+    return {"von": von, "bis": bis, "dorfvergleich": alle, "stunden": k["stunden"], "rows": k["rows"]}
+
+
+def _details_dateien(data_dir):
+    d = os.path.join(data_dir, "kampf")
+    return [os.path.join(d, f) for f in sorted(os.listdir(d))
+            if f.startswith("details_") and f.endswith(".jsonl.gz")] if os.path.isdir(d) else []
+
+
+def _details_lesen(p):
+    with gzip.open(p, "rt", encoding="utf-8") as f:
+        return [json.loads(z) for z in f if z.strip()]
+
+
+def details_laden(data_dir=None):
+    """Alle Kampfdetails, aufsteigend nach Intervallende."""
+    out = []
+    for p in _details_dateien(data_dir or store.dpath()):
+        out += _details_lesen(p)
+    return out
+
+
+def _letztes_detail(data_dir):
+    for p in reversed(_details_dateien(data_dir)):
+        z = _details_lesen(p)
+        if z:
+            return _ts(z[-1]["bis"])
+    return None
+
+
+def _details_anhaengen(p, eintraege):
+    """Ein gzip-Glied anhängen: die Datei bleibt lesbar, Git speichert nur den neuen Teil."""
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    text = "".join(json.dumps(e, ensure_ascii=False, separators=(",", ":")) + "\n" for e in eintraege)
+    with open(p, "ab") as f:
+        f.write(gzip.compress(text.encode("utf-8"), mtime=0))
+
+
 def _dorfstand(tag, data_dir):
     """{pid: [(x, y)]} aus dem Tagesarchiv des Tages (oder dem nächstälteren, sonst dem ältesten)."""
     d = os.path.join(data_dir, "daily", "villages")
@@ -91,12 +137,15 @@ def _aktueller_dorfstand():
 
 
 def fortschreiben(historie=None, data_dir=None, jetzt=None):
-    """Trägt fertige Intervalle nach, die noch nicht im Verlauf stehen. Gibt die Zahl neuer Zeilen zurück."""
+    """Trägt fertige Intervalle nach, die noch nicht im Verlauf oder in den Details stehen. Gibt die Zahl
+    neuer Verlaufszeilen zurück."""
     data_dir = data_dir or store.dpath()
     historie = historie or tagessieger.Historie()
     jetzt = jetzt or datetime.now(timezone.utc).timestamp()
     alt = verlauf_laden(data_dir)
-    letzte = max((_ts(r["bis_utc"]) for r in alt), default=None)
+    letzte_log = max((_ts(r["bis_utc"]) for r in alt), default=None)
+    letzte_det = _letztes_detail(data_dir)
+    letzte = None if letzte_log is None or letzte_det is None else min(letzte_log, letzte_det)
 
     staende = []                                  # (commit, datenzeit) aufsteigend, ältere Auslieferungen raus
     for h, ct in historie.staende:
@@ -129,17 +178,18 @@ def fortschreiben(historie=None, data_dir=None, jetzt=None):
 
     # in Stücken, damit bei der Rückfüllung nicht alle Stände gleichzeitig im Speicher liegen
     verluste = kampf.verluste_laden(data_dir)
-    neu = defaultdict(list)
+    neu, det = defaultdict(list), defaultdict(list)
     ab = 0
     while ab < len(staende) - 1:
         stueck = staende[ab:ab + STUECK]
         werte = [(t, stand(h)) for h, t in stueck]
         ende = None
-        for von, bis, _alle, kaempfe in kampf.intervalle(werte, doerfer, verluste, _iso):
+        for von, bis, alle, kaempfe in kampf.intervalle(werte, doerfer, verluste, _iso):
             ende = bis
-            if letzte is not None and _ts(bis) <= letzte:
-                continue
-            neu[bis[:7]] += log_zeilen(von, bis, kaempfe)
+            if letzte_log is None or _ts(bis) > letzte_log:
+                neu[bis[:7]] += log_zeilen(von, bis, kaempfe)
+            if letzte_det is None or _ts(bis) > letzte_det:
+                det[bis[:7]].append(detail(von, bis, alle, kaempfe))
         if ende is None:
             if ab + STUECK >= len(staende):
                 break
@@ -149,6 +199,8 @@ def fortschreiben(historie=None, data_dir=None, jetzt=None):
     for monat, rows in sorted(neu.items()):
         store.append_csv(os.path.join(data_dir, "kampf", f"kaempfe_{monat}.csv"), HEADER, rows)
         n += len(rows)
+    for monat, eintraege in sorted(det.items()):
+        _details_anhaengen(os.path.join(data_dir, "kampf", f"details_{monat}.jsonl.gz"), eintraege)
     return n
 
 

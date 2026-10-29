@@ -26,7 +26,7 @@
   --radius:3px;
   /* Kartenflächen */
   --map-bg:#7c9a4e; --map-grid:rgba(0,0,0,.20); --map-grid-major:rgba(0,0,0,.58); --map-label:rgba(0,0,0,.55);
-  --map-barb:#8d9482; --map-bonus:#d9c26a; --map-other:#a4372c; --map-none:#c8cbbc;
+  --map-barb:#8d9482; --map-bonus:#d9c26a; --map-other:#a4372c; --map-none:#c8cbbc; --map-tribe-1:#2b2f33;
   --map-edge:rgba(0,0,0,.45);
 }
 
@@ -65,7 +65,7 @@
   --radius:8px;
   --map-bg:#071018; --map-grid:rgba(72,214,246,.10); --map-grid-major:rgba(72,214,246,.28);
   --map-label:rgba(150,225,250,.55);
-  --map-barb:#33465c; --map-bonus:#c99a35; --map-other:#c0392b; --map-none:#5f7d92;
+  --map-barb:#33465c; --map-bonus:#c99a35; --map-other:#c0392b; --map-none:#5f7d92; --map-tribe-1:#6b7682;
   --map-edge:rgba(0,0,0,.55);
 }
 

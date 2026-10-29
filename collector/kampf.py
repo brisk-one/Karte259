@@ -247,4 +247,25 @@ def als_json(ivs):
     nr = {t: i for i, t in enumerate(stunden)}
     rows = [zeile(i, k, nr) for i, ks in roh for k in ks]
     return {"intervalle": liste, "stunden": [list(t) for t in stunden], "felder": FELDER, "rows": rows,
-            "regeln": {"min_def": MIN_DEF, "min_att": MIN_ATT, "min_sup": MIN_SUP, "r": R, "dominanz": DOMINANZ}}
+            "regeln": regeln()}
+
+
+def regeln():
+    return {"min_def": MIN_DEF, "min_att": MIN_ATT, "min_sup": MIN_SUP, "r": R, "dominanz": DOMINANZ}
+
+
+def zusammenfuegen(details):
+    """Mehrere Intervalle aus den Kampfdetails (krieg.detail) zu einem Ergebnis wie als_json: Intervall- und
+    Stundennummern werden fortlaufend neu vergeben."""
+    liste, stunden, rows = [], [], []
+    ti = FELDER.index("treffer")
+    for i, d in enumerate(details):
+        off = len(stunden)
+        liste.append({"von": d["von"], "bis": d["bis"], "dorfvergleich": d["dorfvergleich"]})
+        stunden += d["stunden"]
+        for r in d["rows"]:
+            r = list(r)
+            r[0] = i
+            r[ti] = [[xy, s + off if s >= 0 else -1, dp] for xy, s, dp in r[ti]]
+            rows.append(r)
+    return {"intervalle": liste, "stunden": stunden, "felder": FELDER, "rows": rows, "regeln": regeln()}
