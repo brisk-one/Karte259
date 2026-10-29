@@ -728,6 +728,12 @@ function plakette(c, x, y, r, art, rand){
       c.lineWidth=Math.max(1, r*0.15);
       c.beginPath(); c.moveTo(px-l, py-d*l); c.lineTo(px+l, py+d*l); c.stroke();
     }
+  } else if(art==="v"){
+    // Turm mit drei Zinnen: Verteidiger
+    const w=r*0.5, top=y-r*0.62, mz=y-r*0.3, z=w*2/5;
+    c.beginPath(); c.rect(x-w, mz, 2*w, r*0.95);
+    for(const i of [0,2,4]) c.rect(x-w+i*z, top, z, mz-top+0.5);
+    c.fill();
   } else {
     const w=r*0.52, top=y-r*0.55;
     c.beginPath(); c.moveTo(x-w, top); c.lineTo(x+w, top); c.lineTo(x+w, y+r*0.02);
@@ -736,7 +742,7 @@ function plakette(c, x, y, r, art, rand){
   }
 }
 const PLAKETTE_IMG={};
-for(const art of ["a","u"]){ const c=document.createElement("canvas"); c.width=c.height=32;
+for(const art of ["a","u","v"]){ const c=document.createElement("canvas"); c.width=c.height=32;
   plakette(c.getContext("2d"), 16, 16, 13, art, "#9e9e9e"); PLAKETTE_IMG[art]="<img alt='' src='"+c.toDataURL()+"'>"; }
 
 function dunkel(hex){
@@ -971,23 +977,87 @@ function openKampf(items, fokus){
 }
 function closeKampf(){ $("kampf").hidden=true; if(pfeilFix){ pfeilFix=null; drawOverlay(); } }
 
-/* ---------- Namen der Beteiligten ----------
-   In jeder Ansicht: Verteidiger am Ziel, Angreifer und Unterstützer am Ausgangspunkt ihres Pfeils, wenn ihr
-   Zuwachs im Zeitraum mindestens Rot erreicht (p97 der Spieler mit Zuwachs), per „+ mittlere Namen“ ab Gelb. */
-function kampfNamen(){
-  const st=(P&&P.bash_steps)||{}, best=new Map();
+/* ---------- Namen der Beteiligten (Dennis 29.10.2026) ----------
+   Weit weg unter jedem Kampfsymbol „Angreifer vs Verteidiger“ des stärksten Kampfes im Gebiet. Näher heran
+   längs jedes Pfeils auf Höhe seiner Plakette der Name des Angreifers bzw. Unterstützers mit Mini-Zeichen davor,
+   am Ziel der Name des Verteidigers mit Turm davor. Gezeigt wird, wer im Zeitraum mindestens Rot erreicht
+   (p97 der Spieler mit Zuwachs), mit „Weitere Spielernamen anzeigen“ ab Gelb. Größere Werte zuerst; was einen
+   schon gezeichneten Namen überdecken würde, entfällt. */
+function kampfStufe(){
+  const st=(P&&P.bash_steps)||{};
   const win = kampfTag && st["24h_def"]? "24h" : bashWindow();     // ein Tag misst sich an den 24-h-Stufen
-  if(!win) return [];
-  const stufe=(v,art)=>{ const e=st[win+"_"+art]; if(!e) return -1; let s=0; while(s<e.length && v>e[s]) s++; return s; };
-  const nimm=(pid,v,art,x,y)=>{ if(stufe(v,art)<namesFrom) return; const b=best.get(pid); if(!b || b[0]<v) best.set(pid,[v,x,y]); };
-  for(const r of kampfSel){
-    if(!imKrieg(r)) continue;
-    nimm(r[kF.v], r[kF.dv], "def", r[kF.x], r[kF.y]);
-    const a=r[kF.a][0];
-    if(a && r[kF.a_sicher]!=="u") nimm(a[0], a[1], "att", a[3], a[4]);
-    r[kF.u].forEach(u=>{ if(u[2]!=="u") nimm(u[0], u[1], "sup", u[3], u[4]); });
+  if(!win) return null;
+  return (v,art)=>{ const e=st[win+"_"+art]; if(!e) return -1; let s=0; while(s<e.length && v>e[s]) s++; return s; };
+}
+const pNameOf = pid => { const p=rowOfPid.get(pid); return p==null? null : P.rows[p][pIdx.name]; };
+/** Namen zu den Kämpfen auf der Karte: Liste von {wert, zeichne(belegt)} für drawNames. */
+function kampfLabels(){
+  const out=[], stufe=kampfStufe();
+  if(!stufe || !KAMPF) return out;
+  const ok=(v,art)=>stufe(v,art)>=namesFrom;
+  const aOf=r=>{ const a=r[kF.a][0]; return a && r[kF.a_sicher]!=="u"? a : null; };
+  if(scale<KAMPF_ZOOM){
+    for(const g of kampfGebiete){
+      const r=g.items.find(imKrieg)||g.items[0], a=aOf(r);
+      if(!ok(r[kF.dv],"def") && !(a && ok(a[1],"att"))) continue;
+      const vn=pNameOf(r[kF.v]); if(!vn) continue;
+      const an=a && pNameOf(a[0]);
+      const [X,Y]=kMitte(g.x,g.y), gr=Math.max(7, Math.min(22, 6+4.2*Math.log10(Math.max(g.sum,1000)/1000)));
+      out.push({wert:g.sum, zeichne:belegt=>textZeile(X, Y+gr+9, (an||"?")+" vs "+vn, belegt)});
+    }
+    return out;
   }
-  return [...best].map(([pid,[v,x,y]])=>[v, pid, x, y]);
+  const ziele=new Set();
+  for(const f of kampfPfeile){
+    const v = f.art==="a"? f.r[kF.a][0][1] : f.u[1];
+    if(!ok(v, f.art==="a"? "att" : "sup")) continue;
+    const n=pNameOf(f.pid); if(!n) continue;
+    out.push({wert:v, zeichne:belegt=>pfeilName(f, n, belegt)});
+  }
+  for(const r of kampfSel){
+    if(!imKrieg(r) || ziele.has(r) || !ok(r[kF.dv],"def")) continue;
+    ziele.add(r);
+    const n=pNameOf(r[kF.v]); if(!n) continue;
+    const [X,Y]=kMitte(r[kF.x], r[kF.y]);
+    out.push({wert:r[kF.dv], zeichne:belegt=>zeichenName(X, Y+Math.max(12, scale*0.6)+8, 0, "v", pFarbe(r[kF.v]), n, belegt)});
+  }
+  return out;
+}
+const NAME_FONT="bold 12px system-ui, sans-serif";
+const frei=(belegt, boxen)=>!boxen.some(q=>belegt.some(b=>q[0]<b[2] && q[2]>b[0] && q[1]<b[3] && q[3]>b[1]));
+function namensText(c, t, x, y){
+  c.lineWidth=3.5; c.strokeStyle="rgba(0,0,0,.8)"; c.fillStyle="#ffffff";
+  c.strokeText(t, x, y); c.fillText(t, x, y);
+}
+/** Waagerechte Zeile ohne Zeichen, mittig bei (X,Y). */
+function textZeile(X, Y, t, belegt){
+  ctx.font=NAME_FONT; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.lineJoin="round";
+  const w=ctx.measureText(t).width+6, box=[X-w/2, Y-8, X+w/2, Y+8];
+  if(X<-w || X>W+w || Y<-20 || Y>H+20 || !frei(belegt,[box])) return;
+  belegt.push(box); namensText(ctx, t, X, Y);
+}
+/** Mini-Zeichen plus Name, mittig bei (X,Y), um ang gedreht. Für die Kollision zählen kleine Quadrate längs
+    der Zeile, damit schräge Namen nicht ihre ganze Umgebung sperren. */
+function zeichenName(X, Y, ang, art, rand, t, belegt){
+  ctx.font=NAME_FONT;
+  const tw=ctx.measureText(t).width, w=tw+18, ux=Math.cos(ang), uy=Math.sin(ang), boxen=[];
+  for(let s=-w/2; s<=w/2; s+=8){ const px=X+ux*s, py=Y+uy*s; boxen.push([px-7, py-7, px+7, py+7]); }
+  if(X<-w || X>W+w || Y<-20 || Y>H+20 || !frei(belegt, boxen)) return;
+  belegt.push(...boxen);
+  ctx.save(); ctx.translate(X, Y); ctx.rotate(ang);
+  plakette(ctx, -w/2+6, 0, 6, art, rand);
+  ctx.font=NAME_FONT; ctx.textAlign="left"; ctx.textBaseline="middle"; ctx.lineJoin="round";
+  namensText(ctx, t, -w/2+15, 0);
+  ctx.restore();
+}
+/** Name längs des Pfeils auf Höhe der Plakette (45 %), seitlich versetzt, Schrift nie auf dem Kopf. */
+function pfeilName(f, t, belegt){
+  const dx=f.x2-f.x1, dy=f.y2-f.y1, d=Math.hypot(dx,dy); if(d<40) return;
+  let ang=Math.atan2(dy,dx); if(ang>Math.PI/2) ang-=Math.PI; else if(ang<-Math.PI/2) ang+=Math.PI;
+  const pr=d>46? Math.max(6.5, Math.min(10, f.breite+4.5)) : f.breite/2, abst=pr+9;
+  // Normale nach „oben“ im gedrehten Bild
+  const nx=Math.sin(ang), ny=-Math.cos(ang);
+  zeichenName(f.x1+dx*0.45+nx*abst, f.y1+dy*0.45+ny*abst, ang, f.art, pFarbe(f.pid), t, belegt);
 }
 
 /** Pfeile am oberen rechten Rand des Dorfes: Zuwachs des Spielers, drei Stufen je Richtung. */
@@ -1048,38 +1118,18 @@ function draw(){
   drawOverlay();
 }
 
-/** Namen: zuerst die Beteiligten der sichtbaren Kämpfe (kampfNamen, mit Stammesfarbe als Punkt), in den
-    Bash-Ansichten dazu Spieler ab der gewählten Stufe über dem Schwerpunkt ihrer Dörfer. Größere Werte zuerst,
-    ein Name, der einen schon gezeichneten überdecken würde, entfällt. */
+/** Namen: zuerst die Beteiligten der sichtbaren Kämpfe (kampfLabels), in den Bash-Ansichten dazu Spieler ab der
+    gewählten Stufe über dem Schwerpunkt ihrer Dörfer. Größere Werte zuerst, Überdeckungen entfallen. */
 function drawNames(){
-  const liste=[], kampf=new Set();
-  const imBild=(X,Y)=>X>-80 && X<W+80 && Y>-20 && Y<H+20;
-  if(KAMPF && scale>=1.5) for(const [v, pid, x, y] of kampfNamen()){
-    const X=sx(x+0.5), Y=sy(y+0.5)-Math.max(10, scale*0.9);
-    if(!imBild(X,Y) || rowOfPid.get(pid)==null) continue;
-    kampf.add(pid); liste.push([1, v, rowOfPid.get(pid), X, Y]);
-  }
-  if(isBash(view) && bashTier) for(let p=0;p<bashTier.length;p++){
-    if(bashTier[p]<namesFrom || !pCount[p] || kampf.has(P.rows[p][pIdx.id])) continue;
-    const X=sx(pSumX[p]/pCount[p]+0.5), Y=sy(pSumY[p]/pCount[p]+0.5);
-    if(imBild(X,Y)) liste.push([0, bashValue(p), p, X, Y]);
-  }
-  liste.sort((a,b)=>b[0]-a[0] || b[1]-a[1]);
-  ctx.font="bold 12px system-ui, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.lineJoin="round";
   const belegt=[];
-  for(const [art, , p, X, Y] of liste){
-    const name=P.rows[p][pIdx.name], tw=ctx.measureText(name).width, punkt=art? 10 : 0, w=tw+6+punkt, h=16;
-    const box=[X-w/2, Y-h/2, X+w/2, Y+h/2];
-    if(belegt.some(b=>box[0]<b[2] && box[2]>b[0] && box[1]<b[3] && box[3]>b[1])) continue;
-    belegt.push(box);
-    const tx=X+punkt/2;
-    ctx.lineWidth=3.5; ctx.strokeStyle="rgba(0,0,0,.8)"; ctx.fillStyle="#ffffff";
-    ctx.strokeText(name, tx, Y); ctx.fillText(name, tx, Y);
-    if(art){
-      ctx.fillStyle=tribeColorOf(allyOf[p]) || C_OTHER; ctx.strokeStyle="rgba(0,0,0,.85)"; ctx.lineWidth=1.2;
-      ctx.fillRect(tx-tw/2-10, Y-4, 8, 8); ctx.strokeRect(tx-tw/2-10, Y-4, 8, 8);
-    }
+  kampfLabels().sort((a,b)=>b.wert-a.wert).forEach(l=>l.zeichne(belegt));
+  if(!isBash(view) || !bashTier) return;
+  const liste=[];
+  for(let p=0;p<bashTier.length;p++){
+    if(bashTier[p]<namesFrom || !pCount[p]) continue;
+    liste.push([bashValue(p), p, sx(pSumX[p]/pCount[p]+0.5), sy(pSumY[p]/pCount[p]+0.5)]);
   }
+  liste.sort((a,b)=>b[0]-a[0]).forEach(([, p, X, Y])=>textZeile(X, Y, P.rows[p][pIdx.name], belegt));
 }
 
 /** Zeiger und Suchtreffer liegen auf einer eigenen Ebene. Beim Bewegen der Maus wird nur sie
@@ -1297,7 +1347,8 @@ function renderLegend(){
       +". Weit weg ein Symbol je Kampfgebiet, Größe nach besiegten Gegnern; näher heran Pfeile in der Stammesfarbe des Angreifers bzw. Unterstützers.");
     zeile(PLAKETTE_IMG.a, "<b>Angriff</b>: durchgezogen, spitze Spitze, Schwerter");
     zeile(PLAKETTE_IMG.u, "<b>Unterstützung</b>: gestrichelt, runde Spitze, Schild. Blass, wenn nicht eindeutig. Zeiger auf einen Pfeil nennt Beteiligte, Bashpunkte und Zeitraum, Klick heftet an.");
-    zeile("Aa", "Namen der Beteiligten ab Rot, mit „Weitere Spielernamen anzeigen“ ab Gelb (Zuwachs im gewählten Zeitraum)");
+    zeile(PLAKETTE_IMG.v, "<b>Verteidiger</b>: Name am Ziel des Pfeils");
+    zeile("Aa", "Namen: weit weg „Angreifer vs Verteidiger“ unter dem Kampfsymbol, näher heran längs der Pfeile Angreifer bzw. Unterstützer und am Ziel der Verteidiger. Ab Rot, mit „Weitere Spielernamen anzeigen“ ab Gelb (Zuwachs im gewählten Zeitraum)");
   }
   zeile("<i class='raute'></i>", "Links unten: Bonusdorf");
   const hint=document.createElement("li"); hint.className="hint"; hint.textContent="Zeichen am Dorf erscheinen ab mittlerem Zoom.";
