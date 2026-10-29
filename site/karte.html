@@ -1036,12 +1036,13 @@ function kampfLabels(){
   }
   return out;
 }
-// Schwarze Schrift ohne Rand (Wünsche Dennis 29.10.2026: erst schwarz statt weiß, dann Rand ganz weg). Fett, damit
-// sie auf dem bunten Dorfteppich trägt.
+// Weiße Schrift mit schwarzem Rand (Dennis 29.10.2026, nach Versuchen mit schwarzer Schrift mit und ohne Rand).
+// Fett, damit der Rand die Buchstaben nicht auffrisst.
 const NAME_FONT="700 11px system-ui, sans-serif", VS_FONT="700 9px system-ui, sans-serif", WEIT_FONT="700 10.5px system-ui, sans-serif";
 const frei=(belegt, boxen)=>!boxen.some(q=>belegt.some(b=>q[0]<b[2] && q[2]>b[0] && q[1]<b[3] && q[3]>b[1]));
 function namensText(c, t, x, y, farbe){
-  c.fillStyle=farbe||"#111111"; c.fillText(t, x, y);         // ohne Rand (Dennis 29.10.2026)
+  c.lineWidth=3; c.strokeStyle="rgba(0,0,0,.85)"; c.fillStyle=farbe||"#ffffff";
+  c.strokeText(t, x, y); c.fillText(t, x, y);
 }
 /** „Angreifer vs Verteidiger“ weit weg: Namen 10,5 px, „vs“ kleiner und gedämpft. */
 function vsZeile(X, Y, an, vn, belegt){
@@ -1054,7 +1055,7 @@ function vsZeile(X, Y, an, vn, belegt){
   belegt.push(box);
   let x=X-w/2;
   ctx.font=WEIT_FONT; namensText(ctx, an, x, Y); x+=wa;
-  ctx.font=VS_FONT; namensText(ctx, " vs ", x, Y+0.5, "#3a3a3a"); x+=ws;
+  ctx.font=VS_FONT; namensText(ctx, " vs ", x, Y+0.5, "#d0d0d0"); x+=ws;
   ctx.font=WEIT_FONT; namensText(ctx, vn, x, Y);
 }
 /** Waagerechte Zeile ohne Zeichen, mittig bei (X,Y). */
