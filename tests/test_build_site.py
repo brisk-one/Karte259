@@ -88,5 +88,30 @@ class VillagePayload(unittest.TestCase):
         self.assertIsNone(p["data_time_utc"])
 
 
+class BashStufenTest(unittest.TestCase):
+    def test_runden_auf_1_2_5(self):
+        self.assertEqual([build_site.runde_stufe(v) for v in (0, 1, 3, 4, 7, 63941, 186958, 246332, 1492165)],
+                         [1, 1, 2, 5, 5, 50000, 200000, 200000, 2000000])
+
+    def test_ohne_werte(self):
+        self.assertIsNone(build_site.bash_stufen([0, None, 0]))
+
+    def test_quantile_und_aufsteigend(self):
+        # 100 Spieler mit Werten 1.000 bis 100.000, dazu Nullen, die nicht zählen
+        werte = [i * 1000 for i in range(1, 101)] + [0] * 50
+        # Quantile 51.000, 76.000, 91.000, 98.000, 100.000 gerundet, die oberen rücken auf
+        self.assertEqual(build_site.bash_stufen(werte), [50000, 100000, 200000, 500000, 1000000])
+
+    def test_zusammenfallende_grenzen_ruecken_auf(self):
+        self.assertEqual(build_site.bash_stufen([5] * 99 + [7]), [5, 10, 20, 50, 100])
+
+    def test_30000_und_260000_verschiedene_farben(self):
+        # Verteilung wie Deff 6 h am 28.10. (p50 727, p90 63.941, p97 186.958): 30.000 und 260.000 trennen sich
+        werte = [727] * 50 + [5000] * 25 + [63941] * 15 + [186958] * 7 + [300000] * 3
+        g = build_site.bash_stufen(werte)
+        farbe = lambda v: sum(1 for x in g if v > x)
+        self.assertNotEqual(farbe(30000), farbe(260000))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ import gzip
 import hashlib
 import io
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -23,7 +24,15 @@ from email.utils import parsedate_to_datetime
 
 from . import config, erfahrung, moral, net, praegen, store, units, world
 
-WINDOWS = [("1h", 3600, 600), ("6h", 6 * 3600, 1800), ("12h", 12 * 3600, 1800), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
+# Vergleichsfenster: Schlüssel, Länge, Toleranz nach vorn. Ein Vergleichsstand darf höchstens das
+# 1,5-fache der Fensterlänge zurückliegen (MAX_ALTER), sonst gilt das Fenster als ohne Vergleichsstand.
+# Vorher konnte „1 h“ bei Lücken im Takt einen fünf Stunden alten Stand zeigen.
+WINDOWS = [("1h", 3600, 600), ("3h", 3 * 3600, 1800), ("6h", 6 * 3600, 1800), ("12h", 12 * 3600, 1800), ("24h", 86400, 1800), ("7d", 7 * 86400, 3600)]
+MAX_ALTER = 1.5
+# Farbstufen der Bash-Ansichten (Entscheidung 8.2b): Grenzen bei diesen Quantilen der Spieler mit Wert > 0,
+# je Ansicht und bei jedem Seitenbau neu, gerundet auf 1, 2, 5 × 10^n. Sechs Farben auf der Karte.
+BASH_QUANTILE = [0.50, 0.75, 0.90, 0.97, 0.99]
+BASH_FENSTER = ["3h", "6h", "12h", "24h"]
 DELTA_FIELDS = ["points", "villages", "att", "def", "sup"]
 BASE_FIELDS = ["id", "name", "ally", "villages", "points", "rank", "att", "def", "sup", "all"]
 # Erfahrungs-Stufe (E12 bis E14, Dennis 11.10.2026): Bash-Weltrang und Zahl echter Tagesauszeichnungen
@@ -65,6 +74,37 @@ def _versions(path):
 
 def _csv_at(commit, path):
     return list(csv.DictReader(io.StringIO(_git("show", f"{commit}:{path}"))))
+
+
+def runde_stufe(v):
+    """Nächster Wert der Reihe 1, 2, 5 × 10^n (geometrisch gemessen), mindestens 1."""
+    if v <= 1:
+        return 1
+    n = math.floor(math.log10(v))
+    kand = [m * 10 ** e for e in (n - 1, n, n + 1) for m in (1, 2, 5)]
+    return min(kand, key=lambda k: (abs(math.log(v / k)), k))
+
+
+def _naechste_stufe(k):
+    n = math.floor(math.log10(k) + 1e-9)
+    for m in (1, 2, 5, 10):
+        if m * 10 ** n > k:
+            return m * 10 ** n
+
+
+def bash_stufen(werte):
+    """Fünf aufsteigende Grenzen aus den Werten > 0 (BASH_QUANTILE, gerundet) oder None ohne Werte.
+    Fallen zwei gerundete Grenzen zusammen, rückt die obere auf den nächsten runden Wert."""
+    v = sorted(x for x in werte if x and x > 0)
+    if not v:
+        return None
+    out = []
+    for q in BASH_QUANTILE:
+        g = runde_stufe(v[min(len(v) - 1, int(q * len(v)))])
+        if out and g <= out[-1]:
+            g = _naechste_stufe(out[-1])
+        out.append(g)
+    return out
 
 
 def _iso(ts):
@@ -202,7 +242,7 @@ def build(out_dir):
         if newest is None:
             break
         cand = next(((h, ct) for h, ct in versions if ct <= newest - secs + tol), None)
-        if cand:
+        if cand and cand[1] >= newest - secs * MAX_ALTER:
             refs[key] = (cand[1], {int(r["id"]): r for r in _csv_at(cand[0], players_path)})
 
     # Rang nach Punkten (die stündliche Datei speichert keinen Rang mehr, siehe world.PLAYER_HEADER)
@@ -231,8 +271,14 @@ def build(out_dir):
         row += [tc.get(t, 0) for t in TITEL_TYPEN_ALLE]
         rows.append(row)
     fields = BASE_FIELDS + [f"d{key}_{f}" for key, _, _ in WINDOWS for f in DELTA_FIELDS] + ERFAHRUNG_FIELDS
+    fi = {f: i for i, f in enumerate(fields)}
+    steps = {art: bash_stufen(r[fi[art]] for r in rows) for art in ("all", "att", "def", "sup")}
+    for key in BASH_FENSTER:
+        if key in refs:
+            for art in ("att", "def", "sup"):
+                steps[f"{key}_{art}"] = bash_stufen(r[fi[f"d{key}_{art}"]] for r in rows)
     _dump(os.path.join(ddir, "players.json"), {
-        "fields": fields, "rows": rows,
+        "fields": fields, "rows": rows, "bash_steps": steps,
         "data_time_utc": _iso(newest) if newest else None,
         "refs_utc": {k: _iso(v[0]) for k, v in refs.items()},
     })
