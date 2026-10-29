@@ -35,16 +35,6 @@ class ProbeProfil(unittest.TestCase):
         self.assertEqual(inaday.probe_profil(state, {"kill_def": zeile(1, 42, "Anna", 9000, "2026-10-10")}), 0)
         self.assertEqual(len(self.urls), 2)                                 # kein zweites Mal
 
-    def test_bash_probe_einmalig_drei_seiten_nur_bei_alten_weltdaten(self):
-        from datetime import datetime, timezone
-        state = {}
-        self.assertEqual(inaday.probe_bash(state, datetime(2026, 10, 29, 10, 55, tzinfo=timezone.utc)), 0)
-        self.assertEqual(inaday.probe_bash(state, datetime(2026, 10, 29, 11, 55, tzinfo=timezone.utc)), 3)
-        self.assertEqual(inaday.probe_bash(state, datetime(2026, 10, 29, 14, 55, tzinfo=timezone.utc)), 0)
-        self.assertEqual(len(self.urls), 3)
-        self.assertTrue(all("mode=kill_player" in u for u in self.urls))
-        self.assertTrue(os.path.exists(store.dpath("debug", "probe_kill_player_support.html")))
-
     def test_ohne_rang_1_kein_abruf(self):
         state = {}
         self.assertEqual(inaday.probe_profil(state, {"kill_def": None}), 0)

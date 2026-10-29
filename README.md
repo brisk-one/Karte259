@@ -18,6 +18,8 @@ Fan-Projekt: sammelt stündlich öffentliche Daten der Welt 259 von [Die Stämme
 | `daily/{players,allies,villages}/JJJJ-MM-TT.csv.gz` | Tagesarchiv, einmal pro Tag geschrieben und danach unverändert |
 | `conquers/JJJJ-MM.csv` | Eroberungen |
 | `inaday/tribe_latest.csv`, `inaday/events.csv` | Rekorde aus „An einem Tag“ und deren Änderungen |
+| `bash/latest.csv` | Besiegte Gegner als Angreifer, Verteidiger und Unterstützer, je Art die ersten 500 der Rangliste, stündlich; Werte ab 1 Mio. auf 10.000 gerundet (`genau` = 0); die Git-Historie ist der Stundenverlauf |
+| `kampf/kaempfe_JJJJ-MM.csv`, `kampf/details_JJJJ-MM.jsonl.gz` | Kampfverlauf (Angreifer, Verteidiger, Unterstützer je Intervall) und volle Kampfzeilen für die Kartenansicht vergangener Tage |
 | `runs.csv`, `status.json`, `state.json` | Protokoll aller Läufe, letzter Status, interner Zustand |
 
 ## Lokal ausführen

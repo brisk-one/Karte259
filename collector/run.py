@@ -6,7 +6,7 @@ import sys
 import time
 import traceback
 
-from . import config, inaday, krieg, net, store, tagessieger, world, worldconfig
+from . import bashrang, config, inaday, krieg, net, store, tagessieger, world, worldconfig
 
 RUNS_HEADER = ["run_utc", "trigger", "result", "world_changed", "data_last_modified", "players", "villages",
                "allies", "new_conquers", "world_requests", "guest_requests", "inaday_changed_types",
@@ -49,6 +49,14 @@ def main(argv=None):
             errors.append(f"Tagesbeste: {e}")
             traceback.print_exc()
 
+    b = {}
+    try:                                         # Bash-Ranglisten stündlich, Top 500 je Art (Dennis 1b, 29.10.2026)
+        b = bashrang.update()
+        errors += [f"Bash-Rangliste: {x}" for x in b.get("errors", [])]
+    except Exception as e:
+        errors.append(f"Bash-Rangliste: {e}")
+        traceback.print_exc()
+
     try:                                         # Angreifer und Verteidiger des Tages aus der Git-Historie, ohne Netz
         tagessieger.update(now_local)
     except Exception as e:
@@ -81,6 +89,7 @@ def main(argv=None):
         "last_deep_scrape_utc": state.get("inaday", {}).get("last_deep_scrape_utc"),
         "requests": {"world": net.Counter.world, "guest": net.Counter.guest},
         "kampfverlauf_neu": kv,
+        "bashrang": {k: b.get(k) for k in ("rows", "pages")},
         "errors": errors,
         "tribe_ids": config.TRIBE_IDS,
     }

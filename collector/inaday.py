@@ -296,34 +296,6 @@ def probe_profil(state, rang1_by_type):
     return gespeichert
 
 
-BASH_PROBE_SEITEN = [(f"probe_kill_player_{t}.html", f"screen=ranking&mode=kill_player&type={t}")
-                     for t in ("att", "def", "support")]
-
-
-def probe_bash(state, now_utc):
-    """Legt einmalig Seite 1 der Bash-Ranglisten (Gastzugang) unter data/debug/ ab (Dennis 1b, 29.10.2026).
-
-    Befund 29.10.2026: Der Server erneuert die Bashwerte in den Weltdaten nur alle 3 Stunden (Stände gegen
-    xx:43 UTC der Stunden 0, 3, 6, 9, ...). Geprüft wird, ob die Rangliste im Gastzugang aktueller ist. Deshalb
-    nur in einer Stunde, in der die Weltdaten seit rund 2 Stunden alt sind (UTC-Stunde mod 3 = 2); der
-    Vergleich mit latest/players.csv desselben Commits folgt lokal ohne Netz. Höchstens drei Abrufe, einmal.
-    """
-    st = state.setdefault("inaday", {})
-    if st.get("bash_probe_saved") or now_utc.hour % 3 != 2:
-        return 0
-    gespeichert = 0
-    for name, query in BASH_PROBE_SEITEN:
-        try:
-            html = _get(f"{config.BASE_URL}/guest.php?" + query)
-        except net.FetchError:
-            continue
-        _save_debug(name, html)
-        gespeichert += 1
-    if gespeichert:
-        st["bash_probe_saved"] = store.iso(now_utc)
-    return gespeichert
-
-
 def update_titel(rang1_by_type):
     """Trägt die Rang-1-Zeile je Kategorie als Auszeichnung des jeweiligen Tages nach, ohne Netz.
 
@@ -386,8 +358,6 @@ def update(state, now_utc, now_local, members):
 
     if probe_profil(state, rang1):
         summary["profil_probe"] = True
-    if probe_bash(state, now_utc):
-        summary["bash_probe"] = True
     titel_changed = update_titel(rang1)
     if titel_changed:
         summary["titel_changed"] = titel_changed
