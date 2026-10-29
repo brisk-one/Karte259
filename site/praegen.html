@@ -57,6 +57,13 @@
 
   .pr-cmp td.rec{font-weight:700}
   .pr-cmp th.rec{box-shadow:inset 0 -3px 0 var(--accent)}
+  /* gewählte Aufstellung (10.12): ganze Spalte anklickbar, gewählte Spalte hinterlegt */
+  .pr-cmp th button{font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; text-align:inherit; letter-spacing:inherit; text-transform:inherit}
+  .pr-cmp th button:hover{text-decoration:underline}
+  .pr-cmp td.wk{cursor:pointer}
+  .pr-cmp th.sel,.pr-cmp td.sel{background:var(--accent-soft)}
+  .pr-sel{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:6px 0 0; font-size:12px; color:var(--ink-2)}
+  .pr-sel b{color:var(--ink)}
   .pr-cmp th,.pr-cmp td{white-space:normal; vertical-align:top}
   .pr-cmp td:first-child{color:var(--ink-2); width:9.5em}
   .pr-cmp td:not(:first-child){text-align:left}
@@ -204,12 +211,28 @@
     <div class="body pr-verdict">
       <div class="pr-big" id="rec-title"></div>
       <p class="pr-why" id="rec-why"></p>
+      <div class="pr-sel" id="rec-sel"></div>
       <p class="pr-note" id="rec-note" hidden></p>
       <dl class="facts pr-facts" id="rec-facts"></dl>
     </div>
   </section>
 
   <div class="grid" id="p-more" hidden>
+    <section class="panel c6" aria-labelledby="h-cmp">
+      <h2 id="h-cmp">Wie viele Flaggendoppler</h2>
+      <div class="body" id="cmp" style="overflow-x:auto"></div>
+    </section>
+
+    <section class="panel c6" aria-labelledby="h-map">
+      <h2 id="h-map">Lage
+        <span class="right" role="group" aria-label="Aufstellung wählen" id="views"></span>
+      </h2>
+      <div class="body">
+        <div class="pr-legend" id="map-legend"></div>
+        <div class="pr-map" id="map"></div>
+      </div>
+    </section>
+
     <section class="panel c6" aria-labelledby="h-pk" id="p-pk">
       <h2 id="h-pk">Zeitplan der Pakete <span class="hint" id="pk-hint"></span></h2>
       <div class="body">
@@ -223,21 +246,6 @@
       <div class="body">
         <div class="pr-legend" id="pc-legend"></div>
         <div class="pr-chart" id="pc"></div>
-      </div>
-    </section>
-
-    <section class="panel c6" aria-labelledby="h-cmp">
-      <h2 id="h-cmp">Wie viele Flaggendoppler</h2>
-      <div class="body" id="cmp" style="overflow-x:auto"></div>
-    </section>
-
-    <section class="panel c6" aria-labelledby="h-map">
-      <h2 id="h-map">Lage
-        <span class="right" role="group" aria-label="Aufstellung wählen" id="views"></span>
-      </h2>
-      <div class="body">
-        <div class="pr-legend" id="map-legend"></div>
-        <div class="pr-map" id="map"></div>
       </div>
     </section>
 
@@ -444,7 +452,10 @@ function run() {
   const base = st.textContent;
   st.textContent = base + " · rechnet …";
   ["p-rec", "p-more"].forEach(id => $(id).classList.add("pr-busy"));
+  if (KWORKER && KLAEUFT) { KWORKER.terminate(); KWORKER = null; }
+  KLAEUFT = null;
   compute(token, villages, P, passive, R => {
+    R.Pin = P; R.passive = passive;               // für das Nachrechnen einer gewählten Aufstellung (10.12)
     st.textContent = base;
     ["p-rec", "p-more"].forEach(id => $(id).classList.remove("pr-busy"));
     show(token, R, villages, parsed);
@@ -476,10 +487,11 @@ function compute(token, villages, P, passive, done) {
 
 function show(token, R, villages, parsed) {
   if (token !== RUN) return;
+  const vorher = VIEW;
   RESULT = R;
   RESULT.villages = villages;
   RESULT.allParsed = parsed.villages;
-  VIEW = RESULT.recommend;                // nach jeder Neuberechnung die empfohlene Aufstellung zeigen
+  VIEW = K.wahlNach(vorher, R);            // Wahl bleibt, solange diese Zahl gerechnet wurde (10.12)
   STEPS = [];
   ["p-rec", "p-more"].forEach(id => $(id).hidden = false);
   $("p-pk").hidden = !(R.pkg || R.zeitplan);                    // Zeitplan in beiden Berechnungsarten (10.11)
@@ -492,6 +504,7 @@ function show(token, R, villages, parsed) {
   renderArrival();
   renderFreq();
   renderAssumptions();
+  nachrechnen();
 
   // Klickfrequenz-Leiter in kleinen Schritten, damit die Seite bedienbar bleibt
   $("freq-hint").textContent = "rechnet …";
@@ -506,6 +519,43 @@ function show(token, R, villages, parsed) {
   setTimeout(step, 0);
 }
 
+/* ---------- Gewählte Aufstellung (10.12) ----------
+   Eine Wahl für die ganze Seite (VIEW): Lage, Vergleich, Kennzahlen, Zeitplan, Kurve, Dorftabelle. Zeitplan und
+   Kurve einer nicht empfohlenen Aufstellung rechnet ein eigener Worker nach; das Ergebnis bleibt je Zahl gespeichert,
+   bis sich eine Eingabe ändert (Kennung RUN). */
+const KCACHE = K.aufstellungsCache();
+let KWORKER = null, KLAEUFT = null;
+function gewaehlt() {
+  const R = RESULT, k = VIEW, rec = k === R.recommend, x = rec ? null : KCACHE.get(RUN, k);
+  const pk = R.pkg ? (rec ? R.pkg : x && x.pkg) : null, z = R.zeitplan ? (rec ? R.zeitplan : x && x.zeitplan) : null;
+  return {k, rec, a: aufstellung(k), pk: pk || null, z: z || null, laedt: !rec && !x && !!(R.pkg || R.zeitplan)};
+}
+function renderWahl() { renderRecommendation(); renderSchedule(); renderCurve(); renderCompare(); renderView(); renderArrival(); renderFreq(); }
+function setWahl(k) {
+  if (!RESULT || !aufstellung(k) || k === VIEW) return;
+  VIEW = k; renderWahl(); nachrechnen();
+}
+function nachrechnen() {
+  const R = RESULT, k = VIEW, token = RUN;
+  if (!R || k === R.recommend || !(R.pkg || R.zeitplan) || KCACHE.has(token, k) || KLAEUFT === token + ":" + k) return;
+  if (KWORKER && KLAEUFT) { KWORKER.terminate(); KWORKER = null; }
+  KLAEUFT = token + ":" + k;
+  const st = $("status"), base = st.textContent.replace(/ · rechnet …$/, "");
+  st.textContent = base + " · rechnet …";
+  const fertig = x => {
+    if (token !== RUN || KLAEUFT !== token + ":" + k) return;
+    KLAEUFT = null; st.textContent = base;
+    KCACHE.set(token, k, x || {k});
+    if (VIEW === k) renderWahl(); else renderCompare();
+  };
+  const direkt = () => setTimeout(() => fertig(K.packagesForK(R.villages, R.Pin, k, R.passive, R.pkg && R.pkg.perK)), 0);
+  if (typeof Worker === "undefined" || !CORE_URL) return void direkt();
+  try { KWORKER = new Worker("praegen-worker.js"); } catch (e) { KWORKER = null; return void direkt(); }
+  KWORKER.onmessage = e => { if (e.data.error) { console.error(e.data.error); direkt(); return; } fertig(e.data.R); };
+  KWORKER.onerror = ev => { ev.preventDefault(); KWORKER = null; direkt(); };
+  KWORKER.postMessage({core: CORE_URL, token, villages: R.villages, P: R.Pin, passive: R.passive, k, perK: R.pkg && R.pkg.perK});
+}
+
 function aufstellung(n) {
   const r = RESULT.configs && RESULT.configs[n - 1];
   return r ? {r, d: RESULT.details[n - 1], sites: r.sites.map(i => RESULT.src[i])} : null;
@@ -518,8 +568,10 @@ const joinUnd = list => list.length < 2 ? list.join("") : list.slice(0, -1).join
 function shownConfigs() {
   const n = RESULT.configs.length, rec = RESULT.recommend;
   if (n <= 4) return [...Array(n)].map((_, i) => i + 1);
-  return [...new Set([1, rec - 1, rec, rec + 1].filter(k => k >= 1 && k <= n))];
+  return [...new Set([1, rec - 1, rec, rec + 1, VIEW].filter(k => k >= 1 && k <= n))].sort((a, b) => a - b);
 }
+const linie = k => k === VIEW ? 3.5 : 2;           // gewählte Aufstellung kräftiger (10.12)
+const reiheName = k => fdName(k) + (RESULT.recommend === k ? " (Empfehlung)" : "") + (VIEW === k && RESULT.recommend !== k ? " (gewählt)" : "");
 const seriesColor = (k, pos) => css("--s" + (RESULT.configs.length <= 4 ? k : pos + 1));
 function share90(d) {
   const total = d.curve.reduce((a, c) => a + c[1], 0);
@@ -600,8 +652,18 @@ function renderRecommendation() {
   if (e.m || e.w) parts.push("Engpass: " + [e.m ? e.m + (e.m === 1 ? " Dorf" : " Dörfer") + " mit zu kleinem Markt" : "", e.w ? e.w + (e.w === 1 ? " Dorf" : " Dörfer") + " zu weit weg" : ""].filter(Boolean).join(", ") + ".");
   $("rec-why").textContent = parts.join(" ");
 
+  // ab hier die gewählte Aufstellung (10.12); Titel und Begründung oben bleiben die Empfehlung
+  const sel = gewaehlt(), sa = sel.a, spk = sel.pk, sz = sel.z;
+  const zeile = $("rec-sel");
+  zeile.replaceChildren(document.createTextNode("Kennzahlen für: "), el("b", null, fdName(sel.k)),
+    document.createTextNode(sel.rec ? " (Empfehlung)" : " (gewählt, Empfehlung: " + R.recommend + ")"));
+  if (!sel.rec) {
+    const b = el("button", "tw small", "zur Empfehlung"); b.type = "button";
+    b.addEventListener("click", () => setWahl(R.recommend));
+    zeile.appendChild(b);
+  }
   const notes = [];
-  const gh = grenzeHinweis(pk || R.zeitplan);
+  const gh = grenzeHinweis(spk || sz);
   if (gh) notes.push(gh);
   if (P.minStorage) {
     const up = R.src.filter(s => s.b.storage > s.storageFrom);
@@ -612,7 +674,7 @@ function renderRecommendation() {
     ? "Gerechnet mit Marktplatz mindestens Stufe " + P.minMarket + ": " + R.marketUp.count + " Dörfer bauen den Marktplatz vorher aus, zusammen "
       + R.marketUp.levels + " Stufen. Erst danach mit dem Münzprägen anfangen."
     : "Alle Dörfer haben schon Marktplatz Stufe " + P.minMarket + " oder höher.");
-  if (a.r.needsSnob) notes.push(n === 1 ? "Keines der Dörfer hat einen Adelshof. Im Prägedorf muss erst einer gebaut werden."
+  if (sa.r.needsSnob) notes.push(sel.k === 1 ? "Keines der Dörfer hat einen Adelshof. Im Prägedorf muss erst einer gebaut werden."
                                          : "Es gibt weniger Dörfer mit Adelshof als Prägedörfer. Fehlende Adelshöfe müssen erst gebaut werden.");
   if (R.singleAny) {
     const s = R.src[R.singleAny.sites[0]];
@@ -630,11 +692,15 @@ function renderRecommendation() {
     const v = el("dd", null, dd); if (small) { v.appendChild(document.createTextNode(" ")); v.appendChild(el("small", null, small)); }
     d.appendChild(v); f.appendChild(d);
   };
-  fact("Neue Adelsgeschlechter", ad ? nf.format(ad.n) : "–",
-       ad ? "aus " + nf.format(ad.muenzen) + " Münzen, für das " + nf.format(ad.n + 1) + ". fehlen " + nf.format(ad.fehlen)
-          : "„nächstes kostet“ im Adelshof ablesen");
-  if (pk) {
-    const last = pk.curve[pk.chosen];
+  const lade = "rechnet …";
+  const sMuenzen = R.pkg ? (spk ? spk.detail.coins : null) : sa.r.coins, sad = sMuenzen != null ? adel(sMuenzen) : null;
+  fact("Neue Adelsgeschlechter", sad ? nf.format(sad.n) : sMuenzen == null && adel(0) ? lade : "–",
+       sad ? "aus " + nf.format(sad.muenzen) + " Münzen, für das " + nf.format(sad.n + 1) + ". fehlen " + nf.format(sad.fehlen)
+          : sMuenzen == null && adel(0) ? "" : "„nächstes kostet“ im Adelshof ablesen");
+  if (R.pkg && !spk) {
+    fact("Münzen", lade); fact("Pakete", lade); fact("Überlauf", lade);
+  } else if (spk) {
+    const pk = spk, last = pk.curve[pk.chosen];
     fact("Münzen", nf.format(Math.round(pk.detail.coins)), "ohne Pakete " + nf.format(Math.round(pk.curve[0].coins)));
     fact("Pakete", pakete(pk.chosen), (P.pkgCount ? "fest" : "optimal bei " + P.optThreshold + " %") + ", maximal " + pk.maximal);
     fact("Münzen je Paket", pk.chosen ? nf.format(Math.round((pk.detail.coins - pk.curve[0].coins) / pk.chosen)) : "–",
@@ -643,19 +709,19 @@ function renderRecommendation() {
          last && last.gain != null ? gainTxt(last.gain) + " des Höchstwerts" : "");
     fact("Überlauf", pctf(pk.detail.overflowShare), "der Paket-Rohstoffe, höchstens " + nfG.format(P.maxOverflow) + " %");
   } else {
-    const z = R.zeitplan;
+    const z = sz, a = sa;
     fact("Münzen", nf.format(Math.round(a.r.coins)), "in 48 h, ohne Speichergrenze");
     fact("Rohstoffpakete", nf.format(P.pkgPct) + " %", "der Speicherkapazität, auf einmal");
     if (z) {
       fact("Münzen laut Zeitplan", nf.format(Math.round(z.detail.coins)), pakete(z.n) + " zu " + nf.format(z.size) + " %, mit Speichergrenze");
       fact("Überlauf laut Zeitplan", pctf(z.detail.overflowShare), "höchstens " + nfG.format(P.maxOverflow) + " %");
-    }
+    } else if (sel.laedt) { fact("Münzen laut Zeitplan", lade); fact("Überlauf laut Zeitplan", lade); }
   }
-  fact("Pakete rechtzeitig", pctf(a.r.share), (P.decreeN === 1 ? "bis 24 h" : "bis 48 h") + ", ohne Speichergrenze");
-  fact("90 % angekommen", hrs(share90(a.d)));
-  fact("alles angekommen", hrs(a.d.doneAt));
-  fact("Nötige Klickfrequenz", needText(n, true), needSmall(n));
-  const res = a.r.pkg * P.unitRes;
+  fact("Pakete rechtzeitig", pctf(sa.r.share), (P.decreeN === 1 ? "bis 24 h" : "bis 48 h") + ", ohne Speichergrenze");
+  fact("90 % angekommen", hrs(share90(sa.d)));
+  fact("alles angekommen", hrs(sa.d.doneAt));
+  fact("Nötige Klickfrequenz", needText(sel.k, true), needSmall(sel.k));
+  const res = sa.r.pkg * P.unitRes;
   fact("Paket-Rohstoffe, prägbar", mio(res), "von " + mio(R.src.reduce((x, s) => x + s.pkg.wood + s.pkg.stone + s.pkg.iron, 0)));
 }
 
@@ -670,10 +736,16 @@ function grenzeHinweis(x) {
     + " Überlauf, unter der Grenze von " + nfG.format(g.grenze) + " % gehen höchstens " + pakete(g.maxOk) + ".";
 }
 function renderSchedule() {
-  const R = RESULT, P = R.P, z = R.zeitplan, pk = R.pkg || z;
+  const R = RESULT, P = R.P, sel = gewaehlt(), z = sel.z, pk = sel.pk || z;
+  if (sel.laedt) {
+    $("pk-hint").textContent = fdName(sel.k) + " · rechnet …";
+    $("pk-table").replaceChildren(el("p", "empty", "Zeitplan für " + mitFD(sel.k) + " wird gerechnet …"));
+    $("pk-note").replaceChildren();
+    return;
+  }
   if (!pk) return;
-  const d = pk.detail, n = R.pkg ? pk.chosen : z.n;
-  $("pk-hint").textContent = pakete(n) + " zu " + nf.format(P.pkgSize) + " %" + (z ? " (= " + nf.format(z.sumPct) + " %)" : "")
+  const d = pk.detail, n = sel.pk ? pk.chosen : z.n;
+  $("pk-hint").textContent = fdName(sel.k) + " · " + pakete(n) + " zu " + nf.format(P.pkgSize) + " %" + (z ? " (= " + nf.format(z.sumPct) + " %)" : "")
     + ", " + nf.format(Math.round(d.coins)) + " Münzen, Überlauf " + pctf(d.overflowShare) + " (höchstens " + nfG.format(P.maxOverflow) + " %)";
   const box = $("pk-table");
   if (!d.rows.length) box.replaceChildren(el("p", "empty", z
@@ -695,7 +767,7 @@ function renderSchedule() {
     if (Math.abs(z.sumPct - z.pct) > 1e-9) note.appendChild(el("p", "pr-note", nf.format(z.pct) + " Prozentpunkte ergeben bei "
       + nf.format(z.size) + " % Paketgröße " + pakete(z.n) + ", zusammen " + nf.format(z.sumPct) + " %."));
     note.appendChild(el("p", "pr-note", "Verschieden gerechnet: Die " + nf.format(Math.round(d.coins)) + " Münzen hier rechnet der Zeitplan mit Speichergrenze, "
-      + "Überlauf und diesen Einlösezeiten. Die " + nf.format(Math.round(R.configs[R.recommend - 1].coins)) + " Münzen der Empfehlung stammen aus der einfachen Rechnung "
+      + "Überlauf und diesen Einlösezeiten. Die " + nf.format(Math.round(sel.a.r.coins)) + " Münzen der Kennzahlen stammen aus der einfachen Rechnung "
       + "mit " + nf.format(z.pct) + " % auf einmal und ohne Speichergrenze."));
   }
   const lim = d.limiting;
@@ -718,7 +790,9 @@ function renderSchedule() {
 
 function renderCurve() {
   if (!RESULT || !RESULT.pkg) return;
-  const R = RESULT, pk = R.pkg, c = pk.curve, box = $("pc");
+  const sel = gewaehlt();
+  if (!sel.pk) { $("pc").replaceChildren(el("p", "empty", "Kurve für " + mitFD(sel.k) + " wird gerechnet …")); $("pc-hint").textContent = fdName(sel.k); return; }
+  const R = RESULT, pk = sel.pk, c = pk.curve, box = $("pc");
   const W = Math.max(300, Math.round(box.clientWidth || 620)), H = W < 500 ? 220 : 250;
   const m = {l: 54, r: 16, t: 14, b: 28};
   const color = css("--s1"), acc = css("--accent") || color;
@@ -764,18 +838,28 @@ function renderCompare() {
   box.replaceChildren();
   const t = el("table", "pr-cmp"), th = el("thead"), hr = el("tr");
   hr.appendChild(el("th", "l", ""));
-  ns.forEach(n => hr.appendChild(el("th", R.recommend === n ? "rec" : "", fdName(n) + (R.recommend === n ? " ✓" : ""))));
+  const kl = n => [R.recommend === n ? "rec" : "", VIEW === n ? "sel" : ""].filter(Boolean).join(" ");
+  ns.forEach(n => {
+    const h = el("th", kl(n)), b = el("button", null, fdName(n) + (R.recommend === n ? " ✓" : ""));
+    b.type = "button"; b.title = "Diese Aufstellung für Kennzahlen, Zeitplan und Lage wählen";
+    b.setAttribute("aria-pressed", String(VIEW === n));
+    b.addEventListener("click", () => setWahl(n));
+    h.appendChild(b); hr.appendChild(h);
+  });
   th.appendChild(hr); t.appendChild(th);
   const tb = el("tbody");
   const row = (label, f) => {
     const tr = el("tr");
     tr.appendChild(el("td", "l", label));
-    A.forEach((x, i) => tr.appendChild(el("td", R.recommend === i + 1 ? "rec" : "", f(x, i + 1))));
+    A.forEach((x, i) => { const td = el("td", kl(i + 1) + " wk", f(x, i + 1)); td.addEventListener("click", () => setWahl(i + 1)); tr.appendChild(td); });
     tb.appendChild(tr);
   };
   const pk = R.pkg;
   row("Prägedorf", (x, n) => (pk && pk.perK && pk.perK[n - 1] ? pk.perK[n - 1].sites : x.sites).map(siteName).join(" + "));
-  const cc = pk ? pk.configCoins : R.configs.map(c => c.coins);
+  // feste Paketzahl: nach der Wahl die Münzen mit dem eigenen Zeitplan dieser Aufstellung (wie ihre Kennzahlen)
+  const cc = (pk ? pk.configCoins : R.configs.map(c => c.coins)).map((v, i) => {
+    const x = pk && i + 1 !== R.recommend ? KCACHE.get(RUN, i + 1) : null;
+    return x && x.pkg ? x.pkg.detail.coins : v; });
   const pK = pk && pk.perK;
   if (pK) {
     // „automatisch“: je Aufstellung die eigene optimale Paketzahl; ohne Wert, wo nicht gerechnet wurde
@@ -833,7 +917,7 @@ function renderView() {
     const n = i + 1, b = el("button", "tw", fdName(n));
     b.type = "button";
     b.setAttribute("aria-pressed", String(n === VIEW));
-    b.addEventListener("click", () => { VIEW = n; renderView(); });
+    b.addEventListener("click", () => setWahl(n));
     box.appendChild(b);
   });
   renderMap();
@@ -908,7 +992,7 @@ function renderVillages() {
   const byKey = new Map(a.d.rows.map(r => [R.src[r.i].x + "|" + R.src[r.i].y, r]));
   const cols = [["dabei", "l"], ["Dorf", "l"], ["Koordinaten", "l"], ["Status", "l", 1], ["rechtzeitig", "", 1], ["alles da nach", "", 1],
                 ["Laufzeit", "", 1], ["Markt (Händler)", "", 1], ["Speicher", "", 1], ["Überlauf", "", 1], ["Paket prägbar", "", 1], ["Prägedorf", "l"]];
-  const det = (R.pkg || R.zeitplan || {}).detail, recView = !!det && VIEW === R.recommend;
+  const sel = gewaehlt(), det = (sel.pk || sel.z || {}).detail, recView = !!det;   // Überlauf auch für die gewählte (10.12)
   const pasBy = new Map(det ? det.passive.map(x => [x.x + "|" + x.y, x]) : []);
   const ovCell = (ov, res) => res > 0 ? [ov > 0 ? pctf(ov / res) : "0 %", ov / res > 0.01 ? "down" : "", Math.round(ov / res * 10000)] : ["", "", -1];
   const storText = s => s.b.storage > s.storageFrom ? s.storageFrom + " → " + s.b.storage : String(s.b.storage);
@@ -998,7 +1082,7 @@ function renderArrival() {
   if (!RESULT) return;
   const box = $("arr"), P = RESULT.P, W = Math.max(300, Math.round(box.clientWidth || 620)), H = W < 500 ? 220 : 250;
   const m = {l: 44, r: W < 500 ? 16 : 78, t: 12, b: 28};
-  const data = shownConfigs().map((n, pos) => ({n, label: fdName(n) + (RESULT.recommend === n ? " (Empfehlung)" : ""),
+  const data = shownConfigs().map((n, pos) => ({n, label: reiheName(n),
                                                  color: seriesColor(n, pos), pts: cumulative(aufstellung(n).d)}));
   legend($("arr-legend"), data.map(s => [s.label, s.color]));
   const X = 72;
@@ -1020,7 +1104,7 @@ function renderArrival() {
     let d = `M${sx(0)},${sy(0)}`, last = 0;
     for (const [t, y] of s.pts) { if (t > X) break; d += ` H${sx(t)} V${sy(y)}`; last = y; }
     d += ` H${sx(X)}`;
-    svg.appendChild(svgEl("path", {d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+    svg.appendChild(svgEl("path", {d, fill: "none", stroke: s.color, "stroke-width": linie(s.n), "stroke-linejoin": "round", "stroke-linecap": "round"}));
     ends.push({y: sy(last), v: last, label: s.n + " FD"});
   });
   // Endbeschriftung nur, wenn sich keine zwei Werte überdecken; sonst tragen Legende und Quickinfo
@@ -1049,7 +1133,7 @@ function renderFreq() {
   const m = {l: 44, r: 16, t: 12, b: 28};
   const L = K.LADDER, N = L.length;
   const series = shownConfigs().map((k, pos) => [k, fdName(k), seriesColor(k, pos)]);
-  legend($("freq-legend"), series.map(([k, label, color]) => [label + (RESULT.recommend === k ? " (Empfehlung)" : ""), color]));
+  legend($("freq-legend"), series.map(([k, , color]) => [reiheName(k), color]));
   const {svg, tip, iw, ih} = frame(box, W, H, m);
   svg.setAttribute("aria-label", "Anteil rechtzeitig angekommener Paket-Rohstoffe je Klickabstand");
   const sx = i => m.l + iw * (i + 0.5) / N, sy = y => m.t + ih * (1 - y);
@@ -1064,7 +1148,7 @@ function renderFreq() {
   series.forEach(([k, , color]) => {
     const pts = STEPS.map((s, i) => [sx(i), s.share[k - 1] != null ? sy(s.share[k - 1]) : NaN]).filter(p => !isNaN(p[1]));
     if (!pts.length) return;
-    svg.appendChild(svgEl("polyline", {points: pts.map(p => p.join(",")).join(" "), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+    svg.appendChild(svgEl("polyline", {points: pts.map(p => p.join(",")).join(" "), fill: "none", stroke: color, "stroke-width": linie(k), "stroke-linejoin": "round", "stroke-linecap": "round"}));
     pts.forEach(p => svg.appendChild(svgEl("circle", {cx: p[0], cy: p[1], r: 4, fill: color, stroke: surface, "stroke-width": 2})));
   });
   if (STEPS.length < N) {

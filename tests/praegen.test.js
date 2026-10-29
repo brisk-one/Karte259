@@ -443,3 +443,49 @@ test("10.11: Grenze 100 % ergibt das bisherige Ergebnis", () => {
   assert.equal(V5({maxOverflow: 1}).maxOverflow, 1);
   assert.equal(V5({maxOverflow: 250}).maxOverflow, 100);
 });
+
+/* ---------- 10.12 Aufstellung wählen, Kennzahlen folgen ---------- */
+test("10.12: Kennzahlen einer gewählten Aufstellung stimmen mit ihrer Spalte im Vergleich überein", () => {
+  const v = konto63(), P = V5({maxOverflow: 1});
+  const R = K.planPackages(v, P, []), pK = R.pkg.perK;
+  assert.ok(pK.length >= 2);
+  pK.forEach(o => {
+    const x = K.packagesForK(v, P, o.k, [], pK);
+    assert.equal(x.pkg.chosen, o.n, o.k + " FD: Pakete");
+    near(x.pkg.detail.coins, o.coins, 1e-6);
+    assert.deepEqual(x.sites, o.sites.map(s => R.src.findIndex(t => t.x === s.x && t.y === s.y)));
+  });
+  const rec = K.packagesForK(v, P, R.recommend, [], pK);
+  near(rec.pkg.detail.coins, R.pkg.detail.coins, 1e-6);
+  assert.deepEqual(rec.pkg.pos, R.pkg.pos);
+  // feste Paketzahl: dieselbe Zahl für jede Aufstellung
+  const Pf = V5({pkgCount: 4});
+  const Rf = K.planPackages(v, Pf, []);
+  for (let k = 1; k <= Math.min(3, Rf.configs.length); k++) assert.equal(K.packagesForK(v, Pf, k, [], null).pkg.chosen, 4);
+  // Berechnung 1: Zeitplan mit derselben Paketzahl, Prägedörfer der Spalte
+  const Pp = V5({mode: "pct", pkgPct: 150});
+  const Rp = K.planPct(v, Pp, []);
+  for (let k = 1; k <= Rp.configs.length; k++) {
+    const z = K.packagesForK(v, Pp, k, [], null).zeitplan;
+    assert.equal(z.n, 5);
+    if (k === Rp.recommend) near(z.detail.coins, Rp.zeitplan.detail.coins, 1e-6);
+  }
+});
+
+test("10.12: Wahl bleibt nach einer Eingabe, fällt bei fehlender Zahl auf die Empfehlung zurück", () => {
+  const R = {configs: [{}, {}, {}], recommend: 2};
+  assert.equal(K.wahlNach(3, R), 3);
+  assert.equal(K.wahlNach(1, R), 1);
+  assert.equal(K.wahlNach(4, R), 2);
+  assert.equal(K.wahlNach(null, R), 2);
+  assert.equal(K.wahlNach(3, {configs: [{}], recommend: 1}), 1);
+});
+
+test("10.12: Zwischenspeicher wird bei geänderter Eingabe verworfen", () => {
+  const c = K.aufstellungsCache();
+  c.set("a", 2, {x: 1});
+  assert.deepEqual(c.get("a", 2), {x: 1});
+  assert.equal(c.has("b", 2), false);
+  assert.equal(c.size(), 0);
+  assert.equal(c.get("a", 2), undefined);
+});

@@ -846,11 +846,11 @@ function grenzeInfo(cv, chosen, P) {
 /* Berechnung 1 (10.11): Prägedörfer, Münzen und Klickfrequenz aus der einfachen Rechnung mit den vorgegebenen
    Prozentpunkten; dazu ein Zeitplan für die empfohlene Aufstellung mit N = Prozentpunkte ÷ Paketgröße (gerundet),
    gerechnet im Gleichschritt mit Speichergrenze und Überlaufgrenze. */
-function planPct(villages, P0, passive) {
-  const R = plan(villages, P0);
+function planPct(villages, P0, passive, sitesWahl, R0) {
+  const R = R0 || plan(villages, P0);
   const N = Math.max(0, Math.round(P0.pkgPct / P0.pkgSize + 1e-9));
   if (!R.src.length || !R.configs) return R;
-  const sites = R.configs[R.recommend - 1].sites;
+  const sites = sitesWahl || R.configs[R.recommend - 1].sites;
   const P = Object.assign({}, P0, {pkgCount: N || null});
   const {Pc, m} = coarse(P);
   let cv;
@@ -863,7 +863,46 @@ function planPct(villages, P0, passive) {
   return R;
 }
 
-const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
+/* Aufstellung mit k Prägedörfern nachrechnen (10.12), wenn sie gewählt, aber nicht empfohlen ist.
+   Berechnung 2: wie planPackages für dieses k, also bei „automatisch“ die eigene optimale Paketzahl (10.9) mit
+   demselben Startwert wie in planPackages, damit die Werte mit der Spalte im Vergleich übereinstimmen; bei fester
+   Paketzahl dieselbe Zahl. Berechnung 1: Zeitplan für die Prägedörfer der einfachen Rechnung.
+   perK: R.pkg.perK der Gesamtrechnung (nur für den Startwert). Ergebnis {k, pkg} bzw. {k, zeitplan} oder null. */
+function packagesForK(villages, P0, k, passive, perK) {
+  if (P0.mode === "pct") {
+    const R = plan(villages, P0);
+    if (!R.configs || !R.configs[k - 1]) return null;
+    const z = planPct(villages, P0, passive, R.configs[k - 1].sites, R);
+    return {k, zeitplan: z.zeitplan};
+  }
+  const prev = perK && perK[Math.min(k, perK.length + 1) - 2];
+  const o = bestForK(villages, P0, k, P0.pkgCount || (k === 1 ? 3 : (prev && prev.n) || 1));
+  if (!o || !o.cur) return null;
+  const P = o.R.P, src = o.R.src, sites = o.sites;
+  packageCurve(src, o.Pc, sites, true, o.cur);
+  const cv = refine(src, P, sites, o.cur, o.m);
+  const chosen = Math.min(P0.pkgCount || cv.optimal, cv.curve.length - 1), pos = cv.curve[chosen].pos;
+  return {k, sites, pkg: Object.assign({}, cv, {chosen, pos, grid: o.m, grenze: grenzeInfo(cv, chosen, P),
+    detail: scheduleDetails(src, P, sites, pos, prepare(passive || [], P))})};
+}
+
+/* Gewählte Aufstellung nach einer Neuberechnung (10.12): bleibt, solange diese Zahl gerechnet wurde, sonst die
+   Empfehlung. */
+function wahlNach(vorher, R) {
+  const n = R && R.configs ? R.configs.length : 0;
+  return vorher && vorher >= 1 && vorher <= n ? vorher : (R && R.recommend) || 1;
+}
+
+/* Zwischenspeicher je Zahl der Flaggendoppler. sig kennzeichnet die Eingabe; eine andere sig verwirft alles. */
+function aufstellungsCache() {
+  let sig = null;
+  const m = new Map();
+  const pruef = s => { if (s !== sig) { sig = s; m.clear(); } };
+  return {get: (s, k) => { pruef(s); return m.get(k); }, set: (s, k, v) => { pruef(s); m.set(k, v); },
+          has: (s, k) => { pruef(s); return m.has(k); }, size: () => m.size};
+}
+
+const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
