@@ -25,6 +25,8 @@ body{display:flex; flex-direction:column; overflow:hidden; background-attachment
 .slim .info{color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1}
 .slim .info b{font-weight:700; color:var(--ink)}
 .einklappen{margin-left:8px; align-self:center}
+.bar select.sel{font:inherit; font-size:12px; font-weight:600; padding:3px 4px; color:var(--ink); background:var(--field);
+  border:1px solid var(--edge); border-radius:var(--radius); cursor:pointer}
 .zeitbadge{position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:5; display:flex; align-items:center; gap:8px;
   background:var(--panel-solid); border:1px solid var(--edge); border-radius:var(--radius); padding:4px 6px 4px 10px;
   box-shadow:0 2px 10px rgba(0,0,0,.4); font-size:12px; max-width:calc(100% - 20px)}
@@ -302,6 +304,12 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
   <div class="vcat" id="tage" hidden><b>Vergangener Tag</b>
     <div class="seg" id="tage-seg" role="group" aria-label="Kämpfe eines Tages"></div>
   </div>
+  <div class="vcat"><b>Ab Stärke</b>
+    <div class="grp">
+      <select class="sel" id="minst" aria-label="Kämpfe ab Stärke"
+              title="Nur Kämpfe ab dieser Stärke zeigen: Deff des Verteidigers plus zugeordnete Unterstützung. Gilt für Karte, Tage und Kriege."></select>
+    </div>
+  </div>
   <div class="vcat"><b>Auf der Karte</b>
     <div class="grp">
       <button class="tw" type="button" id="names" aria-pressed="false"
@@ -489,6 +497,11 @@ let N=0, vx=null, vy=null, vp=null, vpts=null, vb=null, vname=null, byXY=null;
 let bashTier=null, pSumX=null, pSumY=null, pCount=null;
 let KAMPF=null, kF={}, rowOfPid=new Map(), kampfGebiete=[], kampfSel=[], kampfHits=[];
 let kampfPfeile=[], pfeilHover=null, pfeilFix=null;     // Fokus: {r: Kampfzeile, art: "a"|"u", u: Unterstützer}
+// Mindest-Stärke eines Kampfes (Dennis K1d, Spezifikation Kämpfe 12): Auswahl in der Leiste, Startwert 10.000.
+// Der Seitenbau schreibt alle Kämpfe mit ihrer Stärke; hier wird gefiltert, die Kriege kommen je Stufe als Datei.
+const STAERKE_STUFEN=[1000, 5000, 10000, 25000, 50000, 100000], STAERKE_START=10000;
+let minStaerke=STAERKE_START, kampfAus=0;
+const kriegCache=new Map();
 let KRIEG=null, kriegOffen=false, kriegSel=null;        // kriegSel: [Stamm, Stamm] hebt deren Kämpfe hervor
 let pIdx={}, aIdx={}, allyOf=null, growth={}, arrowOf=null, refs={}, tagOf=new Map(), allyById=new Map();
 let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
@@ -706,7 +719,9 @@ function computeKaempfe(){
   if(!KAMPF) return;
   const ende=Date.parse(KAMPF.data_time_utc), ab=ende-kHours(bashWindow())*3600e3;
   const iv=KAMPF.intervalle.map(t=>!!kampfTag || Date.parse(t.bis)>ab);
-  kampfSel=KAMPF.rows.filter(r=>iv[r[kF.i]] && beteiligt(r)).sort((a,b)=>b[kF.staerke]-a[kF.staerke]);
+  const imZeitraum=KAMPF.rows.filter(r=>iv[r[kF.i]] && beteiligt(r));
+  kampfSel=imZeitraum.filter(r=>r[kF.staerke]>=minStaerke).sort((a,b)=>b[kF.staerke]-a[kF.staerke]);
+  kampfAus=imZeitraum.length-kampfSel.length;
   for(const r of kampfSel){
     const x=r[kF.x], y=r[kF.y];
     const g=kampfGebiete.find(g=>Math.hypot(g.x-x, g.y-y)<=KAMPF_GEBIET);
@@ -932,6 +947,8 @@ function showKampfTip(f, px, py){
   if(a) zeile("Off", a[0], a[1]);
   zeile("Deff", r[kF.v], r[kF.dv]);
   r[kF.u].forEach(u=>{ if(u[2]!=="u") zeile("Unterstützt", u[0], u[1]); });
+  trow("Stärke", nf.format(r[kF.staerke])+" (Deff plus Unterstützung)");
+  if(a) trow("Verhältnis", verhaeltnis(a[1], r[kF.staerke]));
   trow("Zeitraum", zeitraum(iv.von, iv.bis));
   const n=new Set(r[kF.treffer].map(x=>x[0])).size;
   tip.appendChild(el("div","hl",(r[kF.geschaetzt]? "Ziel geschätzt (kein Dorfvergleich). " : n+(n===1? " Dorf" : " Dörfer")+" mit Punktverlust, eingekreist. ")
@@ -942,6 +959,11 @@ function showKampfTip(f, px, py){
   if(left+tw>rr.width-8) left=px-tw-16;
   if(top+th>rr.height-8) top=Math.max(4, rr.height-th-8);
   tip.style.left=Math.max(4,left)+"px"; tip.style.top=Math.max(4,top)+"px";
+}
+/** „Off 0,7 × Verteidigung“: Off im Verhältnis zur Stärke des Kampfes (Kämpfe 12) */
+function verhaeltnis(off, st){
+  const q=off/Math.max(st,1);
+  return "Off "+(q<10? nf1.format(Math.round(q*10)/10) : nf.format(Math.round(q)))+" × Verteidigung";
 }
 function zentriere(x,y,z){ cx=x+0.5; cy=y+0.5; scale=Math.max(scale, z||10); ownView(); clampView(); draw(); saveUrl(); }
 function openKampf(items, fokus){
@@ -954,12 +976,22 @@ function openKampf(items, fokus){
     const v=el("p","ver"); v.style.setProperty("--c", pFarbe(r[kF.v]));
     v.append(el("b",null,pName(r[kF.v])), document.createTextNode(" verteidigt, Deff +"+nf.format(r[kF.dv])));
     d.append(v);
-    if(!r[kF.a].length) d.append(el("p","s","Angreifer unklar: kein Kandidat aus einem anderen Stamm in der Nähe"));
+    d.append(el("p","s","Stärke "+nf.format(r[kF.staerke])+" (Deff plus Unterstützung)"));
+    const av=r[kF.av]||[];
+    if(!r[kF.a].length) d.append(el("p","s", av.length
+      ? "Angreifer unklar: die Kandidaten in der Nähe passen nicht zur Stärke (Off höchstens "+(KAMPF.regeln.off_max||5)+" × und mindestens "
+        +Math.round((KAMPF.regeln.off_min||0.05)*100)+" % der Stärke)"
+      : "Angreifer unklar: kein Kandidat aus einem anderen Stamm in der Nähe"));
+    if(!r[kF.a].length) av.forEach(x=>{
+      const p=el("p","s"); p.append(el("b",null,pName(x[0])),
+        document.createTextNode(" Off +"+nf.format(x[1])+", "+verhaeltnis(x[1], r[kF.staerke])+(x[1]>r[kF.staerke]? ", zu groß" : ", zu klein")));
+      d.append(p);
+    });
     r[kF.a].forEach((a,j)=>{
       const p=el("p","ang kart"); p.style.setProperty("--c", pFarbe(a[0]));
       if(j===0) p.innerHTML=PLAKETTE_IMG.a;
       p.append(el("b",null,pName(a[0])),
-        document.createTextNode(" greift an, Off +"+nf.format(a[1])+", "+nf1.format(a[2])+(a[2]===1? " Feld " : " Felder ")),
+        document.createTextNode(" greift an, Off +"+nf.format(a[1])+" ("+verhaeltnis(a[1], r[kF.staerke])+"), "+nf1.format(a[2])+(a[2]===1? " Feld " : " Felder ")),
         el("span","s", j===0? SICHER[r[kF.a_sicher]] : "weiterer Kandidat"));
       d.append(p);
     });
@@ -1379,7 +1411,8 @@ function renderLegend(){
     : "Pfeile für den Punktezuwachs erscheinen ab zwölf Stunden Historie");
   if(KAMPF){
     zeile(AXES_IMG[2], (kampfTag? "Kämpfe am "+tagLang(kampfTag) : "Kämpfe der letzten "+windowText(axeKey||"24h"))
-      +(suchFokus? " mit "+(suchFokus.ally!=null? "Stamm " : "")+suchFokus.label : "")+": "+nf.format(kampfSel.length)
+      +(suchFokus? " mit "+(suchFokus.ally!=null? "Stamm " : "")+suchFokus.label : "")+" ab Stärke "+nf.format(minStaerke)+": "+nf.format(kampfSel.length)
+      +(kampfAus? " ("+nf.format(kampfAus)+" kleinere ausgeblendet)" : "")
       +". Weit weg ein Symbol je Kampfgebiet, Größe nach besiegten Gegnern; näher heran Pfeile in der Stammesfarbe des Angreifers bzw. Unterstützers.");
     zeile(PLAKETTE_IMG.a, "<b>Angriff</b>: durchgezogen, spitze Spitze, Schwerter");
     zeile(PLAKETTE_IMG.u, "<b>Unterstützung</b>: gestrichelt, runde Spitze, Schild. Blass, wenn nicht eindeutig. Zeiger auf einen Pfeil nennt Beteiligte, Bashpunkte und Zeitraum, Klick heftet an.");
@@ -1789,6 +1822,18 @@ const sFarbe = id => tribeColorOf(id) || C_OTHER;
 const sTag = (k,j) => tagOf.get(k.s[j]) || k.tags[j];
 function tageSeit(iso){ return Math.floor((Date.now()-Date.parse(iso))/864e5); }
 function dauerText(t){ return t<1? "seit heute" : t===1? "1 Tag" : t+" Tage"; }
+/** Kriege zur gewählten Mindest-Stärke (krieg_<stärke>.json); ältere Seitenbauten haben nur krieg.json */
+function ladeKrieg(){
+  const s=minStaerke, fertig=k=>{ kriegCache.set(s,k); if(s!==minStaerke) return; KRIEG=k; if(kriegOffen) renderKriege(); draw(); };
+  if(kriegCache.has(s)) return fertig(kriegCache.get(s));
+  load("krieg_"+s).then(fertig).catch(()=>load("krieg").then(fertig).catch(()=>{ /* noch kein Seitenbau mit Kriegen */ }));
+}
+function setMinStaerke(s){
+  if(!STAERKE_STUFEN.includes(s) || s===minStaerke) return;
+  minStaerke=s; $("minst").value=String(s);
+  pfeilFix=null; pfeilHover=null; $("kampf").hidden=true;
+  computeKaempfe(); renderLegend(); draw(); saveUrl(); ladeKrieg();
+}
 function setKrieg(offen){
   kriegOffen=offen;
   $("kriege").hidden=!offen; $("kriegbtn").setAttribute("aria-pressed", String(offen));
@@ -1810,7 +1855,7 @@ function renderKriege(){
   $("kriege-title").textContent=n+" Stammespaare im Krieg";
   body.append(el("p","regel","Aus der Kampfauswertung: Krieg ab "+nf.format(rg.min_krieg)+" besiegten Gegnern zwischen zwei Stämmen in "
     +rg.fenster_tage+" Tagen, ein großer Kampftag reicht. „Kriegsbeginn“ in den ersten "+rg.beginn_tage+" Tagen. Frieden erst nach "
-    +rg.frieden_tage+" Tagen ohne Kampf. Gezählt werden nur wahrscheinliche und mögliche Angreifer. Historie seit "
+    +rg.frieden_tage+" Tagen ohne Kampf. Gezählt werden nur wahrscheinliche und mögliche Angreifer"+(rg.min_staerke? " in Kämpfen ab Stärke "+nf.format(rg.min_staerke)+" (Auswahl „Ab Stärke“)" : "")+". Historie seit "
     +dtfTag.format(new Date(KRIEG.historie_ab))+(n>KRIEG.kriege.length? ", gezeigt die "+KRIEG.kriege.length+" mit den meisten besiegten Gegnern der letzten 7 Tage." : "")
     +" Klick auf ein Paar zeigt nur dessen Kämpfe auf der Karte."));
   KRIEG.kriege.forEach(k=>{
@@ -1970,6 +2015,7 @@ function saveUrl(){
     if(view!=="tribes") p.set("v", view);
     if(axWin!=="24h") p.set("w", axWin);
     if(kampfTag) p.set("t", kampfTag);
+    if(minStaerke!==STAERKE_START) p.set("s", String(minStaerke));
     if(namesFrom===NAME_AB_ROT) p.set("n", "rot");
     if(kriegOffen) p.set("k", kriegSel? kriegSel.join("-") : "1");
     if(marks.size) p.set("m", [...marks].map(([id,c])=>id+"-"+c.replace("#","")).join(","));
@@ -1983,6 +2029,7 @@ function readUrl(){
   const v=p.get("v"); if(v && (STEPS[v]||isRank(v)||isBash(v))) view=v;
   const w=p.get("w"); if(BASH_WINDOWS.includes(w)) axWin=w;
   const t=p.get("t"); if(/^\d{4}-\d{2}-\d{2}$/.test(t||"")) kampfTag=t;
+  const sv=+p.get("s"); if(STAERKE_STUFEN.includes(sv)) minStaerke=sv;
   if(p.get("n")==="rot") namesFrom=NAME_AB_ROT;
   const k=p.get("k");
   if(k){ kriegOffen=true; const m=k.match(/^(\d+)-(\d+)$/); if(m) kriegSel=[+m[1], +m[2]]; }
@@ -2077,9 +2124,11 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
     if(kampfTag && !t.tage.some(d=>d.tag===kampfTag)) kampfTag=null;
     setKampfTag(kampfTag);
   }).catch(()=>setKampfTag(null));
-  load("krieg").then(k=>{ KRIEG=k; if(kriegOffen) renderKriege(); }).catch(()=>{ /* noch kein Seitenbau mit Kriegen */ });
+  // Kriege erst nach der Adresszeile laden, sie hängen an der Mindest-Stärke
 
   if(readUrl()) ownView();
+  $("minst").value=String(minStaerke);
+  ladeKrieg();
   let leiste="1"; try{ leiste=localStorage.getItem("karte.leiste")||"1"; }catch(e){ /* ohne Speicher ausgeklappt */ }
   if(leiste==="0") setLeiste(false);
   $("names").setAttribute("aria-pressed", String(namesFrom===NAME_AB_ROT));
@@ -2128,6 +2177,9 @@ $("zout").addEventListener("click", ()=>zoomAt(W/2,H/2,1/1.6));
 $("kriegbtn").addEventListener("click", ()=>setKrieg(!kriegOffen));
 $("kriege-close").addEventListener("click", ()=>setKrieg(false));
 $("einklappen").addEventListener("click", ()=>setLeiste(false));
+STAERKE_STUFEN.forEach(v=>{ const o=document.createElement("option"); o.value=String(v); o.textContent=nf.format(v); $("minst").appendChild(o); });
+$("minst").value=String(minStaerke);
+$("minst").addEventListener("change", e=>setMinStaerke(+e.target.value));
 $("ausklappen").addEventListener("click", ()=>setLeiste(true));
 $("zeitbadge-jetzt").addEventListener("click", ()=>setKampfTag(null));
 $("zfit").addEventListener("click", ()=>{ marked=null; setSuchFokus(null); userView=false; fitWorld(); draw(); saveUrl(); updateClearMarkBtn(); });

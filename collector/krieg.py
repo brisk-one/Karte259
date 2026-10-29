@@ -15,6 +15,10 @@
    Lauf die ganze Historie nach; der Kampfverlauf bekommt dabei nur Intervalle, die er noch nicht hat.
 
 Nur Angriffe mit wahrscheinlichem oder möglichem Angreifer zählen. Keine Netzabrufe.
+
+Regel-Stand (Kämpfe 12): data/kampf/regel.json nennt kampf.REGEL, mit dem Verlauf und Details geschrieben sind.
+Weicht er ab, verwirft der nächste Lauf beide und rechnet die ganze Historie mit der neuen Regel nach. Die Kriege
+gibt es je Mindest-Stärke der Karte (kampf.STAERKE_STUFEN) als eigene Datei.
 """
 import csv
 import gzip
@@ -28,7 +32,7 @@ from datetime import datetime, timedelta, timezone
 from . import config, kampf, store, tagessieger
 
 HEADER = ["art", "von_utc", "bis_utc", "spieler", "spieler_stamm", "ziel", "ziel_stamm", "wert", "ziel_deff",
-          "sicher", "x", "y"]
+          "sicher", "x", "y", "staerke"]
 MIN_KRIEG = 100_000
 FENSTER_TAGE = 7
 FRIEDEN_TAGE = 21
@@ -54,9 +58,10 @@ def log_zeilen(von, bis, kaempfe):
         x, y = k["ziel"]
         if k["a"]:
             a = k["a"][0]
-            out.append(["a", von, bis, a[0], a[5], k["v"], k["ally"], a[1], k["dv"], kampf.KURZ[k["a_sicher"]], x, y])
+            out.append(["a", von, bis, a[0], a[5], k["v"], k["ally"], a[1], k["dv"], kampf.KURZ[k["a_sicher"]], x, y,
+                        k["staerke"]])
         for u in k["u"]:
-            out.append(["u", von, bis, u[0], u[5], k["v"], k["ally"], u[1], k["dv"], kampf.KURZ[u[2]], x, y])
+            out.append(["u", von, bis, u[0], u[5], k["v"], k["ally"], u[1], k["dv"], kampf.KURZ[u[2]], x, y, k["staerke"]])
     return out
 
 
@@ -136,12 +141,38 @@ def _aktueller_dorfstand():
     return out
 
 
+def _regel_pfad(data_dir):
+    return os.path.join(data_dir, "kampf", "regel.json")
+
+
+def regel_stand(data_dir=None):
+    try:
+        with open(_regel_pfad(data_dir or store.dpath()), encoding="utf-8") as f:
+            return json.load(f).get("regel")
+    except (OSError, ValueError):
+        return None
+
+
+def _regel_pruefen(data_dir):
+    """Verlauf und Details einer anderen Zuordnungsregel verwerfen (sie entstehen neu aus der Git-Historie).
+    Gibt True zurück, wenn verworfen wurde."""
+    if regel_stand(data_dir) == kampf.REGEL:
+        return False
+    d = os.path.join(data_dir, "kampf")
+    if os.path.isdir(d):
+        for f in os.listdir(d):
+            if (f.startswith("kaempfe_") and f.endswith(".csv")) or (f.startswith("details_") and f.endswith(".jsonl.gz")):
+                os.remove(os.path.join(d, f))
+    return True
+
+
 def fortschreiben(historie=None, data_dir=None, jetzt=None):
     """Trägt fertige Intervalle nach, die noch nicht im Verlauf oder in den Details stehen. Gibt die Zahl
     neuer Verlaufszeilen zurück."""
     data_dir = data_dir or store.dpath()
     historie = historie or tagessieger.Historie()
     jetzt = jetzt or datetime.now(timezone.utc).timestamp()
+    neu_regel = _regel_pruefen(data_dir)
     alt = verlauf_laden(data_dir)
     letzte_log = max((_ts(r["bis_utc"]) for r in alt), default=None)
     letzte_det = _letztes_detail(data_dir)
@@ -201,6 +232,10 @@ def fortschreiben(historie=None, data_dir=None, jetzt=None):
         n += len(rows)
     for monat, eintraege in sorted(det.items()):
         _details_anhaengen(os.path.join(data_dir, "kampf", f"details_{monat}.jsonl.gz"), eintraege)
+    if neu_regel or regel_stand(data_dir) != kampf.REGEL:
+        os.makedirs(os.path.join(data_dir, "kampf"), exist_ok=True)
+        with open(_regel_pfad(data_dir), "w", encoding="utf-8") as f:
+            json.dump({"regel": kampf.REGEL}, f)
     return n
 
 
@@ -215,12 +250,16 @@ def update():
 
 # ---------- Kriege ----------
 
-def kriege(rows, jetzt, historie_ab, tags=None):
-    """Kriege aus Verlaufszeilen (Wörterbücher nach HEADER). jetzt, historie_ab als Unix-Zeit."""
+def kriege(rows, jetzt, historie_ab, tags=None, min_staerke=0):
+    """Kriege aus Verlaufszeilen (Wörterbücher nach HEADER). jetzt, historie_ab als Unix-Zeit. min_staerke: nur
+    Kämpfe ab dieser Stärke (Δdef plus zugeordnete Unterstützung), wie der Filter der Karte."""
     tags = tags or {}
     angriffe = defaultdict(list)                  # (s1, s2) mit s1 < s2 -> Angriffe
     unt = {}                                      # (bis, ziel) -> [(unterstützer, wert)]
     for r in rows:
+        st = r.get("staerke")
+        if min_staerke and st not in (None, "") and int(st) < min_staerke:
+            continue                              # Zeilen vor Regel 2 haben keine Stärke und bleiben
         sa, sz = int(r["spieler_stamm"]), int(r["ziel_stamm"])
         if r["art"] == "u":
             if r["sicher"] != "u":
@@ -311,14 +350,18 @@ def _seite_json(s):
             "gegner_unt": [[a, b, v] for (a, b), v in top(s["unt"])]}
 
 
-def bauen(live_rows, jetzt, tags, data_dir=None):
-    """data/krieg.json: Verlauf plus Intervalle, die nur in der Git-Historie stehen (Seitenbau)."""
+def bauen(live_rows, jetzt, tags, data_dir=None, stufen=None):
+    """data/krieg.json: Verlauf plus Intervalle, die nur in der Git-Historie stehen (Seitenbau). Mit stufen eine
+    Fassung je Mindest-Stärke: {stärke: ergebnis}; ohne stufen ein Ergebnis ohne Mindest-Stärke."""
     rows = verlauf_laden(data_dir)
     bekannt = max((r["bis_utc"] for r in rows), default="")
     rows += [r for r in live_rows if r["bis_utc"] > bekannt]
     historie_ab = min((_ts(r["von_utc"]) for r in rows), default=jetzt)
-    alle = kriege(rows, jetzt, historie_ab, tags)
-    return {"regeln": {"min_krieg": MIN_KRIEG, "fenster_tage": FENSTER_TAGE, "frieden_tage": FRIEDEN_TAGE,
-                       "beginn_tage": BEGINN_TAGE},
-            "historie_ab": _iso(historie_ab), "stand": _iso(jetzt), "verlaufszeilen": len(rows),
-            "anzahl": len(alle), "kriege": alle[:MAX_KRIEGE]}
+
+    def eins(s):
+        alle = kriege(rows, jetzt, historie_ab, tags, s)
+        return {"regeln": {"min_krieg": MIN_KRIEG, "fenster_tage": FENSTER_TAGE, "frieden_tage": FRIEDEN_TAGE,
+                           "beginn_tage": BEGINN_TAGE, "min_staerke": s, "kampf_regel": regel_stand(data_dir)},
+                "historie_ab": _iso(historie_ab), "stand": _iso(jetzt), "verlaufszeilen": len(rows),
+                "anzahl": len(alle), "kriege": alle[:MAX_KRIEGE]}
+    return {s: eins(s) for s in stufen} if stufen else eins(0)

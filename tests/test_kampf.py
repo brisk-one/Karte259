@@ -85,6 +85,47 @@ class ZuordnenTest(unittest.TestCase):
         self.assertEqual(kampf.zuordnen(ALT, neu(a20=40000), DOERFER, {10: [(102, 101)]}), [])
 
 
+class PlausibilitaetTest(unittest.TestCase):
+    """Spezifikation Kämpfe 12 (Dennis K2a): Off zwischen 5 % und dem 5-Fachen der Stärke."""
+
+    def test_grosser_angreifer_nur_beim_grossen_verteidiger(self):
+        ks = {k["v"]: k for k in kampf.zuordnen(ALT, neu(d10=150000, d30=1500, a20=180000), DOERFER, None)}
+        self.assertEqual([a[0] for a in ks[10]["a"]], [20])
+        self.assertEqual(ks[30]["a"], [])                         # 180.000 Off gegen 1.500: 120-fach
+        self.assertEqual(ks[30]["a_sicher"], kampf.UNKLAR)
+        self.assertEqual([(v[0], v[1]) for v in ks[30]["av"]], [(20, 180000)])
+        self.assertEqual(ks[30]["staerke"], 1500)
+
+    def test_gescheiterter_angriff_bleibt(self):
+        k, = kampf.zuordnen(ALT, neu(d10=100000, a20=10000), DOERFER, None)
+        self.assertEqual([a[0] for a in k["a"]], [20])           # Off 10 % der Stärke
+        k, = kampf.zuordnen(ALT, neu(d10=300000, a20=10000), DOERFER, None)
+        self.assertEqual(k["a"], [])                              # unter 5 %: verworfen
+        self.assertEqual(k["av"][0][0], 20)
+
+    def test_schwacher_verteidiger_mit_starker_unterstuetzung_bleibt(self):
+        k, = kampf.zuordnen(ALT, neu(d10=2000, s12=60000, a20=50000), DOERFER, None)
+        self.assertEqual(k["staerke"], 62000)
+        self.assertEqual([a[0] for a in k["a"]], [20])
+
+    def test_rangfolge_nach_passung(self):
+        # 21 steht weiter weg, passt aber in der Größe; 20 direkt daneben ist mit dem 4,8-Fachen gültig, passt schlecht
+        alt = {**ALT, 40: {"ally": 2, "att": 0, "def": 0, "sup": 0}}
+        dorf = {**DOERFER, 40: [(108, 100)]}
+        n = neu(d10=40000, a20=190000)
+        n[40] = {"ally": 2, "att": 42000, "def": 0, "sup": 0}
+        k, = kampf.zuordnen(alt, n, dorf, None)
+        self.assertEqual([a[0] for a in k["a"]][:2], [40, 20])
+
+    def test_jeder_kampf_traegt_staerke_und_verworfene_in_der_zeile(self):
+        k = kampf.als_json([("a", "b", True, kampf.zuordnen(ALT, neu(d10=150000, d30=1500, a20=180000), DOERFER, None))])
+        f = {n: i for i, n in enumerate(k["felder"])}
+        self.assertEqual(sorted(r[f["staerke"]] for r in k["rows"]), [1500, 150000])
+        self.assertEqual([r[f["av"]] != [] for r in sorted(k["rows"], key=lambda r: r[f["staerke"]])], [True, False])
+        self.assertEqual(k["regeln"]["staerke_start"], 10000)
+        self.assertEqual(k["regeln"]["off_max"], 5)
+
+
 class AuswertenTest(unittest.TestCase):
     def test_je_intervall_getrennt(self):
         # Phase 1: 20 greift 10 an. Phase 2: 21 greift 11 an, 12 unterstützt 11 (einziger Verteidiger).

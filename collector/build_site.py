@@ -185,11 +185,15 @@ def kampf_bauen(versions, players_path, vrows, ddir):
     # eingetragen hat (er trägt nur Intervalle aus bereits gespeicherten Ständen ein)
     live = [dict(zip(krieg.HEADER, map(str, z))) for von, bis, _a, ks in ivs for z in krieg.log_zeilen(von, bis, ks)]
     tags = {int(r["id"]): r["tag"] for r in store.read_csv(store.dpath("latest", "allies.csv"))}
-    kr = krieg.bauen(live, versions[0][1], tags)
+    # Kriege je Mindest-Stärke der Karte (Dennis K1d): krieg.json mit dem Startwert, krieg_<stärke>.json je Stufe
+    alle = krieg.bauen(live, versions[0][1], tags, stufen=kampf.STAERKE_STUFEN)
+    for st, kr in alle.items():
+        _dump(os.path.join(ddir, f"krieg_{st}.json"), kr)
+    kr = alle[kampf.STAERKE_START]
     _dump(os.path.join(ddir, "krieg.json"), kr)
     tage = kampf_tage_bauen(ivs, ddir)
     return {"kaempfe": len(k["rows"]), "intervalle": len(k["intervalle"]), "kriege": len(kr["kriege"]),
-            "verlaufszeilen": kr["verlaufszeilen"], "tage": tage}
+            "verlaufszeilen": kr["verlaufszeilen"], "tage": tage, "kampf_regel": krieg.regel_stand()}
 
 
 def kampf_tage_bauen(ivs, ddir, data_dir=None):

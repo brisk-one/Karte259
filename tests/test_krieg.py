@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 
-from collector import krieg, store
+from collector import kampf, krieg, store
 
 TAG = 86400
 T0 = datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp()
@@ -92,7 +92,7 @@ class FortschreibenTest(unittest.TestCase):
                 krieg._aktueller_dorfstand = orig
             r, = krieg.verlauf_laden(d)
             self.assertEqual((r["art"], r["spieler"], r["ziel"], r["wert"], r["ziel_deff"]), ("a", "1", "2", "60000", "50000"))
-            self.assertEqual(sorted(os.listdir(os.path.join(d, "kampf"))), ["details_1970-01.jsonl.gz", "kaempfe_1970-01.csv"])
+            self.assertEqual(sorted(os.listdir(os.path.join(d, "kampf"))), ["details_1970-01.jsonl.gz", "kaempfe_1970-01.csv", "regel.json"])
             det, = krieg.details_laden(d)
             self.assertEqual(det["bis"], iso(4600))
             z, = det["rows"]
@@ -131,6 +131,53 @@ class FortschreibenTest(unittest.TestCase):
 def lies(p):
     with open(p, encoding="utf-8") as f:
         return json.load(f)
+
+
+class StaerkeTest(unittest.TestCase):
+    def test_mindest_staerke_filtert_kriege_alte_zeilen_ohne_staerke_bleiben(self):
+        gross = angriff(0, 1, 7, 2, 8, 90000, 120000)
+        gross["staerke"] = "120000"
+        klein = [angriff(t, 3, 7, 4, 8, 9000, 20000) for t in (0, 1, 2, 3, 4, 5)]
+        for r in klein:
+            r["staerke"] = "8000"
+        rows = [gross] + klein
+        self.assertEqual(len(krieg.kriege(rows, T0 + 6 * TAG, T0, None, 10000)), 1)
+        self.assertEqual(len(krieg.kriege(klein, T0 + 6 * TAG, T0, None, 10000)), 0)
+        self.assertEqual(len(krieg.kriege(klein, T0 + 6 * TAG, T0, None, 5000)), 1)
+        ohne = [angriff(0, 1, 7, 2, 8, 90000, 120000)]                  # Verlauf vor Regel 2
+        self.assertEqual(len(krieg.kriege(ohne, T0 + TAG, T0, None, 100000)), 1)
+
+
+class RegelTest(unittest.TestCase):
+    def test_anderer_regelstand_rechnet_verlauf_und_details_neu(self):
+        kopf = "id,name,ally,villages,points,rank,att,def,sup\n"
+        zeile = lambda pid, ally, att, d: f"{pid},x,{ally},1,100,1,{att},{d},0\n"
+        inhalte = {"c0": kopf + zeile(1, 7, 0, 0) + zeile(2, 8, 0, 0) + zeile(3, 9, 0, 0),
+                   # 1 greift mit 60.000 an; 2 hat 50.000 Deff, 3 nur 1.500 (beide in der Nähe)
+                   "c1": kopf + zeile(1, 7, 60000, 0) + zeile(2, 8, 0, 50000) + zeile(3, 9, 0, 1500)}
+
+        class Hist:
+            pfad = "data/latest/players.csv"
+            staende = [("c0", 1000), ("c1", 4600)]
+            def datenzeit(self, h, ct): return ct
+            def git(self, *args): return inhalte[args[1].split(":")[0]]
+
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "kampf"))
+            alt = dict(zip(krieg.HEADER[:-1], ["a", iso(1000), iso(4600), "1", "7", "3", "9", "60000", "1500", "w", "500", "500"]))
+            store.append_csv(os.path.join(d, "kampf", "kaempfe_1970-01.csv"), krieg.HEADER[:-1], [list(alt.values())])
+            orig = krieg._aktueller_dorfstand
+            krieg._aktueller_dorfstand = lambda: {1: [(500, 500)], 2: [(502, 500)], 3: [(501, 503)]}
+            try:
+                self.assertIsNone(krieg.regel_stand(d))
+                krieg.fortschreiben(Hist(), d, jetzt=9000)
+            finally:
+                krieg._aktueller_dorfstand = orig
+            self.assertEqual(krieg.regel_stand(d), kampf.REGEL)
+            rows = krieg.verlauf_laden(d)
+            self.assertEqual([(r["art"], r["spieler"], r["ziel"], r["staerke"]) for r in rows], [("a", "1", "2", "50000")])
+            k = [r for x in krieg.details_laden(d) for r in x["rows"]]
+            self.assertEqual(sorted(r[1] for r in k), [2, 3])          # beide Kämpfe in den Details, 3 ohne Angreifer
 
 
 class TageTest(unittest.TestCase):

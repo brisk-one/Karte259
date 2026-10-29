@@ -6,16 +6,20 @@ miteinander zu tun hatten. Deshalb wird jedes Intervall zwischen zwei aufeinande
 latest/players.csv einzeln ausgewertet:
 
 1. Verteidiger: Zuwachs der besiegten Gegner als Verteidiger (Δdef) ab MIN_DEF.
-2. Angreifer: Δatt ab MIN_ATT im selben Intervall, anderer Stamm, ein Dorf höchstens R Felder vom Ort des
-   Kampfes. Rangfolge nach Größe, gewichtet mit der Nähe.
-3. Unterstützer: Δsup ab MIN_SUP im selben Intervall und im selben Stamm wie der Verteidiger (Unterstützung
+2. Unterstützer: Δsup ab MIN_SUP im selben Intervall und im selben Stamm wie der Verteidiger (Unterstützung
    geht auf Welt 259 nur in den eigenen Stamm). Bei mehreren Verteidigern im Stamm der mit dem größten Δdef
    in der Nähe der Unterstützerdörfer, sonst unklar. Ist er der einzige Verteidiger im Stamm, gilt er ohne
    Rücksicht auf den Weg (Unterstützung läuft oft quer über das Stammesgebiet).
-4. Ort: die Dörfer des Verteidigers, die im Intervall Punkte verloren haben, ohne Besitzerwechsel
+3. Stärke des Kampfes: Δdef des Verteidigers plus Δsup der ihm zugeordneten Unterstützer.
+4. Angreifer: Δatt ab MIN_ATT im selben Intervall, anderer Stamm, ein Dorf höchstens R Felder vom Ort des
+   Kampfes. Gültig nur, wenn die Off zur Stärke passt: höchstens OFF_MAX × und mindestens OFF_MIN × die Stärke
+   (Spezifikation Kämpfe 12, Dennis K2a 29.10.2026); sonst wurde ein großer Angreifer zum Angreifer jedes kleinen
+   Verteidigers in seiner Nähe. Rangfolge nach Nähe × Passung (kleinere ÷ größere der beiden Zahlen). Verworfene
+   Kandidaten stehen in "av" für das Infofeld.
+5. Ort: die Dörfer des Verteidigers, die im Intervall Punkte verloren haben, ohne Besitzerwechsel
    (data/kampf/dorfverluste_*.csv, geschrieben vom Sammler). Fehlen sie, die dem Angreifer nächsten Dörfer
    des Verteidigers, gekennzeichnet als geschätzt.
-5. Sicherheit je Zuordnung: wahrscheinlich, möglich oder unklar.
+6. Sicherheit je Zuordnung: wahrscheinlich, möglich oder unklar.
 
 Ein Punktverlust allein ist kein Kampf (Abriss durch den Besitzer); er zählt nur zusammen mit Δdef desselben
 Spielers im selben Intervall. Die Karte fasst nahe Kämpfe selbst zu Kampfgebieten zusammen.
@@ -33,10 +37,17 @@ R = 25                # Felder um den Ort des Kampfes, in denen ein Angreifer od
 NAEHE = 5             # Felder, ab denen die Nähe das Gewicht eines Angreifers halbiert (1 / (1 + d / NAEHE))
 DOMINANZ = 3          # ein Kandidat ist „wahrscheinlich“, wenn sein Gewicht mindestens das Dreifache des nächsten ist
 MAX_ANGREIFER = 3
+OFF_MAX = 5           # Off höchstens 5 × die Stärke des Kampfes (Dennis K2a)
+OFF_MIN = 0.05        # und mindestens 5 % davon (ein gescheiterter Angriff in eine große Deff bleibt)
+MAX_VERWORFEN = 3
 MAX_ZIELE = 6
 ZELLE = R
 
 WAHRSCHEINLICH, MOEGLICH, UNKLAR = "wahrscheinlich", "möglich", "unklar"
+# Mindest-Stärke filtert die Karte im Browser (Dennis K1d): Auswahl und Startwert; der Seitenbau schreibt alle Kämpfe
+STAERKE_STUFEN = [1000, 5000, 10000, 25000, 50000, 100000]
+STAERKE_START = 10000
+REGEL = 2             # Stand der Zuordnungsregel; ein anderer Stand im Kampfverlauf löst dessen Neuberechnung aus
 
 
 def _dist(a, b):
@@ -100,43 +111,36 @@ def zuordnen(alt, neu, doerfer, verluste):
     angreifer = [pid for pid in neu if delta(pid, "att") >= MIN_ATT and doerfer.get(pid)]
     raster_a = _raster(doerfer, angreifer)
 
+    def orte_fuer(v, getroffen, punkte, fa):
+        """Ort des Kampfes: getroffene Dörfer, sonst die Dörfer des Verteidigers am nächsten Dorf des Angreifers
+        (fa), sonst das Dorf in der Mitte seiner Dörfer."""
+        if getroffen:
+            return punkte[:MAX_ZIELE], False
+        if fa:
+            return sorted(doerfer[v], key=lambda p: _dist(p, fa))[:3], True
+        mitte = _mitte(doerfer[v])
+        return [min(doerfer[v], key=lambda p: _dist(p, mitte))], True
+
+    # 1. Verteidiger mit Kandidaten; vorläufiger Ort (für die Unterstützer) am stärksten nahen Kandidaten
     kaempfe = []
     for v in verteidiger:
         getroffen = (verluste or {}).get(v) or []
         punkte = list(dict.fromkeys((p[0], p[1]) for p in getroffen))
-        orte = punkte or doerfer[v]
-        naehe = _naehe(raster_a, orte)
+        naehe = _naehe(raster_a, punkte or doerfer[v])
         ally_v = neu[v]["ally"]
-        kand = []
-        for a, (d, dorf) in naehe.items():
-            if a == v or (ally_v and neu[a]["ally"] == ally_v):
-                continue
-            kand.append((delta(a, "att") / (1 + d / NAEHE), a, d, dorf))
-        kand.sort(key=lambda k: (-k[0], k[1]))
-        if getroffen:
-            ziele, geschaetzt = punkte[:MAX_ZIELE], False
-        elif kand:
-            # ohne Dorfvergleich: die Dörfer des Verteidigers am nächsten Dorf des wahrscheinlichsten Angreifers
-            fa = kand[0][3]
-            ziele = sorted(doerfer[v], key=lambda p: _dist(p, fa))[:3]
-            geschaetzt = True
-        else:
-            mitte = _mitte(doerfer[v])
-            ziele, geschaetzt = [min(doerfer[v], key=lambda p: _dist(p, mitte))], True
-        ziel = _mitte(ziele)
+        kand = [(a, d, dorf) for a, (d, dorf) in naehe.items() if a != v and not (ally_v and neu[a]["ally"] == ally_v)]
+        vorl = min(kand, key=lambda c: (-delta(c[0], "att") / (1 + c[1] / NAEHE), c[0]), default=None)
+        ziele, geschaetzt = orte_fuer(v, getroffen, punkte, vorl[2] if vorl else None)
         kaempfe.append({
-            "v": v, "dv": delta(v, "def"), "ally": ally_v, "ziel": list(ziel),
+            "v": v, "dv": delta(v, "def"), "ally": ally_v, "ziel": list(_mitte(ziele)),
             "orte": [list(p) for p in ziele], "geschaetzt": geschaetzt,
             # alle getroffenen Dörfer mit Stunde und Punktverlust, für die Liste im Infofeld
             "treffer": sorted(((p[0], p[1], p[2] if len(p) > 2 else None, p[3] if len(p) > 3 else 0)
                                for p in getroffen), key=lambda t: (t[2] or (), t[0], t[1])),
-            "a": [[a, delta(a, "att"), round(d, 1), *_front(doerfer[a], ziel), neu[a]["ally"]]
-                  for _, a, d, _ in kand[:MAX_ANGREIFER]],
-            "a_sicher": _sicherheit([k[0] for k in kand]),
-            "u": [],
+            "u": [], "_kand": kand, "_getroffen": getroffen, "_punkte": punkte,
         })
 
-    # Unterstützer: nur im eigenen Stamm, zum Verteidiger mit dem größten Δdef in der Nähe
+    # 2. Unterstützer: nur im eigenen Stamm, zum Verteidiger mit dem größten Δdef in der Nähe
     nach_stamm = defaultdict(list)
     for k in kaempfe:
         if k["ally"]:
@@ -156,11 +160,33 @@ def zuordnen(alt, neu, doerfer, verluste):
             k = nah[0]
         else:
             k, sicher = max(kandidaten, key=lambda k: k["dv"]), UNKLAR
-        front = _mitte(sorted(doerfer[s], key=lambda p: _dist(p, k["ziel"]))[:3])
-        k["u"].append([s, delta(s, "sup"), sicher, *front, neu[s]["ally"]])
+        k["u"].append([s, delta(s, "sup"), sicher, neu[s]["ally"]])
+
+    # 3. Stärke, 4. Angreifer nach Passung, 5. endgültiger Ort
     for k in kaempfe:
+        v, kand = k["v"], k.pop("_kand")
+        getroffen, punkte = k.pop("_getroffen"), k.pop("_punkte")
         k["u"].sort(key=lambda u: -u[1])
-        k["staerke"] = k["dv"] + sum(u[1] for u in k["u"])
+        st = k["staerke"] = k["dv"] + sum(u[1] for u in k["u"])
+        gueltig, verworfen = [], []
+        for a, d, dorf in kand:
+            off = delta(a, "att")
+            if OFF_MIN * st <= off <= OFF_MAX * st:
+                gueltig.append((min(off, st) / max(off, st) / (1 + d / NAEHE), a, d, dorf))
+            else:
+                verworfen.append((off / (1 + d / NAEHE), a, d, off))
+        gueltig.sort(key=lambda g: (-g[0], g[1]))
+        verworfen.sort(key=lambda g: (-g[0], g[1]))
+        ziele, geschaetzt = orte_fuer(v, getroffen, punkte, gueltig[0][3] if gueltig else None)
+        ziel = _mitte(ziele)
+        k.update(ziel=list(ziel), orte=[list(p) for p in ziele], geschaetzt=geschaetzt,
+                 a=[[a, delta(a, "att"), round(d, 1), *_front(doerfer[a], ziel), neu[a]["ally"]]
+                    for _, a, d, _ in gueltig[:MAX_ANGREIFER]],
+                 a_sicher=_sicherheit([g[0] for g in gueltig]),
+                 av=[[a, off, round(d, 1)] for _, a, d, off in verworfen[:MAX_VERWORFEN]])
+        # Unterstützer zeigen vom nächsten Teil ihres Gebiets auf den endgültigen Ort
+        k["u"] = [[s, w, sicher, *_mitte(sorted(doerfer[s], key=lambda p: _dist(p, ziel))[:3]), ally]
+                  for s, w, sicher, ally in k["u"]]
     return kaempfe
 
 
@@ -185,17 +211,18 @@ def stand(rows):
 
 
 KURZ = {WAHRSCHEINLICH: "w", MOEGLICH: "m", UNKLAR: "u"}
-FELDER = ["i", "v", "dv", "x", "y", "geschaetzt", "staerke", "a_sicher", "orte", "a", "u", "treffer"]
+FELDER = ["i", "v", "dv", "x", "y", "geschaetzt", "staerke", "a_sicher", "orte", "a", "u", "treffer", "av"]
 
 
 def zeile(i, k, stunde_nr):
     """Kompakte Zeile nach FELDER. Orte als x*1000+y, Angreifer [pid, Δatt, Abstand, x, y],
     Unterstützer [pid, Δsup, Sicherheit, x, y], Sicherheit als w, m oder u. Treffer [x*1000+y, Stunde, Δpunkte],
-    Stunde als Index in "stunden" ([vorher, stand] der Stunde mit dem Punktverlust), -1 ohne Zeit."""
+    Stunde als Index in "stunden" ([vorher, stand] der Stunde mit dem Punktverlust), -1 ohne Zeit. Verworfene
+    Angreifer (Off passt nicht zur Stärke) [pid, Δatt, Abstand]."""
     return [i, k["v"], k["dv"], k["ziel"][0], k["ziel"][1], int(k["geschaetzt"]), k["staerke"], KURZ[k["a_sicher"]],
             [x * 1000 + y for x, y in k["orte"]], [a[:5] for a in k["a"]],
             [[u[0], u[1], KURZ[u[2]], u[3], u[4]] for u in k["u"]],
-            [[x * 1000 + y, stunde_nr.get(t, -1), dp] for x, y, t, dp in k["treffer"]]]
+            [[x * 1000 + y, stunde_nr.get(t, -1), dp] for x, y, t, dp in k["treffer"]], k.get("av", [])]
 
 
 def _bash_gleich(a, b):
@@ -251,7 +278,9 @@ def als_json(ivs):
 
 
 def regeln():
-    return {"min_def": MIN_DEF, "min_att": MIN_ATT, "min_sup": MIN_SUP, "r": R, "dominanz": DOMINANZ}
+    return {"min_def": MIN_DEF, "min_att": MIN_ATT, "min_sup": MIN_SUP, "r": R, "dominanz": DOMINANZ,
+            "off_max": OFF_MAX, "off_min": OFF_MIN, "staerke_stufen": STAERKE_STUFEN, "staerke_start": STAERKE_START,
+            "regel": REGEL}
 
 
 def zusammenfuegen(details):
