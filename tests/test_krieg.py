@@ -55,6 +55,10 @@ class KriegeTest(unittest.TestCase):
         rows = [angriff(1, 1, 7, 2, 8, 50000, 150000, "u"), angriff(1, 1, 7, 2, 7, 50000, 150000)]
         self.assertEqual(krieg.kriege(rows, T0 + 2 * TAG, T0), [])
 
+    def test_verbuendete_fuehren_keinen_krieg(self):
+        a, b = kampf.config.BUENDNISSE[0]
+        self.assertEqual(krieg.kriege([angriff(10, 1, a, 2, b, 90000, 120000)], T0 + 11 * TAG, T0), [])
+
     def test_off_je_intervall_einmal_und_unterstuetzung_beim_gegner(self):
         rows = [angriff(1, 1, 7, 2, 8, 90000, 80000), angriff(1, 1, 7, 3, 8, 90000, 40000),
                 unterstuetzung(1, 5, 2, 8, 25000)]

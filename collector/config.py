@@ -13,6 +13,11 @@ TZ = "Europe/Berlin"  # Serverzeit der deutschen Welten
 DATA_DIR = os.environ.get("K259_DATA_DIR", "data")
 CACHE_DIR = os.environ.get("K259_CACHE_DIR", ".cache/raw")
 
+# Bündnisse und Wings als Paare von Stammes-IDs, gepflegt von Dennis (1a, 01.11.2026). Verbündete gelten in der
+# Kampfauswertung nicht als Angreifer (2a): 456 REPEAT mit 123 GSE, 130 Nice mit 442 Nice?!, 797 -SN- als Wing von 456
+# und damit auch mit 123 GSE verbündet.
+BUENDNISSE = [(456, 123), (130, 442), (456, 797), (797, 123)]
+
 # Weltdaten-Dateien unter /map/<name>.txt.gz
 WORLD_FILES = ["player", "ally", "village", "kill_att", "kill_def", "kill_sup", "kill_all", "conquer"]
 

@@ -34,6 +34,26 @@ def neu(**d):
 
 
 class ZuordnenTest(unittest.TestCase):
+    def test_verbuendeter_angreifer_weicht_dem_fremden(self):
+        # Stamm 2 mit Stamm 1 verbündet (Bündnis oder Wing, Dennis 2a): 20 steht näher und passt besser, 30 gewinnt
+        k, = kampf.zuordnen(ALT, neu(d10=50000, a20=40000, a30=30000), DOERFER, None, buendnisse=[(2, 1)])
+        self.assertEqual([a[0] for a in k["a"]], [30])
+        ohne, = kampf.zuordnen(ALT, neu(d10=50000, a20=40000, a30=30000), DOERFER, None, buendnisse=[])
+        self.assertEqual(ohne["a"][0][0], 20)
+
+    def test_nur_verbuendeter_heisst_angreifer_unklar_mit_hinweis(self):
+        k, = kampf.zuordnen(ALT, neu(d10=50000, a20=40000), DOERFER, None, buendnisse=[(1, 2)])
+        self.assertEqual(k["a"], [])
+        self.assertEqual(k["a_sicher"], kampf.UNKLAR)
+        self.assertEqual(k["av"][0][0], 20)
+        self.assertEqual(k["av"][0][3], 1)                     # Kennzeichen „verbündet“ fürs Infofeld
+
+    def test_verbuendet_symmetrisch_und_nie_der_eigene_stamm(self):
+        paare = kampf._paare([(456, 797)])
+        self.assertTrue(kampf.verbuendet(797, 456, paare))
+        self.assertFalse(kampf.verbuendet(456, 456, paare))
+        self.assertFalse(kampf.verbuendet(0, 456, paare))
+
     def test_ein_angriff(self):
         k, = kampf.zuordnen(ALT, neu(d10=50000, a20=40000, a22=90000), DOERFER, None)
         self.assertEqual(k["v"], 10)

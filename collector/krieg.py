@@ -265,8 +265,8 @@ def kriege(rows, jetzt, historie_ab, tags=None, min_staerke=0):
             if r["sicher"] != "u":
                 unt.setdefault((r["bis_utc"], int(r["ziel"])), []).append((int(r["spieler"]), int(r["wert"])))
             continue
-        if r["sicher"] == "u" or not sa or not sz or sa == sz:
-            continue
+        if r["sicher"] == "u" or not sa or not sz or sa == sz or kampf.verbuendet(sa, sz):
+            continue                              # Verbündete führen keinen Krieg (Dennis 2a, 01.11.2026)
         angriffe[(min(sa, sz), max(sa, sz))].append(r)
 
     out = []

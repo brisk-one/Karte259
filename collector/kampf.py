@@ -15,7 +15,9 @@ latest/players.csv einzeln ausgewertet:
    Kampfes. Gültig nur, wenn die Off zur Stärke passt: höchstens OFF_MAX × und mindestens OFF_MIN × die Stärke
    (Spezifikation Kämpfe 12, Dennis K2a 29.10.2026); sonst wurde ein großer Angreifer zum Angreifer jedes kleinen
    Verteidigers in seiner Nähe. Rangfolge nach Nähe × Passung (kleinere ÷ größere der beiden Zahlen). Verworfene
-   Kandidaten stehen in "av" für das Infofeld.
+   Kandidaten stehen in "av" für das Infofeld. Verbündete Stämme (config.BUENDNISSE, Bündnis oder Wing) sind keine
+   Kandidaten (Dennis 2a, 01.11.2026); bleibt nur ein passender Verbündeter, ist der Angreifer unklar und der
+   Verbündete steht mit Kennzeichen 1 in "av" (Stammesverrat bleibt sichtbar, ohne falschen Pfeil).
 5. Ort: die Dörfer des Verteidigers, die im Intervall Punkte verloren haben, ohne Besitzerwechsel
    (data/kampf/dorfverluste_*.csv, geschrieben vom Sammler). Fehlen sie, die dem Angreifer nächsten Dörfer
    des Verteidigers, gekennzeichnet als geschätzt.
@@ -28,7 +30,7 @@ import math
 import os
 from collections import defaultdict
 
-from . import store
+from . import config, store
 
 MIN_DEF = 1000
 MIN_ATT = 1000
@@ -47,7 +49,18 @@ WAHRSCHEINLICH, MOEGLICH, UNKLAR = "wahrscheinlich", "möglich", "unklar"
 # Mindest-Stärke filtert die Karte im Browser (Dennis K1d): Auswahl und Startwert; der Seitenbau schreibt alle Kämpfe
 STAERKE_STUFEN = [1000, 5000, 10000, 25000, 50000, 100000]
 STAERKE_START = 10000
-REGEL = 2             # Stand der Zuordnungsregel; ein anderer Stand im Kampfverlauf löst dessen Neuberechnung aus
+REGEL = 3             # Stand der Zuordnungsregel (3: Bündnisse, 01.11.2026); ein anderer Stand im Kampfverlauf löst dessen Neuberechnung aus
+
+
+def _paare(buendnisse):
+    return {(min(a, b), max(a, b)) for a, b in buendnisse}
+
+
+def verbuendet(s1, s2, paare=None):
+    """Zwei verschiedene Stämme sind laut config.BUENDNISSE verbündet (Bündnis oder Wing)."""
+    if not s1 or not s2 or s1 == s2:
+        return False
+    return (min(s1, s2), max(s1, s2)) in (_paare(config.BUENDNISSE) if paare is None else paare)
 
 
 def _dist(a, b):
@@ -94,14 +107,16 @@ def _front(doerfer, ziel):
     return _mitte(nah) if nah else min(doerfer, key=lambda p: _dist(p, ziel))
 
 
-def zuordnen(alt, neu, doerfer, verluste):
+def zuordnen(alt, neu, doerfer, verluste, buendnisse=None):
     """Kämpfe eines Intervalls.
 
     alt, neu: {pid: {"ally", "att", "def", "sup"}} zu Beginn und Ende des Intervalls
     doerfer: {pid: [(x, y), ...]} Dörfer je Spieler
     verluste: {pid: [(x, y[, (vorher_utc, stand_utc), Δpunkte]), ...]} Dörfer mit Punktverlust im Intervall, None ohne
         Dorfvergleich. Ein Dorf kann mehrfach vorkommen (Verlust in mehreren Stunden).
+    buendnisse: Paare verbündeter Stämme, Standard config.BUENDNISSE
     """
+    paare = _paare(config.BUENDNISSE if buendnisse is None else buendnisse)
     def delta(pid, f):
         a = alt.get(pid)
         return neu[pid][f] - a[f] if a else 0
@@ -128,7 +143,11 @@ def zuordnen(alt, neu, doerfer, verluste):
         punkte = list(dict.fromkeys((p[0], p[1]) for p in getroffen))
         naehe = _naehe(raster_a, punkte or doerfer[v])
         ally_v = neu[v]["ally"]
-        kand = [(a, d, dorf) for a, (d, dorf) in naehe.items() if a != v and not (ally_v and neu[a]["ally"] == ally_v)]
+        kand, verb = [], []
+        for a, (d, dorf) in naehe.items():
+            if a == v or (ally_v and neu[a]["ally"] == ally_v):
+                continue
+            (verb if verbuendet(ally_v, neu[a]["ally"], paare) else kand).append((a, d, dorf))
         vorl = min(kand, key=lambda c: (-delta(c[0], "att") / (1 + c[1] / NAEHE), c[0]), default=None)
         ziele, geschaetzt = orte_fuer(v, getroffen, punkte, vorl[2] if vorl else None)
         kaempfe.append({
@@ -137,7 +156,7 @@ def zuordnen(alt, neu, doerfer, verluste):
             # alle getroffenen Dörfer mit Stunde und Punktverlust, für die Liste im Infofeld
             "treffer": sorted(((p[0], p[1], p[2] if len(p) > 2 else None, p[3] if len(p) > 3 else 0)
                                for p in getroffen), key=lambda t: (t[2] or (), t[0], t[1])),
-            "u": [], "_kand": kand, "_getroffen": getroffen, "_punkte": punkte,
+            "u": [], "_kand": kand, "_verb": verb, "_getroffen": getroffen, "_punkte": punkte,
         })
 
     # 2. Unterstützer: nur im eigenen Stamm, zum Verteidiger mit dem größten Δdef in der Nähe
@@ -164,7 +183,7 @@ def zuordnen(alt, neu, doerfer, verluste):
 
     # 3. Stärke, 4. Angreifer nach Passung, 5. endgültiger Ort
     for k in kaempfe:
-        v, kand = k["v"], k.pop("_kand")
+        v, kand, verb = k["v"], k.pop("_kand"), k.pop("_verb")
         getroffen, punkte = k.pop("_getroffen"), k.pop("_punkte")
         k["u"].sort(key=lambda u: -u[1])
         st = k["staerke"] = k["dv"] + sum(u[1] for u in k["u"])
@@ -177,13 +196,18 @@ def zuordnen(alt, neu, doerfer, verluste):
                 verworfen.append((off / (1 + d / NAEHE), a, d, off))
         gueltig.sort(key=lambda g: (-g[0], g[1]))
         verworfen.sort(key=lambda g: (-g[0], g[1]))
+        # Ohne gültigen Angreifer: passende Verbündete zuerst nennen, Kennzeichen 1 (Infofeld „verbündet“)
+        verbuendete = [] if gueltig else sorted(
+            ((min(delta(a, "att"), st) / max(delta(a, "att"), st) / (1 + d / NAEHE), a, d, delta(a, "att"))
+             for a, d, _ in verb if OFF_MIN * st <= delta(a, "att") <= OFF_MAX * st), key=lambda g: (-g[0], g[1]))
         ziele, geschaetzt = orte_fuer(v, getroffen, punkte, gueltig[0][3] if gueltig else None)
         ziel = _mitte(ziele)
         k.update(ziel=list(ziel), orte=[list(p) for p in ziele], geschaetzt=geschaetzt,
                  a=[[a, delta(a, "att"), round(d, 1), *_front(doerfer[a], ziel), neu[a]["ally"]]
                     for _, a, d, _ in gueltig[:MAX_ANGREIFER]],
                  a_sicher=_sicherheit([g[0] for g in gueltig]),
-                 av=[[a, off, round(d, 1)] for _, a, d, off in verworfen[:MAX_VERWORFEN]])
+                 av=([[a, off, round(d, 1), 1] for _, a, d, off in verbuendete]
+                     + [[a, off, round(d, 1)] for _, a, d, off in verworfen])[:MAX_VERWORFEN])
         # Unterstützer zeigen vom nächsten Teil ihres Gebiets auf den endgültigen Ort
         k["u"] = [[s, w, sicher, *_mitte(sorted(doerfer[s], key=lambda p: _dist(p, ziel))[:3]), ally]
                   for s, w, sicher, ally in k["u"]]
@@ -280,7 +304,7 @@ def als_json(ivs):
 def regeln():
     return {"min_def": MIN_DEF, "min_att": MIN_ATT, "min_sup": MIN_SUP, "r": R, "dominanz": DOMINANZ,
             "off_max": OFF_MAX, "off_min": OFF_MIN, "staerke_stufen": STAERKE_STUFEN, "staerke_start": STAERKE_START,
-            "regel": REGEL}
+            "regel": REGEL, "buendnisse": [list(b) for b in config.BUENDNISSE]}
 
 
 def zusammenfuegen(details):

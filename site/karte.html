@@ -978,13 +978,15 @@ function openKampf(items, fokus){
     d.append(v);
     d.append(el("p","s","Stärke "+nf.format(r[kF.staerke])+" (Deff plus Unterstützung)"));
     const av=r[kF.av]||[];
-    if(!r[kF.a].length) d.append(el("p","s", av.length
+    if(!r[kF.a].length) d.append(el("p","s", av.some(x=>x[3]===1)
+      ? "Angreifer unklar: in der Nähe passt nur die Off eines verbündeten Stammes (Stammesverrat möglich, aber selten)"
+      : av.length
       ? "Angreifer unklar: die Kandidaten in der Nähe passen nicht zur Stärke (Off höchstens "+(KAMPF.regeln.off_max||5)+" × und mindestens "
         +Math.round((KAMPF.regeln.off_min||0.05)*100)+" % der Stärke)"
       : "Angreifer unklar: kein Kandidat aus einem anderen Stamm in der Nähe"));
     if(!r[kF.a].length) av.forEach(x=>{
       const p=el("p","s"); p.append(el("b",null,pName(x[0])),
-        document.createTextNode(" Off +"+nf.format(x[1])+", "+verhaeltnis(x[1], r[kF.staerke])+(x[1]>r[kF.staerke]? ", zu groß" : ", zu klein")));
+        document.createTextNode(" Off +"+nf.format(x[1])+", "+verhaeltnis(x[1], r[kF.staerke])+(x[3]===1? ", verbündet" : x[1]>r[kF.staerke]? ", zu groß" : ", zu klein")));
       d.append(p);
     });
     r[kF.a].forEach((a,j)=>{
