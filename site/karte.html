@@ -993,7 +993,12 @@ function openKampf(items, fokus){
       const p=el("p","ang kart"); p.style.setProperty("--c", pFarbe(a[0]));
       if(j===0) p.innerHTML=PLAKETTE_IMG.a;
       p.append(el("b",null,pName(a[0])),
-        document.createTextNode(" greift an, Off +"+nf.format(a[1])+" ("+verhaeltnis(a[1], r[kF.staerke])+"), "+nf1.format(a[2])+(a[2]===1? " Feld " : " Felder ")),
+        // a[5]: diesem Kampf zugeordnete Off (Regel 4, Dennis 3a); fehlt bei älteren Daten
+        document.createTextNode(" greift an, Off +"+nf.format(a[1])
+          +(a[5]==null? " ("+verhaeltnis(a[1], r[kF.staerke])+"), "
+            : a[5]>0? ", davon hier "+nf.format(a[5])+" ("+verhaeltnis(a[5], r[kF.staerke])+"), "
+            : ", schon anderen Kämpfen zugeordnet, ")
+          +nf1.format(a[2])+(a[2]===1? " Feld " : " Felder ")),
         el("span","s", j===0? SICHER[r[kF.a_sicher]] : "weiterer Kandidat"));
       d.append(p);
     });

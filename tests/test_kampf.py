@@ -54,6 +54,35 @@ class ZuordnenTest(unittest.TestCase):
         self.assertFalse(kampf.verbuendet(456, 456, paare))
         self.assertFalse(kampf.verbuendet(0, 456, paare))
 
+    def test_off_wird_nur_einmal_verbraucht(self):
+        # Fall Spectre (Dennis 3a): großer Angreifer 40 nahe zwei Verteidigern, kleiner Angreifer 41 nahe beiden.
+        # Früher war 40 bei beiden erster, jetzt bekommt 40 einen Kampf und 41 den anderen.
+        alt = {p: {"ally": s, "att": 0, "def": 0, "sup": 0} for p, s in ((50, 1), (51, 1), (40, 2), (41, 3))}
+        neu_ = {p: dict(v) for p, v in alt.items()}
+        neu_[50]["def"], neu_[51]["def"], neu_[40]["att"], neu_[41]["att"] = 160000, 140000, 160000, 58000
+        dorf = {50: [(100, 100)], 51: [(104, 100)], 40: [(102, 103)], 41: [(103, 101)]}
+        k = {x["v"]: x for x in kampf.zuordnen(alt, neu_, dorf, None, buendnisse=[])}
+        self.assertEqual(k[50]["a"][0][0], 40)
+        self.assertEqual(k[50]["a"][0][6], 160000)               # ganze Off hier verbraucht
+        self.assertEqual(k[51]["a"][0][0], 41)
+        self.assertEqual(k[51]["a"][0][6], 58000)
+        self.assertEqual(k[51]["a"][1][:2], [40, 160000])        # bleibt als Kandidat, ohne Anteil
+        self.assertEqual(k[51]["a"][1][6], 0)
+        self.assertEqual(k[51]["a_sicher"], kampf.MOEGLICH)
+
+    def test_verteilen_teilt_rest_off(self):
+        # 40 mit 100.000 Off, zwei Kämpfe zu 60.000 und 40.000: beide bekommen ihn, zusammen genau seine Off
+        alt = {p: {"ally": s, "att": 0, "def": 0, "sup": 0} for p, s in ((50, 1), (51, 1), (40, 2))}
+        neu_ = {p: dict(v) for p, v in alt.items()}
+        neu_[50]["def"], neu_[51]["def"], neu_[40]["att"] = 60000, 40000, 100000
+        dorf = {50: [(100, 100)], 51: [(104, 100)], 40: [(102, 103)]}
+        k = {x["v"]: x for x in kampf.zuordnen(alt, neu_, dorf, None, buendnisse=[])}
+        self.assertEqual((k[50]["a"][0][6], k[51]["a"][0][6]), (60000, 40000))
+
+    def test_zeile_traegt_anteil(self):
+        k, = kampf.zuordnen(ALT, neu(d10=50000, a20=40000), DOERFER, None)
+        self.assertEqual(kampf.zeile(0, k, {})[9][0][5], 40000)
+
     def test_ein_angriff(self):
         k, = kampf.zuordnen(ALT, neu(d10=50000, a20=40000, a22=90000), DOERFER, None)
         self.assertEqual(k["v"], 10)

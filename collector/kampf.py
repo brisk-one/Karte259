@@ -18,6 +18,9 @@ latest/players.csv einzeln ausgewertet:
    Kandidaten stehen in "av" für das Infofeld. Verbündete Stämme (config.BUENDNISSE, Bündnis oder Wing) sind keine
    Kandidaten (Dennis 2a, 01.11.2026); bleibt nur ein passender Verbündeter, ist der Angreifer unklar und der
    Verbündete steht mit Kennzeichen 1 in "av" (Stammesverrat bleibt sichtbar, ohne falschen Pfeil).
+   Die Off eines Angreifers wird im Intervall nur einmal verbraucht (Dennis 3a, 01.11.2026, _verteilen): erster
+   Angreifer ist der mit dem größten zugeordneten Anteil, sonst zählte ein großer Angreifer bei jedem
+   Verteidiger in seiner Nähe voll.
 5. Ort: die Dörfer des Verteidigers, die im Intervall Punkte verloren haben, ohne Besitzerwechsel
    (data/kampf/dorfverluste_*.csv, geschrieben vom Sammler). Fehlen sie, die dem Angreifer nächsten Dörfer
    des Verteidigers, gekennzeichnet als geschätzt.
@@ -26,6 +29,7 @@ latest/players.csv einzeln ausgewertet:
 Ein Punktverlust allein ist kein Kampf (Abriss durch den Besitzer); er zählt nur zusammen mit Δdef desselben
 Spielers im selben Intervall. Die Karte fasst nahe Kämpfe selbst zu Kampfgebieten zusammen.
 """
+import heapq
 import math
 import os
 from collections import defaultdict
@@ -49,7 +53,7 @@ WAHRSCHEINLICH, MOEGLICH, UNKLAR = "wahrscheinlich", "möglich", "unklar"
 # Mindest-Stärke filtert die Karte im Browser (Dennis K1d): Auswahl und Startwert; der Seitenbau schreibt alle Kämpfe
 STAERKE_STUFEN = [1000, 5000, 10000, 25000, 50000, 100000]
 STAERKE_START = 10000
-REGEL = 3             # Stand der Zuordnungsregel (3: Bündnisse, 01.11.2026); ein anderer Stand im Kampfverlauf löst dessen Neuberechnung aus
+REGEL = 4             # Stand der Zuordnungsregel (3: Bündnisse, 4: Off nur einmal verbraucht, 01.11.2026); ein anderer Stand im Kampfverlauf löst dessen Neuberechnung aus
 
 
 def _paare(buendnisse):
@@ -99,6 +103,50 @@ def _sicherheit(gewichte):
     if len(gewichte) == 1 or gewichte[0] >= DOMINANZ * gewichte[1]:
         return WAHRSCHEINLICH
     return MOEGLICH
+
+
+def _verteilen(kaempfe, off):
+    """Off der Angreifer auf die Kämpfe eines Intervalls verteilen, jede Off nur einmal (Dennis 3a, 01.11.2026).
+
+    Gierig über alle gültigen Paare (Angreifer, Kampf): das Paar mit der besten Passung aus Rest-Off und
+    Rest-Stärke, gewichtet mit der Nähe, bekommt die kleinere der beiden Mengen; beide Reste sinken um sie.
+    Ein großer Angreifer zählt so nicht mehr bei jedem Verteidiger in seiner Nähe voll. kaempfe mit "_gueltig"
+    und "staerke", off: {pid: Δatt}. Ergebnis {(angreifer, verteidiger): zugeordnete Off}."""
+    rest_off = dict(off)
+    rest_st = {k["v"]: k["staerke"] for k in kaempfe}
+    paare = defaultdict(list)                     # Angreifer -> [(Verteidiger, Abstand)], Verteidiger -> ...
+    heap = []
+
+    def wert(a, v, d):
+        o, s = rest_off[a], rest_st[v]
+        return min(o, s) / max(o, s) / (1 + d / NAEHE) if o >= MIN_ATT and s >= MIN_DEF else 0
+
+    for k in kaempfe:
+        for _, a, d, _ in k["_gueltig"]:
+            paare[("a", a)].append((k["v"], d))
+            paare[("v", k["v"])].append((a, d))
+            w = wert(a, k["v"], d)
+            if w > 0:
+                heapq.heappush(heap, (-w, a, k["v"], d))
+    anteil = {}
+    while heap:
+        w, a, v, d = heapq.heappop(heap)
+        if (a, v) in anteil:
+            continue
+        if abs(wert(a, v, d) + w) > 1e-12 or w == 0:
+            continue                              # veraltet: nach der letzten Änderung liegt ein frischer Eintrag bereit
+        m = min(rest_off[a], rest_st[v])
+        anteil[(a, v)] = m
+        rest_off[a] -= m
+        rest_st[v] -= m
+        # Passungen von a und v haben sich geändert (sie können auch steigen): frisch einreihen
+        for v2, d2 in paare[("a", a)]:
+            if (a, v2) not in anteil and (w2 := wert(a, v2, d2)) > 0:
+                heapq.heappush(heap, (-w2, a, v2, d2))
+        for a2, d2 in paare[("v", v)]:
+            if (a2, v) not in anteil and (w2 := wert(a2, v, d2)) > 0:
+                heapq.heappush(heap, (-w2, a2, v, d2))
+    return anteil
 
 
 def _front(doerfer, ziel):
@@ -181,21 +229,34 @@ def zuordnen(alt, neu, doerfer, verluste, buendnisse=None):
             k, sicher = max(kandidaten, key=lambda k: k["dv"]), UNKLAR
         k["u"].append([s, delta(s, "sup"), sicher, neu[s]["ally"]])
 
-    # 3. Stärke, 4. Angreifer nach Passung, 5. endgültiger Ort
+    # 3. Stärke, 4. Angreifer nach Passung
     for k in kaempfe:
-        v, kand, verb = k["v"], k.pop("_kand"), k.pop("_verb")
-        getroffen, punkte = k.pop("_getroffen"), k.pop("_punkte")
         k["u"].sort(key=lambda u: -u[1])
         st = k["staerke"] = k["dv"] + sum(u[1] for u in k["u"])
         gueltig, verworfen = [], []
-        for a, d, dorf in kand:
+        for a, d, dorf in k.pop("_kand"):
             off = delta(a, "att")
             if OFF_MIN * st <= off <= OFF_MAX * st:
                 gueltig.append((min(off, st) / max(off, st) / (1 + d / NAEHE), a, d, dorf))
             else:
                 verworfen.append((off / (1 + d / NAEHE), a, d, off))
-        gueltig.sort(key=lambda g: (-g[0], g[1]))
+        k["_gueltig"], k["_verworfen"] = gueltig, verworfen
+
+    # 4b. Off nur einmal verbrauchen (Dennis 3a, 01.11.2026)
+    anteil = _verteilen(kaempfe, {a: delta(a, "att") for k in kaempfe for _, a, _, _ in k["_gueltig"]})
+
+    # 5. Rangfolge, endgültiger Ort
+    for k in kaempfe:
+        v, verb = k["v"], k.pop("_verb")
+        getroffen, punkte = k.pop("_getroffen"), k.pop("_punkte")
+        st, gueltig, verworfen = k["staerke"], k.pop("_gueltig"), k.pop("_verworfen")
+        # zuerst nach zugeordnetem Anteil, Kandidaten ohne Anteil (Off anderswo verbraucht) danach nach Passung
+        gueltig.sort(key=lambda g: (-anteil.get((g[1], v), 0), -g[0], g[1]))
         verworfen.sort(key=lambda g: (-g[0], g[1]))
+        andere = [g[0] for g in gueltig[1:]]
+        sicher = _sicherheit([gueltig[0][0], max(andere)] if andere else [g[0] for g in gueltig])
+        if gueltig and not anteil.get((gueltig[0][1], v)):
+            sicher = MOEGLICH                     # nur Kandidaten, deren Off schon anderen Kämpfen zugeordnet ist
         # Ohne gültigen Angreifer: passende Verbündete zuerst nennen, Kennzeichen 1 (Infofeld „verbündet“)
         verbuendete = [] if gueltig else sorted(
             ((min(delta(a, "att"), st) / max(delta(a, "att"), st) / (1 + d / NAEHE), a, d, delta(a, "att"))
@@ -203,9 +264,10 @@ def zuordnen(alt, neu, doerfer, verluste, buendnisse=None):
         ziele, geschaetzt = orte_fuer(v, getroffen, punkte, gueltig[0][3] if gueltig else None)
         ziel = _mitte(ziele)
         k.update(ziel=list(ziel), orte=[list(p) for p in ziele], geschaetzt=geschaetzt,
-                 a=[[a, delta(a, "att"), round(d, 1), *_front(doerfer[a], ziel), neu[a]["ally"]]
+                 a=[[a, delta(a, "att"), round(d, 1), *_front(doerfer[a], ziel), neu[a]["ally"],
+                     round(anteil.get((a, v), 0))]
                     for _, a, d, _ in gueltig[:MAX_ANGREIFER]],
-                 a_sicher=_sicherheit([g[0] for g in gueltig]),
+                 a_sicher=sicher,
                  av=([[a, off, round(d, 1), 1] for _, a, d, off in verbuendete]
                      + [[a, off, round(d, 1)] for _, a, d, off in verworfen])[:MAX_VERWORFEN])
         # Unterstützer zeigen vom nächsten Teil ihres Gebiets auf den endgültigen Ort
@@ -239,12 +301,13 @@ FELDER = ["i", "v", "dv", "x", "y", "geschaetzt", "staerke", "a_sicher", "orte",
 
 
 def zeile(i, k, stunde_nr):
-    """Kompakte Zeile nach FELDER. Orte als x*1000+y, Angreifer [pid, Δatt, Abstand, x, y],
+    """Kompakte Zeile nach FELDER. Orte als x*1000+y, Angreifer [pid, Δatt, Abstand, x, y, diesem Kampf
+    zugeordnete Off (ab Regel 4)],
     Unterstützer [pid, Δsup, Sicherheit, x, y], Sicherheit als w, m oder u. Treffer [x*1000+y, Stunde, Δpunkte],
     Stunde als Index in "stunden" ([vorher, stand] der Stunde mit dem Punktverlust), -1 ohne Zeit. Verworfene
     Angreifer (Off passt nicht zur Stärke) [pid, Δatt, Abstand]."""
     return [i, k["v"], k["dv"], k["ziel"][0], k["ziel"][1], int(k["geschaetzt"]), k["staerke"], KURZ[k["a_sicher"]],
-            [x * 1000 + y for x, y in k["orte"]], [a[:5] for a in k["a"]],
+            [x * 1000 + y for x, y in k["orte"]], [a[:5] + a[6:7] for a in k["a"]],
             [[u[0], u[1], KURZ[u[2]], u[3], u[4]] for u in k["u"]],
             [[x * 1000 + y, stunde_nr.get(t, -1), dp] for x, y, t, dp in k["treffer"]], k.get("av", [])]
 
