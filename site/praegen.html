@@ -55,6 +55,13 @@
   .facts.pr-facts{margin-top:10px}
   .facts.pr-facts dd small{font-size:11px; font-weight:400; color:var(--muted)}
 
+  /* Lieferdörfer je Prägedorf als kopierbare Koordinatenliste (Dennis 01.11.2026) */
+  .pr-send{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px}
+  .pr-sgrp{border:1px solid var(--edge); border-radius:var(--radius); background:var(--panel-2); padding:6px 8px; min-width:0}
+  .pr-shead{display:flex; align-items:flex-start; gap:8px; font-size:12px; margin-bottom:4px}
+  .pr-shead b{flex:1; min-width:0; overflow-wrap:anywhere}
+  .pr-shead small{display:block; font-weight:400; color:var(--muted)}
+  .pr-sgrp pre{margin:0; max-height:260px; overflow:auto; font:12px/1.45 ui-monospace,Consolas,monospace}
   .pr-cmp td.rec{font-weight:700}
   .pr-cmp th.rec{box-shadow:inset 0 -3px 0 var(--accent)}
   /* gewählte Aufstellung (10.12): ganze Spalte anklickbar, gewählte Spalte hinterlegt */
@@ -268,6 +275,11 @@
         <div class="pr-legend" id="freq-legend"></div>
         <div class="pr-chart" id="freq"></div>
       </div>
+    </section>
+
+    <section class="panel c12" aria-labelledby="h-send" id="p-send" hidden>
+      <h2 id="h-send">Lieferdörfer je Prägedorf <span class="hint" id="send-hint"></span></h2>
+      <div class="body pr-send" id="send"></div>
     </section>
 
     <section class="panel c12" aria-labelledby="h-vil">
@@ -929,6 +941,7 @@ function renderView() {
     box.appendChild(b);
   });
   renderMap();
+  renderSenders();
   renderVillages();
 }
 
@@ -995,6 +1008,42 @@ function renderMap() {
   box.replaceChildren(svg);
 }
 
+/* Lieferdörfer je Prägedorf (Dennis 01.11.2026): ab 2 Flaggendopplern eine Gruppe je Prägedorf, Koordinaten
+   „x|y“ zeilenweise, damit sie direkt kopiert werden können */
+async function kopieren(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* Rückfall unten */ }
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+function renderSenders() {
+  const R = RESULT, a = aufstellung(VIEW), box = $("send");
+  $("p-send").hidden = VIEW < 2;
+  box.replaceChildren();
+  if (VIEW < 2) return;
+  let n = 0;
+  a.r.sites.forEach(si => {
+    const site = R.src[si], list = a.d.rows.filter(r => r.site === si && r.i !== si).map(r => R.src[r.i].x + "|" + R.src[r.i].y);
+    const text = list.join("\n");
+    n += list.length;
+    const g = el("div", "pr-sgrp"), head = el("div", "pr-shead"), name = el("b", null, siteName(site));
+    name.appendChild(el("small", null, list.length === 1 ? "1 Dorf liefert" : list.length + " Dörfer liefern"));
+    const b = el("button", "tw small", "Kopieren"); b.type = "button"; b.disabled = !list.length;
+    b.setAttribute("aria-label", "Koordinaten der Lieferdörfer für " + siteName(site) + " kopieren");
+    b.addEventListener("click", async () => {
+      b.textContent = await kopieren(text) ? "Kopiert" : "Fehler";
+      setTimeout(() => { b.textContent = "Kopieren"; }, 1500);
+    });
+    head.append(name, b);
+    g.append(head, el("pre", null, list.length ? text : "keine"));
+    box.appendChild(g);
+  });
+  $("send-hint").textContent = "Aufstellung mit " + mitFD(VIEW) + " · " + n + " Dörfer schicken an " + a.r.sites.length + " Prägedörfer";
+}
 function renderVillages() {
   const R = RESULT, a = aufstellung(VIEW), box = $("vil");
   const byKey = new Map(a.d.rows.map(r => [R.src[r.i].x + "|" + R.src[r.i].y, r]));
