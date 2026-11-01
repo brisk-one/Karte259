@@ -814,12 +814,23 @@ function pAlly(pid){ const p=rowOfPid.get(pid); return p!=null? allyOf[p] : 0; }
     Unterstützung zuerst, damit der Angriff obenauf liegt. */
 function kampfPfeileVon(r){
   const out=[], [X,Y]=kMitte(r[kF.x], r[kF.y]);
-  r[kF.u].forEach(u=>{ if(u[2]==="u") return; const [fx,fy]=kMitte(u[3],u[4]);
+  r[kF.u].forEach(u=>{ if(u[2]==="u") return; const [fx,fy]=minLaenge(kMitte(u[3],u[4]), X, Y);
     out.push({r, art:"u", u, pid:u[0], x1:fx, y1:fy, x2:X, y2:Y, breite:strich(u[1]), sicher:u[2]!=="w"? PFEIL_MOEGLICH : 1}); });
+  // ohne Anteil (a[5]===0, Off schon anderen Kämpfen zugeordnet, Regel 4) kein Pfeil, nur im Infofeld
   const a=r[kF.a][0];
-  if(a){ const [fx,fy]=kMitte(a[3],a[4]); out.push({r, art:"a", u:null, pid:a[0], x1:fx, y1:fy, x2:X, y2:Y, breite:strich(a[1]),
+  if(a && a[5]!==0){ const [fx,fy]=minLaenge(kMitte(a[3],a[4]), X, Y); out.push({r, art:"a", u:null, pid:a[0], x1:fx, y1:fy, x2:X, y2:Y, breite:strich(a[1]),
           sicher:r[kF.a_sicher]!=="w"? PFEIL_MOEGLICH : 1}); }
   return out;
+}
+/** Start eines Pfeils mindestens PFEIL_MIN Pixel vom Ziel, Richtung bleibt: sehr nahe Angreifer verschwanden
+    sonst unter dem Kampfsymbol (LKAV Maracuja → Michaell, 1,9 Felder, 01.11.2026) */
+const PFEIL_MIN=56;
+function minLaenge([fx,fy], X, Y){
+  let dx=fx-X, dy=fy-Y; const l=Math.hypot(dx,dy);
+  if(l>=PFEIL_MIN) return [fx,fy];
+  if(l<1e-6){ dx=-1; dy=-1; } else { dx/=l; dy/=l; }
+  if(l<1e-6){ dx/=Math.SQRT2; dy/=Math.SQRT2; }
+  return [X+dx*PFEIL_MIN, Y+dy*PFEIL_MIN];
 }
 /** Gehört der Kampf zum gewählten Krieg (Angreifer und Verteidiger in den beiden Stämmen)? */
 function imKrieg(r){
@@ -1047,7 +1058,7 @@ function kampfLabels(){
   const out=[], stufe=kampfStufe();
   if(!stufe || !KAMPF) return out;
   const ok=(v,art)=>stufe(v,art)>=namesFrom;
-  const aOf=r=>{ const a=r[kF.a][0]; return a && r[kF.a_sicher]!=="u"? a : null; };
+  const aOf=r=>{ const a=r[kF.a][0]; return a && r[kF.a_sicher]!=="u" && a[5]!==0? a : null; };
   if(scale<KAMPF_ZOOM){
     for(const g of kampfGebiete){
       const r=g.items.find(imKrieg)||g.items[0], a=aOf(r);
