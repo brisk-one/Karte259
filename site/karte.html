@@ -1073,7 +1073,7 @@ function kampfLabels(){
   const ziele=new Set();
   for(const f of kampfPfeile){
     const v = f.art==="a"? f.r[kF.a][0][1] : f.u[1];
-    if(!ok(v, f.art==="a"? "att" : "sup")) continue;
+    if(f.art!=="a" && !ok(v, "sup")) continue;   // Angreifer mit Pfeil immer beschriftet (Dennis 1b, 01.11.2026)
     const n=pNameOf(f.pid); if(!n) continue;
     out.push({wert:v, zeichne:belegt=>pfeilName(f, n, belegt)});
   }
@@ -1136,7 +1136,9 @@ function pfeilName(f, t, belegt){
   const pr=d>46? Math.max(6.5, Math.min(10, f.breite+4.5)) : f.breite/2, abst=pr+7;
   // Normale nach „oben“ im gedrehten Bild
   const nx=Math.sin(ang), ny=-Math.cos(ang);
-  zeichenName(f.x1+dx*0.45+nx*abst, f.y1+dy*0.45+ny*abst, ang, f.art, pFarbe(f.pid), t, belegt);
+  // kurze Pfeile: Name in Verlängerung hinter dem Startende, sonst liegt er auf dem Namen des Verteidigers und fällt weg
+  const s=d<90? -0.7 : 0.45;
+  zeichenName(f.x1+dx*s+nx*abst, f.y1+dy*s+ny*abst, ang, f.art, pFarbe(f.pid), t, belegt);
 }
 
 /** Pfeile am oberen rechten Rand des Dorfes: Zuwachs des Spielers, drei Stufen je Richtung. */
@@ -1435,7 +1437,7 @@ function renderLegend(){
     zeile(PLAKETTE_IMG.a, "<b>Angriff</b>: durchgezogen, spitze Spitze, Schwerter");
     zeile(PLAKETTE_IMG.u, "<b>Unterstützung</b>: gestrichelt, runde Spitze, Schild. Blass, wenn nicht eindeutig. Zeiger auf einen Pfeil nennt Beteiligte, Bashpunkte und Zeitraum, Klick heftet an.");
     zeile(PLAKETTE_IMG.v, "<b>Verteidiger</b>: Name am Ziel des Pfeils");
-    zeile("Aa", "Namen: weit weg „Angreifer vs Verteidiger“ unter dem Kampfsymbol, näher heran längs der Pfeile Angreifer bzw. Unterstützer und am Ziel der Verteidiger. Ab Gelb, mit „Weniger Spielernamen anzeigen“ nur ab Rot (Zuwachs im gewählten Zeitraum)");
+    zeile("Aa", "Namen: weit weg „Angreifer vs Verteidiger“ unter dem Kampfsymbol, näher heran längs der Pfeile Angreifer bzw. Unterstützer und am Ziel der Verteidiger. Angreifer am Pfeil immer, sonst ab Gelb, mit „Weniger Spielernamen anzeigen“ nur ab Rot (Zuwachs im gewählten Zeitraum)");
   }
   zeile("<i class='raute'></i>", "Links unten: Bonusdorf");
   const hint=document.createElement("li"); hint.className="hint"; hint.textContent="Zeichen am Dorf erscheinen ab mittlerem Zoom.";
