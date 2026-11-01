@@ -28,6 +28,9 @@ on:
       - "site/**"
       - "tests/**"
       - ".github/**"
+      # von Hand neu gerechnete Kampfdaten sofort veröffentlichen (Dennis 01.11.2026); Pushes des Bots mit
+      # github.token lösen keine Workflows aus, der Takt baut also nicht doppelt
+      - "data/kampf/**"
 
 permissions:
   contents: write
