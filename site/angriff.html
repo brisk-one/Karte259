@@ -156,11 +156,14 @@
     <section class="panel c6" aria-labelledby="h-fen">
       <h2 id="h-fen">5 · Abschickzeiträume <span class="hint">Serverzeit</span></h2>
       <div class="body" style="display:grid; gap:6px">
+        <strong style="font-size:12px">Für alle Angreifer</strong>
         <div id="fenster-felder"></div>
-        <div class="ap-row"><span class="ap-note">Gilt für alle Angreifer, je Angreifer überschreibbar.</span>
+        <div class="ap-row"><span class="ap-note">Gilt für jeden Angreifer ohne eigene Zeiträume.</span>
           <button class="ap-i" type="button" data-info="fenster" aria-expanded="false" title="Info">i</button></div>
         <div class="ap-help" data-help="fenster"></div>
         <div id="fenster-note" class="ap-note"></div>
+        <strong style="font-size:12px; margin-top:6px">Je Angreifer</strong>
+        <div id="fenster-je" style="display:grid; gap:6px"></div>
       </div>
     </section>
   </div>
@@ -224,7 +227,7 @@ const INFO = {
   extra_fakes: "Dörfer starker Stammesmitglieder der Zielspieler, gegen die der Angreifer mindestens die Moral-Schwelle hätte. Schwache Spieler sind schlechte Fakeziele: hohe Moral, kaum Truppen zum Unterstützen.",
   zmodus: "Automatisch: so viele Ziele wie möglich adeln (AGs plus mindestens eine Clean-Off), dann Clean-Offs bis zum Richtwert, dann Off vor AG möglichst oft, dann kürzeste Laufzeiten; gleichwertige Lösungen per Zufall. Je Angreifer: jedes Ziel bekommt in der Tabelle einen Angreifer, der es adelt; Clean-Offs dürfen von allen kommen.",
   ankunft: "Ein Zeitpunkt (alle Ziele zur selben Zeit, die erste Clean-Off genau darauf) oder ein Zeitraum, über den sich die Angriffe verteilen. Für einen Zeitpunkt nur den Start ausfüllen. Ende ohne Tag: gleicher Tag wie der Start, liegt die Uhrzeit davor, der nächste Tag. Tag und Uhrzeit lassen sich eintippen oder über die Knöpfe neben den Feldern wählen. Ankünfte im Nachtbonus werden gemeldet.",
-  fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Die Abschickzeit jedes Befehls liegt in einem dieser Zeiträume.",
+  fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Jeder Angreifer kann unter „Je Angreifer“ eigene Zeiträume bekommen; sie ersetzen für ihn die gemeinsamen. Die Abschickzeit jedes Befehls liegt in einem dieser Zeiträume.",
   teilnahme: "Offs: Clean-Offs und übrige Offs. AGs: Trains; eine Off läuft nur im Train mit, wenn der Spieler auch mit Offs teilnimmt. Fakes: aus allen Dörfern der Übersicht.",
   auswahl: "Nur diese Dörfer schicken Offs und AGs, etwa weil andere Offs schon für einen anderen Plan verplant sind. Je Dorf Koordinaten, mit oder ohne Namen, auch eingefügte Links. Fakes kommen weiter aus allen Dörfern; Offs außerhalb der Auswahl geben dafür keine Rammen her, Katapulte nur über dem Richtwert.",
 };
@@ -382,15 +385,16 @@ function spalten() {
   const ids = (window._units || []).map(u => u.id);
   return ids.length ? ids.concat(["militia"]) : K.OVERVIEW_COLUMNS;
 }
-function tageBisAbschicken() {
-  const f = K.fensterAusZeilen(S.fen).fenster;
+function tageBisAbschicken(own) {
+  const f = own.fenster.length ? own.fenster : K.fensterAusZeilen(S.fen).fenster;
   return f.length ? Math.max(0, (f[0][0] - Date.now()) / 864e5) : 0;
 }
 function analysieren(i) {
   const a = S.atts[i];
   const r = K.parseOverview(a.text, spalten());
   const fehlt = [], besitzer = new Map();
-  const tage = tageBisAbschicken();
+  const own = K.fensterAusZeilen(a.fen);
+  const tage = tageBisAbschicken(own);
   const dorfer = [];
   r.villages.forEach(v => {
     const d = dorf(v.x * 1000 + v.y);
@@ -406,7 +410,6 @@ function analysieren(i) {
   const aus = a.auswahlText.trim() ? K.parseKoordListe(a.auswahlText) : null;
   const inUebersicht = new Set(dorfer.map(d => d.xy));
   const auswahlFehlt = aus ? aus.keys.filter(k => !inUebersicht.has(k)).map(koord) : [];
-  const own = K.fensterAusZeilen(a.fen);
   ANALYSE[i] = {r, dorfer, fehlt, fremd, pRow, aus, auswahlFehlt, own, tage,
                 name: pRow >= 0 ? spielerName(pRow) : "Angreifer " + (i + 1),
                 points: pRow >= 0 ? P.rows[pRow][pIdx.points] : (r.header ? r.header.points : 0)};
@@ -448,29 +451,24 @@ function attBlock(i) {
   det1.children[1].append(el("span", "ap-note", "Leer: alle Dörfer der Übersicht."), infoKnopf("auswahl"));
   det1.append(hilfeFeld("auswahl"));
   if (a.auswahlText.trim()) det1.open = true;
-  const det2 = el("details"), s2 = el("summary", null, "Eigene Abschickzeiträume (optional)");
-  const eigeneNote = el("div", "ap-note");
-  const eigeneListe = el("div");
-  zeitraumListe(eigeneListe, a.fen, () => { fensterNote(eigeneNote, a.fen, "Leer: Zeiträume aus Abschnitt 5."); attAnalyse(i); geaendert(true); });
-  fensterNote(eigeneNote, a.fen, "Leer: Zeiträume aus Abschnitt 5.");
-  det2.append(s2, eigeneListe, eigeneNote);
-  if (a.fen.some(z => !K.zeitraumAusFeldern(z).leer)) det2.open = true;
   const out = el("div");
   out.id = "att-out-" + i;
-  box.append(kopf, ta, det1, det2, out);
+  box.append(kopf, ta, det1, out);
   return box;
 }
 function attsBauen() {
   const box = $("atts");
   box.replaceChildren();
+  fensterJeBauen();
   S.atts.forEach((a, i) => { box.append(attBlock(i)); attAnalyse(i); });
 }
 function attAnalyse(i) {
   const out = $("att-out-" + i);
   if (!out) return;
   const a = S.atts[i];
-  if (!a.text.trim()) { ANALYSE[i] = null; out.replaceChildren(el("p", "ap-note", "Noch keine Übersicht eingefügt.")); return; }
+  if (!a.text.trim()) { ANALYSE[i] = null; fensterJeTitel(i); out.replaceChildren(el("p", "ap-note", "Noch keine Übersicht eingefügt.")); return; }
   const A = analysieren(i);
+  fensterJeTitel(i);
   $("att-titel-" + i).textContent = "Angreifer " + (i + 1) + ": " + A.name + (A.points ? " (" + nf.format(A.points) + " P)" : "");
   const box = el("div");
   const offs = A.dorfer.filter(d => d.c.isOff).length, knapp = A.dorfer.filter(d => d.c.knapp).length;
@@ -738,6 +736,31 @@ function fensterNote(ziel, zeilen, leerText) {
   const teile = f.fenster.map(x => K.fmtZeit(x[0]).slice(0, 16) + " bis " + K.fmtZeit(x[1]).slice(0, 16));
   ziel.replaceChildren(el("span", f.fehler.length ? "ap-warn" : (teile.length ? "ap-ok" : null),
     f.fehler.length ? f.fehler.join("; ") : (teile.length ? teile.join(" · ") : leerText)));
+}
+/* Je Angreifer eigene Zeiträume in Abschnitt 5; ohne eigene gelten die gemeinsamen. */
+function fensterJeTitel(i) {
+  const t = $("fen-titel-" + i);
+  if (!t) return;
+  const f = K.fensterAusZeilen(S.atts[i].fen);
+  const eigen = f.fenster.length > 0 || f.fehler.length > 0;
+  t.textContent = (ANALYSE[i] ? "Angreifer " + (i + 1) + ": " + ANALYSE[i].name : "Angreifer " + (i + 1)) + " · " +
+    (eigen ? "eigene Zeiträume" : "gemeinsame Zeiträume");
+}
+function fensterJeBauen() {
+  const box = $("fenster-je");
+  box.replaceChildren();
+  S.atts.forEach((a, i) => {
+    const det = el("details"), sum = el("summary"), titel = el("span"), note = el("div", "ap-note"), liste = el("div");
+    titel.id = "fen-titel-" + i;
+    sum.append(titel);
+    const LEER = "Leer: gemeinsame Zeiträume von oben.";
+    zeitraumListe(liste, a.fen, () => { fensterNote(note, a.fen, LEER); attAnalyse(i); fensterJeTitel(i); geaendert(true); });
+    fensterNote(note, a.fen, LEER);
+    det.append(sum, liste, note);
+    if (a.fen.some(z => !K.zeitraumAusFeldern(z).leer)) det.open = true;
+    box.append(det);
+    fensterJeTitel(i);
+  });
 }
 function zeitFelderBauen() {
   $("ankunft-felder").replaceChildren(zeitraumFelder(S.ank, {ms: true}, () => geaendert(true)));

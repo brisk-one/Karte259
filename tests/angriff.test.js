@@ -182,6 +182,18 @@ function szenario(cfg, extra) {
 }
 const ofZiel = (r, id) => r.items.filter(i => i.t.id === id && i.kind !== "fake").sort((a, b) => a.arrivalMs - b.arrivalMs);
 
+test("Plan: Abschickzeiträume je Angreifer, ohne eigene gelten die gemeinsamen", () => {
+  const input = szenario({}, {windows: K.parseFenster("02.11.2026 16:00 bis 20:00").fenster});
+  const eigen = K.parseFenster("02.11.2026 19:00 bis 20:00").fenster;
+  input.attackers[1].windows = eigen;
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  const von = id => r.items.filter(i => i.att === id);
+  assert.ok(von(102).length > 0);
+  von(102).forEach(i => assert.ok(K.ivHas(eigen, i.sendMs), "Beta nur im eigenen Zeitraum"));
+  assert.ok(von(101).some(i => i.sendMs < eigen[0][0]), "Alpha nutzt den gemeinsamen Zeitraum");
+});
+
 test("Plan: ganze Trains, Clean-Offs vorneweg, alle Regeln eingehalten", () => {
   const input = szenario({});
   const r = K.plan(input);
