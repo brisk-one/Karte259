@@ -52,6 +52,44 @@
   .ap-sum{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px}
   .ap-sum>div{border:1px solid var(--edge-soft); border-radius:var(--radius); padding:4px 9px; font-size:12px}
   .ap-sum b{font-size:14px}
+  .ap-zr{display:grid; grid-template-columns:auto 1fr; gap:6px 8px; align-items:center}
+  .ap-zr .wo{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  .ap-zr .felder{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center}
+  .ap-zliste{display:grid; gap:8px; justify-items:start}
+  .ap-zliste .zeile{display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; border:1px solid var(--edge-soft);
+    border-radius:var(--radius); padding:7px 8px}
+  .ap-feld{display:inline-flex; align-items:stretch}
+  .ap-feld input{font:12px/1.4 ui-monospace,Consolas,monospace; color:var(--ink); background:var(--field); box-sizing:content-box;
+    border:1px solid var(--edge); border-right:0; border-radius:var(--radius) 0 0 var(--radius); padding:4px 6px; margin:0}
+  .ap-feld input.tag{width:10ch} .ap-feld input.zeit{width:8ch} .ap-feld input.zeit.ms{width:12ch}
+  .ap-feld input.falsch{border-color:var(--bad); color:var(--bad)}
+  .ap-pick{display:inline-flex; align-items:center; padding:0 6px; margin:0; cursor:pointer; color:var(--ink); background:var(--btn);
+    border:1px solid var(--edge); border-radius:0 var(--radius) var(--radius) 0}
+  .ap-pick:hover{background:var(--btn-hover)}
+  .ap-pick[aria-expanded="true"]{background:var(--btn-on); color:var(--accent-ink)}
+  .ap-pick svg{width:14px; height:14px; display:block; fill:none; stroke:currentColor; stroke-width:1.6}
+  .ap-pop{position:absolute; z-index:50; background:var(--panel,var(--field)); color:var(--ink); border:1px solid var(--edge);
+    border-radius:var(--radius); padding:8px; box-shadow:0 6px 20px rgba(0,0,0,.35); font-size:12px; display:grid; gap:6px}
+  .ap-pop button{font:inherit; color:var(--ink); background:transparent; border:1px solid transparent; border-radius:var(--radius);
+    cursor:pointer; padding:0}
+  .ap-pop button:hover{border-color:var(--edge)}
+  .ap-pop button.an{background:var(--btn-on); color:var(--accent-ink); font-weight:700}
+  .ap-pop .mon{display:flex; align-items:center; justify-content:space-between; font-weight:700}
+  .ap-pop .mon button{width:30px; height:26px; font-size:15px}
+  .ap-pop .tage{display:grid; grid-template-columns:repeat(7,32px); gap:2px; text-align:center}
+  .ap-pop .tage span{font-size:10px; color:var(--muted); font-weight:700}
+  .ap-pop .tage button{height:28px}
+  .ap-pop .tage button.heute{border-color:var(--accent)}
+  .ap-pop .tage button.alt{opacity:.5}
+  .ap-pop .fuss{display:flex; justify-content:space-between; align-items:center; gap:10px}
+  .ap-pop .fuss button{padding:3px 8px; border-color:var(--edge)}
+  .ap-pop .spalten{display:flex; gap:6px; text-align:center}
+  .ap-pop .spalten b{display:block; font-size:10px; color:var(--muted); margin-bottom:3px}
+  .ap-pop .liste{position:relative; height:176px; overflow-y:auto; width:44px; display:grid; gap:1px; align-content:start;
+    border:1px solid var(--edge-soft); border-radius:var(--radius)}
+  .ap-pop .liste button{height:26px; font-family:ui-monospace,Consolas,monospace}
+  .ap-pop .fuss input{width:4em; font:inherit; color:var(--ink); background:var(--field); border:1px solid var(--edge);
+    border-radius:var(--radius); padding:2px 4px}
   @media (max-width:640px){ .ap-cfg{grid-template-columns:1fr} }
 </style>
 </head>
@@ -108,18 +146,17 @@
     <section class="panel c6" aria-labelledby="h-ank">
       <h2 id="h-ank">4 · Ankunft <span class="hint">Serverzeit</span></h2>
       <div class="body" style="display:grid; gap:6px">
-        <input type="text" id="ankunft" spellcheck="false" style="width:100%; box-sizing:border-box"
-          placeholder="03.11.2026 08:00:00:000 bis 09:00:00:000 oder ein Zeitpunkt">
-        <div class="ap-row"><span class="ap-note">Zeitpunkt oder Zeitraum, Format TT.MM.JJJJ HH:MM:SS:mmm</span>
+        <div id="ankunft-felder"></div>
+        <div class="ap-row"><span class="ap-note">Ende leer: fester Zeitpunkt. Ende ohne Tag: gleicher Tag wie der Start.</span>
           <button class="ap-i" type="button" data-info="ankunft" aria-expanded="false" title="Info">i</button></div>
         <div class="ap-help" data-help="ankunft"></div>
         <div id="ankunft-note" class="ap-note"></div>
       </div>
     </section>
     <section class="panel c6" aria-labelledby="h-fen">
-      <h2 id="h-fen">5 · Abschickzeiträume <span class="hint">je Zeile ein Zeitraum</span></h2>
+      <h2 id="h-fen">5 · Abschickzeiträume <span class="hint">Serverzeit</span></h2>
       <div class="body" style="display:grid; gap:6px">
-        <textarea class="ap-ta klein" id="fenster" spellcheck="false" placeholder="02.11.2026 16:00 bis 20:00&#10;02.11.2026 22:00 bis 23:30"></textarea>
+        <div id="fenster-felder"></div>
         <div class="ap-row"><span class="ap-note">Gilt für alle Angreifer, je Angreifer überschreibbar.</span>
           <button class="ap-i" type="button" data-info="fenster" aria-expanded="false" title="Info">i</button></div>
         <div class="ap-help" data-help="fenster"></div>
@@ -186,8 +223,8 @@ const INFO = {
   fake_extra_pop: "Ein Fake braucht mindestens 1 % der Dorfpunkte des abschickenden Dorfs in Bauernhofplätzen. Der Zuschlag fängt Punkte ab, die bis zum Abschicken dazukommen. Fakes laufen mit Katapult- oder Rammentempo und bestehen nur aus Katapulten, Spähern und, aus Dörfern ohne Off, Rammen.",
   extra_fakes: "Dörfer starker Stammesmitglieder der Zielspieler, gegen die der Angreifer mindestens die Moral-Schwelle hätte. Schwache Spieler sind schlechte Fakeziele: hohe Moral, kaum Truppen zum Unterstützen.",
   zmodus: "Automatisch: so viele Ziele wie möglich adeln (AGs plus mindestens eine Clean-Off), dann Clean-Offs bis zum Richtwert, dann Off vor AG möglichst oft, dann kürzeste Laufzeiten; gleichwertige Lösungen per Zufall. Je Angreifer: jedes Ziel bekommt in der Tabelle einen Angreifer, der es adelt; Clean-Offs dürfen von allen kommen.",
-  ankunft: "Ein Zeitpunkt (alle Ziele zur selben Zeit, die erste Clean-Off genau darauf) oder ein Zeitraum, über den sich die Angriffe verteilen. Ohne Datum hinter „bis“ gilt das Datum davor. Ankünfte im Nachtbonus werden gemeldet.",
-  fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (22:00 bis 01:00). Die Abschickzeit jedes Befehls liegt in einem dieser Zeiträume.",
+  ankunft: "Ein Zeitpunkt (alle Ziele zur selben Zeit, die erste Clean-Off genau darauf) oder ein Zeitraum, über den sich die Angriffe verteilen. Für einen Zeitpunkt nur den Start ausfüllen. Ende ohne Tag: gleicher Tag wie der Start, liegt die Uhrzeit davor, der nächste Tag. Tag und Uhrzeit lassen sich eintippen oder über die Knöpfe neben den Feldern wählen. Ankünfte im Nachtbonus werden gemeldet.",
+  fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Die Abschickzeit jedes Befehls liegt in einem dieser Zeiträume.",
   teilnahme: "Offs: Clean-Offs und übrige Offs. AGs: Trains; eine Off läuft nur im Train mit, wenn der Spieler auch mit Offs teilnimmt. Fakes: aus allen Dörfern der Übersicht.",
   auswahl: "Nur diese Dörfer schicken Offs und AGs, etwa weil andere Offs schon für einen anderen Plan verplant sind. Je Dorf Koordinaten, mit oder ohne Namen, auch eingefügte Links. Fakes kommen weiter aus allen Dörfern; Offs außerhalb der Auswahl geben dafür keine Rammen her, Katapulte nur über dem Richtwert.",
 };
@@ -217,9 +254,33 @@ const FELDER = [
 ];
 
 /* ---------- Zustand ---------- */
-const neuerAngreifer = () => ({text: "", rollen: {off: true, ag: true, fake: true}, auswahlText: "", fensterText: "", nobles: {}, useOff: {}});
+const leererZeitraum = () => ({vonDatum: "", vonZeit: "", bisDatum: "", bisZeit: ""});
+const neuerAngreifer = () => ({text: "", rollen: {off: true, ag: true, fake: true}, auswahlText: "", fen: [leererZeitraum()], nobles: {}, useOff: {}});
 let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], zmodus: "auto",
-         ankunft: "", fenster: "", fakeAus: [], fakeText: "", extraAus: [], wahlKnapp: null, hilfe: false};
+         ank: leererZeitraum(), fen: [leererZeitraum()], fakeAus: [], fakeText: "", extraAus: [], wahlKnapp: null, hilfe: false};
+/* Gespeicherte Stände aus der Zeit der Textfelder (ankunft, fenster, fensterText) in die getrennten Felder übernehmen. */
+function zeilenAusFenster(text) {
+  const z = K.parseFenster(text).fenster.map(x => {
+    const a = K.fmtZeit(x[0]).split(" "), b = K.fmtZeit(x[1]).split(" ");
+    return {vonDatum: a[0], vonZeit: K.fmtUhrzeit(K.parseUhrzeit(a[1])), bisDatum: b[0], bisZeit: K.fmtUhrzeit(K.parseUhrzeit(b[1]))};
+  });
+  return z.length ? z : [leererZeitraum()];
+}
+function zeitenUebernehmen() {
+  if (S.ankunft != null) {
+    const a = K.parseAnkunft(S.ankunft);
+    if (!a.fehler) {
+      const v = K.fmtZeit(a.from, true).split(" "), b = K.fmtZeit(a.to, true).split(" ");
+      S.ank = {vonDatum: v[0], vonZeit: v[1], bisDatum: a.to > a.from ? b[0] : "", bisZeit: a.to > a.from ? b[1] : ""};
+    }
+    delete S.ankunft;
+  }
+  if (S.fenster != null) { S.fen = zeilenAusFenster(S.fenster); delete S.fenster; }
+  S.atts.forEach(a => {
+    if (a.fensterText != null) { a.fen = zeilenAusFenster(a.fensterText); delete a.fensterText; }
+    if (!a.fen || !a.fen.length) a.fen = [leererZeitraum()];
+  });
+}
 function laden() {
   try {
     const s = JSON.parse(localStorage.getItem(SPEICHER) || "null");
@@ -227,6 +288,7 @@ function laden() {
       S = Object.assign(S, s.S);
       S.cfg = Object.assign({}, K.CFG_DEFAULT, s.S.cfg);
       if (!S.atts.length) S.atts = [neuerAngreifer()];
+      zeitenUebernehmen();
     }
   } catch (e) { /* ohne Speicher nur für diesen Besuch */ }
 }
@@ -321,7 +383,7 @@ function spalten() {
   return ids.length ? ids.concat(["militia"]) : K.OVERVIEW_COLUMNS;
 }
 function tageBisAbschicken() {
-  const f = K.parseFenster(S.fenster).fenster;
+  const f = K.fensterAusZeilen(S.fen).fenster;
   return f.length ? Math.max(0, (f[0][0] - Date.now()) / 864e5) : 0;
 }
 function analysieren(i) {
@@ -344,7 +406,7 @@ function analysieren(i) {
   const aus = a.auswahlText.trim() ? K.parseKoordListe(a.auswahlText) : null;
   const inUebersicht = new Set(dorfer.map(d => d.xy));
   const auswahlFehlt = aus ? aus.keys.filter(k => !inUebersicht.has(k)).map(koord) : [];
-  const own = a.fensterText.trim() ? K.parseFenster(a.fensterText) : null;
+  const own = K.fensterAusZeilen(a.fen);
   ANALYSE[i] = {r, dorfer, fehlt, fremd, pRow, aus, auswahlFehlt, own, tage,
                 name: pRow >= 0 ? spielerName(pRow) : "Angreifer " + (i + 1),
                 points: pRow >= 0 ? P.rows[pRow][pIdx.points] : (r.header ? r.header.points : 0)};
@@ -387,12 +449,12 @@ function attBlock(i) {
   det1.append(hilfeFeld("auswahl"));
   if (a.auswahlText.trim()) det1.open = true;
   const det2 = el("details"), s2 = el("summary", null, "Eigene Abschickzeiträume (optional)");
-  const ta3 = el("textarea", "ap-ta klein");
-  ta3.spellcheck = false; ta3.value = a.fensterText;
-  ta3.placeholder = "leer: Zeiträume aus Abschnitt 5";
-  ta3.addEventListener("input", () => { a.fensterText = ta3.value; attAnalyse(i); geaendert(true); });
-  det2.append(s2, ta3);
-  if (a.fensterText.trim()) det2.open = true;
+  const eigeneNote = el("div", "ap-note");
+  const eigeneListe = el("div");
+  zeitraumListe(eigeneListe, a.fen, () => { fensterNote(eigeneNote, a.fen, "Leer: Zeiträume aus Abschnitt 5."); attAnalyse(i); geaendert(true); });
+  fensterNote(eigeneNote, a.fen, "Leer: Zeiträume aus Abschnitt 5.");
+  det2.append(s2, eigeneListe, eigeneNote);
+  if (a.fen.some(z => !K.zeitraumAusFeldern(z).leer)) det2.open = true;
   const out = el("div");
   out.id = "att-out-" + i;
   box.append(kopf, ta, det1, det2, out);
@@ -508,10 +570,183 @@ function zieleBauen() {
 }
 
 /* ---------- 4./5. Zeiten ---------- */
+const SVG_TAG = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="1"/><path d="M2 6.5h12M5 1.5v3M11 1.5v3"/></svg>';
+const SVG_UHR = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.2V8l2.6 1.6"/></svg>';
+const istGueltig = (art, text) => !text.trim() || (art === "tag" ? K.parseDatum(text) : K.parseUhrzeit(text)) !== null;
+
+/* Auswahlfenster: immer nur eines offen, schließt bei Klick daneben und mit Esc. */
+let POP = null;
+function popZu(zurueck) {
+  if (!POP) return;
+  POP.el.remove();
+  POP.btn.setAttribute("aria-expanded", "false");
+  if (zurueck) POP.btn.focus();
+  POP = null;
+}
+function popAuf(btn, inhalt) {
+  const p = el("div", "ap-pop");
+  p.setAttribute("role", "dialog");
+  p.append(inhalt);
+  document.body.append(p);
+  POP = {el: p, btn};
+  btn.setAttribute("aria-expanded", "true");
+  const r = btn.getBoundingClientRect(), b = p.offsetWidth, h = p.offsetHeight;
+  const links = Math.max(8, Math.min(r.right - b, document.documentElement.clientWidth - b - 8));
+  const oben = r.bottom + h + 12 > window.innerHeight && r.top - h - 4 >= 8 ? r.top - h - 4 : r.bottom + 4;
+  p.style.left = (links + window.scrollX) + "px";
+  p.style.top = (oben + window.scrollY) + "px";
+  p.querySelectorAll(".liste .an").forEach(x => { x.parentElement.scrollTop = x.offsetTop - 75; });
+}
+document.addEventListener("pointerdown", e => { if (POP && !POP.el.contains(e.target) && !POP.btn.contains(e.target)) popZu(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && POP) popZu(true); });
+
+const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+function knopf(text, klick, cls) {
+  const b = el("button", cls || null, text);
+  b.type = "button";
+  b.addEventListener("click", klick);
+  return b;
+}
+/** Kalender; zeigt den gewählten Tag, sonst den Bezugstag (Start bei einem Ende), sonst heute. Alles in Serverzeit. */
+function kalender(wert, bezug, waehle) {
+  const h = K.berlinParts(Date.now()), heute = Date.UTC(h.y, h.mo - 1, h.d);
+  const g = K.parseDatum(wert), start = g || K.parseDatum(bezug) || {y: h.y, mo: h.mo};
+  let y = start.y, mo = start.mo;
+  const box = el("div");
+  box.style.cssText = "display:grid; gap:6px";
+  const zeichnen = () => {
+    const blaettern = n => () => { const t = new Date(Date.UTC(y, mo - 1 + n, 1)); y = t.getUTCFullYear(); mo = t.getUTCMonth() + 1; zeichnen(); };
+    const kopf = el("div", "mon");
+    const zurueck = knopf("‹", blaettern(-1)), vor = knopf("›", blaettern(1));
+    zurueck.setAttribute("aria-label", "Voriger Monat");
+    vor.setAttribute("aria-label", "Nächster Monat");
+    kopf.append(zurueck, el("span", null, MONATE[mo - 1] + " " + y), vor);
+    const tage = el("div", "tage");
+    ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].forEach(t => tage.append(el("span", null, t)));
+    const leer = (new Date(Date.UTC(y, mo - 1, 1)).getUTCDay() + 6) % 7, n = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    for (let i = 0; i < leer; i++) tage.append(el("i"));
+    for (let d = 1; d <= n; d++) {
+      const t = Date.UTC(y, mo - 1, d);
+      const cls = [g && g.y === y && g.mo === mo && g.d === d ? "an" : "", t === heute ? "heute" : "", t < heute ? "alt" : ""].join(" ").trim();
+      tage.append(knopf(String(d), () => waehle(K.fmtDatum({y, mo, d})), cls));
+    }
+    const fuss = el("div", "fuss");
+    fuss.append(knopf("Heute", () => waehle(K.fmtDatum(h))), knopf("Leeren", () => waehle("")));
+    box.replaceChildren(kopf, tage, fuss);
+  };
+  zeichnen();
+  return box;
+}
+/** Uhrzeit aus Spalten; übernimmt jede Wahl sofort ins Feld, „Fertig“ schließt. Mit ms auch Sekunden und Millisekunden. */
+function uhrAuswahl(wert, mitMs, setze) {
+  const t = K.parseUhrzeit(wert) || {h: 0, mi: 0, s: 0, ms: 0};
+  const box = el("div");
+  box.style.cssText = "display:grid; gap:6px";
+  const spalten = el("div", "spalten");
+  const spalte = (titel, n, k) => {
+    const s = el("div"), liste = el("div", "liste");
+    for (let i = 0; i < n; i++) {
+      const b = knopf(String(i).padStart(2, "0"), () => {
+        t[k] = i;
+        liste.querySelectorAll(".an").forEach(x => x.classList.remove("an"));
+        b.classList.add("an");
+        setze(K.fmtUhrzeit(t, mitMs));
+      }, t[k] === i ? "an" : "");
+      liste.append(b);
+    }
+    s.append(el("b", null, titel), liste);
+    spalten.append(s);
+  };
+  spalte("Std", 24, "h");
+  spalte("Min", 60, "mi");
+  if (mitMs) spalte("Sek", 60, "s");
+  const fuss = el("div", "fuss");
+  if (mitMs) {
+    const l = el("label"), ms = el("input");
+    ms.type = "number"; ms.min = 0; ms.max = 999; ms.value = t.ms;
+    ms.addEventListener("input", () => { t.ms = Math.max(0, Math.min(999, Math.floor(+ms.value) || 0)); setze(K.fmtUhrzeit(t, mitMs)); });
+    l.append(el("span", null, "ms "), ms);
+    fuss.append(l);
+  } else fuss.append(el("span"));
+  fuss.append(knopf("Fertig", () => popZu(true)));
+  box.append(spalten, fuss);
+  return box;
+}
+/** Texteingabe mit Auswahlknopf. Beim Verlassen wird die Eingabe ins einheitliche Format gebracht. */
+function zeitFeld(z, k, art, opt, geaendertFn) {
+  const box = el("span", "ap-feld"), inp = el("input"), btn = el("button", "ap-pick");
+  const beschr = opt.titel + " " + (art === "tag" ? "Tag" : "Uhrzeit");
+  inp.type = "text"; inp.spellcheck = false; inp.autocomplete = "off"; inp.value = z[k] || "";
+  inp.className = art === "tag" ? "tag" : "zeit" + (opt.ms ? " ms" : "");
+  inp.inputMode = "numeric"; inp.title = beschr;
+  inp.placeholder = art === "tag" ? (opt.bezug ? "wie Start" : "TT.MM.JJJJ") : (opt.ms ? "HH:MM:SS:mmm" : "HH:MM");
+  inp.setAttribute("aria-label", beschr);
+  const setze = v => {
+    inp.value = v; z[k] = v;
+    inp.classList.toggle("falsch", !istGueltig(art, v));
+    geaendertFn();
+  };
+  inp.classList.toggle("falsch", !istGueltig(art, inp.value));
+  inp.addEventListener("input", () => setze(inp.value));
+  inp.addEventListener("change", () => {
+    if (!inp.value.trim()) return;
+    const w = art === "tag" ? K.parseDatum(inp.value) : K.parseUhrzeit(inp.value);
+    if (w) setze(art === "tag" ? K.fmtDatum(w) : K.fmtUhrzeit(w, opt.ms));
+  });
+  btn.type = "button"; btn.innerHTML = art === "tag" ? SVG_TAG : SVG_UHR;
+  btn.title = art === "tag" ? "Tag im Kalender wählen" : "Uhrzeit wählen";
+  btn.setAttribute("aria-label", beschr + " wählen");
+  btn.setAttribute("aria-expanded", "false");
+  btn.addEventListener("click", () => {
+    if (POP && POP.btn === btn) { popZu(true); return; }
+    popZu();
+    popAuf(btn, art === "tag"
+      ? kalender(inp.value, opt.bezug ? opt.bezug() : "", v => { setze(v); popZu(true); })
+      : uhrAuswahl(inp.value, opt.ms, setze));
+  });
+  box.append(inp, btn);
+  return box;
+}
+/** Start und Ende eines Zeitraums, je mit eigenem Feld für Tag und Uhrzeit. */
+function zeitraumFelder(z, opt, fn) {
+  const box = el("div", "ap-zr");
+  [["Start", "vonDatum", "vonZeit", null], ["Ende", "bisDatum", "bisZeit", () => z.vonDatum]].forEach(([titel, kd, kz, bezug]) => {
+    const felder = el("div", "felder");
+    const o = {ms: opt.ms, titel, bezug};
+    felder.append(zeitFeld(z, kd, "tag", o, fn), zeitFeld(z, kz, "zeit", o, fn));
+    box.append(el("span", "wo", titel), felder);
+  });
+  return box;
+}
+/** Liste von Abschickzeiträumen mit „Zeitraum hinzufügen“ und „entfernen“. */
+function zeitraumListe(box, zeilen, fn) {
+  const zeichnen = () => {
+    const liste = el("div", "ap-zliste");
+    zeilen.forEach((z, i) => {
+      const zeile = el("div", "zeile");
+      zeile.append(zeitraumFelder(z, {ms: false}, fn));
+      if (zeilen.length > 1) zeile.append(knopf("entfernen", () => { popZu(); zeilen.splice(i, 1); zeichnen(); fn(); }, "tw"));
+      liste.append(zeile);
+    });
+    liste.append(knopf("Weiteren Zeitraum hinzufügen", () => { popZu(); zeilen.push(leererZeitraum()); zeichnen(); fn(); }, "tw"));
+    box.replaceChildren(liste);
+  };
+  zeichnen();
+}
+function fensterNote(ziel, zeilen, leerText) {
+  const f = K.fensterAusZeilen(zeilen);
+  const teile = f.fenster.map(x => K.fmtZeit(x[0]).slice(0, 16) + " bis " + K.fmtZeit(x[1]).slice(0, 16));
+  ziel.replaceChildren(el("span", f.fehler.length ? "ap-warn" : (teile.length ? "ap-ok" : null),
+    f.fehler.length ? f.fehler.join("; ") : (teile.length ? teile.join(" · ") : leerText)));
+}
+function zeitFelderBauen() {
+  $("ankunft-felder").replaceChildren(zeitraumFelder(S.ank, {ms: true}, () => geaendert(true)));
+  zeitraumListe($("fenster-felder"), S.fen, () => { S.atts.forEach((a, i) => attAnalyse(i)); geaendert(true); });
+}
 function zeitenBauen() {
-  const a = S.ankunft.trim() ? K.parseAnkunft(S.ankunft) : null;
+  const a = K.zeitraumAusFeldern(S.ank, true);
   const n = $("ankunft-note");
-  if (!a) n.replaceChildren(el("span", null, "Noch keine Ankunft."));
+  if (a.leer) n.replaceChildren(el("span", null, "Noch keine Ankunft."));
   else if (a.fehler) n.replaceChildren(el("span", "ap-warn", a.fehler));
   else {
     const t = a.from === a.to ? "Zeitpunkt " + K.fmtZeit(a.from, true)
@@ -519,9 +754,7 @@ function zeitenBauen() {
     const nacht = K.istNacht(W, a.from) || K.istNacht(W, a.to) || (a.to - a.from > 3600000 && [...Array(Math.ceil((a.to - a.from) / 3600000))].some((_, h) => K.istNacht(W, a.from + h * 3600000)));
     n.replaceChildren(el("span", "ap-ok", t), nacht ? el("span", "ap-warn", " · berührt den Nachtbonus (" + W.night.start_hour + " bis " + W.night.end_hour + " Uhr)") : el("span"));
   }
-  const f = K.parseFenster(S.fenster), m = $("fenster-note");
-  const teile = f.fenster.map(x => K.fmtZeit(x[0]).slice(0, 16) + " bis " + K.fmtZeit(x[1]).slice(0, 16));
-  m.replaceChildren(el("span", f.fehler.length ? "ap-warn" : "ap-ok", f.fehler.length ? f.fehler.join("; ") : (teile.length ? teile.join(" · ") : "Noch kein Zeitraum.")));
+  fensterNote($("fenster-note"), S.fen, "Noch kein Zeitraum.");
 }
 
 /* ---------- 6. Fakes ---------- */
@@ -599,13 +832,15 @@ function fakesBauen() {
 let ERG = null;
 function kernInput(cfgExtra) {
   const fehler = [];
-  const ank = K.parseAnkunft(S.ankunft);
-  if (!S.ankunft.trim() || ank.fehler) fehler.push("Ankunft fehlt oder ist ungültig (Abschnitt 4).");
-  const fw = K.parseFenster(S.fenster);
+  const ank = K.zeitraumAusFeldern(S.ank, true);
+  if (ank.leer || ank.fehler) fehler.push("Ankunft fehlt oder ist ungültig (Abschnitt 4).");
+  const fw = K.fensterAusZeilen(S.fen);
+  if (fw.fehler.length) fehler.push(fw.fehler.join("; ") + " (Abschnitt 5).");
   const attackers = [];
   S.atts.forEach((a, i) => {
     const A = ANALYSE[i];
     if (!A || !A.dorfer.length) return;
+    if (A.own && A.own.fehler.length) fehler.push(A.name + ": " + A.own.fehler.join("; ") + " (eigene Abschickzeiträume).");
     const own = A.own && A.own.fenster.length ? A.own.fenster : null;
     if (!own && !fw.fenster.length) fehler.push("Kein Abschickzeitraum für " + A.name + " (Abschnitt 5).");
     attackers.push({id: i, name: A.name, points: A.points || 0, rollen: a.rollen, auswahl: A.aus ? A.aus.keys : null, windows: own,
@@ -848,8 +1083,7 @@ function auswahlUebernehmen() {
   laden();
   hilfeAnwenden();
   cfgBauen();
-  $("ankunft").value = S.ankunft;
-  $("fenster").value = S.fenster;
+  zeitFelderBauen();
   $("fake-text").value = S.fakeText;
   $("res").replaceChildren(el("p", "empty", "Lade Weltdaten …"));
   const lade = n => loadData(n).catch(() => null);
@@ -896,8 +1130,6 @@ $("ziel-leer").addEventListener("click", () => { S.ziele = []; geaendert(); });
 $("ziel-karte").addEventListener("click", () => zurKarte("ag"));
 $("fake-karte").addEventListener("click", () => zurKarte("fake"));
 document.querySelectorAll('input[name="zmodus"]').forEach(r => r.addEventListener("change", () => { S.zmodus = r.value; geaendert(); }));
-$("ankunft").addEventListener("input", () => { S.ankunft = $("ankunft").value; geaendert(true); });
-$("fenster").addEventListener("input", () => { S.fenster = $("fenster").value; S.atts.forEach((a, i) => attAnalyse(i)); geaendert(true); });
 $("fake-text").addEventListener("input", () => { S.fakeText = $("fake-text").value; geaendert(true); });
 $("calc").addEventListener("click", () => { S.wahlKnapp = null; rechnen(); });
 $("reroll").addEventListener("click", () => { S.seed = (S.seed % 100000) + 1; S.wahlKnapp = null; speichern(); rechnen(); });

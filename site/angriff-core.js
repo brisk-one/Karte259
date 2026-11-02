@@ -186,6 +186,63 @@ function parseFenster(text) {
   });
   return {fenster: ivNorm(out), fehler};
 }
+/** Kalendertag aus „03.11.2026“, auch „3.11.26“; null, wenn es den Tag nicht gibt. */
+function parseDatum(text) {
+  const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})$/.exec(String(text || "").trim());
+  if (!m) return null;
+  const d = +m[1], mo = +m[2], y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+  const t = new Date(Date.UTC(y, mo - 1, d));
+  return t.getUTCMonth() === mo - 1 && t.getUTCDate() === d ? {y, mo, d} : null;
+}
+/** Uhrzeit aus „8“, „08:00“, „08:00:10“ oder „08:00:10:200“; null, wenn sie ungültig ist. */
+function parseUhrzeit(text) {
+  const m = /^(\d{1,2})(?::(\d{2})(?::(\d{2})(?:[:.,](\d{1,3}))?)?)?$/.exec(String(text || "").trim());
+  if (!m) return null;
+  const h = +m[1], mi = +(m[2] || 0), s = +(m[3] || 0), ms = m[4] ? +(m[4] + "00").slice(0, 3) : 0;
+  return h < 24 && mi < 60 && s < 60 ? {h, mi, s, ms} : null;
+}
+const fmtDatum = t => pad(t.d) + "." + pad(t.mo) + "." + t.y;
+/** Mit Millisekunden immer vollständig, sonst nur so lang wie nötig. */
+function fmtUhrzeit(t, mitMs) {
+  const kurz = pad(t.h) + ":" + pad(t.mi);
+  if (mitMs) return kurz + ":" + pad(t.s) + ":" + pad(t.ms, 3);
+  return t.s || t.ms ? kurz + ":" + pad(t.s) + (t.ms ? ":" + pad(t.ms, 3) : "") : kurz;
+}
+/**
+ * Zeitraum aus getrennten Feldern {vonDatum, vonZeit, bisDatum, bisZeit}.
+ * Ende ohne Tag: gleicher Tag wie der Start, liegt die Uhrzeit davor, der nächste. Ganz leeres Ende: mit
+ * punktErlaubt ein fester Zeitpunkt, sonst ein Fehler. Ergebnis {leer}, {fehler} oder {from, to}.
+ */
+function zeitraumAusFeldern(f, punktErlaubt) {
+  const w = k => String((f && f[k]) || "").trim();
+  const vd = w("vonDatum"), vz = w("vonZeit"), bd = w("bisDatum"), bz = w("bisZeit");
+  if (!vd && !vz && !bd && !bz) return {leer: true};
+  if (!vd) return {fehler: "Starttag fehlt"};
+  if (!vz) return {fehler: "Startzeit fehlt"};
+  const tag = parseDatum(vd), zeit = parseUhrzeit(vz);
+  if (!tag) return {fehler: "Tag nicht erkannt: " + vd};
+  if (!zeit) return {fehler: "Uhrzeit nicht erkannt: " + vz};
+  const from = berlinToUtc(tag.y, tag.mo, tag.d, zeit.h, zeit.mi, zeit.s, zeit.ms);
+  if (!bd && !bz) return punktErlaubt ? {from, to: from} : {fehler: "Ende fehlt"};
+  if (!bz) return {fehler: "Endzeit fehlt"};
+  const bisTag = bd ? parseDatum(bd) : tag, bisZeit = parseUhrzeit(bz);
+  if (!bisTag) return {fehler: "Tag nicht erkannt: " + bd};
+  if (!bisZeit) return {fehler: "Uhrzeit nicht erkannt: " + bz};
+  let to = berlinToUtc(bisTag.y, bisTag.mo, bisTag.d, bisZeit.h, bisZeit.mi, bisZeit.s, bisZeit.ms);
+  if (to < from && !bd) to = berlinToUtc(bisTag.y, bisTag.mo, bisTag.d + 1, bisZeit.h, bisZeit.mi, bisZeit.s, bisZeit.ms);   // über Mitternacht
+  if (to < from) return {fehler: "Ende liegt vor dem Anfang"};
+  return {from, to};
+}
+/** Abschickzeiträume aus Feldzeilen; ganz leere Zeilen zählen nicht. */
+function fensterAusZeilen(zeilen) {
+  const out = [], fehler = [];
+  (zeilen || []).forEach((z, i) => {
+    const r = zeitraumAusFeldern(z, false);
+    if (r.fehler) fehler.push("Zeitraum " + (i + 1) + ": " + r.fehler);
+    else if (!r.leer) out.push([r.from, r.to]);
+  });
+  return {fenster: ivNorm(out), fehler};
+}
 function istNacht(world, ms) {
   if (!world.night || !world.night.active) return false;
   const h = berlinParts(ms).h, s = world.night.start_hour, e = world.night.end_hour;
@@ -1073,7 +1130,8 @@ function toDSU(items, meta) {
 }
 
 const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEFAULT, CFG_DEFAULT, makeWorld, erfolgsChance, moral,
-             berlinToUtc, berlinParts, fmtZeit, parseAnkunft, parseFenster, istNacht, ivNorm, ivIntersect, ivShift, ivHas,
+             berlinToUtc, berlinParts, fmtZeit, parseAnkunft, parseFenster, parseDatum, parseUhrzeit, fmtDatum, fmtUhrzeit,
+             zeitraumAusFeldern, fensterAusZeilen, istNacht, ivNorm, ivIntersect, ivShift, ivHas,
              parseOverview, offInfo, classify, fakeAus, begleitschutz, plan, pruefePlan, toDSU, exportAuswahl, parseKoordListe,
              travelS, dist, popOf, langsamste,
              mulberry32, Fluss};

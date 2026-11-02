@@ -6,6 +6,50 @@ const assert = require("node:assert/strict");
 const K = require("../site/angriff-core.js");
 
 const W = K.makeWorld();
+
+test("Zeitfelder: Tag und Uhrzeit getrennt, Prüfung und Format", () => {
+  assert.deepEqual(K.parseDatum("3.11.26"), {y: 2026, mo: 11, d: 3});
+  assert.equal(K.parseDatum("31.11.2026"), null);
+  assert.equal(K.parseDatum("03.11.2026 08:00"), null);
+  assert.deepEqual(K.parseUhrzeit("8"), {h: 8, mi: 0, s: 0, ms: 0});
+  assert.deepEqual(K.parseUhrzeit("08:00:10:2"), {h: 8, mi: 0, s: 10, ms: 200});
+  assert.equal(K.parseUhrzeit("24:00"), null);
+  assert.equal(K.parseUhrzeit("08:60"), null);
+  assert.equal(K.fmtDatum({y: 2026, mo: 11, d: 3}), "03.11.2026");
+  assert.equal(K.fmtUhrzeit({h: 8, mi: 5, s: 0, ms: 0}), "08:05");
+  assert.equal(K.fmtUhrzeit({h: 8, mi: 5, s: 0, ms: 0}, true), "08:05:00:000");
+  assert.equal(K.fmtUhrzeit({h: 8, mi: 5, s: 1, ms: 20}), "08:05:01:020");
+});
+
+test("Zeitraum aus Feldern: gleiche Ergebnisse wie die Texteingabe, Zeitpunkt nur mit Freigabe", () => {
+  const f = (vonDatum, vonZeit, bisDatum, bisZeit) => ({vonDatum, vonZeit, bisDatum, bisZeit});
+  assert.ok(K.zeitraumAusFeldern(f("", "", "", ""), true).leer);
+  const alt = K.parseAnkunft("03.11.2026 08:00:00:000 bis 09:00:00:000");
+  assert.deepEqual(K.zeitraumAusFeldern(f("03.11.2026", "08:00:00:000", "", "09:00:00:000"), true), alt);
+  const punkt = K.zeitraumAusFeldern(f("03.11.2026", "08:00:10:200", "", ""), true);
+  assert.equal(punkt.from, punkt.to);
+  assert.equal(K.zeitraumAusFeldern(f("03.11.2026", "08:00", "", ""), false).fehler, "Ende fehlt");
+  const nacht = K.zeitraumAusFeldern(f("03.11.2026", "23:30", "", "00:30"), false);    // über Mitternacht
+  assert.equal(nacht.to - nacht.from, 3600000);
+  assert.equal(K.zeitraumAusFeldern(f("03.11.2026", "23:30", "03.11.2026", "00:30")).fehler, "Ende liegt vor dem Anfang");
+  const lang = K.zeitraumAusFeldern(f("03.11.2026", "22:00", "05.11.2026", "01:00"), false);
+  assert.equal(lang.to - lang.from, 27 * 3600000);
+  assert.equal(K.zeitraumAusFeldern(f("", "08:00", "", "")).fehler, "Starttag fehlt");
+  assert.equal(K.zeitraumAusFeldern(f("03.11.2026", "", "", "")).fehler, "Startzeit fehlt");
+  assert.equal(K.zeitraumAusFeldern(f("03.11.2026", "08:00", "04.11.2026", "")).fehler, "Endzeit fehlt");
+  assert.match(K.zeitraumAusFeldern(f("31.11.2026", "08:00", "", "")).fehler, /Tag nicht erkannt/);
+  assert.match(K.zeitraumAusFeldern(f("03.11.2026", "25:00", "", "")).fehler, /Uhrzeit nicht erkannt/);
+});
+
+test("Abschickzeiträume aus Zeilen: leere Zeilen zählen nicht, Fehler nennen die Zeile", () => {
+  const z = (vonDatum, vonZeit, bisDatum, bisZeit) => ({vonDatum, vonZeit, bisDatum, bisZeit});
+  const r = K.fensterAusZeilen([z("02.11.2026", "16:00", "", "20:00"), z("", "", "", ""), z("02.11.2026", "22:00", "", "23:30")]);
+  assert.deepEqual(r.fehler, []);
+  assert.deepEqual(r.fenster, K.parseFenster("02.11.2026 16:00 bis 20:00\n02.11.2026 22:00 bis 23:30").fenster);
+  const f = K.fensterAusZeilen([z("02.11.2026", "16:00", "", "20:00"), z("02.11.2026", "22:00", "", "")]);
+  assert.deepEqual(f.fehler, ["Zeitraum 2: Ende fehlt"]);
+  assert.equal(f.fenster.length, 1);
+});
 const leer = () => Object.fromEntries(K.UNITS.map(u => [u, 0]));
 const truppen = o => Object.assign(leer(), o);
 const OFF = () => truppen({axe: 6000, light: 3000, ram: 300, catapult: 50, spy: 100});              // 19.900 BH
