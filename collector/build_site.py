@@ -22,7 +22,7 @@ import subprocess
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from . import config, erfahrung, kampf, krieg, moral, net, praegen, store, units, world
+from . import angriff, config, erfahrung, kampf, krieg, moral, net, praegen, store, units, world
 
 # Vergleichsfenster: Schlüssel, Länge, Toleranz nach vorn. Ein Vergleichsstand darf höchstens das
 # 1,5-fache der Fensterlänge zurückliegen (MAX_ALTER), sonst gilt das Fenster als ohne Vergleichsstand.
@@ -360,6 +360,19 @@ def build(out_dir):
     except Exception as e:  # Karte fehlt, Statusseite bleibt nutzbar
         villages = {"count": 0, "source": None, "error": repr(e)}
 
+    # Angriffsplaner: Dorf-IDs in eigener Datei (Reihenfolge wie villages.json) und Weltwerte, ohne Einfluss auf den Rest
+    angriff_info = {"ok": False}
+    try:
+        if villages.get("count"):
+            _dump(os.path.join(ddir, "dorf_ids.json"), angriff.dorf_ids(vrows, payload["rows"], payload.get("data_time_utc")))
+        wc = store.load_json(store.dpath("world_config.json"), {}) or {}
+        ap = angriff.payload(wc.get("settings"))
+        if ap:
+            _dump(os.path.join(ddir, "angriff.json"), ap)
+        angriff_info = {"ok": bool(ap), "ids": villages.get("count", 0)}
+    except Exception as e:
+        angriff_info = {"ok": False, "error": repr(e)}
+
     # Kämpfe der letzten 24 h je Intervall zwischen zwei Ständen (collector/kampf.py), ohne Einfluss auf den Rest
     kampf_info = {"kaempfe": 0}
     try:
@@ -476,7 +489,7 @@ def build(out_dir):
     })
     return {"players": len(rows), "refs": sorted(refs), "allies": len(allies),
             "records": len(records), "top": len(top_rows), "deep": len(deep_rows), "villages": villages, "moral": moral_info, "units": unit_info,
-            "praegen": praegen_info, "kampf": kampf_info}
+            "praegen": praegen_info, "angriff": angriff_info, "kampf": kampf_info}
 
 
 def main(argv=None):

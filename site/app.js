@@ -65,7 +65,8 @@ function toggleTheme() {
 
 /* ---------- Kopfzeile ---------- */
 const PAGES = [["./", "Punkteübersicht", "index"], ["praegen.html", "Prägerechner", "praegen"],
-               ["dashboard.html", "Dashboard", "dashboard"], ["karte.html", "Karte", "karte"], ["moral.html", "Moral", "moral"]];
+               ["dashboard.html", "Dashboard", "dashboard"], ["karte.html", "Karte", "karte"], ["moral.html", "Moral", "moral"],
+               ["angriff.html", "Angriffsplaner", "angriff"]];
 function buildAppbar(current, title) {
   const bar = $("appbar");
   if (!bar) return;

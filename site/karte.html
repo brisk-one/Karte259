@@ -235,6 +235,43 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .tip .row.cur .k::before{content:"▶ "; font-size:.8em}
 .msg{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
   color:var(--ink); background:var(--panel-solid); opacity:.94; font-size:13px; padding:24px; z-index:4}
+/* Auswahlmodus für den Angriffsplaner (S4, 02.11.2026): Werkzeuge und Liste rechts neben der Karte,
+   auf schmalen Schirmen unter der Karte. Dort steht die Leiste nicht über der Karte, sonst läge deren Mitte
+   (der Ausschnitt aus dem Planer) unter der Leiste. */
+.auswahl{width:340px; flex:none; display:flex; flex-direction:column; min-height:0; overflow:hidden;
+  background:var(--panel-solid); border-left:1px solid var(--edge); font-size:12px}
+.auswahl[hidden]{display:none}
+.auswahl .kh{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:10.5px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--head-ink); background:var(--head);
+  border-bottom:1px solid var(--edge-soft); padding:4px 4px 4px 10px}
+.auswahl .kh button{font:inherit; font-weight:700; font-size:14px; cursor:pointer; background:none; color:inherit;
+  border:0; width:22px; height:22px; border-radius:var(--radius)}
+.auswahl .kh button:hover{background:rgba(255,255,255,.18)}
+.auswahl .aw-kopf{padding:7px 10px 8px; display:flex; flex-direction:column; gap:6px; border-bottom:1px solid var(--edge-line)}
+.auswahl .aw-zeile{display:flex; flex-wrap:wrap; align-items:center; gap:5px 8px}
+.auswahl .aw-zeile>b{font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); min-width:62px}
+.auswahl .seg .opt button.tw{border-radius:0}
+.auswahl .seg .opt:first-child button.tw{border-radius:var(--radius) 0 0 var(--radius)}
+.auswahl .seg .opt:last-child button.tw{border-radius:0 var(--radius) var(--radius) 0}
+.auswahl label{display:inline-flex; align-items:center; gap:4px; cursor:pointer}
+.auswahl .aw-hilfe{color:var(--muted); font-size:10.5px; line-height:1.35; margin:0}
+.auswahl .aw-note{color:var(--ink-2); font-weight:600}
+.auswahl .aw-zahl{font-weight:700}
+.auswahl .aw-liste{overflow:auto; flex:1; min-height:0}
+.auswahl table{width:100%; border-collapse:collapse; font-size:11.5px}
+.auswahl th,.auswahl td{padding:2px 6px; text-align:left; white-space:nowrap}
+.auswahl th{position:sticky; top:0; z-index:1; background:var(--panel-solid); font-size:9.5px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted); font-weight:700; border-bottom:1px solid var(--edge-line)}
+.auswahl .n{text-align:right; font-variant-numeric:tabular-nums}
+.auswahl tbody tr:nth-child(even){background:var(--row-alt)}
+.auswahl tbody tr:hover{background:var(--row-hover)}
+.auswahl td.nm{max-width:104px; overflow:hidden; text-overflow:ellipsis}
+.auswahl td.co{cursor:pointer; font-variant-numeric:tabular-nums; text-decoration:underline dotted}
+.auswahl td button{font:inherit; font-weight:700; font-size:13px; cursor:pointer; background:none; color:inherit; border:0; padding:0 4px}
+.auswahl .leer{color:var(--muted); padding:10px; margin:0}
+.mapwrap.aw-zug{cursor:crosshair}
+@media (max-width:900px){ .mainrow.mit-auswahl{flex-direction:column}
+  .auswahl{width:auto; max-height:45%; border-left:0; border-top:1px solid var(--edge)} }
 @media (max-width:640px){ .stand{width:100%; text-align:left; margin-left:0} .legend{font-size:11px}
   .zeitbadge .s{display:none}
   .dist .dbody{max-height:34vh} .dist .note{display:none} }
@@ -340,6 +377,12 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
       <button class="tw small" type="button" id="clearmark" title="Hervorhebung aufheben" aria-label="Hervorhebung aufheben" hidden>×</button>
     </div>
   </div>
+  <div class="vcat"><b>Auswahl</b>
+    <div class="grp">
+      <button class="tw" type="button" id="awbtn" aria-pressed="false" aria-controls="auswahl"
+              title="Dörfer per Klick, Rechteck oder Lasso auswählen, etwa als Ziele für den Angriffsplaner">Dörfer auswählen</button>
+    </div>
+  </div>
   <p class="stand" id="stand">Lade Kartendaten …</p>
   <button class="tw small einklappen" type="button" id="einklappen" aria-expanded="true" aria-controls="einst"
           title="Einstellungen einklappen, mehr Platz für die Karte">&#9652; Einklappen</button>
@@ -386,6 +429,30 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
   <div class="kh"><span id="kriege-title">Kriege</span>
     <button type="button" id="kriege-close" title="Schließen" aria-label="Schließen">×</button></div>
   <div id="kriege-body"></div>
+</aside>
+<aside class="auswahl" id="auswahl" hidden aria-label="Dörfer auswählen">
+  <div class="kh"><span id="aw-title">Dörfer auswählen</span>
+    <button type="button" id="aw-close" title="Auswahl beenden (Escape)" aria-label="Auswahl beenden">×</button></div>
+  <div class="aw-kopf">
+    <div class="aw-zeile"><b>Werkzeug</b>
+      <div class="seg" id="aw-werkzeug" role="group" aria-label="Werkzeug">
+        <span class="opt"><button class="tw small" type="button" data-w="klick">Klick</button></span>
+        <span class="opt"><button class="tw small" type="button" data-w="rechteck">Rechteck</button></span>
+        <span class="opt"><button class="tw small" type="button" data-w="lasso">Lasso</button></span>
+      </div></div>
+    <div class="aw-zeile"><b>Wirkung</b>
+      <div class="seg" id="aw-wirkung" role="group" aria-label="Wirkung von Rechteck und Lasso">
+        <span class="opt"><button class="tw small" type="button" data-m="add">hinzufügen</button></span>
+        <span class="opt"><button class="tw small" type="button" data-m="del">entfernen</button></span>
+      </div>
+      <label><input type="checkbox" id="aw-spieler" checked> nur Spielerdörfer</label></div>
+    <p class="aw-hilfe" id="aw-hilfe"></p>
+    <div class="aw-zeile"><span class="aw-zahl" id="aw-zahl">0 Dörfer</span>
+      <button class="tw small" type="button" id="aw-mark" hidden title="Die Dörfer des gesuchten Spielers oder Stammes übernehmen"></button></div>
+    <p class="aw-hilfe aw-note" id="aw-note" hidden aria-live="polite"></p>
+    <div class="aw-zeile" id="aw-knoepfe"></div>
+  </div>
+  <div class="aw-liste" id="aw-liste"></div>
 </aside>
 </div>
 
@@ -1235,6 +1302,7 @@ function drawOverlay(){
       octx.strokeRect(sx(x)+off-1.5, sy(y)+off-1.5, size+3, size+3);
     }
   }
+  if(AW.aktiv) awZeichnen(x0, x1, y0, y1);
   if(selA>=0){
     const punkte=[[selA,"A"]].concat(selB>=0? [[selB,"B"]] : []);
     const mitte=i=>[sx(vx[i])+off+size/2, sy(vy[i])+off+size/2];
@@ -1499,7 +1567,9 @@ function setView(v){
 
 /* ---------- Tooltip ---------- */
 function hit(px,py){
-  const wx=wxAt(px), wy=wyAt(py), x=Math.round(wx), y=Math.round(wy);
+  // Dorf x|y liegt auf dem Feld [x, x+1), seine Mitte bei x+0.5. Ohne den halben Versatz traf die rechte und
+  // untere Hälfte eines Dorfes den Nachbarn oder nichts (gefunden beim Auswahlmodus, 02.11.2026).
+  const wx=wxAt(px)-0.5, wy=wyAt(py)-0.5, x=Math.round(wx), y=Math.round(wy);
   const direkt=byXY.get(x*1000+y);
   if(direkt!=null) return direkt;
   // Nichts genau unter dem Zeiger: das nächstgelegene Dorf im Umkreis nehmen. Ohne das wirkt die
@@ -2007,10 +2077,10 @@ function renderZeitBadge(){
 }
 
 /* ---------- Einklappbare Einstellungen ---------- */
-function setLeiste(offen){
+function setLeiste(offen, merken){
   $("einst").hidden=!offen; $("slim").hidden=offen;
   $("einklappen").setAttribute("aria-expanded", String(offen)); $("ausklappen").setAttribute("aria-expanded", String(offen));
-  try{ localStorage.setItem("karte.leiste", offen? "1" : "0"); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
+  if(merken!==false) try{ localStorage.setItem("karte.leiste", offen? "1" : "0"); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
   renderSlim();
 }
 /** Kurzform der Auswahl für die eingeklappte Leiste. */
@@ -2039,6 +2109,7 @@ function saveUrl(){
     if(namesFrom===NAME_AB_ROT) p.set("n", "rot");
     if(kriegOffen) p.set("k", kriegSel? kriegSel.join("-") : "1");
     if(marks.size) p.set("m", [...marks].map(([id,c])=>id+"-"+c.replace("#","")).join(","));
+    if(AW.aktiv){ p.set("auswahl", AW.ziel||"1"); if(AW.fuer) p.set("fuer", AW.fuer); }
     const q=p.toString();
     history.replaceState(null,"", q? "?"+q : location.pathname);
   }, 400);
@@ -2051,6 +2122,8 @@ function readUrl(){
   const t=p.get("t"); if(/^\d{4}-\d{2}-\d{2}$/.test(t||"")) kampfTag=t;
   const sv=+p.get("s"); if(STAERKE_STUFEN.includes(sv)) minStaerke=sv;
   if(p.get("n")==="rot") namesFrom=NAME_AB_ROT;
+  const aw=p.get("auswahl");
+  if(aw && /^(ag(:\d{1,2})?|fake|1)$/.test(aw)){ AW.start=true; AW.startZiel = aw==="1"? null : aw; AW.startFuer=(p.get("fuer")||"").slice(0,40); }
   const k=p.get("k");
   if(k){ kriegOffen=true; const m=k.match(/^(\d+)-(\d+)$/); if(m) kriegSel=[+m[1], +m[2]]; }
   (p.get("m")||"").split(",").filter(Boolean).forEach(s=>{
@@ -2160,6 +2233,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   renderMarks();
   setView(view);
   initDone=true;
+  if(AW.start) awStart(AW.startZiel, AW.startFuer);
   new ResizeObserver(resize).observe(wrap);
   showStand();
   updateUndoBtn(); updateClearMarkBtn();
@@ -2227,6 +2301,304 @@ $("q").addEventListener("focus", renderSuggestions);
 $("q").addEventListener("blur", ()=>setTimeout(()=>{ $("sugg").hidden=true; }, 150));
 $("q").addEventListener("keydown", e=>{ if(e.key==="Escape") $("sugg").hidden=true; });
 
+/* ---------- Auswahlmodus für den Angriffsplaner (S4, 02.11.2026, Spezifikation Angriffsplaner 7) ----------
+   Aufruf aus dem Planer mit karte.html?auswahl=ag, ag:<Angreifer> oder fake, ohne Planer über „Dörfer auswählen“.
+   Werkzeuge Klick, Rechteck und Lasso. Bei Rechteck und Lasso zieht die linke Maustaste (ein Finger) die Auswahl,
+   verschoben wird mit rechter oder mittlerer Maustaste, Pfeiltasten oder zwei Fingern. Bei Klick gibt es nichts zu
+   ziehen, dort verschiebt Ziehen die Karte wie sonst. Escape bricht ein Rechteck oder Lasso ab, sonst beendet es den
+   Modus. Gespeichert werden Koordinaten (x*1000+y), keine Zeilennummern, weil sich villages.json stündlich ändert.
+   Die Auswahl hält sich als Entwurf im sessionStorage. „Kopieren und zurück zum Planer“ legt sie in die
+   Zwischenablage und unter AW_PLANER in den localStorage, den der Planer beim Laden liest (auswahlUebernehmen). */
+const AW_PLANER="k259-angriff-auswahl", AW_ENTWURF="k259-karte-auswahl";
+const AW={aktiv:false, ziel:null, fuer:"", werkzeug:"rechteck", wirkung:"add", nurSpieler:true, sel:new Set(),
+          zug:null, vorschau:null, panKnopf:false, mitte:null, markRef:undefined, markN:0, eingeklappt:false,
+          start:false, startZiel:null, startFuer:""};
+const AW_HILFE={
+  klick:"Klick wählt ein Dorf an oder ab, Ziehen verschiebt die Karte.",
+  rechteck:"Linke Maustaste oder ein Finger zieht ein Rechteck. Verschieben mit rechter oder mittlerer Maustaste, Pfeiltasten oder zwei Fingern.",
+  lasso:"Linke Maustaste oder ein Finger umfährt die Dörfer. Verschieben mit rechter oder mittlerer Maustaste, Pfeiltasten oder zwei Fingern."
+};
+const awKey = i => vx[i]*1000+vy[i];
+const awDoerfer = n => n===1? "1 Dorf" : nf.format(n)+" Dörfer";
+const awErlaubt = i => !AW.nurSpieler || vp[i]>=0;
+let awHinweisTimer=0;
+function awTitel(){
+  if(!AW.ziel) return "Dörfer auswählen";
+  if(AW.ziel==="fake") return "Fakeziele";
+  return "AG-Ziele"+(AW.fuer? " für "+AW.fuer : (AW.ziel!=="ag"? " eines Angreifers" : ""));
+}
+function awSpeichern(){
+  try{ sessionStorage.setItem(AW_ENTWURF, JSON.stringify({ziel:AW.ziel, keys:[...AW.sel], werkzeug:AW.werkzeug,
+    wirkung:AW.wirkung, nurSpieler:AW.nurSpieler})); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
+}
+function awStart(ziel, fuer){
+  AW.aktiv=true; AW.ziel=ziel||null; AW.fuer=fuer||""; AW.sel=new Set(); AW.zug=null; AW.vorschau=null;
+  let d=null;
+  try{ d=JSON.parse(sessionStorage.getItem(AW_ENTWURF)||"null"); }catch(e){ d=null; }
+  if(d){
+    if(AW_HILFE[d.werkzeug]) AW.werkzeug=d.werkzeug;
+    if(d.wirkung==="add" || d.wirkung==="del") AW.wirkung=d.wirkung;
+    if(typeof d.nurSpieler==="boolean") AW.nurSpieler=d.nurSpieler;
+    // Entwurf nur zum selben Ziel wiederherstellen, etwa nach dem Neuladen der Seite
+    if(d.ziel===AW.ziel && Array.isArray(d.keys)) d.keys.forEach(k=>{ if(byXY.has(k)) AW.sel.add(k); });
+  }
+  $("auswahl").hidden=false; $("awbtn").setAttribute("aria-pressed","true");
+  document.querySelector(".mainrow").classList.add("mit-auswahl");
+  // Auf schmalen Schirmen nehmen die Einstellungen fast die ganze Höhe: für die Auswahl einklappen, ohne die
+  // gespeicherte Wahl zu ändern; beim Beenden wieder aufklappen
+  AW.eingeklappt = innerWidth<=900 && !$("einst").hidden;
+  if(AW.eingeklappt) setLeiste(false, false);
+  awSpeichern(); renderAuswahl(); drawOverlay(); saveUrl();
+}
+function awEnde(){
+  if(!AW.aktiv) return;
+  AW.aktiv=false; AW.zug=null; AW.vorschau=null; AW.panKnopf=false;
+  $("auswahl").hidden=true; $("awbtn").setAttribute("aria-pressed","false");
+  document.querySelector(".mainrow").classList.remove("mit-auswahl");
+  if(AW.eingeklappt){ AW.eingeklappt=false; if($("einst").hidden) setLeiste(true, false); }
+  wrap.classList.remove("aw-zug");
+  // Rückgängig-Schritte der Auswahl gehören zum Modus, ohne ihn würden sie unsichtbar wirken
+  undoStack=undoStack.filter(f=>!f.auswahl); updateUndoBtn();
+  drawOverlay(); saveUrl();
+}
+function awHinweis(t){
+  const n=$("aw-note"); n.textContent=t; n.hidden=false;
+  clearTimeout(awHinweisTimer); awHinweisTimer=setTimeout(()=>{ n.hidden=true; }, 4000);
+}
+/** Neue Auswahl übernehmen; die alte kommt auf den Rückgängig-Stapel. */
+function awAendern(neu){
+  const alt=AW.sel;
+  if(neu.size===alt.size && [...neu].every(k=>alt.has(k))) return false;
+  const zurueck=()=>{ AW.sel=alt; awSpeichern(); renderAuswahl(); drawOverlay(); };
+  zurueck.auswahl=true; pushUndo(zurueck);
+  AW.sel=neu; awSpeichern(); renderAuswahl(); drawOverlay();
+  return true;
+}
+function awKlick(i){
+  if(i<0) return;
+  const k=awKey(i), neu=new Set(AW.sel);
+  if(neu.has(k)) neu.delete(k);
+  else if(!awErlaubt(i)){ awHinweis("Barbarendorf: „nur Spielerdörfer“ ist eingeschaltet."); return; }
+  else neu.add(k);
+  awAendern(neu);
+}
+function awAnwenden(liste, wirkung){
+  const neu=new Set(AW.sel), vorher=AW.sel.size;
+  liste.forEach(i=>{ const k=awKey(i); if(wirkung==="del") neu.delete(k); else neu.add(k); });
+  if(!awAendern(neu)) awHinweis(liste.length? "Keine Änderung." : "Keine Dörfer in der Fläche.");
+  else awHinweis(wirkung==="del"? awDoerfer(vorher-neu.size)+" entfernt." : awDoerfer(neu.size-vorher)+" hinzugefügt.");
+}
+/** Dörfer, deren Mitte im Rechteck a–b liegt (Weltkoordinaten). */
+function awImRechteck(a, b, alle){
+  const x0=Math.min(a[0],b[0]), x1=Math.max(a[0],b[0]), y0=Math.min(a[1],b[1]), y1=Math.max(a[1],b[1]), out=[];
+  for(let i=0;i<N;i++){
+    const x=vx[i]+0.5, y=vy[i]+0.5;
+    if(x>=x0 && x<=x1 && y>=y0 && y<=y1 && (alle || awErlaubt(i))) out.push(i);
+  }
+  return out;
+}
+/** Dörfer, deren Mitte im Lasso liegt (Strahlverfahren, nur innerhalb des umgebenden Rechtecks geprüft). */
+function awImLasso(poly, alle){
+  if(poly.length<3) return [];
+  let x0=1e9, x1=-1e9, y0=1e9, y1=-1e9;
+  poly.forEach(([x,y])=>{ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); });
+  const out=[];
+  for(let i=0;i<N;i++){
+    const x=vx[i]+0.5, y=vy[i]+0.5;
+    if(x<x0 || x>x1 || y<y0 || y>y1 || !(alle || awErlaubt(i))) continue;
+    let innen=false;
+    for(let a=0, b=poly.length-1; a<poly.length; b=a++){
+      const [xa,ya]=poly[a], [xb,yb]=poly[b];
+      if((ya>y)!==(yb>y) && x<(xb-xa)*(y-ya)/(yb-ya)+xa) innen=!innen;
+    }
+    if(innen) out.push(i);
+  }
+  return out;
+}
+function awZugAbbrechen(){ AW.zug=null; AW.vorschau=null; drawOverlay(); }
+/** Zeiger gedrückt im Auswahlmodus. true: erledigt, false: weiter wie auf der normalen Karte. */
+function awDown(e){
+  AW.panKnopf=false;
+  if(e.pointerType==="mouse" && (e.button===1 || e.button===2)){
+    e.preventDefault();
+    dragging=true; moved=0; lastX=e.clientX; lastY=e.clientY; AW.panKnopf=true;
+    wrap.classList.add("drag");
+    try{ wrap.setPointerCapture(e.pointerId); }catch(x){ /* ohne Capture endet das Ziehen am Kartenrand */ }
+    return true;
+  }
+  if(e.pointerType==="mouse" && e.button!==0) return true;
+  if(AW.werkzeug==="klick") return false;
+  const r=wrap.getBoundingClientRect(), w=[wxAt(e.clientX-r.left), wyAt(e.clientY-r.top)];
+  // Alt kehrt die Wirkung für diesen Zug um
+  const wirkung = e.altKey? (AW.wirkung==="add"? "del" : "add") : AW.wirkung;
+  AW.zug={id:e.pointerId, art:AW.werkzeug, wirkung, start:w, ende:w, punkte:[w], weg:0};
+  AW.vorschau=null; tip.style.display="none"; hover=-1;
+  try{ wrap.setPointerCapture(e.pointerId); }catch(x){ /* siehe oben */ }
+  drawOverlay();
+  return true;
+}
+function awMove(px, py){
+  const z=AW.zug, w=[wxAt(px), wyAt(py)];
+  z.weg=Math.max(z.weg, Math.hypot(w[0]-z.start[0], w[1]-z.start[1])*scale);
+  z.ende=w;
+  if(z.art==="rechteck") AW.vorschau=awImRechteck(z.start, w, z.wirkung==="del");
+  else{ const l=z.punkte[z.punkte.length-1]; if(Math.hypot(w[0]-l[0], w[1]-l[1])*scale>=3) z.punkte.push(w); }
+  drawOverlay();
+}
+function awUp(e){
+  const z=AW.zug; AW.zug=null; AW.vorschau=null;
+  if(e.type==="pointercancel"){ drawOverlay(); return; }
+  if(z.weg<6){
+    // kurzer Klick wählt auch mit Rechteck und Lasso ein einzelnes Dorf
+    const r=wrap.getBoundingClientRect(); awKlick(hit(e.clientX-r.left, e.clientY-r.top)); drawOverlay(); return;
+  }
+  const liste = z.art==="rechteck"? awImRechteck(z.start, z.ende, z.wirkung==="del")
+                                   : awImLasso(z.punkte.concat([z.ende]), z.wirkung==="del");
+  awAnwenden(liste, z.wirkung);
+  drawOverlay();
+}
+/** Zwei Finger verschieben im Auswahlmodus (der eine Finger zieht ja die Auswahl). Gezoomt wird wie sonst. */
+function awZweiFinger(mx, my, zeichnen){
+  if(AW.mitte){
+    ownView(); cx-=(mx-AW.mitte[0])/scale; cy-=(my-AW.mitte[1])/scale; clampView();
+    if(zeichnen){ draw(); saveUrl(); }
+  }
+  AW.mitte=[mx, my];
+}
+function awZeichnen(x0, x1, y0, y1){
+  awMarkKnopf();
+  const rad=Math.max(2.2, Math.min(6, scale*0.28));
+  const punkt=(i, art)=>{
+    const x=vx[i], y=vy[i]; if(x<x0 || x>x1 || y<y0 || y>y1) return;
+    octx.beginPath(); octx.arc(sx(x)+scale/2, sy(y)+scale/2, rad, 0, 2*Math.PI);
+    octx.fillStyle = art==="weg"? "#ff5252" : (art==="neu"? "rgba(255,255,255,.55)" : "#ffffff"); octx.fill();
+    octx.lineWidth=1.5; octx.strokeStyle="#000000"; octx.stroke();
+  };
+  const z=AW.zug, vor = z && AW.vorschau && AW.vorschau.length<=5000? new Set(AW.vorschau.map(awKey)) : null;
+  for(const k of AW.sel){
+    const i=byXY.get(k);
+    if(i!=null) punkt(i, vor && z.wirkung==="del" && vor.has(k)? "weg" : "drin");
+  }
+  if(vor && z.wirkung==="add") AW.vorschau.forEach(i=>{ if(!AW.sel.has(awKey(i))) punkt(i, "neu"); });
+  if(!z || z.weg<6) return;
+  const weg=z.wirkung==="del";
+  octx.save(); octx.setLineDash([6,4]); octx.beginPath();
+  if(z.art==="rechteck"){ const a=z.start, b=z.ende; octx.rect(sx(a[0]), sy(a[1]), (b[0]-a[0])*scale, (b[1]-a[1])*scale); }
+  else{
+    z.punkte.forEach(([x,y],n)=>{ if(n) octx.lineTo(sx(x), sy(y)); else octx.moveTo(sx(x), sy(y)); });
+    octx.lineTo(sx(z.ende[0]), sy(z.ende[1])); octx.closePath();
+  }
+  octx.fillStyle=weg? "rgba(229,57,53,.14)" : "rgba(255,255,255,.12)"; octx.fill();
+  octx.lineWidth=3; octx.strokeStyle="rgba(0,0,0,.6)"; octx.stroke();
+  octx.lineWidth=1.5; octx.strokeStyle=weg? "#ff8a80" : "#ffffff"; octx.stroke();
+  octx.restore();
+  if(z.art==="rechteck" && AW.vorschau){
+    const n=AW.vorschau.filter(i=>AW.sel.has(awKey(i))===weg).length;
+    const t=(weg? "−" : "+")+nf.format(n), X=sx(z.ende[0])+10, Y=sy(z.ende[1])-8;
+    octx.font="bold 12px system-ui, sans-serif"; octx.textAlign="left"; octx.textBaseline="bottom";
+    octx.lineWidth=3; octx.strokeStyle="rgba(0,0,0,.75)"; octx.strokeText(t, X, Y);
+    octx.fillStyle=weg? "#ff8a80" : "#ffffff"; octx.fillText(t, X, Y);
+  }
+}
+/** Knopf „Hervorgehobene übernehmen“: die Dörfer aus der Suche (Spieler oder Stamm). */
+function awMarkKnopf(){
+  if(marked===AW.markRef) return;
+  AW.markRef=marked;
+  AW.markN = marked? [...marked].filter(awErlaubt).length : 0;
+  const b=$("aw-mark"); b.hidden=!AW.markN;
+  if(AW.markN) b.textContent="Hervorgehobene übernehmen ("+nf.format(AW.markN)+")";
+}
+function awText(){ return [...AW.sel].sort((a,b)=>a-b).map(k=>Math.floor(k/1000)+"|"+(k%1000)).join("\n"); }
+async function awKopieren(melden){
+  const text=awText(); let ok=false;
+  try{ await navigator.clipboard.writeText(text); ok=true; }
+  catch(e){
+    const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ ok=document.execCommand("copy"); }catch(e2){ ok=false; }
+    ta.remove();
+  }
+  if(melden) awHinweis(ok? (AW.sel.size===1? "1 Koordinate" : nf.format(AW.sel.size)+" Koordinaten")+" kopiert, je Zeile ein Dorf." : "Kopieren nicht möglich, der Browser hat es abgelehnt.");
+  return ok;
+}
+async function awZumPlaner(ziel){
+  try{ localStorage.setItem(AW_PLANER, JSON.stringify({ziel, keys:[...AW.sel], t:Date.now()})); }
+  catch(e){ awHinweis("Ohne Browser-Speicher geht die Übergabe nicht. Bitte kopieren und im Planer einfügen."); return; }
+  await Promise.race([awKopieren(false), new Promise(r=>setTimeout(r, 800))]);
+  try{ sessionStorage.removeItem(AW_ENTWURF); }catch(e){ /* nichts zu tun */ }
+  location.href="angriff.html";
+}
+function renderAuswahl(){
+  if(!AW.aktiv) return;
+  $("aw-title").textContent=awTitel();
+  document.querySelectorAll("#aw-werkzeug button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.w===AW.werkzeug)));
+  document.querySelectorAll("#aw-wirkung button").forEach(b=>{
+    b.setAttribute("aria-pressed", String(b.dataset.m===AW.wirkung)); b.disabled=AW.werkzeug==="klick"; });
+  $("aw-spieler").checked=AW.nurSpieler;
+  $("aw-hilfe").textContent=AW_HILFE[AW.werkzeug]+(AW.werkzeug==="klick"? "" : " Alt kehrt die Wirkung um.")+" Escape beendet.";
+  wrap.classList.toggle("aw-zug", AW.werkzeug!=="klick");
+  const dorfer=[...AW.sel].map(k=>byXY.get(k)).filter(i=>i!=null);
+  const spieler=new Set(dorfer.filter(i=>vp[i]>=0).map(i=>vp[i]));
+  $("aw-zahl").textContent=awDoerfer(dorfer.length)+(dorfer.length? " · "+nf.format(spieler.size)+" Spieler" : "");
+  AW.markRef=undefined; awMarkKnopf();
+  const kn=$("aw-knoepfe"); kn.replaceChildren();
+  const knopf=(text, fn, title)=>{
+    const b=document.createElement("button"); b.className="tw small"; b.type="button"; b.textContent=text;
+    if(title) b.title=title;
+    b.disabled=!dorfer.length; b.addEventListener("click", fn); kn.appendChild(b); return b;
+  };
+  if(AW.ziel) knopf("Kopieren und zurück zum Planer", ()=>awZumPlaner(AW.ziel), "Koordinaten in die Zwischenablage und als "+awTitel()+" in den Angriffsplaner");
+  else{
+    knopf("Als AG-Ziele in den Planer", ()=>awZumPlaner("ag"));
+    knopf("Als Fakeziele in den Planer", ()=>awZumPlaner("fake"));
+  }
+  knopf(AW.ziel? "Nur kopieren" : "Kopieren", ()=>awKopieren(true), "Koordinaten in die Zwischenablage, je Zeile ein Dorf");
+  knopf("Leeren", ()=>awAendern(new Set()), "Alle entfernen, rückgängig mit ↩");
+  const box=$("aw-liste"), oben=box.scrollTop;
+  if(!dorfer.length){
+    const p=document.createElement("p"); p.className="leer"; p.textContent="Noch keine Dörfer ausgewählt.";
+    box.replaceChildren(p); return;
+  }
+  const besitzer = i => vp[i]>=0? P.rows[vp[i]][pIdx.name] : "Barbaren";
+  dorfer.sort((a,b)=>besitzer(a).localeCompare(besitzer(b),"de") || vx[a]-vx[b] || vy[a]-vy[b]);
+  const tab=document.createElement("table"), kopf=document.createElement("thead"), tb=document.createElement("tbody");
+  kopf.innerHTML='<tr><th>Koord.</th><th>Dorf</th><th>Besitzer</th><th class="n">Punkte</th><th></th></tr>';
+  dorfer.forEach(i=>{
+    const tr=document.createElement("tr");
+    const td=(t, c)=>{ const d=document.createElement("td"); if(c) d.className=c; d.textContent=t; tr.appendChild(d); return d; };
+    const co=td(vx[i]+"|"+vy[i], "co"); co.title="Auf der Karte zeigen";
+    co.addEventListener("click", ()=>zentriere(vx[i], vy[i], 6));
+    td(vname[i]||"", "nm").title=vname[i]||"";
+    td(besitzer(i), "nm").title=besitzer(i);
+    td(nf.format(vpts[i]), "n");
+    const x=document.createElement("button"); x.type="button"; x.textContent="×"; x.title="Entfernen"; x.setAttribute("aria-label","Entfernen");
+    x.addEventListener("click", ()=>{ const neu=new Set(AW.sel); neu.delete(awKey(i)); awAendern(neu); });
+    const t5=document.createElement("td"); t5.appendChild(x); tr.appendChild(t5);
+    tb.appendChild(tr);
+  });
+  tab.append(kopf, tb); box.replaceChildren(tab); box.scrollTop=oben;
+}
+$("awbtn").addEventListener("click", ()=>{ if(AW.aktiv) awEnde(); else if(N) awStart(null, ""); });
+$("aw-close").addEventListener("click", awEnde);
+$("aw-werkzeug").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  AW.werkzeug=b.dataset.w; awSpeichern(); renderAuswahl();
+});
+$("aw-wirkung").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b || b.disabled) return;
+  AW.wirkung=b.dataset.m; awSpeichern(); renderAuswahl();
+});
+$("aw-spieler").addEventListener("change", e=>{
+  AW.nurSpieler=e.target.checked; awSpeichern();
+  // Einschalten nimmt schon gewählte Barbarendörfer heraus (rückgängig mit ↩)
+  if(AW.nurSpieler) awAendern(new Set([...AW.sel].filter(k=>{ const i=byXY.get(k); return i!=null && vp[i]>=0; })));
+  renderAuswahl();
+});
+$("aw-mark").addEventListener("click", ()=>{ if(marked) awAnwenden([...marked].filter(awErlaubt), "add"); });
+// Rechte Maustaste verschiebt im Auswahlmodus, deshalb kein Kontextmenü; die mittlere startet kein Rollen
+wrap.addEventListener("contextmenu", e=>{ if(AW.aktiv) e.preventDefault(); });
+wrap.addEventListener("mousedown", e=>{ if(AW.aktiv && e.button===1) e.preventDefault(); });
+
 const pts=new Map();
 let dragging=false, lastX=0, lastY=0, moved=0, pinch=0;
 // Legende, Infofelder, Kriegspanel und Zoomknöpfe liegen über der Karte. Ein Zeiger dort gehört ihnen:
@@ -2236,7 +2608,9 @@ const aufPanel = e => !!(e.target.closest && e.target.closest(".legend,.dist,.pd
 wrap.addEventListener("pointerdown", e=>{
   if(aufPanel(e)) return;
   pts.set(e.pointerId,[e.clientX,e.clientY]);
+  if(AW.zug) awZugAbbrechen();          // zweiter Finger oder verlorenes Loslassen: Rechteck oder Lasso verwerfen
   if(pts.size>1){ dragging=false; wrap.classList.remove("drag"); return; }
+  if(AW.aktiv && awDown(e)) return;
   if(e.pointerType==="mouse" && e.button!==0) return;
   dragging=true; moved=0; lastX=e.clientX; lastY=e.clientY; wrap.style.cursor="";
   wrap.classList.add("drag"); wrap.setPointerCapture(e.pointerId);
@@ -2249,9 +2623,11 @@ wrap.addEventListener("pointermove", e=>{
   }
   if(pts.has(e.pointerId)) pts.set(e.pointerId,[e.clientX,e.clientY]);
   const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+  if(AW.zug){ if(e.pointerId===AW.zug.id) awMove(px,py); return; }
   if(pts.size===2){
     const [a,b]=[...pts.values()];
     const d=Math.hypot(a[0]-b[0], a[1]-b[1]);
+    if(AW.aktiv) awZweiFinger((a[0]+b[0])/2, (a[1]+b[1])/2, !pinch);
     if(pinch) zoomAt((a[0]+b[0])/2-r.left, (a[1]+b[1])/2-r.top, d/pinch);
     pinch=d; tip.style.display="none";
     return;
@@ -2277,11 +2653,14 @@ wrap.addEventListener("pointermove", e=>{
 let lastClick={i:-1, t:0};
 function endPointer(e){
   pts.delete(e.pointerId);
-  if(pts.size<2) pinch=0;
+  if(pts.size<2){ pinch=0; AW.mitte=null; }
+  if(AW.zug && e.pointerId===AW.zug.id){ if(e.type!=="pointerleave") awUp(e); return; }
   if(!dragging) return;
   dragging=false; wrap.classList.remove("drag");
+  if(AW.panKnopf){ AW.panKnopf=false; return; }      // rechte oder mittlere Maustaste: nur verschoben
   if(moved>=6) return;
   const r=wrap.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+  if(AW.aktiv){ awKlick(hit(px,py)); return; }        // im Auswahlmodus wählt ein Klick, statt Laufzeit oder Kampf
   const f = scale>=KAMPF_ZOOM? pfeilAt(px,py) : null;
   if(f){ pfeilFix=f; tip.style.display="none"; openKampf([f.r], f); drawOverlay(); return; }
   const k=kampfAt(px,py);
@@ -2312,6 +2691,7 @@ wrap.addEventListener("wheel", e=>{
 
 document.addEventListener("keydown", e=>{
   if(e.key==="Escape"){
+    if(AW.aktiv && e.target.id!=="q"){ if(AW.zug) awZugAbbrechen(); else awEnde(); return; }
     if(!$("kampf").hidden) closeKampf();
     else if(undoStack.length) doUndo();
     else if(selA>=0) selectVillage(-1);
