@@ -131,6 +131,13 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .kampf .kb{border-top:1px solid var(--edge-line); padding:4px 0 5px}
 .kampf .kb:first-child{border-top:0; padding-top:0}
 .kampf .kb p{margin:1px 0}
+/* Truppen-Äquivalent (Kämpfe 14): Umrechnung der Bashpunkte als leise Zeile, Info-Knopf wie ein kleines i */
+.tq{color:var(--muted); font-size:10.5px; line-height:1.35}
+.kampf .kb p.tq{margin:0 0 2px}
+.pdet .tq{padding:0 0 3px; text-align:right}
+.tinfo{font:inherit; font-size:10px; text-transform:none; letter-spacing:0; font-weight:700; width:16px; height:16px; line-height:14px; padding:0; margin-left:6px; cursor:pointer;
+  border:1px solid var(--edge); border-radius:50%; background:var(--btn); color:var(--ink); vertical-align:1px}
+.tinfo-text{color:var(--ink-2); font-size:10.5px; line-height:1.4; margin:3px 0 5px; text-transform:none; letter-spacing:0; font-weight:400}
 .kampf .kb .zeit{color:var(--muted); font-size:10.5px}
 .kampf .kb .ang,.kampf .kb .unt,.kampf .kb .ver{border-left:4px solid var(--c,#888); padding-left:5px}
 .kampf .kb .s{color:var(--muted); font-size:10.5px}
@@ -445,7 +452,8 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
         <span class="opt"><button class="tw small" type="button" data-m="add">hinzufügen</button></span>
         <span class="opt"><button class="tw small" type="button" data-m="del">entfernen</button></span>
       </div>
-      <label><input type="checkbox" id="aw-spieler" checked> nur Spielerdörfer</label></div>
+      <label><input type="checkbox" id="aw-spieler" checked> nur Spielerdörfer</label>
+      <label title="Kampfsymbole, Pfeile und Namen der Kämpfe ausblenden, damit sie beim Auswählen nicht im Weg sind"><input type="checkbox" id="aw-kaempfe"> Kämpfe ausblenden</label></div>
     <p class="aw-hilfe" id="aw-hilfe"></p>
     <div class="aw-zeile"><span class="aw-zahl" id="aw-zahl">0 Dörfer</span>
       <button class="tw small" type="button" id="aw-mark" hidden title="Die Dörfer des gesuchten Spielers oder Stammes übernehmen"></button></div>
@@ -457,6 +465,7 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 </div>
 
 <script src="app.js"></script>
+<script src="truppen.js"></script>
 <script>
 buildAppbar("karte", "Karte");
 
@@ -906,9 +915,10 @@ function imKrieg(r){
   const sa=pAlly(a[0]), sv=pAlly(r[kF.v]);
   return (sa===kriegSel[0] && sv===kriegSel[1]) || (sa===kriegSel[1] && sv===kriegSel[0]);
 }
+const kaempfeVerborgen = () => AW.aktiv && AW.kaempfeAus;      // Auswahlmodus, „Kämpfe ausblenden“
 function drawKaempfe(){
   kampfHits=[]; kampfPfeile=[];
-  if(!kampfSel.length) return;
+  if(!kampfSel.length || kaempfeVerborgen()) return;
   const sichtbar=(X,Y,m)=>X>-m && X<W+m && Y>-m && Y<H+m;
   if(scale<KAMPF_ZOOM){
     for(const g of kampfGebiete){
@@ -1007,6 +1017,19 @@ function nameMitFarbe(pid){
   s.append(d, document.createTextNode(pName(pid))); return s;
 }
 /** Infofeld am Zeiger für einen Pfeil: wer wen, drei Bashzahlen aus demselben Zeitraum. */
+/* ---------- Truppen-Äquivalent (Spezifikation Kämpfe 14, Dennis 03.11.2026) ----------
+   art „def“/„sup“: vernichtete Angreifer in Offs, „att“: vernichtete Verteidiger in Deffs (site/truppen.js). */
+const tq = (punkte, art, kurz) => (window.Truppen && punkte>0)? Truppen.truppenText(punkte, art, kurz) : "";
+function truppenInfo(ziel){
+  const b=el("button","tinfo","i"); b.type="button"; b.title="Wie wird umgerechnet?"; b.setAttribute("aria-expanded","false");
+  b.addEventListener("click", e=>{
+    e.preventDefault(); e.stopPropagation();
+    const da=ziel.querySelector(".tinfo-text");
+    if(da){ da.remove(); b.setAttribute("aria-expanded","false"); return; }
+    ziel.appendChild(el("p","tinfo-text", window.Truppen? Truppen.INFO : "")); b.setAttribute("aria-expanded","true");
+  });
+  return b;
+}
 function showKampfTip(f, px, py){
   const r=f.r, iv=KAMPF.intervalle[r[kF.i]], a=r[kF.a][0];
   tip.replaceChildren();
@@ -1020,12 +1043,12 @@ function showKampfTip(f, px, py){
     t(a && r[kF.a_sicher]!=="u"? " gegen "+pName(a[0]) : ""));
   tip.appendChild(satz);
   tsec("Besiegte Gegner, alle im selben Zeitraum");
-  const zeile=(k,pid,v)=>{ const d=el("div","row"); const l=el("span","k"); l.append(t(k+" "), nameMitFarbe(pid));
-    d.append(l, el("span",null,"+"+nf.format(v))); tip.appendChild(d); };
-  if(a) zeile("Off", a[0], a[1]);
-  zeile("Deff", r[kF.v], r[kF.dv]);
-  r[kF.u].forEach(u=>{ if(u[2]!=="u") zeile("Unterstützt", u[0], u[1]); });
-  trow("Stärke", nf.format(r[kF.staerke])+" (Deff plus Unterstützung)");
+  const zeile=(k,pid,v,art)=>{ const d=el("div","row"); const l=el("span","k"); l.append(t(k+" "), nameMitFarbe(pid));
+    const q=tq(v, art, true); d.append(l, el("span",null,"+"+nf.format(v)+(q? " "+q : ""))); tip.appendChild(d); };
+  if(a) zeile("Off", a[0], a[5]!=null? a[5] : a[1], "att");
+  zeile("Deff", r[kF.v], r[kF.dv], "def");
+  r[kF.u].forEach(u=>{ if(u[2]!=="u") zeile("Unterstützt", u[0], u[1], "sup"); });
+  trow("Stärke", nf.format(r[kF.staerke])+" (Deff plus Unterstützung)"+(tq(r[kF.staerke],"def",true)? " "+tq(r[kF.staerke],"def",true) : ""));
   if(a) trow("Verhältnis", verhaeltnis(a[1], r[kF.staerke]));
   trow("Zeitraum", zeitraum(iv.von, iv.bis));
   const n=new Set(r[kF.treffer].map(x=>x[0])).size;
@@ -1055,6 +1078,7 @@ function openKampf(items, fokus){
     v.append(el("b",null,pName(r[kF.v])), document.createTextNode(" verteidigt, Deff +"+nf.format(r[kF.dv])));
     d.append(v);
     d.append(el("p","s","Stärke "+nf.format(r[kF.staerke])+" (Deff plus Unterstützung)"));
+    if(tq(r[kF.staerke],"def")) d.append(el("p","tq","Vernichtete Angreifer "+tq(r[kF.staerke],"def")));
     const av=r[kF.av]||[];
     if(!r[kF.a].length) d.append(el("p","s", av.some(x=>x[3]===1)
       ? "Angreifer unklar: in der Nähe passt nur die Off eines verbündeten Stammes (Stammesverrat möglich, aber selten)"
@@ -1064,7 +1088,7 @@ function openKampf(items, fokus){
       : "Angreifer unklar: kein Kandidat aus einem anderen Stamm in der Nähe"));
     if(!r[kF.a].length) av.forEach(x=>{
       const p=el("p","s"); p.append(el("b",null,pName(x[0])),
-        document.createTextNode(" Off +"+nf.format(x[1])+", "+verhaeltnis(x[1], r[kF.staerke])+(x[3]===1? ", verbündet" : x[1]>r[kF.staerke]? ", zu groß" : ", zu klein")));
+        document.createTextNode(" Off +"+nf.format(x[1])+(tq(x[1],"att",true)? " "+tq(x[1],"att",true) : "")+", "+verhaeltnis(x[1], r[kF.staerke])+(x[3]===1? ", verbündet" : x[1]>r[kF.staerke]? ", zu groß" : ", zu klein")));
       d.append(p);
     });
     r[kF.a].forEach((a,j)=>{
@@ -1079,11 +1103,14 @@ function openKampf(items, fokus){
           +nf1.format(a[2])+(a[2]===1? " Feld " : " Felder ")),
         el("span","s", j===0? SICHER[r[kF.a_sicher]] : "weiterer Kandidat"));
       d.append(p);
+      // vernichtete Verteidiger: die diesem Kampf zugeordnete Off (Regel 4), bei älteren Daten die ganze
+      const hier = a[5]!=null? a[5] : a[1];
+      if(tq(hier,"att")) d.append(el("p","tq","Vernichtete Verteidiger"+(a[5]!=null && a[5]!==a[1]? " (Anteil hier) " : " ")+tq(hier, "att", j>0)));
     });
     r[kF.u].forEach(u=>{
       const p=el("p","unt kart"); p.style.setProperty("--c", pFarbe(u[0])); p.innerHTML=PLAKETTE_IMG.u;
       p.append(el("b",null,pName(u[0])),
-        document.createTextNode(" unterstützt, +"+nf.format(u[1])+" "), el("span","s", SICHER[u[2]]));
+        document.createTextNode(" unterstützt, +"+nf.format(u[1])+(tq(u[1],"sup",true)? " "+tq(u[1],"sup",true) : "")+" "), el("span","s", SICHER[u[2]]));
       d.append(p);
     });
     const tr=r[kF.treffer];
@@ -1102,6 +1129,7 @@ function openKampf(items, fokus){
     body.appendChild(d);
   });
   if(liste.length>12) body.appendChild(el("p","note","und "+(liste.length-12)+" weitere Kämpfe in diesem Gebiet; näher heranzoomen"));
+  const hinweis=el("p","note","Umrechnung in Truppen: Näherung"); hinweis.append(truppenInfo(hinweis)); body.appendChild(hinweis);
   $("kampf-title").textContent = liste.length>1? liste.length+" Kämpfe in diesem Gebiet" : (fokus && fokus.art==="u"? "Unterstützung" : "Kampf");
   box.hidden=false; box.open=true;
 }
@@ -1273,7 +1301,7 @@ function drawNames(){
   // so verdrängt ein kleines Nachbarsymbol nie den Namen eines großen Kampfes
   const belegt=[], sym = scale<KAMPF_ZOOM? kampfHits.filter(h=>h.sum!=null).sort((a,b)=>b.sum-a.sum) : [];
   let si=0;
-  kampfLabels().sort((a,b)=>b.wert-a.wert).forEach(l=>{
+  (kaempfeVerborgen()? [] : kampfLabels()).sort((a,b)=>b.wert-a.wert).forEach(l=>{
     for(; si<sym.length && sym[si].sum>=l.wert; si++){ const h=sym[si]; belegt.push([h.X-h.r*0.7, h.Y-h.r*0.7, h.X+h.r*0.7, h.Y+h.r*0.7]); }
     l.zeichne(belegt);
   });
@@ -1292,7 +1320,7 @@ function drawOverlay(){
   octx.clearRect(0,0,W,H);
   if(!N) return;
   const fk=pfeilFix||pfeilHover;
-  if(fk && KAMPF) drawFokus(fk);
+  if(fk && KAMPF && !kaempfeVerborgen()) drawFokus(fk);
   const size=scale<2? Math.max(1, scale) : scale*0.84, off=(scale-size)/2;
   const x0=wxAt(-2), x1=wxAt(W+2), y0=wyAt(-2), y1=wyAt(H+2);
   if(marked && marked.size){
@@ -1624,7 +1652,7 @@ function showTip(i, px, py){
     trow("Gesamt", nf.format(r[pIdx.all]), null, view==="bash_all");
     const bw=bashWindow();
     [["att","Angriff (Off)"],["def","Verteidigung (Deff)"],["sup","Unterstützung"]].forEach(([art,label])=>{
-      trow(label, nf.format(r[pIdx[art]]), null, view==="bash_"+art);
+      trow(label, nf.format(r[pIdx[art]])+(tq(r[pIdx[art]],art,true)? " "+tq(r[pIdx[art]],art,true) : ""), null, view==="bash_"+art);
       if(view==="bash_"+art+"_new" && bw) trow(label+" + "+winShort(bw), "+"+nf.format(bashValue(p)), null, true);
     });
     const e=inaday.get(r[pIdx.id]);
@@ -1774,6 +1802,19 @@ function renderPlayerPanel(pi){
   [["att","Angriff (Off)"],["def","Verteidigung (Deff)"],["sup","Unterstützung"]].forEach(([k,label])=>{
     const br=r[pIdx["rank_"+k]];
     zeile(label, br!=null? "Platz "+nf.format(br)+(rangBadge(br)? " ("+rangBadge(br)+")" : "") : "kein Wert erfasst");
+  });
+  // Besiegte Gegner mit Truppen-Äquivalent (Kämpfe 14, Dennis 3a): gesamt und Zuwächse über 24 h und 7 Tage
+  const bsec=el("div","sec","Besiegte Gegner in Truppen"); bsec.append(truppenInfo(bsec)); body.appendChild(bsec);
+  [["att","Angriff (Off)"],["def","Verteidigung (Deff)"],["sup","Unterstützung"]].forEach(([k,label])=>{
+    const g=r[pIdx[k]]||0;
+    zeile(label, nf.format(g));
+    if(tq(g,k)) body.appendChild(el("div","tq",tq(g,k)));
+    const zu=[["24h","24 h"],["7d","7 Tage"]].filter(([w])=>refs[w] && pIdx["d"+w+"_"+k]!=null).map(([w,t])=>[t, r[pIdx["d"+w+"_"+k]]||0]);
+    if(zu.length){
+      zeile("davon "+zu.map(z=>z[0]).join(" / "), zu.map(z=>"+"+nf.format(z[1])).join(" / "), "aus");
+      const q=zu.filter(z=>tq(z[1],k,true)).map(z=>z[0]+" "+tq(z[1],k,true));
+      if(q.length) body.appendChild(el("div","tq",q.join(" · ")));
+    }
   });
   body.appendChild(el("div","sec","Tagestitel"));
   const gewertet=new Set((ERF&&ERF.titel_gewertet)||["kill_def","kill_att","loot_res","scavenge"]);
@@ -2311,7 +2352,7 @@ $("q").addEventListener("keydown", e=>{ if(e.key==="Escape") $("sugg").hidden=tr
    Zwischenablage und unter AW_PLANER in den localStorage, den der Planer beim Laden liest (auswahlUebernehmen). */
 const AW_PLANER="k259-angriff-auswahl", AW_ENTWURF="k259-karte-auswahl";
 const AW={aktiv:false, ziel:null, fuer:"", werkzeug:"rechteck", wirkung:"add", nurSpieler:true, sel:new Set(),
-          zug:null, vorschau:null, panKnopf:false, mitte:null, markRef:undefined, markN:0, eingeklappt:false,
+          zug:null, vorschau:null, panKnopf:false, mitte:null, markRef:undefined, markN:0, eingeklappt:false, kaempfeAus:false,
           start:false, startZiel:null, startFuer:""};
 const AW_HILFE={
   klick:"Klick wählt ein Dorf an oder ab, Ziehen verschiebt die Karte.",
@@ -2329,7 +2370,7 @@ function awTitel(){
 }
 function awSpeichern(){
   try{ sessionStorage.setItem(AW_ENTWURF, JSON.stringify({ziel:AW.ziel, keys:[...AW.sel], werkzeug:AW.werkzeug,
-    wirkung:AW.wirkung, nurSpieler:AW.nurSpieler})); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
+    wirkung:AW.wirkung, nurSpieler:AW.nurSpieler, kaempfeAus:AW.kaempfeAus})); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
 }
 function awStart(ziel, fuer){
   if(!zusatzFrei()){ ziel=null; fuer=""; }            // ohne freigeschalteten Angriffsplaner nur Auswahl und Kopieren
@@ -2343,13 +2384,15 @@ function awStart(ziel, fuer){
     // Entwurf nur zum selben Ziel wiederherstellen, etwa nach dem Neuladen der Seite
     if(d.ziel===AW.ziel && Array.isArray(d.keys)) d.keys.forEach(k=>{ if(byXY.has(k)) AW.sel.add(k); });
   }
+  // Kämpfe ausblenden: aus dem Planer standardmäßig an, weil Pfeile das Auswählen stören (Dennis 03.11.2026)
+  AW.kaempfeAus = d && d.ziel===AW.ziel && typeof d.kaempfeAus==="boolean"? d.kaempfeAus : !!AW.ziel;
   $("auswahl").hidden=false; $("awbtn").setAttribute("aria-pressed","true");
   document.querySelector(".mainrow").classList.add("mit-auswahl");
   // Auf schmalen Schirmen nehmen die Einstellungen fast die ganze Höhe: für die Auswahl einklappen, ohne die
   // gespeicherte Wahl zu ändern; beim Beenden wieder aufklappen
   AW.eingeklappt = innerWidth<=900 && !$("einst").hidden;
   if(AW.eingeklappt) setLeiste(false, false);
-  awSpeichern(); renderAuswahl(); drawOverlay(); saveUrl();
+  awSpeichern(); renderAuswahl(); draw(); saveUrl();
 }
 function awEnde(){
   if(!AW.aktiv) return;
@@ -2360,7 +2403,7 @@ function awEnde(){
   wrap.classList.remove("aw-zug");
   // Rückgängig-Schritte der Auswahl gehören zum Modus, ohne ihn würden sie unsichtbar wirken
   undoStack=undoStack.filter(f=>!f.auswahl); updateUndoBtn();
-  drawOverlay(); saveUrl();
+  draw(); saveUrl();
 }
 function awHinweis(t){
   const n=$("aw-note"); n.textContent=t; n.hidden=false;
@@ -2536,6 +2579,7 @@ function renderAuswahl(){
   document.querySelectorAll("#aw-wirkung button").forEach(b=>{
     b.setAttribute("aria-pressed", String(b.dataset.m===AW.wirkung)); b.disabled=AW.werkzeug==="klick"; });
   $("aw-spieler").checked=AW.nurSpieler;
+  $("aw-kaempfe").checked=AW.kaempfeAus;
   $("aw-hilfe").textContent=AW_HILFE[AW.werkzeug]+(AW.werkzeug==="klick"? "" : " Alt kehrt die Wirkung um.")+" Escape beendet.";
   wrap.classList.toggle("aw-zug", AW.werkzeug!=="klick");
   const dorfer=[...AW.sel].map(k=>byXY.get(k)).filter(i=>i!=null);
@@ -2595,6 +2639,7 @@ $("aw-spieler").addEventListener("change", e=>{
   if(AW.nurSpieler) awAendern(new Set([...AW.sel].filter(k=>{ const i=byXY.get(k); return i!=null && vp[i]>=0; })));
   renderAuswahl();
 });
+$("aw-kaempfe").addEventListener("change", e=>{ AW.kaempfeAus=e.target.checked; awSpeichern(); draw(); });
 $("aw-mark").addEventListener("click", ()=>{ if(marked) awAnwenden([...marked].filter(awErlaubt), "add"); });
 // Rechte Maustaste verschiebt im Auswahlmodus, deshalb kein Kontextmenü; die mittlere startet kein Rollen
 wrap.addEventListener("contextmenu", e=>{ if(AW.aktiv) e.preventDefault(); });
