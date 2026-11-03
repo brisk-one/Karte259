@@ -97,8 +97,8 @@ jobs:
       - name: Tests Prägerechner
         run: node --test tests/praegen.test.js
 
-      - name: Tests Angriffsplaner
-        run: node --test tests/angriff.test.js
+      - name: Tests Zusatzfunktionen
+        run: node --test tests/zusatz.test.js
 
       - name: Vorbereiten
         id: start
@@ -169,8 +169,8 @@ jobs:
       - name: Tests Prägerechner
         run: node --test tests/praegen.test.js
 
-      - name: Tests Angriffsplaner
-        run: node --test tests/angriff.test.js
+      - name: Tests Zusatzfunktionen
+        run: node --test tests/zusatz.test.js
 
       - name: Seite bauen
         run: python3 -m collector.build_site --out _site

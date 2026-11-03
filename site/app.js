@@ -63,10 +63,69 @@ function toggleTheme() {
   applyTheme(next);
 }
 
+/* ---------- Zusatzfunktionen (Angriffsplaner) ----------
+   Dennis 02.11.2026 21:26 und 03.11. 02:42: die Planerseite liegt verschlüsselt in zusatz.json (AES-GCM, Schlüssel per
+   PBKDF2-SHA-256 aus dem Passwort, erzeugt mit tools/zusatz_verschluesseln.js). Nach dem Freischalten liegt nur der
+   abgeleitete Schlüssel im localStorage dieses Browsers, nie das Passwort. Der Reiter erscheint erst danach. */
+const ZUSATZ_SPEICHER = "k259-zusatz", ZUSATZ_PRUEF = "Karte259";
+const b64zuBytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const bytesZuB64 = buf => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); };
+function zusatzSchluessel() {
+  try { const z = JSON.parse(localStorage.getItem(ZUSATZ_SPEICHER) || "null"); return z && z.k && z.salt ? z : null; }
+  catch (e) { return null; }
+}
+const zusatzFrei = () => !!zusatzSchluessel();
+function zusatzSperren() { try { localStorage.removeItem(ZUSATZ_SPEICHER); } catch (e) { /* nichts gespeichert */ } }
+async function zusatzDatei() {
+  const r = await fetch("zusatz.json", {cache: "no-cache"});
+  if (!r.ok) throw new Error("zusatz.json: HTTP " + r.status);
+  return r.json();
+}
+async function zusatzEntschluesseln(k, teil) {
+  const key = await crypto.subtle.importKey("raw", b64zuBytes(k), "AES-GCM", false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: b64zuBytes(teil.iv)}, key, b64zuBytes(teil.ct));
+  return new TextDecoder().decode(pt);
+}
+/** true, wenn das Passwort passt; dann ist der Schlüssel gespeichert. */
+async function zusatzFreischalten(pw) {
+  const z = await zusatzDatei();
+  const basis = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({name: "PBKDF2", hash: "SHA-256", salt: b64zuBytes(z.salt), iterations: z.iter}, basis, 256);
+  const k = bytesZuB64(bits);
+  let t = null;
+  try { t = await zusatzEntschluesseln(k, z.pruef); } catch (e) { t = null; }
+  if (t !== ZUSATZ_PRUEF) return false;
+  try { localStorage.setItem(ZUSATZ_SPEICHER, JSON.stringify({k, salt: z.salt})); } catch (e) { throw new Error("Browser-Speicher gesperrt"); }
+  return true;
+}
+/** Kleines Feld unter der Kopfzeile: Passwort eingeben, freischalten, danach zum Angriffsplaner. */
+function zusatzDialog(bar) {
+  let box = $("zusatz-box");
+  if (box) { box.remove(); return; }
+  box = el("form", "zusatz-box"); box.id = "zusatz-box";
+  const inp = el("input"); inp.type = "password"; inp.autocomplete = "current-password"; inp.placeholder = "Passwort";
+  inp.setAttribute("aria-label", "Passwort für die Zusatzfunktionen");
+  const ok = el("button", "tw", "Freischalten"); ok.type = "submit";
+  const ab = el("button", "tw", "Abbrechen"); ab.type = "button"; ab.addEventListener("click", () => box.remove());
+  const msg = el("span", "zusatz-msg", "");
+  box.append(inp, ok, ab, msg);
+  box.addEventListener("submit", async e => {
+    e.preventDefault();
+    ok.disabled = true; msg.textContent = "prüfe …";
+    try {
+      if (await zusatzFreischalten(inp.value)) { location.href = "angriff.html"; return; }
+      msg.textContent = "Passwort falsch.";
+    } catch (err) { msg.textContent = "Freischalten nicht möglich (" + err.message + ")."; }
+    ok.disabled = false; inp.select();
+  });
+  bar.after(box);
+  inp.focus();
+}
+
 /* ---------- Kopfzeile ---------- */
 const PAGES = [["./", "Punkteübersicht", "index"], ["praegen.html", "Prägerechner", "praegen"],
                ["dashboard.html", "Dashboard", "dashboard"], ["karte.html", "Karte", "karte"], ["moral.html", "Moral", "moral"],
-               ["angriff.html", "Angriffsplaner", "angriff"]];
+               ["angriff.html", "Angriffsplaner", "angriff", true]];
 function buildAppbar(current, title) {
   const bar = $("appbar");
   if (!bar) return;
@@ -74,12 +133,20 @@ function buildAppbar(current, title) {
   const h = el("h1", null, title);
   const world = el("span", "world", "Welt 259");
   const nav = el("nav");
-  PAGES.forEach(([href, label, id]) => {
+  const frei = zusatzFrei();
+  PAGES.forEach(([href, label, id, zusatz]) => {
+    if (zusatz && !frei && id !== current) return;          // Zusatzfunktionen erst nach dem Freischalten
     const a = el("a", id === current ? "on" : null, label);
     a.href = href;
     if (id === current) a.setAttribute("aria-current", "page");
     nav.appendChild(a);
   });
+  if (!frei) {
+    const z = el("button", "zusatz-btn", "Zusatzfunktionen freischalten");
+    z.type = "button";
+    z.addEventListener("click", () => zusatzDialog(bar));
+    nav.appendChild(z);
+  }
   const btn = el("button");
   btn.id = "theme-toggle";
   btn.type = "button";

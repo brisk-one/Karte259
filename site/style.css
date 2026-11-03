@@ -100,6 +100,16 @@ a{color:var(--accent)}
   border-radius:var(--radius); padding:4px 10px; box-shadow:var(--shine)}
 [data-theme="classic"] #theme-toggle{color:var(--ink); border-color:#3f2100}
 #theme-toggle:hover{background:var(--btn-hover)}
+/* Zusatzfunktionen freischalten (Angriffsplaner, 03.11.2026): schlichter Knopf wie die Reiter, Feld unter der Kopfzeile */
+.zusatz-btn{font:inherit; font-size:11.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; cursor:pointer;
+  color:var(--bar-dim); background:none; border:1px dashed var(--bar-edge); border-radius:var(--radius); padding:4px 10px}
+[data-theme="classic"] .zusatz-btn{color:var(--ink); border-color:#3f2100}
+.zusatz-btn:hover{background:var(--btn-hover)}
+.zusatz-box{display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:flex-end; padding:7px clamp(10px,3vw,18px);
+  background:var(--panel); border-bottom:1px solid var(--edge-soft)}
+.zusatz-box input{font:inherit; padding:4px 7px; min-width:12em; color:var(--ink); background:var(--field);
+  border:1px solid var(--edge); border-radius:var(--radius)}
+.zusatz-msg{font-size:12px; color:var(--ink-2)}
 #theme-toggle svg{width:14px; height:14px; flex:none}
 
 /* ---------- Kacheln mit Kennzahlen ---------- */

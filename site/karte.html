@@ -380,7 +380,7 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
   <div class="vcat"><b>Auswahl</b>
     <div class="grp">
       <button class="tw" type="button" id="awbtn" aria-pressed="false" aria-controls="auswahl"
-              title="Dörfer per Klick, Rechteck oder Lasso auswählen, etwa als Ziele für den Angriffsplaner">Dörfer auswählen</button>
+              title="Dörfer per Klick, Rechteck oder Lasso auswählen und als Koordinatenliste kopieren">Dörfer auswählen</button>
     </div>
   </div>
   <p class="stand" id="stand">Lade Kartendaten …</p>
@@ -2332,6 +2332,7 @@ function awSpeichern(){
     wirkung:AW.wirkung, nurSpieler:AW.nurSpieler})); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
 }
 function awStart(ziel, fuer){
+  if(!zusatzFrei()){ ziel=null; fuer=""; }            // ohne freigeschalteten Angriffsplaner nur Auswahl und Kopieren
   AW.aktiv=true; AW.ziel=ziel||null; AW.fuer=fuer||""; AW.sel=new Set(); AW.zug=null; AW.vorschau=null;
   let d=null;
   try{ d=JSON.parse(sessionStorage.getItem(AW_ENTWURF)||"null"); }catch(e){ d=null; }
@@ -2548,7 +2549,7 @@ function renderAuswahl(){
     b.disabled=!dorfer.length; b.addEventListener("click", fn); kn.appendChild(b); return b;
   };
   if(AW.ziel) knopf("Kopieren und zurück zum Planer", ()=>awZumPlaner(AW.ziel), "Koordinaten in die Zwischenablage und als "+awTitel()+" in den Angriffsplaner");
-  else{
+  else if(zusatzFrei()){
     knopf("Als AG-Ziele in den Planer", ()=>awZumPlaner("ag"));
     knopf("Als Fakeziele in den Planer", ()=>awZumPlaner("fake"));
   }
