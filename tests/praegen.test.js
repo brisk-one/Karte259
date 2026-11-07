@@ -522,7 +522,7 @@ const summe = v => v[0] + v[1] + v[2];
 function pruefeMengen(m, P, text) {
   for (let r = 0; r < 3; r++) {
     // Paket-Rohstoffe = Überlauf + rechtzeitig + nicht rechtzeitig + nicht prägbarer Rest
-    near(m.G[r], m.O[r] + m.A[r] + m.N[r] + m.S[r], 1e-3 * Math.max(1, m.G[r]));
+    near(m.G[r], m.O[r] + (m.L ? m.L[r] : 0) + m.A[r] + m.N[r] + m.S[r], 1e-3 * Math.max(1, m.G[r]));
     assert.ok(m.A[r] >= -1e-6 && m.N[r] >= -1e-6 && m.S[r] >= -1e-6 && m.O[r] >= -1e-6, text + ": keine negativen Mengen");
   }
   if (!P.ignoreRatio) {
@@ -582,5 +582,48 @@ test("10.14: Mehrertrag in Rohstoffen passt zu den Münzen (ohne Erlass)", () =>
   for (let i = 1; i < Rp.configs.length; i++) {
     const a = Rp.configs[i - 1], b = Rp.configs[i];
     near(summe(K.rohstoffeAus(b.minted - a.minted, Rp.P)), (b.coins - a.coins) * Rp.P.unitRes * (1 - K.reduction(1, Rp.P)), 1e-6 * Rp.P.unitRes * b.coins);
+  }
+});
+
+/* ---------- 10.15 Überlauf nach Art und Reaktion (Dennis 1a, 2a, 3a am 07.11.2026) ---------- */
+test("10.15: Lieferdörfer mit Adelshof prägen ihren Überlauf zum Grundpreis", () => {
+  const v = konto63(), aus = V5({maxOverflow: 10, optThreshold: 70}), an = V5({maxOverflow: 10, optThreshold: 70, mintLocal: true});
+  assert.equal(aus.mintLocal, false);
+  const R = K.planPackages(v, aus, []), src = R.src, sites = R.configs[R.recommend - 1].sites;
+  const cnt = K.toCnt(R.pkg.pos, R.pkg.K);
+  const a = K.lockstep(src, R.P, sites, cnt, true);
+  const Pan = Object.assign({}, R.P, {mintLocal: true});
+  const b = K.lockstep(src, Pan, sites, cnt, true);
+  assert.equal(a.lokal, 0);
+  assert.ok(b.lokal > 0, "es wird lokal geprägt");
+  const sum = x => x.reduce((s, y) => s + y, 0);
+  // nur Lieferdörfer mit Adelshof prägen selbst, Dörfer ohne Adelshof und Prägedörfer nicht
+  src.forEach((s, i) => { if (!s.snob || sites.includes(i)) assert.equal(b.lokalDorf[i], 0, s.name); });
+  // gleicher Plan: mehr Münzen um genau die lokal geprägten, weniger Überlauf um genau das Geprägte
+  near(b.coins, a.coins + b.lokal, 1e-6 * a.coins);
+  near(sum(a.overflow) - sum(b.overflow), b.lokal * Pan.unitRes, 1e-3 * Pan.unitRes);
+  const m = b.mengen;
+  pruefeMengen(m, Pan, "lokal");
+  near(m.L[0] / Pan.coin.wood, m.L[1] / Pan.coin.stone, 1e-6 * Math.max(1, m.L[0]));    // im Prägeverhältnis
+  near((m.L[0] + m.L[1] + m.L[2]) / Pan.unitRes, b.lokal, 1e-6 * b.lokal);
+  for (let r = 0; r < 3; r++) near(m.G[r], m.O[r] + m.L[r] + m.A[r] + m.N[r] + m.S[r], 1e-3 * m.G[r]);
+  // Gesamtrechnung mit Option: Münzen enthalten das lokale Prägen, Überlaufgrenze bleibt eingehalten
+  const Rb = K.planPackages(v, an, []);
+  assert.ok(Rb.pkg.detail.lokal > 0);
+  assert.ok(Rb.pkg.detail.overflowShare * 100 <= 10 + 1e-9);
+  assert.ok(Rb.pkg.detail.coins >= R.pkg.detail.coins - 1e-6, Rb.pkg.detail.coins + " < " + R.pkg.detail.coins);
+  assert.ok(Rb.pkg.perK.every(o => o.lokal >= 0));
+  assert.equal(Rb.pkg.configLokal.length, Rb.configs.length);
+});
+
+test("10.15: Markttausch als Obergrenze aus dem nicht prägbaren Überschuss", () => {
+  const v = konto63();
+  for (const ignoreRatio of [false, true]) {
+    const R = K.planPackages(v, V5({maxOverflow: 10, ignoreRatio}), []), m = R.pkg.detail.mengen, P = R.P;
+    const t = K.tauschObergrenze(m, P);
+    for (let r = 0; r < 3; r++) near(t.res[r], m.S[r] + (ignoreRatio ? m.sov[r] : 0), 1e-6);
+    near(t.units, (t.res[0] + t.res[1] + t.res[2]) / P.unitRes, 1e-9);
+    near(t.coins, t.units / (1 - K.reduction(P.window, P)), 1e-9);
+    if (!ignoreRatio) assert.ok(t.res[0] + t.res[2] > t.res[1], "Überschuss ist vor allem Holz und Eisen");
   }
 });

@@ -10,11 +10,12 @@
   /* Serienfarben (1, 2, 3, 4 Flaggendoppler) und Statusfarben, je Gestaltung geprüft auf Abstand und Kontrast */
   :root,[data-theme="classic"]{--s1:#8a5a12; --s2:#1f5fae; --s3:#b8366e; --s4:#6d4fc2; --st-ok:#2f6b1f; --st-markt:#a8700a; --st-weit:#9c2b1c;
     --chart-grid:rgba(60,40,10,.16); --surface:#f4e4bc;
-    /* Holz, Lehm, Eisen (10.14): geprüft gegen #f4e4bc, immer mit Wort daneben; Rest der Bilanz neutral */
-    --holz:#1f8a5c; --lehm:#c95a24; --eisen:#2a6fc4; --st-rest:#a39373}
+    /* Holz braun, Lehm orange, Eisen grau (Dennis 07.11.2026 16:43): Abstand für Farbsehschwäche geprüft gegen
+       #f4e4bc, Braun und Grau bewusst wenig farbig, deshalb immer mit Wort daneben; Rest der Bilanz neutral */
+    --holz:#6f4520; --lehm:#c95a24; --eisen:#7d8792; --st-rest:#a39373}
   [data-theme="futuristic"]{--s1:#0aa3be; --s2:#9a6cf5; --s3:#d55181; --s4:#c98500; --st-ok:#34e5b0; --st-markt:#ff9f1c; --st-weit:#ff6b81;
     --chart-grid:rgba(120,200,240,.14); --surface:#0a1622;
-    --holz:#199e70; --lehm:#d95926; --eisen:#3987e5; --st-rest:#5f7d92}
+    --holz:#c9a27a; --lehm:#d95926; --eisen:#7f8a96; --st-rest:#5f7d92}
 
   .pr-in{display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:14px}
   @media (max-width:900px){ .pr-in{grid-template-columns:1fr} }
@@ -131,6 +132,12 @@
   .pr-bil-head span{font-size:11.5px; color:var(--muted)}
   .pr-bar{display:flex; gap:2px; height:16px; border-radius:var(--radius); overflow:hidden}
   .pr-bar i{display:block; min-width:3px; height:100%}
+  .pr-bar .lokal{background:repeating-linear-gradient(135deg,var(--st-ok) 0 4px,var(--panel-solid) 4px 6px)}
+  .lokal-c{fill:none; stroke:var(--st-ok); stroke-width:2.2px}
+  .pr-tausch{display:flex; gap:8px; align-items:baseline; margin:9px 0 0; padding:6px 9px; font-size:12px; color:var(--ink-2);
+    border:1px dashed var(--edge-soft); border-radius:var(--radius)}
+  .pr-tausch b{color:var(--ink)}
+  .pr-tausch .ic{font-weight:700; color:var(--accent)}
   .pr-bar .ok{background:var(--st-ok)} .pr-bar .weit{background:var(--st-weit)} .pr-bar .markt{background:var(--st-markt)} .pr-bar .rest{background:var(--st-rest)}
   .pr-bil-leg{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:6px 16px; margin-top:8px}
   .pr-bil-leg>div{display:grid; grid-template-columns:auto 1fr; gap:0 7px; align-items:center; font-size:12px; min-width:0}
@@ -282,6 +289,10 @@
         </div>
         <div class="pr-row">
           <label class="pr-check"><input type="checkbox" id="ignoreratio"> Rohstoffverhältnis ignorieren (Händler schicken, was im Dorf liegt)</label>
+        </div>
+        <div class="pr-row">
+          <!-- 10.15, Dennis 1a am 07.11.2026 -->
+          <label class="pr-check"><input type="checkbox" id="mintlocal"> Überlauf in Lieferdörfern mit Adelshof dort prägen (Grundpreis)</label>
         </div>
         <div>
           <span class="lab">Adelsgeschlechter</span>
@@ -454,7 +465,7 @@ function inputs() {
   const mo = $("maxov").value.trim();
   return {mode: MODE, pkgPct: Math.max(0, +$("pkgpct").value || 0), maxOverflow: mo === "" || !isFinite(+mo) ? 1 : +mo,
           pkgSize: +$("pkgsize").value || 30, pkgCount: +$("pkgcount").value || null, fdCount: +$("fdcount").value || null, startPct: +$("start").value || 0,
-          decreeN: +$("decree").value || 0, minStorage: +$("minstorage").value || 0, ignoreRatio: $("ignoreratio").checked,
+          decreeN: +$("decree").value || 0, minStorage: +$("minstorage").value || 0, ignoreRatio: $("ignoreratio").checked, mintLocal: $("mintlocal").checked,
           optThreshold: +$("thr").value || 90,
           merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, intervalMin: +$("interval").value,
           production: $("prod").checked, prodFactor: pf > 0 ? pf : null, minGainPct: +$("gain").value || 0,
@@ -505,7 +516,7 @@ function pctPakete() {
 }
 ["pkgpct", "pkgsize"].forEach(id => $(id).addEventListener("input", pctPakete));
 ["paste", "maxov", "pkgpct", "pkgsize", "start", "mpf", "pfac", "gain", "thr"].forEach(id => $(id).addEventListener("input", schedule));
-["flag", "interval", "minmarket", "minstorage", "pkgcount", "fdcount", "bonus", "decree", "ignoreratio", "prod"].forEach(id => $(id).addEventListener("change", schedule));
+["flag", "interval", "minmarket", "minstorage", "pkgcount", "fdcount", "bonus", "decree", "ignoreratio", "mintlocal", "prod"].forEach(id => $(id).addEventListener("change", schedule));
 /* Schwelle gilt nicht, wenn die Zahl der Flaggendoppler vorgegeben ist (nur bei „maximieren“) */
 function gainZustand() {
   const aus = MODE === "max" && +$("fdcount").value > 0;
@@ -894,7 +905,7 @@ function renderRecommendation() {
   title.appendChild(sub);
   $("rec-hint").textContent = (P.fdCount ? fdName(P.fdCount) + " vorgegeben · " : "") + (pk ? pakete(pk.chosen) + " zu " + P.pkgSize + " %" : nf.format(P.pkgPct) + " % Pakete") + " · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
     + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.minStorage ? " · Speicher mind. " + P.minStorage : "")
-    + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decreeN ? " · Erlass " + P.decreeN + "×" : "") + (P.ignoreRatio ? " · Verhältnis ignoriert" : "");
+    + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decreeN ? " · Erlass " + P.decreeN + "×" : "") + (P.ignoreRatio ? " · Verhältnis ignoriert" : "") + (P.mintLocal ? " · Prägen in Lieferdörfern" : "");
 
   // Begründung der Empfehlung; Mehrertrag zusätzlich in Rohstoffen, die Schwelle als Verweis auf ihr Feld (10.14)
   const why = $("rec-why");
@@ -1000,6 +1011,8 @@ function kpi(g, label, wert, sub, o) {
   }
   g.appendChild(d);
 }
+// Münzen aus dem Prägen in Lieferdörfern (10.15, Dennis 1a)
+const lokalText = d => d && d.lokal >= 0.5 ? "davon " + nf.format(Math.round(d.lokal)) + " in Lieferdörfern geprägt" : "";
 const TEXT_O = "Geht beim Einlösen über den Speicher eines Lieferdorfs und ist verloren. Betrifft vor allem Dörfer mit zu kleinem Markt.";
 function renderKennzahlen(sel) {
   const R = RESULT, P = R.P, sa = sel.a, spk = sel.pk, sz = sel.z, box = $("rec-kpi");
@@ -1010,7 +1023,8 @@ function renderKennzahlen(sel) {
   const g1 = kpiGruppe(box, "Ergebnis", "hero");
   const muenzen = R.pkg ? (spk ? spk.detail.coins : null) : sa.r.coins;
   kpi(g1, "Münzen in 48 h", muenzen != null ? nf.format(Math.round(muenzen)) : LADE,
-    R.pkg ? (spk ? ["ohne Pakete " + nf.format(Math.round(spk.curve[0].coins)), "+" + nf.format(Math.round(spk.detail.coins - spk.curve[0].coins)) + " durch die Pakete"] : [])
+    R.pkg ? (spk ? ["ohne Pakete " + nf.format(Math.round(spk.curve[0].coins)), "+" + nf.format(Math.round(spk.detail.coins - spk.curve[0].coins)) + " durch die Pakete",
+                    lokalText(spk.detail)] : [])
           : ["einfache Rechnung, alle Pakete auf einmal, ohne Speichergrenze"]);
   const ad = muenzen != null ? adel(muenzen) : null;
   kpi(g1, "Neue Adelsgeschlechter", ad ? nf.format(ad.n) : muenzen == null && adel(0) ? LADE : "–",
@@ -1037,7 +1051,7 @@ function renderKennzahlen(sel) {
     kpi(g2, "Rohstoffpakete", nf.format(P.pkgPct) + " %", [ankerG, "der Speicherkapazität, auf einmal"]);
     if (sz) {
       const zm = sz.detail.mengen;
-      kpi(g2, "Münzen laut Zeitplan", nf.format(Math.round(sz.detail.coins)), [pakete(sz.n) + " zu " + nf.format(sz.size) + " %, mit Speichergrenze"]);
+      kpi(g2, "Münzen laut Zeitplan", nf.format(Math.round(sz.detail.coins)), [pakete(sz.n) + " zu " + nf.format(sz.size) + " %, mit Speichergrenze", lokalText(sz.detail)]);
       kpi(g2, "Überlauf laut Zeitplan", pctf(sz.detail.overflowShare),
         [zm && sz.n ? resAnker(menge(sum3(zm.O)) + " Rohstoffe", "Überlauf laut Zeitplan", zm.O, TEXT_O) : null, "höchstens " + nfG.format(P.maxOverflow) + " %"],
         {mark: "markt", bad: !!(sz.grenze && !sz.grenze.ok)});
@@ -1075,9 +1089,10 @@ function renderBilanz(m) {
   const teile = [
     ["ok", "rechtzeitig angekommen", m.A, "Kommt bis zum Ende der Frist im Prägedorf an."],
     ["weit", "nicht rechtzeitig", m.N, "Prägbar, kommt aber erst nach der Frist an."],
+    ["lokal", "im Lieferdorf geprägt", m.L || [0, 0, 0], "Wäre übergelaufen. Das Lieferdorf hat einen Adelshof und prägt es selbst zum Grundpreis."],
     ["markt", "Überlauf", m.O, TEXT_O],
     ["rest", "nicht prägbar", m.S, "Überschuss außerhalb des Prägeverhältnisses, meist Holz und Eisen, weil Lehm das Prägen begrenzt. Bleibt im Dorf."],
-  ].filter(t => (t[0] !== "markt" || R.pkg) && (t[0] !== "rest" || sum3(t[2]) > G * 5e-4));
+  ].filter(t => (t[0] !== "markt" || R.pkg) && ((t[0] !== "rest" && t[0] !== "lokal") || sum3(t[2]) > G * 5e-4));
   const bar = el("div", "pr-bar");
   bar.setAttribute("role", "img");
   bar.setAttribute("aria-label", "Rohstoffbilanz: " + teile.map(t => t[1] + " " + menge(sum3(t[2]))).join(", "));
@@ -1098,6 +1113,20 @@ function renderBilanz(m) {
     leg.appendChild(d);
   });
   box.appendChild(leg);
+  // Markttausch als Obergrenze (10.15, Dennis 2a): nicht eingerechnet, weil unsicher
+  const tausch = K.tauschObergrenze(m, P);
+  if (sum3(tausch.res) > G * 5e-4 && tausch.coins >= 0.5) {
+    const z = el("p", "pr-tausch"), tx = el("span");
+    z.appendChild(el("span", "ic", "⇄"));
+    tx.append(document.createTextNode("Markttausch, Obergrenze: "),
+      resAnker(menge(sum3(tausch.res)) + " Überschuss", "Überschuss für den Markttausch", tausch.res,
+        P.ignoreRatio ? "Liegt nach dem Prägen im Prägedorf." : "Liegt in den Dörfern, meist Holz und Eisen."),
+      document.createTextNode(" brächten 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf geprägt höchstens "),
+      el("b", null, "+" + nf.format(Math.round(tausch.coins)) + " Münzen"),
+      document.createTextNode(". Nicht eingerechnet: Händler müssen den Überschuss rechtzeitig bringen, und jemand muss die Angebote annehmen."));
+    z.appendChild(tx);
+    box.appendChild(z);
+  }
   // dieselben Werte ohne Überfahren
   const det = el("details");
   det.open = BIL_OFFEN;
@@ -1180,6 +1209,13 @@ function renderSchedule() {
     });
     if (lim.length > 12) ul.appendChild(el("li", null, "und " + (lim.length - 12) + " weitere"));
     note.appendChild(ul);
+  }
+  if (d.lokalDorf && d.lokalDorf.length) {
+    // 10.15: diese Lieferdörfer prägen beim Einlösen selbst, was sonst überliefe
+    note.appendChild(el("p", "pr-note", "Mit Adelshof prägen " + (d.lokalDorf.length === 1 ? "dieses Lieferdorf" : "diese " + d.lokalDorf.length + " Lieferdörfer")
+      + " beim Einlösen selbst, was sonst überliefe, zusammen " + nf.format(Math.round(d.lokal)) + " Münzen zum Grundpreis: "
+      + d.lokalDorf.slice(0, 12).map(x => siteName(R.src[x.i]) + " " + nf.format(Math.round(x.coins))).join(", ")
+      + (d.lokalDorf.length > 12 ? " und " + (d.lokalDorf.length - 12) + " weitere" : "") + "."));
   }
   const pas = d.passive.filter(x => x.overflow > 0);
   if (pas.length) note.appendChild(el("p", "pr-note", "Dörfer ohne Haken bekommen die Pakete trotzdem und laufen über: "
@@ -1285,6 +1321,13 @@ function renderCompare() {
     if (adel(0)) row("Neue Adelsgeschlechter", (x, n) => nf.format(adel(cc[n - 1]).n));
     row("mehr als einer weniger", (x, n) => n === 1 ? "" : plus((cc[n - 1] / cc[n - 2] - 1) * 100));
   }
+  // 10.15: Anteil der Münzen aus dem Prägen in Lieferdörfern, nur im Gleichschritt
+  if (pk && R.P.mintLocal) row("davon in Lieferdörfern", (x, n) => {
+    if (pK) return pK[n - 1] ? nf.format(Math.round(pK[n - 1].lokal || 0)) : "–";
+    const c = n !== R.recommend ? KCACHE.get(RUN, n) : null;
+    const v = c && c.pkg ? c.pkg.detail.lokal : pk.configLokal ? pk.configLokal[n - 1] : null;
+    return v != null ? nf.format(Math.round(v)) : "–";
+  });
   const mv = ns.map(mengenVergleich);
   row("Pakete rechtzeitig", (x, n) => {
     const m = mv[n - 1];
@@ -1333,6 +1376,8 @@ const STATUS = {ok: "rechtzeitig", markt: "Markt zu klein", weit: "zu weit weg o
 function shape(status, cx, cy, r) {
   if (status === "markt") return svgEl("path", {d: `M${cx},${cy - r * 1.15} L${cx + r * 1.1},${cy + r * 0.8} L${cx - r * 1.1},${cy + r * 0.8}Z`, class: "mk markt-c"});
   if (status === "weit") return svgEl("rect", {x: cx - r * 0.9, y: cy - r * 0.9, width: r * 1.8, height: r * 1.8, class: "mk weit-c"});
+  // im Lieferdorf geprägt (10.15): Ring in der Farbe von „rechtzeitig“
+  if (status === "lokal") return svgEl("circle", {cx, cy, r: r * 0.9, class: "mk lokal-c"});
   // Rest der Rohstoffbilanz (10.14): Raute in neutraler Farbe
   if (status === "rest") return svgEl("path", {d: `M${cx},${cy - r * 1.2} L${cx + r * 1.2},${cy} L${cx},${cy + r * 1.2} L${cx - r * 1.2},${cy}Z`, class: "mk rest-c"});
   return svgEl("circle", {cx, cy, r, class: "mk ok-c"});
@@ -1669,6 +1714,9 @@ function renderAssumptions() {
   items.push(    P.ignoreRatio ? "Rohstoffverhältnis ignoriert: Händler schicken Holz, Lehm und Eisen so, wie sie im Dorf liegen. Im Prägedorf wird weiter im Verhältnis " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + " geprägt, die Münzen richten sich nach dem knappsten Rohstoff; überschüssiges Holz oder Eisen darf dort überlaufen und zählt nicht als Überlauf."
       : "Verschickt wird nur im Prägeverhältnis Holz : Lehm : Eisen = " + [w.coin.wood, w.coin.stone, w.coin.iron].map(v => nf.format(v)).join(" : ") + ". Der Überschuss, meist Holz und Eisen, bleibt im Dorf und kann dort überlaufen.",
     "Das Prägedorf prägt sofort, was ankommt, und läuft nicht über.",
+    P.mintLocal ? "Prägen in Lieferdörfern (an): Lieferdörfer mit Adelshof prägen beim Einlösen eines Pakets selbst, was sonst über den Speicher ginge, im Prägeverhältnis und zum Grundpreis (vorsichtig: ohne eigene Flagge und ohne Erlass). Geprägt wird der kleinste Wert über die drei Rohstoffe, der Rest läuft weiter über. Diese Münzen zählen zu den Münzen, der Überlauf sinkt entsprechend, auch für die Überlaufgrenze. Das gilt im Gleichschritt, also in Berechnung 2 und im Zeitplan von Berechnung 1."
+      : "Prägen in Lieferdörfern (aus): Überlauf ist verloren, auch in Dörfern mit Adelshof.",
+    "Markttausch (nur Obergrenze unter der Rohstoffbilanz, nicht in den Münzen): Der nicht prägbare Überschuss" + (P.ignoreRatio ? " im Prägedorf" : "") + " wird 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf zum Flaggenpreis am Ende der 48 h geprägt. Unsicher, weil Händler den Überschuss bringen müssen und jemand die Angebote annehmen muss.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",
     "Klick auf „Rohstoffe anfordern“ beim Start und dann alle " + ivl(P.intervalMin) + ". Jeder Klick schickt alle freien Händler aller Dörfer los. Jedes Dorf beliefert das nächstgelegene Prägedorf.",
     "Münzpreis: Flagge Stufe " + P.flagLevel + " verdoppelt −" + 2 * K.FLAG_PCT[P.flagLevel] + " %" + (P.decreeN === 2 ? ", alle 48 h zusätzlich −10 % durch zwei Erlasse hintereinander" : P.decree ? ", in den ersten 24 h zusätzlich −10 % durch den Erlass (die Werte addieren sich)" : "") + ". Geprägt wird, was bis zum Ende der 48 h ankommt (Dauermünzprägen).",
