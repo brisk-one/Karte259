@@ -508,3 +508,79 @@ test("Vorgabe Flaggendoppler: genau diese Zahl, auch gegen die automatische Rege
   assert.equal(V5({fdCount: 2, mode: "pct"}).fdCount, null);    // nur bei „maximieren“
   assert.equal(V5({fdCount: 0}).fdCount, null);
 });
+
+/* ---------- 10.14 Rohstoffmengen und Wahl (Wunsch Dennis 07.11.2026) ---------- */
+test("10.14: Ansicht folgt der Empfehlung ohne aktive Wahl, aktive Wahl bleibt", () => {
+  const R = {configs: [{}, {}, {}], recommend: 2};
+  assert.equal(K.wahlNach(1, R, false), 2);          // nie aktiv gewählt: folgt der Empfehlung
+  assert.equal(K.wahlNach(3, R, true), 3);           // aktiv gewählt: bleibt
+  assert.equal(K.wahlNach(4, R, true), 2);           // Zahl nicht mehr gerechnet: zurück zur Empfehlung
+  assert.equal(K.wahlNach(null, R, false), 2);
+});
+
+const summe = v => v[0] + v[1] + v[2];
+function pruefeMengen(m, P, text) {
+  for (let r = 0; r < 3; r++) {
+    // Paket-Rohstoffe = Überlauf + rechtzeitig + nicht rechtzeitig + nicht prägbarer Rest
+    near(m.G[r], m.O[r] + m.A[r] + m.N[r] + m.S[r], 1e-3 * Math.max(1, m.G[r]));
+    assert.ok(m.A[r] >= -1e-6 && m.N[r] >= -1e-6 && m.S[r] >= -1e-6 && m.O[r] >= -1e-6, text + ": keine negativen Mengen");
+  }
+  if (!P.ignoreRatio) {
+    // im Prägeverhältnis stehen rechtzeitig und nicht rechtzeitig je Rohstoff im Verhältnis der Münzkosten
+    near(m.A[1] / P.coin.stone, m.A[0] / P.coin.wood, 1e-6 * Math.max(1, m.A[0]));
+    near(m.N[2] / P.coin.iron, m.N[0] / P.coin.wood, 1e-6 * Math.max(1, m.N[0]));
+  }
+  near(m.share, summe(m.A) / Math.max(1e-9, summe(m.A) + summe(m.N)), 1e-9);
+}
+
+test("10.14: Rohstoffmengen im Gleichschritt summieren sich und passen zum Überlauf", () => {
+  const v = konto63();
+  for (const extra of [{maxOverflow: 1}, {maxOverflow: 10, optThreshold: 70}, {maxOverflow: 10, ignoreRatio: true}]) {
+    const P = V5(extra), R = K.planPackages(v, P, []), d = R.pkg.detail, m = d.mengen;
+    pruefeMengen(m, R.P, JSON.stringify(extra));
+    // Paket-Rohstoffe und Überlauf wie die bisherigen Summen je Dorf
+    near(summe(m.G), d.pkgRes.reduce((a, x) => a + x, 0), 1);
+    near(summe(m.O), d.overflow.reduce((a, x) => a + x, 0), 1);
+    near(summe(m.O) / summe(m.G), d.overflowShare, 1e-9);
+    // Vergleich (perK) und Kennzahlen (detail) zeigen für die Empfehlung dieselben Mengen
+    const o = R.pkg.perK[R.recommend - 1];
+    near(summe(o.mengen.A), summe(m.A), 1e-6 * summe(m.G));
+    near(summe(o.mengen.N), summe(m.N), 1e-6 * summe(m.G));
+    // feste Paketzahl: je Aufstellung derselbe Zeitplan, Mengen vorhanden
+    assert.equal(R.pkg.configMengen.length, R.configs.length);
+    R.pkg.configMengen.forEach((x, i) => pruefeMengen(x, R.P, "Aufstellung " + (i + 1)));
+  }
+});
+
+test("10.14: Rohstoffmengen der einfachen Rechnung (Berechnung 1)", () => {
+  const v = konto63();
+  for (const ignoreRatio of [false, true]) {
+    const P = V5({mode: "pct", pkgPct: 300, ignoreRatio}), R = K.planPct(v, P, []);
+    R.configs.forEach(r => {
+      const m = K.mengenEinfach(R.src, r, R.P);
+      pruefeMengen(m, R.P, "einfach " + ignoreRatio);
+      assert.equal(summe(m.O), 0);                                        // ohne Speichergrenze kein Überlauf
+      near(m.share, r.share, 1e-9);
+      near(summe(m.G), R.src.reduce((a, s) => a + s.pkg.wood + s.pkg.stone + s.pkg.iron, 0), 1);
+      if (ignoreRatio) near(summe(m.S), 0, 1);                             // alles verschickbar
+      else near(summe(m.A) + summe(m.N), r.pkg * R.P.unitRes, 1);          // prägbare Paketmenge
+    });
+  }
+});
+
+test("10.14: Mehrertrag in Rohstoffen passt zu den Münzen (ohne Erlass)", () => {
+  const v = konto63(), P = V5({maxOverflow: 10}), R = K.planPackages(v, P, []), pK = R.pkg.perK;
+  assert.ok(pK.length >= 2);
+  const rabatt = K.reduction(1, R.P);
+  for (let i = 1; i < pK.length; i++) {
+    const res = K.rohstoffeAus(pK[i].units - pK[i - 1].units, R.P);
+    near(summe(res), (pK[i].coins - pK[i - 1].coins) * R.P.unitRes * (1 - rabatt), 1e-6 * R.P.unitRes * pK[i].coins);
+    near(res[1] / res[0], 30000 / 28000, 1e-9);
+  }
+  // einfache Rechnung: geprägte Einheiten der Aufstellungen
+  const Rp = K.planPct(v, V5({mode: "pct", pkgPct: 300}), []);
+  for (let i = 1; i < Rp.configs.length; i++) {
+    const a = Rp.configs[i - 1], b = Rp.configs[i];
+    near(summe(K.rohstoffeAus(b.minted - a.minted, Rp.P)), (b.coins - a.coins) * Rp.P.unitRes * (1 - K.reduction(1, Rp.P)), 1e-6 * Rp.P.unitRes * b.coins);
+  }
+});

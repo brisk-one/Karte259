@@ -172,7 +172,7 @@ function simulate(s, tau, P, horizon, merchants, keepArrivals) {
   // Mit P.ignoreRatio schicken die Händler alles, was im Dorf liegt; gerechnet in Rohstoffen / Münzpreis
   const avail = () => P.ignoreRatio ? (pw + ps + pi) / P.unitRes : Math.min(pw / cw, ps / cs, pi / ci);
   const pkgUnits = avail();
-  let shipped = 0, coins = 0, inTime = 0, doneAt = pkgUnits <= EPS ? 0 : Infinity, lastArrival = 0;
+  let shipped = 0, coins = 0, minted = 0, inTime = 0, doneAt = pkgUnits <= EPS ? 0 : Infinity, lastArrival = 0;
   const qT = [], qN = [];
   let qh = 0, busy = 0;
   const arrivals = keepArrivals ? [] : null;
@@ -198,14 +198,14 @@ function simulate(s, tau, P, horizon, merchants, keepArrivals) {
       const ta = t + tau, pkgPart = Math.max(0, Math.min(units, pkgUnits - shipped));
       shipped += units;
       if (pkgPart > 0 && doneAt === Infinity && shipped >= pkgUnits - 1e-7) doneAt = ta;
-      if (ta <= P.window + EPS) coins += units / (1 - reduction(ta, P));
+      if (ta <= P.window + EPS) { coins += units / (1 - reduction(ta, P)); minted += units; }
       if (pkgPart > 0 && ta <= P.deadline + EPS) inTime += pkgPart;
       if (ta > lastArrival) lastArrival = ta;
       if (arrivals) arrivals.push([ta, pkgPart, units]);
     }
     if (t >= P.window && shipped >= pkgUnits - 1e-7) break;   // Pakete weg, Prägezeit vorbei
   }
-  return {tau, pkgUnits, inTime, coins, doneAt, shipped, arrivals};
+  return {tau, pkgUnits, inTime, coins, minted, doneAt, shipped, arrivals};
 }
 
 /* ---------- Standortsuche ---------- */
@@ -229,13 +229,13 @@ Planner.prototype.assign = function (i, sites) {
   return best;
 };
 Planner.prototype.evaluate = function (sites) {
-  let coins = 0, pkg = 0, inTime = 0, doneAt = 0, spread = 0;
+  let coins = 0, minted = 0, pkg = 0, inTime = 0, doneAt = 0, spread = 0;
   for (let i = 0; i < this.n; i++) {
     const r = this.get(i, this.assign(i, sites));
-    coins += r.coins; pkg += r.pkgUnits; inTime += r.inTime; spread += r.pkgUnits * r.tau;
+    coins += r.coins; minted += r.minted; pkg += r.pkgUnits; inTime += r.inTime; spread += r.pkgUnits * r.tau;
     if (r.doneAt > doneAt) doneAt = r.doneAt;
   }
-  return {sites, coins, pkg, inTime, share: pkg > EPS ? inTime / pkg : 1, doneAt, spread};
+  return {sites, coins, minted, pkg, inTime, share: pkg > EPS ? inTime / pkg : 1, doneAt, spread};
 };
 // Reihenfolge: mehr Münzen, dann mehr Paketmenge rechtzeitig, dann früher fertig, dann kürzere Wege
 function better(a, b) {
@@ -468,9 +468,11 @@ const COIN = P => [P.coin.wood, P.coin.stone, P.coin.iron];
 
 /* Ein Herkunftsdorf: Bestand, Pakete, Händler. Jede Lieferung geht an sink(Ankunftszeit, Holz, Lehm, Eisen).
    M = Händler; send = false: das Dorf verschickt nichts (nicht dabei), nur Bestand und Überlauf.
-   ovClick (optional) sammelt den Überlauf je Klick. */
+   ovClick (optional) sammelt den Überlauf je Klick.
+   acc (optional, 10.14) sammelt je Rohstoff [Holz, Lehm, Eisen]: ov Überlauf beim Einlösen, arr bis zur Frist
+   (P.deadline) im Prägedorf angekommen. */
 const ST = new Float64Array(3), QT = [], QN = [];
-function villageRun(s, tau, P, cnt, M, sink, send, ovClick) {
+function villageRun(s, tau, P, cnt, M, sink, send, ovClick, acc) {
   const T = P.interval, C = P.carry, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
   const add1 = P.pkgSize / 100 * cap, start = Math.min(cap, cap * P.startPct / 100);
   const p0 = s.prod.wood * T, p1 = s.prod.stone * T, p2 = s.prod.iron * T;
@@ -483,9 +485,9 @@ function villageRun(s, tau, P, cnt, M, sink, send, ovClick) {
       const add = n * add1;
       pkgRes += 3 * add;
       let ov = 0;
-      w += add; if (w > cap) { ov += w - cap; w = cap; }
-      st += add; if (st > cap) { ov += st - cap; st = cap; }
-      ir += add; if (ir > cap) { ov += ir - cap; ir = cap; }
+      w += add; if (w > cap) { ov += w - cap; if (acc) acc.ov[0] += w - cap; w = cap; }
+      st += add; if (st > cap) { ov += st - cap; if (acc) acc.ov[1] += st - cap; st = cap; }
+      ir += add; if (ir > cap) { ov += ir - cap; if (acc) acc.ov[2] += ir - cap; ir = cap; }
       overflow += ov;
       if (ovClick) ovClick[k] += ov;
     }
@@ -510,34 +512,81 @@ function villageRun(s, tau, P, cnt, M, sink, send, ovClick) {
     busy += used; QT[qn] = t + 2 * tau; QN[qn] = used; qn++;
     w -= a0; st -= a1; ir -= a2;
     if (sink && t + tau <= P.window + EPS) sink(t + tau, a0, a1, a2);
+    if (acc && t + tau <= P.deadline + EPS) { acc.arr[0] += a0; acc.arr[1] += a1; acc.arr[2] += a2; }
   }
   return {overflow, pkgRes};
 }
 
 /* Prägedorf: eigene Klicks (Produktion, Pakete) und Ankünfte in zeitlicher Folge (Fächer je Klickabstand),
-   sofort prägen, was im Prägeverhältnis da ist. bins[k] = Ankünfte im Abstand [kT, (k+1)T). */
-function siteRun(s, P, cnt, bins) {
+   sofort prägen, was im Prägeverhältnis da ist. bins[k] = Ankünfte im Abstand [kT, (k+1)T).
+   acc (optional, 10.14): arr eigene Pakete und Produktion bis zur Frist, sov Überschuss je Rohstoff, der nach dem
+   Prägen über den Speicher geht (meist Holz und Eisen, weil Lehm das Prägen begrenzt). */
+function siteRun(s, P, cnt, bins, acc) {
   const T = P.interval, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
   const add1 = P.pkgSize / 100 * cap, start = Math.min(cap, cap * P.startPct / 100);
-  let w = start, st = start, ir = start, coins = 0, pkgRes = 0;
+  let w = start, st = start, ir = start, coins = 0, minted = 0, pkgRes = 0;
   const mint = t => {
     const u = Math.min(w / cw, st / cs, ir / ci);
-    if (u > EPS && t <= P.window + EPS) { coins += u / (1 - reduction(t, P)); w -= u * cw; st -= u * cs; ir -= u * ci; }
-    if (w > cap) w = cap; if (st > cap) st = cap; if (ir > cap) ir = cap;
+    if (u > EPS && t <= P.window + EPS) { coins += u / (1 - reduction(t, P)); minted += u; w -= u * cw; st -= u * cs; ir -= u * ci; }
+    if (w > cap) { if (acc) acc.sov[0] += w - cap; w = cap; }
+    if (st > cap) { if (acc) acc.sov[1] += st - cap; st = cap; }
+    if (ir > cap) { if (acc) acc.sov[2] += ir - cap; ir = cap; }
   };
   const K = cnt.length;
   for (let k = 0; k <= K; k++) {
     if (k < K) {
       const add = cnt[k] * add1;
       pkgRes += 3 * add;
-      w += (k > 0 ? s.prod.wood * T : 0) + add; st += (k > 0 ? s.prod.stone * T : 0) + add; ir += (k > 0 ? s.prod.iron * T : 0) + add;
+      const q0 = (k > 0 ? s.prod.wood * T : 0) + add, q1 = (k > 0 ? s.prod.stone * T : 0) + add, q2 = (k > 0 ? s.prod.iron * T : 0) + add;
+      w += q0; st += q1; ir += q2;
+      if (acc && k * T <= P.deadline + EPS) { acc.arr[0] += q0; acc.arr[1] += q1; acc.arr[2] += q2; }
       mint(k * T);
     }
     const b = bins && bins[k];
     if (b) for (let j = 0; j < b.length; j += 4) { w += b[j + 1]; st += b[j + 2]; ir += b[j + 3]; mint(b[j]); }
   }
-  return {coins, pkgRes};
+  return {coins, pkgRes, minted};
 }
+
+/* Rohstoffmengen eines Zeitplans (10.14, Wunsch Dennis 07.11.2026), je Rohstoff [Holz, Lehm, Eisen]:
+   G Paket-Rohstoffe, O Überlauf beim Einlösen (Lieferdörfer), A rechtzeitig angekommen, N nicht rechtzeitig,
+   S Rest (nicht prägbarer Überschuss, der im Dorf bleibt), sov Überschuss im Prägedorf nach dem Prägen.
+   Pakete gelten wie in der einfachen Rechnung als zuerst verschickt. Im Prägeverhältnis zählt nur die prägbare
+   Paketmenge (Münzeinheiten, meist von Lehm begrenzt) als rechtzeitig oder nicht rechtzeitig, umgerechnet mit den
+   Münzkosten; mit P.ignoreRatio je Rohstoff direkt. share = A ÷ (A + N). */
+function mengenNeu() { return {G: [0, 0, 0], O: [0, 0, 0], A: [0, 0, 0], N: [0, 0, 0], S: [0, 0, 0], sov: [0, 0, 0]}; }
+function mengenDorf(m, P, pkgEach, ov, arr) {
+  const c = COIN(P);
+  for (let r = 0; r < 3; r++) { m.G[r] += pkgEach; m.O[r] += ov[r]; }
+  if (P.ignoreRatio) {
+    for (let r = 0; r < 3; r++) {
+      const eff = Math.max(0, pkgEach - ov[r]), a = Math.min(eff, arr[r]);
+      m.A[r] += a; m.N[r] += eff - a;
+    }
+  } else {
+    let eff = Infinity, an = Infinity;
+    for (let r = 0; r < 3; r++) { eff = Math.min(eff, Math.max(0, pkgEach - ov[r]) / c[r]); an = Math.min(an, arr[r] / c[r]); }
+    const a = Math.min(eff, an);
+    for (let r = 0; r < 3; r++) { m.A[r] += a * c[r]; m.N[r] += (eff - a) * c[r]; }
+  }
+}
+function mengenFertig(m) {
+  for (let r = 0; r < 3; r++) m.S[r] = Math.max(0, m.G[r] - m.O[r] - m.A[r] - m.N[r]);
+  const sum = v => v[0] + v[1] + v[2], a = sum(m.A), n = sum(m.N);
+  m.share = a + n > EPS ? a / (a + n) : 1;
+  return m;
+}
+/* Dieselben Mengen aus der einfachen Rechnung (Berechnung 1, Dennis 1a am 07.11.2026): alle Pakete bei 0 h, ohne
+   Speichergrenze, deshalb ohne Überlauf. r: Ergebnis von Planner.evaluate (pkg und inTime in Münzeinheiten). */
+function mengenEinfach(src, r, P) {
+  const m = mengenNeu(), c = P.ignoreRatio ? [P.unitRes / 3, P.unitRes / 3, P.unitRes / 3] : COIN(P);
+  src.forEach(s => { m.G[0] += s.pkg.wood; m.G[1] += s.pkg.stone; m.G[2] += s.pkg.iron; });
+  const a = Math.max(0, r.inTime), n = Math.max(0, r.pkg - r.inTime);
+  for (let k = 0; k < 3; k++) { m.A[k] = a * c[k]; m.N[k] = n * c[k]; }
+  return mengenFertig(m);
+}
+/* Rohstoffe zu Münzeinheiten, je Rohstoff [Holz, Lehm, Eisen]; für den Mehrertrag in der Begründung (10.14). */
+const rohstoffeAus = (units, P) => COIN(P).map(c => units * c);
 
 function nearestSite(src, i, sites) {
   let best = sites[0], bd = Infinity;
@@ -557,10 +606,11 @@ function lockstep(src, P, sites, cnt, detail) {
   }
   const {site, tau} = src._ls;
   const out = detail ? {overflow: new Float64Array(n), pkgRes: new Float64Array(n), ovClick: new Float64Array(K), site} : null;
-  let coins = 0, ovSum = 0, pkSum = 0;
+  const m = detail ? mengenNeu() : null;
+  let coins = 0, units = 0, ovSum = 0, pkSum = 0;
   const bins = P.ignoreRatio ? new Map(sites.map(j => [j, new Array(K + 1)])) : null;
   let cur = null;
-  const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, P)); };
+  const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, P)); units += a0 / P.coin.wood; };
   const sinkBin = (ta, a0, a1, a2) => {
     const k = Math.min(K, Math.floor(ta / P.interval + EPS));
     (cur[k] || (cur[k] = [])).push(ta, a0, a1, a2);
@@ -568,18 +618,22 @@ function lockstep(src, P, sites, cnt, detail) {
   for (let i = 0; i < n; i++) {
     if (site[i] === i) continue;
     if (bins) cur = bins.get(site[i]);
-    const r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, bins ? sinkBin : sinkRatio, true, out && out.ovClick);
+    const acc = m ? {ov: [0, 0, 0], arr: [0, 0, 0]} : null;
+    const r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, bins ? sinkBin : sinkRatio, true, out && out.ovClick, acc);
     ovSum += r.overflow; pkSum += r.pkgRes;
     if (out) { out.overflow[i] = r.overflow; out.pkgRes[i] = r.pkgRes; }
+    if (m) mengenDorf(m, P, r.pkgRes / 3, acc.ov, acc.arr);
   }
   for (const j of sites) {
-    const r = siteRun(src[j], P, cnt, bins ? bins.get(j) : null);
-    coins += r.coins; pkSum += r.pkgRes;
+    const acc = m ? {arr: [0, 0, 0], sov: m.sov} : null;
+    const r = siteRun(src[j], P, cnt, bins ? bins.get(j) : null, acc);
+    coins += r.coins; units += r.minted; pkSum += r.pkgRes;
     if (out) out.pkgRes[j] = r.pkgRes;
+    if (m) mengenDorf(m, P, r.pkgRes / 3, [0, 0, 0], acc.arr);
   }
   const ov = pkSum > 0 ? ovSum / pkSum : 0;
-  if (out) { out.coins = coins; out.ov = ov; return out; }
-  return {coins, ov};
+  if (out) { out.coins = coins; out.units = units; out.ov = ov; out.mengen = mengenFertig(m); return out; }
+  return {coins, ov, units};
 }
 
 /* Höchstwert eines Pakets: Paketgröße × Summe der Speicher, in Münzen zum Flaggenpreis (Flagge verdoppelt). */
@@ -741,7 +795,7 @@ function scheduleDetails(src, P, sites, pos, passive) {
   limiting.sort((a, b) => b.share - a.share);
   const pas = (passive || []).map(s => { const q = villageRun(s, 0, P, cnt, 0, null, false); return {name: s.name, x: s.x, y: s.y, overflow: q.overflow, pkgRes: q.pkgRes}; });
   const pkgTotal = r.pkgRes.reduce((a, v) => a + v, 0), ovTotal = r.overflow.reduce((a, v) => a + v, 0);
-  return {coins: r.coins, cnt, rows, overflow: r.overflow, pkgRes: r.pkgRes, limiting, passive: pas,
+  return {coins: r.coins, units: r.units, mengen: r.mengen, cnt, rows, overflow: r.overflow, pkgRes: r.pkgRes, limiting, passive: pas,
           overflowShare: pkgTotal > 0 ? ovTotal / pkgTotal : 0};
 }
 
@@ -825,8 +879,17 @@ function planPackages(villages, P0, passive) {
   const pos = cv.curve[chosen].pos;
   R.pkg = Object.assign({}, cv, {chosen, pos, grid: best.m, grenze: grenzeInfo(cv, chosen, P),
     detail: scheduleDetails(src, P, sites, pos, prepare(passive || [], P)),
-    configCoins: R.configs.map(c => lockstep(src, P, c.sites, toCnt(pos, cv.K)).coins),
-    perK: perK && perK.map(o => ({k: o.k, n: o.n, coins: o.coins, sites: o.sites.map(i => o.R.src[i])}))});
+    perK: perK && perK.map(o => {
+      // je Aufstellung mit ihrer eigenen Paketzahl und ihrem Zeitplan: Mengen für Vergleich und Begründung (10.14)
+      const pos = o.cv.curve[o.n].pos, d = lockstep(o.R.src, o.R.P, o.sites, toCnt(pos, o.cv.K), true);
+      return {k: o.k, n: o.n, coins: o.coins, units: d.units, mengen: d.mengen, sites: o.sites.map(i => o.R.src[i])};
+    })});
+  // feste Paketzahl: alle Aufstellungen mit demselben Zeitplan
+  const cfg = R.configs.map(c => lockstep(src, P, c.sites, toCnt(pos, cv.K), true));
+  R.pkg.configCoins = cfg.map(d => d.coins);
+  R.pkg.configUnits = cfg.map(d => d.units);
+  R.pkg.configMengen = cfg.map(d => d.mengen);
+  if (R.src) delete R.src._ls;
   return R;
 }
 
@@ -894,8 +957,10 @@ function packagesForK(villages, P0, k, passive, perK) {
 
 /* Gewählte Aufstellung nach einer Neuberechnung (10.12): bleibt, solange diese Zahl gerechnet wurde, sonst die
    Empfehlung. */
-function wahlNach(vorher, R) {
+function wahlNach(vorher, R, aktiv) {
   const n = R && R.configs ? R.configs.length : 0;
+  // 10.14: nur eine aktiv angeklickte Wahl bleibt; ohne aktive Wahl folgt die Ansicht der Empfehlung
+  if (aktiv === false) return (R && R.recommend) || 1;
   return vorher && vorher >= 1 && vorher <= n ? vorher : (R && R.recommend) || 1;
 }
 
@@ -912,7 +977,8 @@ const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packages
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
-             toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages};
+             toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,
+             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Praegen = api;
 })(typeof window !== "undefined" ? window : globalThis);
