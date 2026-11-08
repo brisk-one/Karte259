@@ -627,3 +627,71 @@ test("10.15: Markttausch als Obergrenze aus dem nicht prägbaren Überschuss", (
     if (!ignoreRatio) assert.ok(t.res[0] + t.res[2] > t.res[1], "Überschuss ist vor allem Holz und Eisen");
   }
 });
+
+/* ---------- 10.16 Tausch vor dem Start (Wunsch Dennis 08.11.2026, 1a, 2a, 3b) ---------- */
+test("10.16: Lagerstand aus der Produktionsübersicht", () => {
+  const txt = [
+    "Dorf (3)\tPunkte\tRohstoffe\tSpeicher\tHändler\tBauernhof",
+    "[001] Erstes Dorf (500|501) K55 \t10.393\t123.456 234.567 345.678\t400.000\t110/235\t24.000/24.000",
+    "[002] Dorf 22 (502|503) K55",
+    "8.792", "12.000 400.000 99.999", "400.000", "235/235", "23.950/24.000",
+    "[003] Leer (504|505) K55 \t10.362\t0 0 0\t400000\t0/235\t24000/24000",
+  ].join("\n");
+  const r = K.parseLager(txt);
+  assert.equal(r.count, 3);
+  assert.deepEqual(r.lager["500|501"], {wood: 123456, stone: 234567, iron: 345678, storage: 400000});
+  assert.deepEqual(r.lager["502|503"], {wood: 12000, stone: 400000, iron: 99999, storage: 400000});
+  assert.deepEqual(r.lager["504|505"], {wood: 0, stone: 0, iron: 0, storage: 400000});
+  // Gebäudezeilen (viele kleine Stufen) sind kein Lagerstand
+  const geb = "[001] Shoppington D.C. (631|601) K66  \t10.393\t22\t25\t20\t15\t0\t1\t20\t1\t1\t23\t30\t30\t30\t30\t30\t10\t20";
+  assert.equal(K.parseLager(geb).count, 0);
+  assert.equal(K.parseLager("").count, 0);
+});
+
+test("10.16: Vorrat vor dem Start bringt Münzen, ohne mehr Überlauf, und wird geprägt", () => {
+  const v = konto63();
+  for (const extra of [{maxOverflow: 10, optThreshold: 70}, {maxOverflow: 1}, {maxOverflow: 10, ignoreRatio: true}]) {
+    const R = K.planPackages(v, V5(extra), []), d = R.pkg.detail, x = d.vorab, P = R.P;
+    assert.ok(x, "Vorrat im Ergebnis");
+    near(x.coins0, d.coins, 1e-6 * d.coins);                             // gleicher Zeitplan wie die Kennzahlen
+    assert.ok(x.coins1 >= x.coins0 - 1e-9);
+    assert.ok(x.ov1 <= x.ov0 + 1e-9, "kein zusätzlicher Überlauf");
+    const z = x.vorab;
+    assert.equal(z[2], 0, "kein Eisen als Vorrat");
+    x.dorf.forEach(o => {
+      const s = R.src[o.i];
+      assert.ok(o.vorab[0] <= s.cap + 1e-6 && o.vorab[1] <= s.cap + 1e-6 && o.plus > 0.5, s.name);
+    });
+    if (x.dorf.length) {
+      assert.ok(x.coins1 > x.coins0 + 0.5);
+      // mindestens 90 % des Vorrats wird geprägt (Lehm über Lehmkosten, Holz über Holzkosten)
+      const du = x.units1 - x.units0;
+      assert.ok(du * P.coin.stone >= 0.9 * z[1] - x.dorf.length - 1, JSON.stringify(extra));
+      assert.ok(du * P.coin.wood >= 0.9 * z[0] - x.dorf.length - 1, JSON.stringify(extra));
+      // es bleibt weniger Eisen liegen
+      assert.ok(x.rest1[2] < x.rest0[2]);
+      if (!P.ignoreRatio) near(x.coins1 - x.coins0, x.dorf.reduce((a, o) => a + o.plus, 0), 1e-6 * x.coins1);
+    }
+    // ohne Nebenwirkung: Rechnung danach wie vorher
+    assert.ok(R.src.every(s => !s.vorab));
+    const nach = K.lockstep(R.src, P, R.configs[R.recommend - 1].sites, K.toCnt(R.pkg.pos, K.lastClick(P)), false);
+    near(nach.coins, d.coins, 1e-6 * d.coins);
+  }
+});
+
+test("10.16: Startbestand je Rohstoff im Gleichschritt", () => {
+  const v = konto63(), R = K.planPackages(v, V5({maxOverflow: 10}), []), P = R.P, src = R.src;
+  const sites = R.configs[R.recommend - 1].sites, cnt = K.toCnt(R.pkg.pos, K.lastClick(P));
+  const a = K.lockstep(src, P, sites, cnt, false);
+  src.forEach(s => { s.vorab = [0, 0, 0]; });
+  const b = K.lockstep(src, P, sites, cnt, false);
+  near(a.coins, b.coins, 1e-9);                                          // Vorrat 0 ändert nichts
+  // nur Eisen als Vorrat bringt im Prägeverhältnis nichts, Lehm und Holz dazu schon
+  src.forEach(s => { s.vorab = [0, 0, 0.3 * s.cap]; });
+  const c = K.lockstep(src, P, sites, cnt, false);
+  src.forEach(s => { s.vorab = [0.3 * s.cap, 0.3 * s.cap, 0.3 * s.cap]; });
+  const e = K.lockstep(src, P, sites, cnt, false);
+  src.forEach(s => { s.vorab = null; });
+  assert.ok(c.coins <= a.coins + 1e-6);
+  assert.ok(e.coins > a.coins);
+});

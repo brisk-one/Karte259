@@ -151,6 +151,56 @@
   .pr-bil td:first-child,.pr-bil th:first-child{text-align:left}
   .pr-bil tr.sum td{font-weight:700}
 
+  /* Tausch vor dem Start (10.16) */
+  .pr-vin{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 22px; align-items:start; margin-bottom:12px}
+  .pr-vin>div{display:flex; align-items:center; gap:7px; flex-wrap:wrap; font-size:12px; padding-top:18px}
+  .pr-vin input[type="number"]{width:72px}
+  .pr-lager{display:grid; gap:4px; font-size:12px}
+  .pr-lager textarea{min-height:44px; font-size:11.5px}
+  .pr-lager .lab{color:var(--ink-2)}
+  @media (max-width:760px){ .pr-vin{grid-template-columns:1fr} .pr-vin>div{padding-top:0} }
+  .pr-vlead{display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 18px; margin:0 0 12px}
+  .pr-vlead .t{font-size:clamp(16px,2vw,19px); font-weight:700; line-height:1.35; max-width:860px}
+  .pr-vlead .t em{font-style:normal; color:var(--accent)}
+  .pr-vgrid{display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,.85fr); gap:12px}
+  @media (max-width:1000px){ .pr-vgrid{grid-template-columns:1fr 1fr} .pr-vgrid>:first-child{grid-column:1/-1} }
+  @media (max-width:640px){ .pr-vgrid{grid-template-columns:1fr} }
+  .pr-vgrid .pr-kg{padding-bottom:10px}
+  .pr-vgrid .in{padding:8px 12px 0}
+  .pr-wh,.pr-wr{display:grid; grid-template-columns:62px minmax(0,1fr) minmax(0,1fr); gap:0 12px; align-items:center}
+  .pr-wh{font-size:11px; color:var(--muted); margin-bottom:3px}
+  .pr-wr{font-size:12px; margin:6px 0}
+  .pr-wb{display:flex; align-items:center; gap:7px; min-width:0}
+  .pr-wb b{min-width:56px; font-variant-numeric:tabular-nums}
+  .pr-bk{flex:1; height:12px; min-width:30px; background:var(--edge-line); border-radius:2px; overflow:hidden; display:block}
+  .pr-bk i{display:block; height:100%}
+  .pr-bk .h,.pr-lg .h{background:var(--holz)} .pr-bk .l,.pr-lg .l{background:var(--lehm)} .pr-bk .e{background:var(--eisen)}
+  .pr-vcap{font-size:11.5px; color:var(--ink-2); margin-top:9px; line-height:1.45}
+  .pr-flow{display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:8px; margin:2px 0 9px}
+  .pr-flow .bx{border:1px solid var(--edge-soft); border-radius:var(--radius); padding:6px 9px; background:var(--panel-solid); font-size:12px; min-width:0}
+  .pr-flow .bx b{font-size:16px; font-variant-numeric:tabular-nums}
+  .pr-flow .bx div{margin:1px 0}
+  .pr-flow .ar{font-size:20px; font-weight:700; color:var(--accent)}
+  .pr-vkv{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 10px; font-size:12px; align-items:baseline}
+  .pr-vkv .v{font-weight:700; text-align:right; font-variant-numeric:tabular-nums}
+  .pr-vkv .v.big{font-size:24px; color:var(--accent)}
+  .pr-vkv .s{grid-column:1/-1; font-size:11px; color:var(--muted); text-align:right; margin-top:-2px}
+  .pr-steps{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0}
+  @media (max-width:760px){ .pr-steps{grid-template-columns:1fr} }
+  .pr-steps div{font-size:12px; border-left:3px solid var(--accent); padding:4px 10px; background:var(--panel-2)}
+  .pr-steps b{display:block; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent)}
+  .pr-vtab td{vertical-align:middle; font-variant-numeric:tabular-nums; white-space:normal}
+  .pr-vtab td:nth-child(3){min-width:200px}
+  .pr-vtab .sub{display:block; font-size:10.5px; color:var(--muted); font-weight:400}
+  .pr-lg{display:flex; align-items:center; gap:7px; white-space:nowrap; margin:1px 0}
+  .pr-lg .bar{display:flex; width:84px; height:8px; border-radius:2px; overflow:hidden; background:var(--edge-line); flex:none}
+  .pr-lg .bar i{display:block; height:100%}
+  .pr-vtab .ok{color:var(--st-ok); font-weight:700}
+  .pr-vtab .fehlt{color:var(--bad); font-weight:700}
+  .pr-gb{display:inline-block; height:8px; background:var(--st-ok); border-radius:2px; margin-right:6px; vertical-align:0}
+  .pr-tag{display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:9px; border:1px solid var(--accent);
+    color:var(--accent); line-height:15px; margin-left:4px}
+
   /* Aufteilung Holz, Lehm, Eisen: Feld beim Überfahren, Fokus und Antippen */
   .pr-res{cursor:help; color:var(--ink-2); border-bottom:1px dotted currentColor; white-space:nowrap; border-radius:2px}
   .pr-res:hover,.pr-res[aria-expanded="true"]{color:var(--ink)}
@@ -331,6 +381,26 @@
       <div class="pr-sel" id="rec-sel"></div>
       <div class="pr-kpi" id="rec-kpi"></div>
       <div class="pr-bil" id="rec-bil" hidden></div>
+    </div>
+  </section>
+
+  <!-- 10.16: Tausch vor dem Start (Wunsch Dennis 08.11.2026, Entscheidung 1a, 2a, 3b) -->
+  <section class="panel" aria-labelledby="h-vorab" id="p-vorab" hidden>
+    <h2 id="h-vorab">Vorbereitung: vor dem Start tauschen <span class="hint" id="vorab-hint"></span></h2>
+    <div class="body">
+      <div class="pr-vin">
+        <div>
+          <label class="pick"><span>Kurs: 1.000 Eisen gegen</span><input type="number" id="vorab-kurs" min="100" max="5000" step="50" value="1000"
+            aria-label="Kurs: so viel Lehm oder Holz gegen 1.000 Eisen"></label>
+          <span>Lehm oder Holz</span>
+        </div>
+        <label class="pr-lager"><span class="lab">Lagerstand (freiwillig): Übersichten › Produktion öffnen, Strg+A, kopieren, hier einfügen</span>
+          <textarea id="lager" rows="2" spellcheck="false" aria-describedby="lager-status"
+            placeholder="[001] Dorfname (500|500) K55   10.393   123.456 234.567 345.678   400.000   110/235   24.000/24.000&#10;…"></textarea>
+          <span class="pr-mnote" id="lager-status">Ohne Lagerstand: die Tabelle nennt, was zu Beginn im Lager liegen soll und wie viel Eisen dafür nötig ist.</span>
+        </label>
+      </div>
+      <div id="vorab-body"></div>
     </div>
   </section>
 
@@ -525,6 +595,9 @@ function gainZustand() {
   $("gain-note").textContent = aus ? "gilt nicht, die Zahl der Flaggendoppler ist vorgegeben" : "gegenüber einem Flaggendoppler weniger";
 }
 $("fdcount").addEventListener("change", gainZustand);
+// Tausch vor dem Start (10.16): Kurs und Lagerstand ändern nur dieses Feld, keine neue Rechnung
+$("vorab-kurs").addEventListener("input", () => { if (RESULT) renderVorab(); });
+$("lager").addEventListener("input", () => { LAGER = K.parseLager($("lager").value); if (RESULT) renderVorab(); else lagerStatus(); });
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
 setMode("max");
 pctPakete();
@@ -565,7 +638,7 @@ function run() {
   if (!parsed.villages.length) {
     st.textContent = $("paste").value.trim() ? "Keine Dorfzeile erkannt. Erwartet wird die Ansicht Übersichten › Gebäude, komplett markiert und kopiert." : "Noch keine Übersicht eingefügt.";
     if ($("paste").value.trim()) st.classList.add("err");
-    ["p-rec", "p-more"].forEach(id => $(id).hidden = true);
+    ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).hidden = true);
     RESULT = null;
     return;
   }
@@ -579,18 +652,18 @@ function run() {
     + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "")
     + (inp.production ? " · Produktion × " + nf2.format(inp.prodFactor)
        + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
-  if (!villages.length) { ["p-rec", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
+  if (!villages.length) { ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
 
   const passive = parsed.villages.filter(v => OFF.has(v.x + "|" + v.y));
   const base = st.textContent;
   st.textContent = base + " · rechnet …";
-  ["p-rec", "p-more"].forEach(id => $(id).classList.add("pr-busy"));
+  ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).classList.add("pr-busy"));
   if (KWORKER && KLAEUFT) { KWORKER.terminate(); KWORKER = null; }
   KLAEUFT = null;
   compute(token, villages, P, passive, R => {
     R.Pin = P; R.passive = passive;               // für das Nachrechnen einer gewählten Aufstellung (10.12)
     st.textContent = base;
-    ["p-rec", "p-more"].forEach(id => $(id).classList.remove("pr-busy"));
+    ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).classList.remove("pr-busy"));
     show(token, R, villages, parsed);
   });
 }
@@ -630,7 +703,7 @@ function show(token, R, villages, parsed) {
   if (WAHL_AKTIV && v !== VIEW) WAHL_AKTIV = false;
   VIEW = v;
   STEPS = [];
-  ["p-rec", "p-more"].forEach(id => $(id).hidden = false);
+  ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).hidden = false);
   $("p-pk").hidden = !(R.pkg || R.zeitplan);                    // Zeitplan in beiden Berechnungsarten (10.11)
   $("p-pc").hidden = !R.pkg;                                     // Kurve nur bei „maximieren“
   renderRecommendation();
@@ -1073,6 +1146,7 @@ function renderKennzahlen(sel) {
   kpi(g3, "Nötige Klickfrequenz", needText(sel.k, true), [needSmall(sel.k)]);
 
   renderBilanz(m);
+  renderVorab();
 }
 
 /* Rohstoffbilanz der Pakete: Paket-Rohstoffe = rechtzeitig + nicht rechtzeitig + Überlauf + nicht prägbar */
@@ -1150,6 +1224,172 @@ function renderBilanz(m) {
   t.appendChild(tb);
   det.appendChild(t);
   box.appendChild(det);
+}
+
+/* ---------- Tausch vor dem Start (10.16, Wunsch Dennis 08.11.2026) ----------
+   1a: eigenes Feld unter der Rohstoffbilanz, gerechnet mit dem Zeitplan der gewählten Aufstellung.
+   2a: Eisen gegen Lehm und Holz zugleich (beide Angebote gleichzeitig, das erhöht die Chance auf Annahme), Kurs
+   einstellbar. 3b: optional der Lagerstand aus der Produktionsübersicht; dann zählt, was schon im Lager liegt, und
+   die Tabelle zeigt, ob das Eisen reicht. Rohstoffmengen exakt und zusätzlich in Prozent (Dennis 13:08). */
+let LAGER = {lager: {}, count: 0};
+const ganz = v => nf.format(Math.round(v));
+function lagerZeile(cls, wort, v, cap) {
+  const z = el("span", "pr-lg"), bar = el("span", "bar"), i = el("i", cls);
+  i.style.width = Math.min(100, v / cap * 100).toFixed(1) + "%";
+  bar.appendChild(i);
+  z.append(bar, document.createTextNode(wort + " " + ganz(v) + " · " + nf.format(Math.round(v / cap * 100)) + " %"));
+  return z;
+}
+const stunden = h => h < 48 ? "rund " + nf.format(Math.max(1, Math.ceil(h))) + " h" : "rund " + nf1.format(Math.round(h / 24 * 10) / 10) + " Tage";
+function lagerStatus() {
+  const st = $("lager-status"), txt = $("lager").value.trim();
+  if (!txt) { st.textContent = "Ohne Lagerstand: die Tabelle nennt, was zu Beginn im Lager liegen soll und wie viel Eisen dafür nötig ist."; return; }
+  if (!LAGER.count) { st.textContent = "Keine Dörfer mit Lagerstand erkannt. Bitte Übersichten › Produktion kopieren, nicht die Gebäudeübersicht."; return; }
+  const src = RESULT ? RESULT.src : [], fehlt = src.filter(s => !LAGER.lager[s.x + "|" + s.y]).length;
+  st.textContent = "Lagerstand für " + nf.format(src.length ? src.length - fehlt : LAGER.count) + (src.length ? " von " + nf.format(src.length) : "")
+    + " Dörfern erkannt" + (fehlt ? "; für die übrigen rechnet die Tabelle ohne Lagerstand." : ".");
+}
+function renderVorab() {
+  const R = RESULT, box = $("vorab-body");
+  if (!R) return;
+  box.replaceChildren();
+  lagerStatus();
+  const P = R.P, sel = gewaehlt(), plan = R.pkg ? sel.pk : sel.z, d = plan && plan.detail;
+  $("vorab-hint").textContent = d ? fdName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %"
+    + (R.pkg ? "" : " · Zeitplan der Berechnung 1") : "";
+  if (!d) { box.appendChild(el("p", "empty", sel.laedt ? "rechnet …" : "Ohne Zeitplan der Pakete gibt es keinen Vorrat zu planen.")); return; }
+  const v = d.vorab;
+  if (!v || !v.dorf.length) {
+    box.appendChild(el("p", "empty", "Ein Tausch vor dem Start bringt mit diesem Zeitplan keine zusätzlichen Münzen: entweder bleibt kaum Holz oder Eisen liegen, oder die Dörfer mit Überschuss schaffen schon den Paketinhalt nicht rechtzeitig."));
+    return;
+  }
+  const kurs = Math.max(0.1, (+$("vorab-kurs").value || 1000) / 1000);      // Lehm oder Holz je Eisen
+  const start = s => Math.min(s.cap, s.cap * P.startPct / 100);
+  const mitLager = LAGER.count > 0;
+  const zeilen = v.dorf.map(x => {
+    const s = R.src[x.i], z0 = start(s), H = z0 + x.vorab[0], L = z0 + x.vorab[1], lg = mitLager ? LAGER.lager[s.x + "|" + s.y] : null;
+    const kH = lg ? Math.max(0, H - lg.wood) : x.vorab[0], kL = lg ? Math.max(0, L - lg.stone) : x.vorab[1];
+    const eisen = (kH + kL) / kurs, fehlt = lg ? Math.max(0, eisen - lg.iron) : null, gaenge = Math.ceil(eisen / P.carry - 1e-9);
+    return {s, x, H, L, kH, kL, eisen, lg, fehlt, gaenge, runden: Math.ceil(gaenge / Math.max(1, s.merchants) - 1e-9)};
+  });
+  const sum = f => zeilen.reduce((a, z) => a + f(z), 0);
+  const eisen = sum(z => z.eisen), kL = sum(z => z.kL), kH = sum(z => z.kH), plus = v.coins1 - v.coins0;
+
+  const lead = el("div", "pr-vlead"), t = el("div", "t");
+  t.append(document.createTextNode("Vor dem Flaggendoppler "), el("em", null, menge(eisen) + " Eisen"),
+    document.createTextNode(" gegen Lehm und Holz tauschen bringt "), el("em", null, "+" + ganz(plus) + " Münzen"),
+    document.createTextNode(" (+" + nf1.format(Math.round(plus / v.coins0 * 1000) / 10) + " %)."));
+  lead.appendChild(t);
+  box.appendChild(lead);
+
+  const grid = el("div", "pr-vgrid");
+  // Warum: was nach 48 h liegen bleibt
+  const g1 = kpiGruppe(grid, "Warum: was nach 48 h liegen bleibt"), in1 = el("div", "in");
+  const smax = Math.max(1, ...v.rest0, ...v.rest1);
+  const kopf = el("div", "pr-wh");
+  kopf.append(el("span"), el("span", null, "ohne Tausch"), el("span", null, "mit Tausch vorab"));
+  in1.appendChild(kopf);
+  RES_NAME.forEach((nm, r) => {
+    const zr = el("div", "pr-wr"), lab = el("span");
+    lab.append(resMarke(r), document.createTextNode(nm));
+    zr.appendChild(lab);
+    [v.rest0[r], v.rest1[r]].forEach(x => {
+      const wb = el("span", "pr-wb"), bk = el("span", "pr-bk"), i = el("i", "hle"[r]);
+      i.style.width = (Math.max(0, x) / smax * 100).toFixed(2) + "%";
+      bk.appendChild(i);
+      wb.append(bk, el("b", null, menge(Math.max(0, x))));
+      zr.appendChild(wb);
+    });
+    in1.appendChild(zr);
+  });
+  in1.appendChild(el("p", "pr-vcap", "Eine Münze kostet " + ganz(P.coin.wood) + " Holz, " + ganz(P.coin.stone) + " Lehm und " + ganz(P.coin.iron)
+    + " Eisen. Pakete und Minen bringen von allem etwa gleich viel, deshalb begrenzt Lehm das Prägen, und Holz und vor allem Eisen bleiben liegen. "
+    + "Wer vorher Eisen gegen Lehm und Holz tauscht, startet mit dem fehlenden Rohstoff im Lager und verschickt dann auch das übrige Eisen."));
+  g1.appendChild(in1);
+  // Tauschen
+  const g2 = kpiGruppe(grid, "Tauschen vor dem Start"), in2 = el("div", "in"), flow = el("div", "pr-flow");
+  const bx1 = el("div", "bx"), d1 = el("div");
+  d1.append(resMarke(2), document.createTextNode("Eisen abgeben"));
+  bx1.append(d1, el("b", null, menge(eisen)));
+  const bx2 = el("div", "bx");
+  [[1, "Lehm", kL], [0, "Holz", kH]].forEach(([r, nm, x]) => { const z = el("div"); z.append(resMarke(r), document.createTextNode(nm + " "), el("b", null, menge(x))); bx2.appendChild(z); });
+  flow.append(bx1, el("span", "ar", "→"), bx2);
+  in2.appendChild(flow);
+  const kv2 = el("div", "pr-vkv");
+  kv2.append(el("span", null, "Dörfer mit Tausch"), el("span", "v", nf.format(zeilen.length) + " von " + nf.format(R.src.length)),
+    el("span", null, "Händlergänge für die Angebote"), el("span", "v", ganz(sum(z => z.gaenge))),
+    el("span", null, "Kurs"), el("span", "v", "1.000 Eisen : " + ganz(kurs * 1000)));
+  if (mitLager) {
+    const ok = zeilen.filter(z => z.lg && z.fehlt <= 0.5).length, mit = zeilen.filter(z => z.lg).length;
+    kv2.append(el("span", null, "Eisen reicht schon"), el("span", "v", nf.format(ok) + " von " + nf.format(mit)));
+    const f = sum(z => z.fehlt || 0);
+    if (f > 0.5) kv2.appendChild(el("span", "s", "es fehlen noch " + ganz(f) + " Eisen"));
+  } else kv2.appendChild(el("span", "s", "je Dorf am eigenen Markt, solange er für den Transport noch frei ist"));
+  in2.appendChild(kv2);
+  g2.appendChild(in2);
+  // Ergebnis
+  const g3 = kpiGruppe(grid, "Ergebnis in 48 h"), in3 = el("div", "in"), kv3 = el("div", "pr-vkv");
+  const ovGleich = Math.abs(v.ov1 - v.ov0) < 1e-6;
+  kv3.append(el("span", null, "Münzen"), el("span", "v big", ganz(v.coins1)), el("span", "s", "statt " + ganz(v.coins0)),
+    el("span", null, "Überschuss danach"), el("span", "v", menge(sum3(v.rest1))), el("span", "s", "statt " + menge(sum3(v.rest0))),
+    el("span", null, "Überlauf"), el("span", "v", ovGleich ? "unverändert" : pctf(v.ov1)),
+    el("span", "s", ovGleich ? "kein Dorf läuft durch den Vorrat mehr über" : "statt " + pctf(v.ov0)));
+  in3.appendChild(kv3);
+  g3.appendChild(in3);
+  box.appendChild(grid);
+
+  const steps = el("div", "pr-steps");
+  [["1 · Tage vorher", "Am Markt gleichzeitig Eisen gegen Lehm und Eisen gegen Holz anbieten, dann nimmt an, wer das eine oder das andere braucht. Mengen je Dorf aus der Tabelle."],
+   ["2 · Vor dem Start", "Lehm und Holz bis zum Start im Lager lassen, Pakete erst nach dem Zeitplan einlösen."],
+   ["3 · Ab dem Flaggendoppler", "Pakete und Versand wie im Zeitplan; der Vorrat gleicht den Eisenüberschuss aus."]].forEach(([k, txt]) => {
+    const z = el("div"); z.append(el("b", null, k), document.createTextNode(txt)); steps.appendChild(z);
+  });
+  box.appendChild(steps);
+
+  // Tabelle je Dorf, nach Mehrmünzen sortiert, alle Spalten sortierbar
+  const cols = [["Dorf", "l", true], ["Lager zu Beginn", "l", true], ["Tauschen", "l", true]];
+  if (mitLager) cols.push(["Eisen im Lager", "l", true]);
+  cols.push(["Händlergänge", "", true], ["Mehr Münzen", "", true]);
+  const maxPlus = Math.max(...zeilen.map(z => z.x.plus));
+  const rows = zeilen.slice().sort((a, b) => b.x.plus - a.x.plus).map(z => {
+    const s = z.s, dn = el("span");
+    dn.append(el("b", null, s.name), document.createTextNode(" "));
+    dn.appendChild(el("span", "sub", s.x + "|" + s.y + (z.x.site ? "" : " · Markt " + s.marketFrom)));
+    if (z.x.site) dn.appendChild(el("span", "pr-tag", "Prägedorf"));
+    const lg = el("span");
+    lg.append(lagerZeile("l", "Lehm", z.L, s.cap), lagerZeile("h", "Holz", z.H, s.cap));
+    const ts = el("span");
+    if (z.kL + z.kH < 0.5) ts.append(el("b", null, "nichts"), el("span", "sub", "Lehm und Holz liegen schon im Lager"));
+    else ts.append(el("b", null, "Eisen " + ganz(z.eisen)), el("span", "sub", "→ " + [z.kL >= 0.5 ? "Lehm " + ganz(z.kL) : "", z.kH >= 0.5 ? "Holz " + ganz(z.kH) : ""].filter(Boolean).join(" · ")
+      + (z.eisen > s.cap ? " · mehr als ein Speicher, über mehrere Tage" : "")));
+    const zellen = [[dn, "l", s.name], [lg, "l", Math.round(z.L + z.H)], [ts, "l", Math.round(z.eisen)]];
+    if (mitLager) {
+      const e = el("span");
+      if (!z.lg) e.appendChild(el("span", "sub", "nicht im Lagerstand"));
+      else if (z.fehlt <= 0.5) e.append(el("span", "ok", "reicht"), el("span", "sub", "jetzt " + ganz(z.lg.iron)));
+      else e.append(el("span", "fehlt", "fehlen " + ganz(z.fehlt)), el("span", "sub", "jetzt " + ganz(z.lg.iron)
+        + (s.prod.iron > 0 ? " · " + stunden(z.fehlt / s.prod.iron) + " Mine" : "")));
+      zellen.push([e, "l", z.lg ? Math.round(z.fehlt) : -1]);
+    }
+    const hg = el("span");
+    hg.append(document.createTextNode(ganz(z.gaenge)), el("span", "sub", z.runden <= 1 ? "in 1 Runde" : "in " + z.runden + " Runden"));
+    const pl = el("span"), gb = el("span", "pr-gb");
+    gb.style.width = (z.x.plus / maxPlus * 48).toFixed(1) + "px";
+    pl.append(gb, el("b", null, "+" + ganz(z.x.plus)));
+    zellen.push([hg, "", z.gaenge], [pl, "", Math.round(z.x.plus * 100)]);
+    return zellen;
+  });
+  const wrap = el("div");
+  wrap.style.overflowX = "auto";
+  const tab = table(cols, rows);
+  tab.classList.add("pr-vtab");
+  wrap.appendChild(tab);
+  box.appendChild(wrap);
+  const ohne = R.src.length - zeilen.length;
+  box.appendChild(el("p", "pr-note", (ohne ? nf.format(ohne) + (ohne === 1 ? " Dorf bekommt" : " Dörfer bekommen") + " keinen Vorrat: entweder schaffen sie schon den Paketinhalt nicht rechtzeitig (Markt zu klein), oder es bliebe danach mehr liegen, als geprägt wird. " : "")
+    + "Annahmen: gleicher Zeitplan der Pakete wie ohne Tausch; je Dorf so viel Vorrat, wie es mehr Münzen bringt, ohne dass das Dorf mehr überläuft und solange mindestens 90 % des Vorrats geprägt werden. "
+    + (mitLager ? "Was schon an Lehm und Holz im Lager liegt, muss nicht getauscht werden. " : "Ohne Lagerstand nimmt die Tabelle an, dass vor dem Tausch kein Lehm und kein Holz über den Startbestand hinaus im Lager liegt. ")
+    + "Ob andere Spieler die Angebote annehmen, kann der Rechner nicht wissen."));
 }
 
 /* ---------- Zeitplan der Pakete ---------- */
@@ -1716,6 +1956,7 @@ function renderAssumptions() {
     "Das Prägedorf prägt sofort, was ankommt, und läuft nicht über.",
     P.mintLocal ? "Prägen in Lieferdörfern (an): Lieferdörfer mit Adelshof prägen beim Einlösen eines Pakets selbst, was sonst über den Speicher ginge, im Prägeverhältnis und zum Grundpreis (vorsichtig: ohne eigene Flagge und ohne Erlass). Geprägt wird der kleinste Wert über die drei Rohstoffe, der Rest läuft weiter über. Diese Münzen zählen zu den Münzen, der Überlauf sinkt entsprechend, auch für die Überlaufgrenze. Das gilt im Gleichschritt, also in Berechnung 2 und im Zeitplan von Berechnung 1."
       : "Prägen in Lieferdörfern (aus): Überlauf ist verloren, auch in Dörfern mit Adelshof.",
+    "Tausch vor dem Start (eigenes Feld): je Dorf ein Vorrat an Lehm und Holz zu Beginn, eingetauscht gegen Eisen. Gesucht wird je Dorf der Vorrat mit den meisten Münzen, bei dem das Dorf nicht mehr überläuft und mindestens 90 % des Vorrats geprägt werden; der Zeitplan der Pakete bleibt. " + (P.ignoreRatio ? "Mit „Verhältnis ignorieren“ ein gemeinsamer Anteil für alle Lieferdörfer ohne Überlauf, dann je Prägedorf. " : "") + "Mit Lagerstand aus der Produktionsübersicht zählt, was schon im Lager liegt; fehlendes Eisen in Stunden Mine aus der Eisenproduktion des Dorfes.",
     "Markttausch (nur Obergrenze unter der Rohstoffbilanz, nicht in den Münzen): Der nicht prägbare Überschuss" + (P.ignoreRatio ? " im Prägedorf" : "") + " wird 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf zum Flaggenpreis am Ende der 48 h geprägt. Unsicher, weil Händler den Überschuss bringen müssen und jemand die Angebote annehmen muss.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",
     "Klick auf „Rohstoffe anfordern“ beim Start und dann alle " + ivl(P.intervalMin) + ". Jeder Klick schickt alle freien Händler aller Dörfer los. Jedes Dorf beliefert das nächstgelegene Prägedorf.",
