@@ -198,6 +198,7 @@
   .pr-vtab .ok{color:var(--st-ok); font-weight:700}
   .pr-vtab .fehlt{color:var(--bad); font-weight:700}
   .pr-gb{display:inline-block; height:8px; background:var(--st-ok); border-radius:2px; margin-right:6px; vertical-align:0}
+  .pr-markt{white-space:nowrap; font-weight:700}
   .pr-tag{display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:9px; border:1px solid var(--accent);
     color:var(--accent); line-height:15px; margin-left:4px}
 
@@ -1335,8 +1336,10 @@ function renderVorab() {
   const zeilen = v.dorf.map(x => {
     const s = R.src[x.i], z0 = start(s), H = z0 + x.vorab[0], L = z0 + x.vorab[1], lg = mitLager ? LAGER.lager[s.x + "|" + s.y] : null;
     const kH = lg ? Math.max(0, H - lg.wood) : x.vorab[0], kL = lg ? Math.max(0, L - lg.stone) : x.vorab[1];
-    const eisen = (kH + kL) / kurs, fehlt = lg ? Math.max(0, eisen - lg.iron) : null, gaenge = Math.ceil(eisen / P.carry - 1e-9);
-    return {s, x, H, L, kH, kL, eisen, lg, fehlt, gaenge, runden: Math.ceil(gaenge / Math.max(1, s.merchants) - 1e-9)};
+    // Marktangebote (Wunsch Dennis 09.11.2026): je Angebot so viel Eisen, wie ein Händler trägt, gegen Lehm bzw. Holz zum Kurs
+    const proAngebot = Math.max(1, Math.round(P.carry * kurs)), aL = Math.ceil(kL / proAngebot - 1e-9), aH = Math.ceil(kH / proAngebot - 1e-9);
+    const gaenge = aL + aH, eisen = gaenge * P.carry, fehlt = lg ? Math.max(0, eisen - lg.iron) : null;
+    return {s, x, H, L, kH, kL, aL, aH, proAngebot, eisen, lg, fehlt, gaenge, runden: Math.ceil(gaenge / Math.max(1, s.merchants) - 1e-9)};
   });
   const sum = f => zeilen.reduce((a, z) => a + f(z), 0);
   const eisen = sum(z => z.eisen), kL = sum(z => z.kL), kH = sum(z => z.kH), plus = v.coins1 - v.coins0;
@@ -1383,7 +1386,7 @@ function renderVorab() {
   in2.appendChild(flow);
   const kv2 = el("div", "pr-vkv");
   kv2.append(el("span", null, "Dörfer mit Tausch"), el("span", "v", nf.format(zeilen.length) + " von " + nf.format(R.src.length)),
-    el("span", null, "Händlergänge für die Angebote"), el("span", "v", ganz(sum(z => z.gaenge))),
+    el("span", null, "Angebote, je ein Händler"), el("span", "v", ganz(sum(z => z.gaenge))),
     el("span", null, "Kurs"), el("span", "v", "1.000 Eisen : " + ganz(kurs * 1000)));
   if (mitLager) {
     const ok = zeilen.filter(z => z.lg && z.fehlt <= 0.5).length, mit = zeilen.filter(z => z.lg).length;
@@ -1405,7 +1408,7 @@ function renderVorab() {
   box.appendChild(grid);
 
   const steps = el("div", "pr-steps");
-  [["1 · Tage vorher", "Am Markt gleichzeitig Eisen gegen Lehm und Eisen gegen Holz anbieten, dann nimmt an, wer das eine oder das andere braucht. Mengen je Dorf aus der Tabelle."],
+  [["1 · Tage vorher", "Am Markt gleichzeitig Eisen gegen Lehm und Eisen gegen Holz anbieten, dann nimmt an, wer das eine oder das andere braucht. Angebote je Dorf aus der Tabelle, von oben nach unten in der Reihenfolge deiner Dörfer; „Markt öffnen“ führt zu „Eigene Angebote“ des Dorfes."],
    ["2 · Vor dem Start", "Lehm und Holz bis zum Start im Lager lassen, Pakete erst nach dem Zeitplan einlösen."],
    ["3 · Ab dem Flaggendoppler", "Pakete und Versand wie im Zeitplan; der Vorrat gleicht den Eisenüberschuss aus."]].forEach(([k, txt]) => {
     const z = el("div"); z.append(el("b", null, k), document.createTextNode(txt)); steps.appendChild(z);
@@ -1415,9 +1418,11 @@ function renderVorab() {
   // Tabelle je Dorf, nach Mehrmünzen sortiert, alle Spalten sortierbar
   const cols = [["Dorf", "l", true], ["Lager zu Beginn", "l", true], ["Tauschen", "l", true]];
   if (mitLager) cols.push(["Eisen im Lager", "l", true]);
-  cols.push(["Händlergänge", "", true], ["Mehr Münzen", "", true]);
+  cols.push(["Händler", "", true], ["Mehr Münzen", "", true], ["Markt", "l", false]);
   const maxPlus = Math.max(...zeilen.map(z => z.x.plus));
-  const rows = zeilen.slice().sort((a, b) => b.x.plus - a.x.plus).map(z => {
+  dorfIdsLaden();
+  // Reihenfolge wie in deiner Übersicht (so sortiert wie deine Dörfer im Spiel), damit man von oben nach unten durchklickt
+  const rows = zeilen.slice().sort((a, b) => a.s.i - b.s.i).map(z => {
     const s = z.s, dn = el("span");
     dn.append(el("b", null, s.name), document.createTextNode(" "));
     dn.appendChild(el("span", "sub", s.x + "|" + s.y + (z.x.site ? "" : " · Markt " + s.marketFrom)));
@@ -1426,9 +1431,13 @@ function renderVorab() {
     lg.append(lagerZeile("l", "Lehm", z.L, s.cap), lagerZeile("h", "Holz", z.H, s.cap));
     const ts = el("span");
     if (z.kL + z.kH < 0.5) ts.append(el("b", null, "nichts"), el("span", "sub", "Lehm und Holz liegen schon im Lager"));
-    else ts.append(el("b", null, "Eisen " + ganz(z.eisen)), el("span", "sub", "→ " + [z.kL >= 0.5 ? "Lehm " + ganz(z.kL) : "", z.kH >= 0.5 ? "Holz " + ganz(z.kH) : ""].filter(Boolean).join(" · ")
-      + (z.eisen > s.cap ? " · mehr als ein Speicher, über mehrere Tage" : "")));
-    const zellen = [[dn, "l", s.name], [lg, "l", Math.round(z.L + z.H)], [ts, "l", Math.round(z.eisen)]];
+    else {
+      ts.appendChild(el("b", null, "Eisen " + ganz(z.eisen) + " → Lehm " + ganz(z.aL * z.proAngebot) + (z.aH ? " · Holz " + ganz(z.aH * z.proAngebot) : "")));
+      if (z.aL) ts.appendChild(el("span", "sub", "Angebot Lehm: " + ganz(z.aL) + " × " + ganz(P.carry) + " Eisen gegen " + ganz(z.proAngebot) + " Lehm"));
+      if (z.aH) ts.appendChild(el("span", "sub", "Angebot Holz: " + ganz(z.aH) + " × " + ganz(P.carry) + " Eisen gegen " + ganz(z.proAngebot) + " Holz"));
+      if (z.eisen > s.cap) ts.appendChild(el("span", "sub", "mehr als ein Speicher, über mehrere Tage"));
+    }
+    const zellen = [[dn, "l", s.i], [lg, "l", Math.round(z.L + z.H)], [ts, "l", Math.round(z.eisen)]];
     if (mitLager) {
       const e = el("span");
       if (!z.lg) e.appendChild(el("span", "sub", "nicht im Lagerstand"));
@@ -1442,7 +1451,7 @@ function renderVorab() {
     const pl = el("span"), gb = el("span", "pr-gb");
     gb.style.width = (z.x.plus / maxPlus * 48).toFixed(1) + "px";
     pl.append(gb, el("b", null, "+" + ganz(z.x.plus)));
-    zellen.push([hg, "", z.gaenge], [pl, "", Math.round(z.x.plus * 100)]);
+    zellen.push([hg, "", z.gaenge], [pl, "", Math.round(z.x.plus * 100)], [marktLink(s), "l", 0]);
     return zellen;
   });
   const wrap = el("div");
@@ -1455,7 +1464,34 @@ function renderVorab() {
   box.appendChild(el("p", "pr-note", (ohne ? nf.format(ohne) + (ohne === 1 ? " Dorf bekommt" : " Dörfer bekommen") + " keinen Vorrat: entweder schaffen sie schon den Paketinhalt nicht rechtzeitig (Markt zu klein), oder es bliebe danach mehr liegen, als geprägt wird. " : "")
     + "Annahmen: gleicher Zeitplan der Pakete wie ohne Tausch; je Dorf so viel Vorrat, wie es mehr Münzen bringt, ohne dass das Dorf mehr überläuft und solange mindestens 90 % des Vorrats geprägt werden. "
     + (mitLager ? "Was schon an Lehm und Holz im Lager liegt, muss nicht getauscht werden. " : "Ohne Lagerstand nimmt die Tabelle an, dass vor dem Tausch kein Lehm und kein Holz über den Startbestand hinaus im Lager liegt. ")
-    + "Ob andere Spieler die Angebote annehmen, kann der Rechner nicht wissen."));
+    + "Ob andere Spieler die Angebote annehmen, kann der Rechner nicht wissen. "
+    + "„Markt öffnen“ öffnet nur die Seite „Eigene Angebote“ des Dorfes im Spiel, in einem neuen Tab und ohne Herkunftsangabe; diese Seite fragt beim Spiel nichts ab. Das Angebot trägst du dort selbst ein."));
+}
+
+/* Link zu „Eigene Angebote“ des Dorfes im Spiel (Wunsch Dennis 09.11.2026). Die Seite fragt beim Spiel nichts ab: die
+   Dorf-ID kommt aus den Weltdaten dieser Seite (dorf_ids.json, gleiche Reihenfolge wie villages.json). Der Link
+   öffnet nur die Seite, ohne Herkunftsangabe (kein Referer). Ein Vorbelegen des Angebots über den Link ist nicht
+   bekannt; das Angebot trägt man im Spiel selbst ein. */
+let DORFID = null, DORFID_LAEDT = null;
+function dorfIdsLaden() {
+  if (DORFID || DORFID_LAEDT) return;
+  DORFID_LAEDT = Promise.all([loadData("villages"), loadData("dorf_ids"), loadData("meta")]).then(([v, ids, meta]) => {
+    const m = new Map();
+    v.rows.forEach((r, q) => { if (ids.ids[q]) m.set(r[0], ids.ids[q]); });
+    DORFID = {m, welt: meta.world || "de259"};
+    if (RESULT) renderVorab();
+  }).catch(() => { DORFID = {m: new Map(), welt: null, fehler: true}; if (RESULT) renderVorab(); });
+}
+function marktLink(s) {
+  if (!DORFID) return el("span", "sub", "lädt …");
+  const id = DORFID.m.get(s.x * 1000 + s.y);
+  if (!id || !DORFID.welt) return el("span", "sub", DORFID.fehler ? "ohne Weltdaten" : "Dorf nicht gefunden");
+  const a = el("a", "pr-markt", "Markt öffnen");
+  a.href = "https://" + DORFID.welt + ".die-staemme.de/game.php?village=" + id + "&screen=market&mode=own_offer";
+  a.target = "_blank";
+  a.rel = "noreferrer noopener";
+  a.referrerPolicy = "no-referrer";
+  return a;
 }
 
 /* ---------- Handelsrouten im Account-Manager (10.18, Wunsch Dennis 09.11.2026) ----------
