@@ -151,13 +151,17 @@ test("Einordnung: Off, knappe Off, Fakelimit", () => {
   assert.equal(d.offPop, 100 * 8);                                  // SKav zählt im Deff-Dorf nicht
 });
 
-test("Fakes aus Katapulten und Spähern", () => {
+test("Fakes aus Katapulten und Spähern: immer ein Späher, höchstens eine Ramme und nur ohne Katapult (Dennis 10.11.2026)", () => {
   const f = K.fakeAus({catapult: 50, spy: 100, ram: 0}, 105, W.pop, "kata");
   assert.deepEqual(f, {catapult: 13, spy: 1, ram: 0});              // 104 + 2 BH
   const s = K.fakeAus({catapult: 50, spy: 100, ram: 0}, 105, W.pop, "spaeher");
   assert.deepEqual(s, {catapult: 1, spy: 49, ram: 0});
-  assert.equal(K.fakeAus({catapult: 0, spy: 100, ram: 0}, 105, W.pop, "kata"), null);   // ohne Katapult kein Fake
-  assert.deepEqual(K.fakeAus({catapult: 0, spy: 0, ram: 30}, 105, W.pop, "kata"), {catapult: 0, spy: 0, ram: 21});
+  assert.deepEqual(K.fakeAus({catapult: 50, spy: 100, ram: 0}, 104, W.pop, "kata"), {catapult: 13, spy: 1, ram: 0});   // Katapulte allein reichen: Späher trotzdem
+  assert.equal(K.fakeAus({catapult: 50, spy: 0, ram: 30}, 105, W.pop, "kata"), null);   // ohne Späher kein Fake
+  assert.equal(K.fakeAus({catapult: 0, spy: 100, ram: 0}, 105, W.pop, "kata"), null);   // ohne Katapult und Ramme kein Fake
+  assert.deepEqual(K.fakeAus({catapult: 0, spy: 100, ram: 30}, 105, W.pop, "kata"), {catapult: 0, spy: 50, ram: 1});   // eine Ramme, Rest Späher
+  assert.deepEqual(K.fakeAus({catapult: 2, spy: 100, ram: 30}, 105, W.pop, "kata"), {catapult: 2, spy: 45, ram: 0});   // Katapult vor Ramme
+  assert.equal(K.fakeAus({catapult: 0, spy: 10, ram: 30}, 105, W.pop, "kata"), null);   // nie mit Rammen auffüllen
   assert.equal(K.fakeAus({catapult: 5, spy: 10, ram: 0}, 105, W.pop, "kata"), null);   // reicht nicht
 });
 

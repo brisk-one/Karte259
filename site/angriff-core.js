@@ -59,6 +59,8 @@ const CFG_DEFAULT = {
   fake_extra_pop: 5,          // Zuschlag auf das Fakelimit, Dorfpunkte steigen bis zum Abschicken
   extra_fakes: false,         // zusätzliche Fakeziele aus dem Stamm der Zielspieler
   extra_fakes_per_village: 1, // Fakes je Zieldorf für diese Stammesmitglieder, nachrangig zu den Pflicht- und weiteren Fakezielen (Dennis 10.11.2026)
+  fakes_max_je_dorf: 4,       // höchstens so viele Fakes aus einem eigenen Dorf (Dennis 10.11.2026 00:52)
+  fake_verteilung: "reihum",  // "reihum": erst jedes Fakeziel einen Fake, dann bis zur vollen Zahl; "haupt": Pflichtziele zuerst voll (bis 10.11.)
   moral_threshold: 1.0,
   send_gap_target_s: 10,      // Mindestabstandtendenz: Richtwert zwischen Abschickvorgängen einer Sitzung (Dennis 21:04)
   zeit_rangfolge: "standard", // Abwägung (Dennis 21:26, Auswahl in der Konfig): "standard", "sitzungen", "nachtruhe"
@@ -486,26 +488,22 @@ class Fluss {
 }
 
 /* ---------- Truppen zusammenstellen ---------- */
-/** Fake aus Katapulten (zuerst), Spähern und, wo erlaubt, Rammen. Mindestens ein Katapult oder eine Ramme. */
+/** Fake (Dennis 10.11.2026): immer mindestens ein Späher; Katapulte vor Rammen, höchstens eine Ramme und nur, wenn kein
+    Katapult frei ist. Aufgefüllt wird bis zum Fakelimit mit Katapulten und Spähern („kata“: Katapulte zuerst, „spaeher“:
+    ein Katapult, Rest Späher), nie mit Rammen. null: aus diesem Dorf geht kein Fake. */
 function fakeAus(av, need, pop, modus) {
+  if (av.spy < 1) return null;
   const f = {catapult: 0, spy: 0, ram: 0};
-  if (av.catapult < 1 && av.ram < 1) return null;
-  let rest = need;
-  if (modus === "spaeher") {
-    if (av.catapult >= 1) { f.catapult = 1; rest -= pop.catapult; } else { f.ram = 1; rest -= pop.ram; }
-    const s = Math.min(av.spy, Math.max(0, Math.ceil(rest / pop.spy)));
-    f.spy = s; rest -= s * pop.spy;
-  } else {
-    f.catapult = Math.min(av.catapult, Math.max(av.catapult >= 1 ? 1 : 0, Math.floor(rest / pop.catapult)));
-    rest -= f.catapult * pop.catapult;
-    if (rest > 0) { const s = Math.min(av.spy, Math.ceil(rest / pop.spy)); f.spy = s; rest -= s * pop.spy; }
-  }
-  if (rest > 0) { const c = Math.min(av.catapult - f.catapult, Math.ceil(rest / pop.catapult)); f.catapult += c; rest -= c * pop.catapult; }
-  if (rest > 0) { const r = Math.min(av.ram - f.ram, Math.ceil(rest / pop.ram)); f.ram += r; rest -= r * pop.ram; }
-  if (f.catapult + f.ram < 1) {
-    if (av.ram >= 1) { f.ram = 1; rest -= pop.ram; } else return null;
-  }
-  return rest > 0 ? null : f;
+  if (av.catapult >= 1) f.catapult = 1; else if (av.ram >= 1) f.ram = 1; else return null;
+  let rest = need - f.catapult * pop.catapult - f.ram * pop.ram;
+  const kata = n => { const c = Math.min(av.catapult - f.catapult, Math.max(0, n)); f.catapult += c; rest -= c * pop.catapult; };
+  const spaeher = n => { const k = Math.min(av.spy - f.spy, Math.max(0, n)); f.spy += k; rest -= k * pop.spy; };
+  if (modus !== "spaeher" && f.catapult) kata(Math.floor(rest / pop.catapult));
+  if (rest > 0) spaeher(Math.ceil(rest / pop.spy));
+  if (rest > 0 && f.catapult) kata(Math.ceil(rest / pop.catapult));
+  if (rest > 0) return null;
+  if (f.spy < 1) f.spy = 1;
+  return f;
 }
 
 /** Begleitschutz von etwa bh BH aus den verfügbaren Einheiten (Äxte zuerst). */
@@ -982,6 +980,7 @@ function plan(input) {
   });
   const fakes = [];
   const fakeQuellen = villages.filter(v => v.fakeMin && v.rolleFake);
+  const ohneSpaeher = fakeQuellen.filter(v => v.fakeAv.spy < 1 && v.fakeAv.catapult + v.fakeAv.ram >= 1).length;
   if (villages.some(v => !v.fakeMin)) warnings.push({art: "punkte", text: "Dörfer ohne Dorfpunkte in den Weltdaten schicken keine Fakes"});
   // Stammesmitglieder reihum (je Mitglied ein Dorf, starke zuerst), damit jedes gewählte Mitglied Fakes bekommt, auch wenn
   // die Truppen nicht für alle Dörfer reichen (10.11.2026; vorher alle Dörfer des stärksten Mitglieds zuerst)
@@ -1003,7 +1002,8 @@ function plan(input) {
     const w = att.get(a).wunsch;
     const wahl = ANK.map((an, i) => {
       const ivs = [];
-      fakeQuellen.forEach(q => { if (q.att === a) fakeZiele.concat(extra).forEach(z => { const tr = travelS(world, "ram", dist(q, z)) * 1000; ivs.push([an.from - tr, an.to - tr]); }); });
+      // nur Abschickzeiten ab jetzt (10.11.2026: sonst lag die Sitzung bei weiten Zielen in der Vergangenheit und alle Fakes entfielen)
+      fakeQuellen.forEach(q => { if (q.att === a) fakeZiele.concat(extra).forEach(z => { const tr = travelS(world, "ram", dist(q, z)) * 1000; ivIntersect([[an.from - tr, an.to - tr]], ab).forEach(iv => ivs.push(iv)); }); });
       const p = dichtesterPunkt(ivs, w);
       const n = p == null ? 0 : ivs.filter(([x, y]) => x <= p && p <= y).length * (!w.length || ivHas(w, p) ? 1 : 0.5);
       return {i, p, n};
@@ -1027,8 +1027,10 @@ function plan(input) {
   };
   // Fakes je Zieldorf (wie bisher) oder je Herkunftsdorf (Dennis 09.11.2026, Konfig); Einstellungen je Spieler gehen vor
   const herkunft = cfg.fake_modus === "herkunft";
-  const sollQ = v => { const a = att.get(v.att); return a.fakeModus === "dorf" ? a.fakeN : cfg.fakes_per_village; };
-  const fakeLauf = (liste, istExtra, modus) => {
+  const sollQ = v => { const a = att.get(v.att); return Math.min(a.fakeModus === "dorf" ? a.fakeN : cfg.fakes_per_village, Math.max(1, Math.round(cfg.fakes_max_je_dorf || 4))); };
+  const maxQ = Math.max(1, Math.round(cfg.fakes_max_je_dorf || 4));
+  /** grenze: höchstens so viele Fakes je Ziel in diesem Lauf (Verteilung reihum). */
+  const fakeLauf = (liste, istExtra, modus, grenze) => {
     const kand = liste.map(t => {
       const q = fakeQuellen.filter(v => {
         // von Hand gewählte Mitglieder unter der Moral-Schwelle (Dennis 10.11.2026): jeder Angreifer darf sie faken
@@ -1048,8 +1050,9 @@ function plan(input) {
       // Topf je Fakeziel: die Spieler mit „ziel“ je eigener Topf mit ihrer Zahl, alle übrigen zusammen die Zahl der Konfig
       const topf = v => { const a = att.get(v.att); return a.fakeModus === "ziel" ? "s" + a.id : "alle"; };
       // Stammesmitglieder nachrangig mit eigener Zahl je Zieldorf (Dennis 10.11.2026)
-      const soll = k => k === "alle" ? (herkunft ? 0 : istExtra ? cfg.extra_fakes_per_village : cfg.fakes_per_village)
+      const soll0 = k => k === "alle" ? (herkunft ? 0 : istExtra ? cfg.extra_fakes_per_village : cfg.fakes_per_village)
         : istExtra ? Math.min(att.get(+k.slice(1)).fakeN, cfg.extra_fakes_per_village) : att.get(+k.slice(1)).fakeN;
+      const soll = k => grenze != null ? Math.min(grenze, soll0(k)) : soll0(k);
       const hat = new Map();
       fakes.forEach(f => { if (f.t.id === t.id) { const k = topf(f.v); hat.set(k, (hat.get(k) || 0) + 1); } });
       for (const {v} of sortiert) {
@@ -1057,6 +1060,7 @@ function plan(input) {
         if ((hat.get(k) || 0) >= soll(k)) continue;
         if (schon.has(v.id)) continue;
         if (a.fakeModus === "dorf" && v.fakes >= a.fakeN) continue;          // Obergrenze je eigenem Dorf
+        if (v.fakes >= maxQ) continue;                                          // höchstens N Fakes je eigenem Dorf
         const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus);
         if (!f) continue;
         v.fakeAv.catapult -= f.catapult; v.fakeAv.spy -= f.spy; v.fakeAv.ram -= f.ram;
@@ -1065,9 +1069,14 @@ function plan(input) {
       }
     });
   };
-  fakeLauf(fakeZiele, false, "kata");
-  fakeLauf(fakeZiele, false, "spaeher");
-  if (extra.length) fakeLauf(extra, true, "kata");
+  const laeufe = (liste, ex, grenze) => { if (liste.length) { fakeLauf(liste, ex, "kata", grenze); fakeLauf(liste, ex, "spaeher", grenze); } };
+  if (cfg.fake_verteilung === "haupt") { laeufe(fakeZiele, false); laeufe(extra, true); }
+  else {
+    // reihum (Dennis 10.11.2026 00:52: sonst bekam fast nur der Hauptspieler Fakes): erst jedes Pflichtziel, dann jedes
+    // Dorf der Stammesmitglieder einen Fake, danach Pflichtziele bis zur vollen Zahl, dann Mitglieder bis zu ihrer Zahl
+    laeufe(fakeZiele, false, 1); laeufe(extra, true, 1);
+    laeufe(fakeZiele, false); laeufe(extra, true);
+  }
   // Je Herkunftsdorf: jedes Dorf schickt N Fakes, Ziele gleichmäßig verteilt (wenig befakte und nahe zuerst), nie zweimal
   // dasselbe Ziel aus einem Dorf; Spieler mit „N je Fakeziel“ bleiben bei ihrem eigenen Topf
   const herkunftLauf = modus => {
@@ -1114,6 +1123,9 @@ function plan(input) {
     const qs = fakeQuellen.filter(v => att.get(v.att).fakeModus !== "ziel"), unter = qs.filter(v => v.fakes < sollQ(v)).length;
     if (unter) warnings.push({art: "fake", text: unter + " von " + qs.length + " Herkunftsdörfern unter ihrer Fakezahl (Truppen, Fakelimit, Abschickzeiten oder zu wenige Fakeziele)"});
   }
+  if (ohneSpaeher && (fakeZiele.length || extra.length || herkunft))
+    warnings.push({art: "fake", text: ohneSpaeher + (ohneSpaeher === 1 ? " Dorf" : " Dörfer") + " ohne freien Späher " + (ohneSpaeher === 1 ? "schickt" : "schicken") +
+      " keine Fakes: jeder Fake braucht mindestens einen Späher" + (cfg.spies_per_off > 0 ? " (Späher je Off sind vorher abgezogen)" : "")});
 
   /* ---- 6. Truppen zusammenstellen ---- */
   fakes.forEach(({v, f}) => { v.avail.catapult -= f.catapult; v.avail.spy -= f.spy; v.avail.ram -= f.ram; });
@@ -1641,6 +1653,8 @@ function pruefePlan(res, input) {
     if (it.kind === "fake") {
       const u = it.units;
       if (u.catapult + u.ram < 1) v.push("Fake ohne Katapult und Ramme");
+      if (u.spy < 1) v.push("Fake ohne Späher: " + it.v.id);
+      if (u.ram > 1 || (u.ram >= 1 && u.catapult >= 1)) v.push("Fake mit mehr als einer Ramme oder Ramme neben Katapult: " + it.v.id);
       const andere = UNITS.filter(x => !["catapult", "spy", "ram"].includes(x) && u[x] > 0);
       if (andere.length) v.push("Fake mit anderen Einheiten: " + andere.join(", "));
       const vv = (input.attackers || []).flatMap(a => a.villages).find(x => x.id === it.v.id);
