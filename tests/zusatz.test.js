@@ -1,53 +1,43 @@
-// Tests der Zusatzfunktionen: Verschlüsselung und öffentliche Teile, ohne das echte Passwort (Dennis 4a, 03.11.2026)
+// Tests der Zusatzfunktionen: einfache Passwortsperre im Browser, ohne das echte Passwort.
+// Seit 10.11.2026 (Dennis) liegt der Planer lesbar im Repo; zusatz.json enthält nur noch den Prüfwert.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("fs"), os = require("os"), path = require("path");
-const Z = require("../tools/zusatz_verschluesseln.js");
+const fs = require("fs"), path = require("path");
+const Z = require("../tools/zusatz_passwort.js");
+const SITE = path.join(__dirname, "..", "site");
 
-function quelle() {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), "zusatz-"));
-  fs.mkdirSync(path.join(d, "site"));
-  fs.writeFileSync(path.join(d, "site", "angriff.html"), "<html><head><style>.x{color:red}</style></head><body><main class=\"wrap\"><p>Plan</p></main>" +
-    "<script src=\"app.js\"></script><script src=\"angriff-core.js\"></script><script>window.SEITE = 1;</script></body></html>");
-  fs.writeFileSync(path.join(d, "site", "angriff-core.js"), "window.KERN = 1;");
-  return d;
-}
-
-test("Verschlüsseln und mit WebCrypto wie im Browser entschlüsseln", async () => {
-  const last = Z.nutzlast(quelle());
-  assert.deepEqual(last.skripte, ["window.KERN = 1;", "window.SEITE = 1;"]);
-  assert.equal(last.html, "<main class=\"wrap\"><p>Plan</p></main>");
-  const z = Z.bauen("Testpasswort", last, null, true);
-  assert.equal(z.iter, Z.ITER);
+/** Schlüssel ableiten und Prüfwert lesen wie zusatzFreischalten() in app.js (WebCrypto). */
+async function wieImBrowser(pw, z) {
   const {subtle} = require("crypto").webcrypto;
   const b = s => Buffer.from(s, "base64");
-  const basis = await subtle.importKey("raw", Buffer.from("Testpasswort"), "PBKDF2", false, ["deriveBits"]);
+  const basis = await subtle.importKey("raw", Buffer.from(pw), "PBKDF2", false, ["deriveBits"]);
   const bits = await subtle.deriveBits({name: "PBKDF2", hash: "SHA-256", salt: b(z.salt), iterations: z.iter}, basis, 256);
   const key = await subtle.importKey("raw", bits, "AES-GCM", false, ["decrypt"]);
-  const text = Buffer.from(await subtle.decrypt({name: "AES-GCM", iv: b(z.seiten.angriff.iv)}, key, b(z.seiten.angriff.ct))).toString("utf8");
-  assert.deepEqual(JSON.parse(text), last);
-  const pruef = Buffer.from(await subtle.decrypt({name: "AES-GCM", iv: b(z.pruef.iv)}, key, b(z.pruef.ct))).toString("utf8");
-  assert.equal(pruef, Z.PRUEF);
+  try { return Buffer.from(await subtle.decrypt({name: "AES-GCM", iv: b(z.pruef.iv)}, key, b(z.pruef.ct))).toString("utf8"); }
+  catch (e) { return null; }
+}
+
+test("Neues Passwort: der Browser erkennt das richtige und lehnt ein falsches ab", async () => {
+  const z = Z.bauen("Testpasswort", 1000);
+  assert.deepEqual(Object.keys(z).sort(), ["iter", "pruef", "salt", "v"]);
+  assert.equal(await wieImBrowser("Testpasswort", z), Z.PRUEF);
+  assert.equal(await wieImBrowser("Tippfehler", z), null);
+  assert.notEqual(Z.bauen("Testpasswort", 1000).salt, z.salt, "jedes Mal neues Salz");
 });
 
-test("Falsches Passwort wird abgelehnt, das richtige behält das Salz", () => {
-  const last = Z.nutzlast(quelle());
-  const alt = Z.bauen("Testpasswort", last, null, true);
-  assert.throws(() => Z.bauen("Tippfehler", last, alt, false), /passt nicht/);
-  const neu = Z.bauen("Testpasswort", last, alt, false);
-  assert.equal(neu.salt, alt.salt);
-  assert.notEqual(neu.seiten.angriff.iv, alt.seiten.angriff.iv);
+test("zusatz.json: nur Prüfwert, kein Chiffrat der Seite mehr", () => {
+  const z = JSON.parse(fs.readFileSync(path.join(SITE, "zusatz.json"), "utf8"));
+  assert.ok(z.salt && z.iter >= 100000 && z.pruef && z.pruef.iv && z.pruef.ct);
+  assert.equal(z.seiten, undefined);
+  assert.ok(fs.readFileSync(path.join(SITE, "app.js"), "utf8").includes('ZUSATZ_PRUEF = "' + Z.PRUEF + '"'));
 });
 
-test("Öffentliche Teile enthalten keinen Planer im Klartext", () => {
-  const site = path.join(__dirname, "..", "site");
-  assert.ok(!fs.existsSync(path.join(site, "angriff-core.js")), "Rechenkern nicht im Repo");
-  const lader = fs.readFileSync(path.join(site, "angriff.html"), "utf8");
-  assert.ok(lader.length < 6000 && !/parseOverview|zeitenPlanen|Truppenübersicht/.test(lader));
-  const zf = path.join(site, "zusatz.json");
-  if (fs.existsSync(zf)) {
-    const z = JSON.parse(fs.readFileSync(zf, "utf8"));
-    assert.ok(z.salt && z.iter >= 100000 && z.pruef && z.seiten && z.seiten.angriff);
-    assert.ok(!/Angriffsplaner|function |zeitenPlanen/.test(JSON.stringify(z.seiten)), "nur Chiffrat");
-  }
+test("angriff.html: Planer gesperrt, Skripte erst nach dem Freischalten", () => {
+  const h = fs.readFileSync(path.join(SITE, "angriff.html"), "utf8");
+  assert.match(h, /id="zusatz-sperre"/);
+  assert.match(h, /<main class="wrap" id="planer" hidden>/);
+  assert.ok(!/<script src="angriff-(core|seite)\.js">/.test(h), "kein direktes Laden vor der Prüfung");
+  assert.match(h, /\["angriff-core\.js", "angriff-seite\.js"\]/);
+  assert.match(h, /zusatzEntschluesseln\(z\.k, d\.pruef\) === ZUSATZ_PRUEF/);
+  for (const f of ["angriff-core.js", "angriff-seite.js"]) assert.ok(fs.existsSync(path.join(SITE, f)), f);
 });

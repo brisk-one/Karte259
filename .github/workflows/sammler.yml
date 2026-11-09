@@ -100,6 +100,9 @@ jobs:
       - name: Tests Zusatzfunktionen
         run: node --test tests/zusatz.test.js
 
+      - name: Tests Angriffsplaner
+        run: node --test tests/angriff.test.js
+
       - name: Tests Truppen-Äquivalent
         run: node --test tests/truppen.test.js
 
@@ -174,6 +177,9 @@ jobs:
 
       - name: Tests Zusatzfunktionen
         run: node --test tests/zusatz.test.js
+
+      - name: Tests Angriffsplaner
+        run: node --test tests/angriff.test.js
 
       - name: Tests Truppen-Äquivalent
         run: node --test tests/truppen.test.js

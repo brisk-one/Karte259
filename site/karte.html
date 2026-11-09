@@ -2186,7 +2186,7 @@ function readUrl(){
   const sv=+p.get("s"); if(STAERKE_STUFEN.includes(sv)) minStaerke=sv;
   if(p.get("n")==="rot") namesFrom=NAME_AB_ROT;
   const aw=p.get("auswahl");
-  if(aw && /^(ag(:\d{1,2})?|fake|1)$/.test(aw)){ AW.start=true; AW.startZiel = aw==="1"? null : aw; AW.startFuer=(p.get("fuer")||"").slice(0,40); }
+  if(aw && /^(ag(:\d{1,2})?|fake|fakeziel|1)$/.test(aw)){ AW.start=true; AW.startZiel = aw==="1"? null : aw; AW.startFuer=(p.get("fuer")||"").slice(0,40); }
   const k=p.get("k");
   if(k){ kriegOffen=true; const m=k.match(/^(\d+)-(\d+)$/); if(m) kriegSel=[+m[1], +m[2]]; }
   (p.get("m")||"").split(",").filter(Boolean).forEach(s=>{
@@ -2365,7 +2365,7 @@ $("q").addEventListener("blur", ()=>setTimeout(()=>{ $("sugg").hidden=true; }, 1
 $("q").addEventListener("keydown", e=>{ if(e.key==="Escape") $("sugg").hidden=true; });
 
 /* ---------- Auswahlmodus für den Angriffsplaner (S4, 02.11.2026, Spezifikation Angriffsplaner 7) ----------
-   Aufruf aus dem Planer mit karte.html?auswahl=ag, ag:<Angreifer> oder fake, ohne Planer über „Dörfer auswählen“.
+   Aufruf aus dem Planer mit karte.html?auswahl=ag, ag:<Angreifer>, fakeziel (Abschnitt 3) oder fake (Abschnitt 6), ohne Planer über „Dörfer auswählen“.
    Werkzeuge Klick, Rechteck und Lasso. Bei Rechteck und Lasso zieht die linke Maustaste (ein Finger) die Auswahl,
    verschoben wird mit rechter oder mittlerer Maustaste, Pfeiltasten oder zwei Fingern. Bei Klick gibt es nichts zu
    ziehen, dort verschiebt Ziehen die Karte wie sonst. Escape bricht ein Rechteck oder Lasso ab, sonst beendet es den
@@ -2387,7 +2387,8 @@ const awErlaubt = i => !AW.nurSpieler || vp[i]>=0;
 let awHinweisTimer=0;
 function awTitel(){
   if(!AW.ziel) return "Dörfer auswählen";
-  if(AW.ziel==="fake") return "Fakeziele";
+  if(AW.ziel==="fake") return "weitere Fakeziele";
+  if(AW.ziel==="fakeziel") return "Fakeziele";
   return "AG-Ziele"+(AW.fuer? " für "+AW.fuer : (AW.ziel!=="ag"? " eines Angreifers" : ""));
 }
 function awSpeichern(){
@@ -2617,7 +2618,7 @@ function renderAuswahl(){
   if(AW.ziel) knopf("Kopieren und zurück zum Planer", ()=>awZumPlaner(AW.ziel), "Koordinaten in die Zwischenablage und als "+awTitel()+" in den Angriffsplaner");
   else if(zusatzFrei()){
     knopf("Als AG-Ziele in den Planer", ()=>awZumPlaner("ag"));
-    knopf("Als Fakeziele in den Planer", ()=>awZumPlaner("fake"));
+    knopf("Als Fakeziele in den Planer", ()=>awZumPlaner("fakeziel"));   // Abschnitt 3 (Dennis 10.11.2026)
   }
   knopf(AW.ziel? "Nur kopieren" : "Kopieren", ()=>awKopieren(true), "Koordinaten in die Zwischenablage, je Zeile ein Dorf");
   knopf("Leeren", ()=>awAendern(new Set()), "Alle entfernen, rückgängig mit ↩");

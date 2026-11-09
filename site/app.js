@@ -64,9 +64,11 @@ function toggleTheme() {
 }
 
 /* ---------- Zusatzfunktionen (Angriffsplaner) ----------
-   Dennis 02.11.2026 21:26 und 03.11. 02:42: die Planerseite liegt verschlüsselt in zusatz.json (AES-GCM, Schlüssel per
-   PBKDF2-SHA-256 aus dem Passwort, erzeugt mit tools/zusatz_verschluesseln.js). Nach dem Freischalten liegt nur der
-   abgeleitete Schlüssel im localStorage dieses Browsers, nie das Passwort. Der Reiter erscheint erst danach. */
+   Dennis 10.11.2026: einfache Passwortsperre nur im Browser, kein Schutz gegen Leser des Repos (der Planer liegt lesbar
+   in angriff-core.js und angriff-seite.js). zusatz.json enthält Salz, Runden und einen Prüfwert (AES-GCM über
+   ZUSATZ_PRUEF, Schlüssel per PBKDF2-SHA-256 aus dem Passwort, neues Passwort mit tools/zusatz_passwort.js). Nach dem
+   Freischalten liegt nur der abgeleitete Schlüssel im localStorage dieses Browsers, nie das Passwort. Der Reiter
+   erscheint erst danach. */
 const ZUSATZ_SPEICHER = "k259-zusatz", ZUSATZ_PRUEF = "Karte259";
 const b64zuBytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const bytesZuB64 = buf => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); };
