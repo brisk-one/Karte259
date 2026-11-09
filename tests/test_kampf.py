@@ -34,6 +34,22 @@ def neu(**d):
 
 
 class ZuordnenTest(unittest.TestCase):
+    def test_zeile_traegt_stamm_zur_kampfzeit(self):
+        # Wunsch Dennis 09.11.2026: die Karte zeigte den heutigen Stamm (OdR gegen GSE sah aus wie GSE gegen GSE)
+        k, = kampf.zuordnen(ALT, neu(d10=50000, a20=40000, s12=8000, a30=900), DOERFER, None)
+        z = kampf.zeile(0, k, {})
+        f = {n: i for i, n in enumerate(kampf.FELDER)}
+        self.assertEqual(z[f["va"]], 1)                          # Verteidiger 10 in Stamm 1
+        self.assertEqual(z[f["a"]][0][0], 20)
+        self.assertEqual(z[f["a"]][0][6], 2)                     # Angreifer an Stelle 6, Anteil bleibt an Stelle 5
+        self.assertEqual(z[f["a"]][0][5], 40000)
+        self.assertEqual(z[f["u"]][0][5], 1)                     # Unterstützer an Stelle 5
+
+    def test_verworfene_mit_stamm_und_kennzeichen(self):
+        k, = kampf.zuordnen(ALT, neu(d10=50000, a20=400000), DOERFER, None)
+        self.assertEqual(k["av"][0][:2], [20, 400000])
+        self.assertEqual(k["av"][0][3:], [0, 2])                 # nicht verbündet, Stamm 2
+
     def test_verbuendeter_angreifer_weicht_dem_fremden(self):
         # Stamm 2 mit Stamm 1 verbündet (Bündnis oder Wing, Dennis 2a): 20 steht näher und passt besser, 30 gewinnt
         k, = kampf.zuordnen(ALT, neu(d10=50000, a20=40000, a30=30000), DOERFER, None, buendnisse=[(2, 1)])

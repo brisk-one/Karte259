@@ -115,3 +115,26 @@ class BashStufenTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StammtagsTest(unittest.TestCase):
+    """Kürzel zur Kampfzeit (Wunsch Dennis 09.11.2026): umbenannte Stämme mit dem Kürzel des Kampftags."""
+
+    def test_tagesarchiv_vor_heute_und_aufgeloeste_aus_aelterem_archiv(self):
+        import csv as _csv, gzip as _gzip, os as _os, tempfile as _tf
+        with _tf.TemporaryDirectory() as d:
+            _os.makedirs(_os.path.join(d, "daily", "allies"))
+            _os.makedirs(_os.path.join(d, "latest"))
+            def schreib(pfad, zeilen, gz):
+                f = _gzip.open(pfad, "wt", encoding="utf-8", newline="") if gz else open(pfad, "w", encoding="utf-8", newline="")
+                with f:
+                    w = _csv.writer(f)
+                    w.writerow(["id", "name", "tag", "members", "villages", "points", "all_points", "rank"])
+                    w.writerows(zeilen)
+            schreib(_os.path.join(d, "daily", "allies", "2026-09-20.csv.gz"), [[7, "Alt", "ALT", 1, 1, 1, 1, 9]], True)
+            schreib(_os.path.join(d, "daily", "allies", "2026-09-25.csv.gz"), [[148, "Orden des Raben", "OdR", 25, 1, 1, 1, 7]], True)
+            schreib(_os.path.join(d, "latest", "allies.csv"), [[148, "Sieger des Suedens", "SdS", 13, 1, 1, 1, 25],
+                                                                [123, "Green Street Elite", "GSE", 24, 1, 1, 1, 3]], False)
+            self.assertEqual(build_site.stammtags({148, 123, 7}, "2026-09-25", d), {"7": "ALT", "123": "GSE", "148": "OdR"})
+            self.assertEqual(build_site.stammtags({148}, None, d), {"148": "SdS"})
+

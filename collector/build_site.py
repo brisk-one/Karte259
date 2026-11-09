@@ -180,6 +180,7 @@ def kampf_bauen(versions, players_path, vrows, ddir):
     ivs = list(kampf.intervalle(staende, doerfer, kampf.verluste_laden(), _iso))
     k = kampf.als_json(ivs)
     k["data_time_utc"] = _iso(versions[0][1])
+    k["tags"] = stammtags(_stamm_ids(k))
     _dump(os.path.join(ddir, "kampf.json"), k)
     # Kriege aus dem Kampfverlauf (data/kampf/kaempfe_*.csv) plus den Intervallen, die der Sammler noch nicht
     # eingetragen hat (er trägt nur Intervalle aus bereits gespeicherten Ständen ein)
@@ -196,6 +197,50 @@ def kampf_bauen(versions, players_path, vrows, ddir):
             "verlaufszeilen": kr["verlaufszeilen"], "tage": tage, "kampf_regel": krieg.regel_stand()}
 
 
+def _stamm_ids(k):
+    """Stämme zur Kampfzeit aus den Zeilen einer Kampfdatei (Angreifer, Unterstützer, Verworfene, Verteidiger)."""
+    f = {n: i for i, n in enumerate(k["felder"])}
+    ids = set()
+    liste = lambda r, n: r[f[n]] if len(r) > f[n] and isinstance(r[f[n]], list) else []
+    for r in k["rows"]:
+        if len(r) > f["va"]:
+            ids.add(r[f["va"]])
+        ids.update(a[6] for a in liste(r, "a") if isinstance(a, list) and len(a) > 6)
+        ids.update(u[5] for u in liste(r, "u") if isinstance(u, list) and len(u) > 5)
+        ids.update(x[4] for x in liste(r, "av") if isinstance(x, list) and len(x) > 4)
+    return {i for i in ids if isinstance(i, int) and i}
+
+
+def stammtags(ids, tag=None, data_dir=None):
+    """Kürzel je Stamm-ID für die Kampfansicht. Mit tag (JJJJ-MM-TT) zuerst aus dem Tagesarchiv dieses Tages, damit
+    ein später umbenannter Stamm mit dem damaligen Kürzel erscheint (148 hieß am 25.09. OdR, heute SdS); sonst der
+    heutige Stand, für aufgelöste Stämme das jüngste Tagesarchiv, in dem sie vorkommen."""
+    fehlt, tags = set(ids), {}
+    ddir = data_dir or store.dpath()
+    adir = os.path.join(ddir, "daily", "allies")
+
+    def archiv(name):
+        with gzip.open(os.path.join(adir, name), "rt", encoding="utf-8", newline="") as f:
+            return list(csv.DictReader(f))
+
+    def nimm(rows):
+        for r in rows:
+            i = int(r["id"])
+            if i in fehlt:
+                tags[i] = r["tag"]
+                fehlt.discard(i)
+
+    if fehlt and tag and os.path.exists(os.path.join(adir, f"{tag}.csv.gz")):
+        nimm(archiv(f"{tag}.csv.gz"))
+    if fehlt:
+        nimm(store.read_csv(os.path.join(ddir, "latest", "allies.csv")))
+    for name in sorted(os.listdir(adir), reverse=True) if fehlt and os.path.isdir(adir) else []:
+        nimm(archiv(name))
+        if not fehlt:
+            break
+    return {str(i): t for i, t in sorted(tags.items())}
+
+
 def kampf_tage_bauen(ivs, ddir, data_dir=None):
     """Kampfansicht vergangener Tage: je Kalendertag (Europe/Berlin, nach Intervallende) eine Datei
     data/kampf_tage/JJJJ-MM-TT.json im Format von kampf.json, dazu data/kampf_tage.json mit Menge je Tag.
@@ -210,6 +255,7 @@ def kampf_tage_bauen(ivs, ddir, data_dir=None):
     for tag, ds in sorted(tage.items()):
         k = kampf.zusammenfuegen(ds)
         k["tag"] = tag
+        k["tags"] = stammtags(_stamm_ids(k), tag, data_dir)
         _dump(os.path.join(ddir, "kampf_tage", f"{tag}.json"), k)
         index.append({"tag": tag, "von": ds[0]["von"], "bis": ds[-1]["bis"], "intervalle": len(ds),
                       "kaempfe": len(k["rows"]), "deff": sum(r[2] for r in k["rows"])})

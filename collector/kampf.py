@@ -53,7 +53,7 @@ WAHRSCHEINLICH, MOEGLICH, UNKLAR = "wahrscheinlich", "möglich", "unklar"
 # Mindest-Stärke filtert die Karte im Browser (Dennis K1d): Auswahl und Startwert; der Seitenbau schreibt alle Kämpfe
 STAERKE_STUFEN = [1000, 5000, 10000, 25000, 50000, 100000]
 STAERKE_START = 10000
-REGEL = 4             # Stand der Zuordnungsregel (3: Bündnisse, 4: Off nur einmal verbraucht, 01.11.2026); ein anderer Stand im Kampfverlauf löst dessen Neuberechnung aus
+REGEL = 5             # Stand der Zuordnungsregel (3: Bündnisse, 4: Off nur einmal verbraucht, 01.11.2026; 5: Stamm zur Kampfzeit in den Zeilen, 09.11.2026); ein anderer Stand im Kampfverlauf löst dessen Neuberechnung aus
 
 
 def _paare(buendnisse):
@@ -268,8 +268,8 @@ def zuordnen(alt, neu, doerfer, verluste, buendnisse=None):
                      round(anteil.get((a, v), 0))]
                     for _, a, d, _ in gueltig[:MAX_ANGREIFER]],
                  a_sicher=sicher,
-                 av=([[a, off, round(d, 1), 1] for _, a, d, off in verbuendete]
-                     + [[a, off, round(d, 1)] for _, a, d, off in verworfen])[:MAX_VERWORFEN])
+                 av=([[a, off, round(d, 1), 1, neu[a]["ally"]] for _, a, d, off in verbuendete]
+                     + [[a, off, round(d, 1), 0, neu[a]["ally"]] for _, a, d, off in verworfen])[:MAX_VERWORFEN])
         # Unterstützer zeigen vom nächsten Teil ihres Gebiets auf den endgültigen Ort
         k["u"] = [[s, w, sicher, *_mitte(sorted(doerfer[s], key=lambda p: _dist(p, ziel))[:3]), ally]
                   for s, w, sicher, ally in k["u"]]
@@ -297,7 +297,7 @@ def stand(rows):
 
 
 KURZ = {WAHRSCHEINLICH: "w", MOEGLICH: "m", UNKLAR: "u"}
-FELDER = ["i", "v", "dv", "x", "y", "geschaetzt", "staerke", "a_sicher", "orte", "a", "u", "treffer", "av"]
+FELDER = ["i", "v", "dv", "x", "y", "geschaetzt", "staerke", "a_sicher", "orte", "a", "u", "treffer", "av", "va"]
 
 
 def zeile(i, k, stunde_nr):
@@ -305,11 +305,14 @@ def zeile(i, k, stunde_nr):
     zugeordnete Off (ab Regel 4)],
     Unterstützer [pid, Δsup, Sicherheit, x, y], Sicherheit als w, m oder u. Treffer [x*1000+y, Stunde, Δpunkte],
     Stunde als Index in "stunden" ([vorher, stand] der Stunde mit dem Punktverlust), -1 ohne Zeit. Verworfene
-    Angreifer (Off passt nicht zur Stärke) [pid, Δatt, Abstand]."""
+    Angreifer (Off passt nicht zur Stärke) [pid, Δatt, Abstand, verbündet 0/1, Stamm]. Ab Regel 5 trägt jede Person
+    den Stamm zur Kampfzeit: Angreifer an Stelle 6, Unterstützer an Stelle 5, Verteidiger im Feld "va"
+    (Wunsch Dennis 09.11.2026: die Karte zeigte den heutigen Stamm, ein früherer Kampf OdR gegen GSE sah aus
+    wie ein Angriff innerhalb von GSE)."""
     return [i, k["v"], k["dv"], k["ziel"][0], k["ziel"][1], int(k["geschaetzt"]), k["staerke"], KURZ[k["a_sicher"]],
-            [x * 1000 + y for x, y in k["orte"]], [a[:5] + a[6:7] for a in k["a"]],
-            [[u[0], u[1], KURZ[u[2]], u[3], u[4]] for u in k["u"]],
-            [[x * 1000 + y, stunde_nr.get(t, -1), dp] for x, y, t, dp in k["treffer"]], k.get("av", [])]
+            [x * 1000 + y for x, y in k["orte"]], [a[:5] + a[6:7] + a[5:6] for a in k["a"]],
+            [[u[0], u[1], KURZ[u[2]], u[3], u[4], u[5]] for u in k["u"]],
+            [[x * 1000 + y, stunde_nr.get(t, -1), dp] for x, y, t, dp in k["treffer"]], k.get("av", []), k["ally"]]
 
 
 def _bash_gleich(a, b):

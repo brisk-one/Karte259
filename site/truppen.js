@@ -31,18 +31,18 @@ function sig2(x) {
   return Math.round(x / f) * f;
 }
 const nf = new Intl.NumberFormat("de-DE"), nf1 = new Intl.NumberFormat("de-DE", {maximumFractionDigits: 1});
-/** „≈ 1,5 Offs (9.600 Axt, 4.500 LKav, 450 Rammen)“, „≈ 1,1 Deffs (je 7.100 Speer, Schwert, Bogen)“.
-    kurz: nur „≈ 1,5 Offs“. Unter 0,1 nur die Einheiten. Leer bei 0. */
-function truppenText(punkte, art, kurz) {
+/** „≈ 1,5 Offs (9.600 Axt, 4.500 LKav, 450 Rammen)“, „≈ 1,1 Deffs (7.100 Speer, 7.100 Schwert, 7.100 Bogen)“.
+    Immer mit der Zahl der Einheiten (Dennis 09.11.2026, die Kurzform „≈ 0,5 Deffs“ entfällt; der frühere dritte
+    Parameter kurz wird ignoriert). Unter 0,1 nur die Einheiten. Leer bei 0. */
+function truppenText(punkte, art) {
   const t = bashTruppen(punkte, art);
   if (!(t.anzahl > 0)) return "";
   const n = Math.round(t.anzahl * 10) / 10;
   const wort = t.off ? (n === 1 ? "Off" : "Offs") : (n === 1 ? "Deff" : "Deffs");
   let teile;
   if (t.off) teile = Object.keys(VOLLE_OFF).map(u => [sig2(t.einheiten[u]), NAME[u]]).filter(x => x[0] > 0).map(x => nf.format(x[0]) + " " + x[1]).join(", ");
-  else { const e = sig2(t.einheiten.spear); teile = e > 0 ? "je " + nf.format(e) + " Speer, Schwert, Bogen" : ""; }
+  else { const e = sig2(t.einheiten.spear); teile = e > 0 ? ["Speer", "Schwert", "Bogen"].map(x => nf.format(e) + " " + x).join(", ") : ""; }
   if (n < 0.1) return teile ? "≈ " + teile : "";
-  if (kurz) return "≈ " + nf1.format(n) + " " + wort;
   return "≈ " + nf1.format(n) + " " + wort + (teile ? " (" + teile + ")" : "");
 }
 const INFO = "Näherung: eine volle Off sind 6.500 Axt, 3.000 LKav und 300 Rammen (20.000 Plätze, " + nf.format(BASH_JE_OFF) +

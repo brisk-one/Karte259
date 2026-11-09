@@ -21,9 +21,11 @@ test("Umrechnung laut Definition of Done", () => {
 
 test("Anzeige: Format und Rundung", () => {
   assert.equal(T.truppenText(100000, "def"), "≈ 1,5 Offs (9.600 Axt, 4.500 LKav, 450 Rammen)");
-  assert.equal(T.truppenText(100000, "att"), "≈ 1,1 Deffs (je 7.100 Speer, Schwert, Bogen)");
-  assert.equal(T.truppenText(100000, "def", true), "≈ 1,5 Offs");
-  assert.equal(T.truppenText(67400, "def", true), "≈ 1 Off");
+  assert.equal(T.truppenText(100000, "att"), "≈ 1,1 Deffs (7.100 Speer, 7.100 Schwert, 7.100 Bogen)");
+  // immer mit Einheiten (Dennis 09.11.2026), ein früher übergebenes kurz ändert nichts
+  assert.equal(T.truppenText(100000, "def", true), "≈ 1,5 Offs (9.600 Axt, 4.500 LKav, 450 Rammen)");
+  assert.equal(T.truppenText(67400, "def"), "≈ 1 Off (6.500 Axt, 3.000 LKav, 300 Rammen)");
+  assert.equal(T.truppenText(47635, "att"), "≈ 0,5 Deffs (3.400 Speer, 3.400 Schwert, 3.400 Bogen)");
   assert.equal(T.truppenText(3000, "def"), "≈ 290 Axt, 130 LKav, 13 Rammen");     // unter 0,1 Offs nur Einheiten
   assert.equal(T.truppenText(0, "att"), "");
   assert.equal(T.truppenText(5, "att"), "");                                       // weniger als eine halbe Einheit
