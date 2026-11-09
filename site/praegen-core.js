@@ -753,16 +753,17 @@ function routeMenge(n, P) {
   const tot = n * P.carry, c = COIN(P), u = P.unitRes;
   return c.map(x => Math.floor(tot * x / u / 100) * 100);
 }
-const ROUTE_DT = [1, 2, 3, 4, 6, 8, 12];
-const ROUTE_N = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 140, 160, 180, 200, 220, 235];
+// Abstände in Stunden: ab 10 Minuten (Hinweis Dennis 09.11.2026 16:42: auch kurze Abstände wie 10 Minuten sind möglich)
+const ROUTE_DT = [1 / 6, 1 / 4, 1 / 3, 1 / 2, 1, 2, 3, 4, 6];
+const ROUTE_N = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 235];
 /* Beste Routen für 1 bis rMax Routen. Je Lieferdorf, Abstand und Händlerzahl die Münzen aus den Lieferungen
    (Dörfer rechnen im Prägeverhältnis unabhängig voneinander); eine Route ist (Prägedorf, Abstand, Händlerzahl),
    jedes Dorf kommt in die Route seines Prägedorfs, die ihm am meisten bringt. Auswahl je Routenzahl gierig, dann
    Tausch einzelner Routen, solange es besser wird. */
-function routenPlan(src, P, sites, cnt, rMax) {
+function routenPlan(src, P, sites, cnt, rMax, nurDt) {
   const base = lockstep(src, P, sites, cnt, false), {site, tau} = src._ls;
   const cands = [];
-  for (const j of sites) for (const dt of ROUTE_DT) for (const n of ROUTE_N) cands.push({site: j, dt, n, a: routeMenge(n, P)});
+  for (const j of sites) for (const dt of (nurDt || ROUTE_DT)) for (const n of ROUTE_N) cands.push({site: j, dt, n, a: routeMenge(n, P)});
   const lief = src.map((_, i) => i).filter(i => site[i] !== i);
   const val = new Map(), ovv = new Map(), info = new Map();
   let ov0 = 0, pkSum = 0, eigen = 0;
