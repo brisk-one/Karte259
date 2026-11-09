@@ -201,6 +201,25 @@
   .pr-tag{display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:9px; border:1px solid var(--accent);
     color:var(--accent); line-height:15px; margin-left:4px}
 
+  /* Handelsrouten (10.18) */
+  .pr-rkurve{display:grid; gap:4px; margin:0 0 12px; max-width:640px}
+  .pr-rkurve>div{display:grid; grid-template-columns:76px minmax(0,1fr) 150px; gap:10px; align-items:center; font-size:12px}
+  .pr-rkurve .bk{height:12px; background:var(--edge-line); border-radius:2px; overflow:hidden}
+  .pr-rkurve .bk i{display:block; height:100%; background:var(--st-rest)}
+  .pr-rkurve .on .bk i{background:var(--accent)}
+  .pr-rkurve .on{font-weight:700}
+  .pr-rkurve .ref .bk i{background:var(--st-ok)}
+  .pr-rkurve .num{font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap}
+  .pr-routen{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px}
+  .pr-routen .pr-kg{padding-bottom:10px}
+  .pr-routen .in{padding:8px 12px 0; font-size:12px; display:grid; gap:6px}
+  .pr-routen .amt{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:14px; font-weight:700; font-variant-numeric:tabular-nums}
+  .pr-routen .amt span{display:inline-flex; align-items:center}
+  .pr-routen .sub{font-size:11px; color:var(--muted)}
+  .pr-routen details summary{cursor:pointer; color:var(--ink-2); font-weight:700}
+  .pr-routen details ol{margin:5px 0 0; padding-left:20px; font-size:11.5px; columns:2; column-gap:18px}
+  @media (max-width:640px){ .pr-rkurve>div{grid-template-columns:64px minmax(0,1fr) 116px} .pr-routen details ol{columns:1} }
+
   /* Aufteilung Holz, Lehm, Eisen: Feld beim Überfahren, Fokus und Antippen */
   .pr-res{cursor:help; color:var(--ink-2); border-bottom:1px dotted currentColor; white-space:nowrap; border-radius:2px}
   .pr-res:hover,.pr-res[aria-expanded="true"]{color:var(--ink)}
@@ -404,6 +423,20 @@
     </div>
   </section>
 
+  <!-- 10.18: Handelsrouten im Account-Manager (Wunsch Dennis 09.11.2026, Entscheidung 1c, 2a, 3a) -->
+  <section class="panel" aria-labelledby="h-routen" id="p-routen" hidden>
+    <h2 id="h-routen">Handelsrouten im Account-Manager <span class="hint" id="routen-hint"></span></h2>
+    <div class="body">
+      <div class="pr-row" style="margin-bottom:10px">
+        <label class="pick"><span>Höchstens</span><select id="routen-max" aria-label="Höchstzahl Handelsrouten">
+          <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+        <span>Handelsrouten</span>
+        <span class="pr-mnote">je mehr Routen, desto genauer, aber jede muss im Account-Manager von Hand angelegt werden</span>
+      </div>
+      <div id="routen-body"></div>
+    </div>
+  </section>
+
   <div class="grid" id="p-more" hidden>
     <section class="panel c6" aria-labelledby="h-cmp">
       <h2 id="h-cmp">Wie viele Flaggendoppler</h2>
@@ -597,6 +630,7 @@ function gainZustand() {
 $("fdcount").addEventListener("change", gainZustand);
 // Tausch vor dem Start (10.16): Kurs und Lagerstand ändern nur dieses Feld, keine neue Rechnung
 $("vorab-kurs").addEventListener("input", () => { if (RESULT) renderVorab(); });
+$("routen-max").addEventListener("change", () => { if (RESULT) renderRouten(); });       // 10.18: nur Anzeige, keine neue Rechnung
 $("lager").addEventListener("input", () => { LAGER = K.parseLager($("lager").value); if (RESULT) renderVorab(); else lagerStatus(); });
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
 setMode("max");
@@ -638,7 +672,7 @@ function run() {
   if (!parsed.villages.length) {
     st.textContent = $("paste").value.trim() ? "Keine Dorfzeile erkannt. Erwartet wird die Ansicht Übersichten › Gebäude, komplett markiert und kopiert." : "Noch keine Übersicht eingefügt.";
     if ($("paste").value.trim()) st.classList.add("err");
-    ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).hidden = true);
+    ["p-rec", "p-vorab", "p-routen", "p-more"].forEach(id => $(id).hidden = true);
     RESULT = null;
     return;
   }
@@ -652,18 +686,18 @@ function run() {
     + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "")
     + (inp.production ? " · Produktion × " + nf2.format(inp.prodFactor)
        + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
-  if (!villages.length) { ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
+  if (!villages.length) { ["p-rec", "p-vorab", "p-routen", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
 
   const passive = parsed.villages.filter(v => OFF.has(v.x + "|" + v.y));
   const base = st.textContent;
   st.textContent = base + " · rechnet …";
-  ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).classList.add("pr-busy"));
+  ["p-rec", "p-vorab", "p-routen", "p-more"].forEach(id => $(id).classList.add("pr-busy"));
   if (KWORKER && KLAEUFT) { KWORKER.terminate(); KWORKER = null; }
   KLAEUFT = null;
   compute(token, villages, P, passive, R => {
     R.Pin = P; R.passive = passive;               // für das Nachrechnen einer gewählten Aufstellung (10.12)
     st.textContent = base;
-    ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).classList.remove("pr-busy"));
+    ["p-rec", "p-vorab", "p-routen", "p-more"].forEach(id => $(id).classList.remove("pr-busy"));
     show(token, R, villages, parsed);
   });
 }
@@ -703,7 +737,7 @@ function show(token, R, villages, parsed) {
   if (WAHL_AKTIV && v !== VIEW) WAHL_AKTIV = false;
   VIEW = v;
   STEPS = [];
-  ["p-rec", "p-vorab", "p-more"].forEach(id => $(id).hidden = false);
+  ["p-rec", "p-vorab", "p-routen", "p-more"].forEach(id => $(id).hidden = false);
   $("p-pk").hidden = !(R.pkg || R.zeitplan);                    // Zeitplan in beiden Berechnungsarten (10.11)
   $("p-pc").hidden = !R.pkg;                                     // Kurve nur bei „maximieren“
   renderRecommendation();
@@ -1147,6 +1181,7 @@ function renderKennzahlen(sel) {
 
   renderBilanz(m);
   renderVorab();
+  renderRouten();
 }
 
 /* Rohstoffbilanz der Pakete: Paket-Rohstoffe = rechtzeitig + nicht rechtzeitig + Überlauf + nicht prägbar */
@@ -1390,6 +1425,66 @@ function renderVorab() {
     + "Annahmen: gleicher Zeitplan der Pakete wie ohne Tausch; je Dorf so viel Vorrat, wie es mehr Münzen bringt, ohne dass das Dorf mehr überläuft und solange mindestens 90 % des Vorrats geprägt werden. "
     + (mitLager ? "Was schon an Lehm und Holz im Lager liegt, muss nicht getauscht werden. " : "Ohne Lagerstand nimmt die Tabelle an, dass vor dem Tausch kein Lehm und kein Holz über den Startbestand hinaus im Lager liegt. ")
     + "Ob andere Spieler die Angebote annehmen, kann der Rechner nicht wissen."));
+}
+
+/* ---------- Handelsrouten im Account-Manager (10.18, Wunsch Dennis 09.11.2026) ----------
+   1c: Routen ersetzen das Anfordern die ganzen 48 h; 2a: Höchstzahl wählbar, dazu was jede weitere Route bringt;
+   3a: je Route alles, was im Account-Manager einzutragen ist. Gerechnet für 1 bis 8 Routen, die Auswahl zeigt nur an. */
+function renderRouten() {
+  const R = RESULT, box = $("routen-body");
+  if (!R) return;
+  box.replaceChildren();
+  const P = R.P, sel = gewaehlt(), plan = R.pkg ? sel.pk : sel.z, d = plan && plan.detail, rt = d && d.routen;
+  $("routen-hint").textContent = d ? fdName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %" : "";
+  if (!rt || !rt.plans.length) { box.appendChild(el("p", "empty", sel.laedt ? "rechnet …" : "Ohne Lieferdörfer gibt es keine Handelsrouten.")); return; }
+  const want = +$("routen-max").value || 3, pl = rt.plans[Math.min(want, rt.plans.length) - 1], base = rt.base;
+  const anteil = x => nf1.format(Math.round(x / base * 1000) / 10) + " %";
+  const lead = el("div", "pr-vlead"), t = el("div", "t");
+  t.append(document.createTextNode("Mit " + (pl.R === 1 ? "1 Handelsroute" : pl.R + " Handelsrouten") + " und ohne Anfordern: "),
+    el("em", null, ganz(pl.coins) + " Münzen"), document.createTextNode(", " + anteil(pl.coins) + " von " + ganz(base) + " beim Anfordern alle " + ivl(P.intervalMin) + "."));
+  lead.appendChild(t);
+  if (pl.R < want) lead.appendChild(el("span", "pr-mnote", "Mehr als " + pl.R + " Routen bringen hier nichts mehr."));
+  box.appendChild(lead);
+  // Münzen je Zahl Routen (2a)
+  const kurve = el("div", "pr-rkurve"), top = Math.max(base, ...rt.plans.map(x => x.coins));
+  const zeile = (lab, v, cls, extra) => {
+    const z = el("div", cls || null), bk = el("span", "bk"), i = el("i");
+    i.style.width = (v / top * 100).toFixed(1) + "%";
+    bk.appendChild(i);
+    z.append(el("span", null, lab), bk, el("span", "num", ganz(v) + " · " + anteil(v) + (extra || "")));
+    kurve.appendChild(z);
+  };
+  rt.plans.forEach((x, q) => zeile(x.R === 1 ? "1 Route" : x.R + " Routen", x.coins, x === pl ? "on" : null,
+    q ? " · +" + ganz(x.coins - rt.plans[q - 1].coins) : ""));
+  zeile("Anfordern", base, "ref");
+  box.appendChild(kurve);
+  // je Route eine Karte mit allem, was im Account-Manager einzutragen ist (3a)
+  const grid = el("div", "pr-routen");
+  pl.routes.forEach((r, q) => {
+    const ziel = R.src[r.site], g = kpiGruppe(grid, "Route " + (q + 1)), inn = el("div", "in");
+    const zz = el("div");
+    zz.append(document.createTextNode("Ziel: "), el("b", null, ziel.name + " (" + ziel.x + "|" + ziel.y + ")"));
+    const amt = el("div", "amt");
+    [[0, "Holz"], [1, "Lehm"], [2, "Eisen"]].forEach(([k, nm]) => { const sp = el("span"); sp.append(resMarke(k), document.createTextNode(nm + " " + ganz(r.a[k]))); amt.appendChild(sp); });
+    const wann = el("div");
+    wann.append(document.createTextNode("je Dorf alle "), el("b", null, r.dt === 1 ? "1 Stunde" : r.dt + " Stunden"),
+      document.createTextNode(" ab Start des Flaggendopplers, " + r.sends + " Lieferungen in 48 h"));
+    const det = el("details"), ol = el("ol");
+    det.appendChild(el("summary", null, "Gruppe: " + r.dorf.length + (r.dorf.length === 1 ? " Dorf" : " Dörfer")));
+    r.dorf.slice().sort((a, b) => R.src[a].name.localeCompare(R.src[b].name)).forEach(i => ol.appendChild(el("li", null, R.src[i].name + " (" + R.src[i].x + "|" + R.src[i].y + ")")));
+    det.appendChild(ol);
+    inn.append(zz, amt, el("div", "sub", r.n + " Händler je Lieferung"), wann, det,
+      el("div", null, "bringt " + ganz(r.coins) + " Münzen" + (r.skipped ? "; " + ganz(r.skipped) + " Lieferungen fallen aus (zu wenig Rohstoffe oder Händler)" : "")));
+    g.appendChild(inn);
+  });
+  box.appendChild(grid);
+  const notes = [];
+  if (pl.ohne.length) notes.push(pl.ohne.length + (pl.ohne.length === 1 ? " Lieferdorf bekommt" : " Lieferdörfer bekommen") + " keine Route (zu wenige Händler oder zu wenig Ertrag für eine eigene Route): "
+    + pl.ohne.slice(0, 12).map(i => R.src[i].name).join(", ") + (pl.ohne.length > 12 ? " und " + (pl.ohne.length - 12) + " weitere" : "") + ".");
+  notes.push("Überlauf mit Routen " + pctf(pl.ov) + " statt " + pctf(rt.baseOv) + " beim Anfordern: der Zeitplan der Pakete ist fürs Anfordern geplant, mit Routen läuft mehr über"
+    + (pl.ov * 100 > P.maxOverflow + 1e-9 ? " und die Grenze von " + nfG.format(P.maxOverflow) + " % wird überschritten" : "") + ".");
+  notes.push("Annahmen zur Spielmechanik, noch nicht belegt: eine Route mit einer Gruppe als Start lässt jedes Dorf der Gruppe die Menge schicken, und die Route wiederholt sich im angegebenen Abstand. Belegt: Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Pakete werden weiter von Hand nach dem Zeitplan eingelöst. Wer zusätzlich anfordert, verschickt mit den übrigen Händlern noch mehr.");
+  box.appendChild(el("p", "pr-note", notes.join(" ")));
 }
 
 /* ---------- Zeitplan der Pakete ---------- */
@@ -1957,6 +2052,7 @@ function renderAssumptions() {
     P.mintLocal ? "Prägen in Lieferdörfern (an): Lieferdörfer mit Adelshof prägen beim Einlösen eines Pakets selbst, was sonst über den Speicher ginge, im Prägeverhältnis und zum Grundpreis (vorsichtig: ohne eigene Flagge und ohne Erlass). Geprägt wird der kleinste Wert über die drei Rohstoffe, der Rest läuft weiter über. Diese Münzen zählen zu den Münzen, der Überlauf sinkt entsprechend, auch für die Überlaufgrenze. Das gilt im Gleichschritt, also in Berechnung 2 und im Zeitplan von Berechnung 1."
       : "Prägen in Lieferdörfern (aus): Überlauf ist verloren, auch in Dörfern mit Adelshof.",
     "Tausch vor dem Start (eigenes Feld): je Dorf ein Vorrat an Lehm und Holz zu Beginn, eingetauscht gegen Eisen. Gesucht wird je Dorf der Vorrat mit den meisten Münzen, bei dem das Dorf nicht mehr überläuft und mindestens 90 % des Vorrats geprägt werden; der Zeitplan der Pakete bleibt. " + (P.ignoreRatio ? "Mit „Verhältnis ignorieren“ ein gemeinsamer Anteil für alle Lieferdörfer ohne Überlauf, dann je Prägedorf. " : "") + "Mit Lagerstand aus der Produktionsübersicht zählt, was schon im Lager liegt; fehlendes Eisen in Stunden Mine aus der Eisenproduktion des Dorfes.",
+    "Handelsrouten (eigenes Feld): statt Anfordern schickt jedes Dorf einer Gruppe alle 1 bis 12 Stunden eine feste Menge im Prägeverhältnis an sein Prägedorf, so viel, wie eine bestimmte Zahl Händler trägt. Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Für 1 bis 8 Routen werden Abstand und Menge je Route und die Zuordnung der Dörfer so gewählt, dass die meisten Münzen herauskommen; der Zeitplan der Pakete bleibt.",
     "Markttausch (nur Obergrenze unter der Rohstoffbilanz, nicht in den Münzen): Der nicht prägbare Überschuss" + (P.ignoreRatio ? " im Prägedorf" : "") + " wird 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf zum Flaggenpreis am Ende der 48 h geprägt. Unsicher, weil Händler den Überschuss bringen müssen und jemand die Angebote annehmen muss.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",
     "Klick auf „Rohstoffe anfordern“ beim Start und dann alle " + ivl(P.intervalMin) + ". Jeder Klick schickt alle freien Händler aller Dörfer los. Jedes Dorf beliefert das nächstgelegene Prägedorf.",

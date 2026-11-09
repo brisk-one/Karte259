@@ -695,3 +695,47 @@ test("10.16: Startbestand je Rohstoff im Gleichschritt", () => {
   assert.ok(c.coins <= a.coins + 1e-6);
   assert.ok(e.coins > a.coins);
 });
+
+/* ---------- 10.18 Handelsrouten im Account-Manager (Wunsch Dennis 09.11.2026, 1c, 2a, 3a) ---------- */
+test("10.18: Menge je Lieferung passt auf die Händler und ins Prägeverhältnis", () => {
+  const P = V5({});
+  for (const n of [5, 70, 235]) {
+    const a = K.routeMenge(n, P);
+    assert.ok(a[0] + a[1] + a[2] <= n * P.carry);
+    assert.ok(a.every(x => x % 100 === 0));
+    near(a[1] / a[0], 30000 / 28000, 0.02);
+  }
+});
+
+test("10.18: eine Route schickt nur, wenn Rohstoffe und Händler reichen", () => {
+  const P = V5({production: false}), s = {cap: 400000, merchants: 10, prod: {wood: 0, stone: 0, iron: 0}};
+  const cnt = K.toCnt([0], K.lastClick(P));                              // ein Paket beim Start
+  const add = P.pkgSize / 100 * s.cap;                                    // je Rohstoff im Paket
+  const a = K.routeMenge(10, P), log = [];
+  const r = K.routeRun(s, 0.5, P, cnt, a, 2, (ta, a0) => log.push([ta, a0]));
+  // so oft, wie das Lehm des Pakets für die feste Menge reicht, danach fällt jede Lieferung aus
+  const moeglich = Math.floor(add / a[1] + 1e-9);
+  assert.equal(r.sent, moeglich);
+  assert.ok(r.skipped > 0);
+  log.forEach(([ta], q) => near(ta, q * 2 + 0.5, 1e-9));
+  // zu wenige Händler: nichts
+  const r2 = K.routeRun(Object.assign({}, s, {merchants: 5}), 0.5, P, cnt, a, 2, null);
+  assert.equal(r2.sent, 0);
+});
+
+test("10.18: Routenplan wird mit mehr Routen nicht schlechter und ordnet jedes Dorf höchstens einmal zu", () => {
+  const v = konto63(), R = K.planPackages(v, V5({maxOverflow: 10, optThreshold: 70}), []), d = R.pkg.detail, rt = d.routen;
+  assert.ok(rt && rt.plans.length >= 1);
+  near(rt.base, d.coins, 1e-6 * d.coins);
+  let vor = 0;
+  rt.plans.forEach(pl => {
+    assert.ok(pl.coins >= vor - 1e-6, "monoton");
+    vor = pl.coins;
+    assert.ok(pl.routes.length <= pl.R);
+    const alle = pl.routes.flatMap(r => r.dorf);
+    assert.equal(new Set(alle).size, alle.length, "jedes Dorf höchstens einmal");
+    near(pl.coins, rt.eigen + pl.routes.reduce((a, r) => a + r.coins, 0), 1e-6 * pl.coins);
+    pl.routes.forEach(r => { assert.deepEqual(r.a, K.routeMenge(r.n, R.P)); r.dorf.forEach(i => assert.ok(R.src[i].merchants >= r.n)); });
+  });
+  assert.ok(rt.plans[rt.plans.length - 1].coins > 0.5 * rt.base, "Routen schaffen einen großen Teil des Anforderns");
+});
