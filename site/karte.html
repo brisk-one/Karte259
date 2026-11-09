@@ -1013,13 +1013,15 @@ function drawFokus(f){
   const [X,Y]=kMitte(r[kF.x], r[kF.y]);
   drawAxes(octx, X, Y, 9, "#e53935");
 }
-/** Name mit Stamm. ally: Stamm zur Kampfzeit; weicht der heutige ab, steht er dahinter („OdR, heute GSE“). */
+/** Name mit Stamm. ally: Stamm zur Kampfzeit; weicht der heutige ab, steht er dahinter („OdR, heute GSE“).
+    Gleicher Stamm unter neuem Kürzel ist kein Wechsel: „OdR, heute umbenannt in SdS“ (Dennis 1b, 09.11.2026). */
 function pName(pid, ally){
   const p=rowOfPid.get(pid), name=p==null? "Spieler "+pid : P.rows[p][pIdx.name];
   const heute=p==null? "" : (tagOf.get(allyOf[p])||"");
   if(ally===undefined) return name+(heute? " ("+heute+")" : "");
   const damals=kTag(ally);
   if(p==null || heute===damals) return name+(damals? " ("+damals+")" : "");
+  if(ally && ally===allyOf[p] && damals && heute) return name+" ("+damals+", heute umbenannt in "+heute+")";
   return name+" ("+(damals||"ohne Stamm")+", heute "+(heute||"ohne Stamm")+")";
 }
 /** „Do., 29.10. 07:00 bis 10:00 Uhr“, Datum am Ende nur, wenn es wechselt. */
