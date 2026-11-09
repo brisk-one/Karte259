@@ -753,8 +753,9 @@ function routeMenge(n, P) {
   const tot = n * P.carry, c = COIN(P), u = P.unitRes;
   return c.map(x => Math.floor(tot * x / u / 100) * 100);
 }
-// Abstände in Stunden: ab 10 Minuten (Hinweis Dennis 09.11.2026 16:42: auch kurze Abstände wie 10 Minuten sind möglich)
-const ROUTE_DT = [1 / 6, 1 / 4, 1 / 3, 1 / 2, 1, 2, 3, 4, 6];
+// Abstände in Stunden, so wie sie im Account-Manager eingetragen werden: Stunden mit Komma (Hinweis Dennis 09.11.2026
+// 16:42 und 17:01: auch kurze Abstände sind möglich, einzutragen z. B. als 0,25 für 15 Minuten)
+const ROUTE_DT = [0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6];
 const ROUTE_N = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 235];
 /* Beste Routen für 1 bis rMax Routen. Je Lieferdorf, Abstand und Händlerzahl die Münzen aus den Lieferungen
    (Dörfer rechnen im Prägeverhältnis unabhängig voneinander); eine Route ist (Prägedorf, Abstand, Händlerzahl),
