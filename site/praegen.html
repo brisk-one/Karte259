@@ -220,6 +220,18 @@
   .pr-routen details ol{margin:5px 0 0; padding-left:20px; font-size:11.5px; columns:2; column-gap:18px}
   @media (max-width:640px){ .pr-rkurve>div{grid-template-columns:64px minmax(0,1fr) 116px} .pr-routen details ol{columns:1} }
 
+  /* Nächstes Prägedorf adeln (10.17) */
+  .pr-fopt{gap:6px 16px; align-items:center}
+  .pr-fopt input[type="number"]{width:84px}
+  .pr-fk{margin-top:14px}
+  .pr-fk h3{margin:0 0 6px; font-size:13px}
+  .pr-fk h3 .sub{font-weight:400; color:var(--muted); font-size:12px}
+  .pr-ftab td{vertical-align:middle; font-variant-numeric:tabular-nums}
+  .pr-ftab .sub{display:block; font-size:10.5px; color:var(--muted)}
+  .pr-ftab .typ{display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:9px; line-height:15px; border:1px solid var(--edge-soft); color:var(--ink-2); margin-left:4px}
+  .pr-ftab .typ.stamm{border-color:var(--accent); color:var(--accent)}
+  .pr-fbar{display:inline-block; height:8px; background:var(--st-ok); border-radius:2px; margin-right:6px; vertical-align:0}
+
   /* Aufteilung Holz, Lehm, Eisen: Feld beim Überfahren, Fokus und Antippen */
   .pr-res{cursor:help; color:var(--ink-2); border-bottom:1px dotted currentColor; white-space:nowrap; border-radius:2px}
   .pr-res:hover,.pr-res[aria-expanded="true"]{color:var(--ink)}
@@ -434,6 +446,24 @@
         <span class="pr-mnote">je mehr Routen, desto genauer, aber jede muss im Account-Manager von Hand angelegt werden</span>
       </div>
       <div id="routen-body"></div>
+    </div>
+  </section>
+
+  <!-- 10.17: Nächstes Prägedorf adeln (Wunsch Dennis 09.11.2026; Frage 1: auch eigener Stamm, Frage 2: wie empfohlen) -->
+  <section class="panel" aria-labelledby="h-fremd" id="p-fremd" hidden>
+    <h2 id="h-fremd">Nächstes Prägedorf adeln <span class="hint">auch Dörfer, die dir noch nicht gehören</span></h2>
+    <div class="body">
+      <div class="pr-row pr-fopt">
+        <label class="pr-check"><input type="checkbox" id="f-barbar" checked> Barbarendörfer</label>
+        <label class="pr-check"><input type="checkbox" id="f-spieler" checked> andere Spieler</label>
+        <label class="pr-check"><input type="checkbox" id="f-stamm" checked> eigener Stamm</label>
+        <label class="pr-check"><input type="checkbox" id="f-eigen" checked> eigene Dörfer ohne Adelshof</label>
+        <label class="pick"><span>höchstens</span><input type="number" id="f-pts" min="0" step="500" placeholder="alle" aria-label="höchstens so viele Punkte"></label>
+        <span>Punkte</span>
+        <button type="button" class="tw" id="f-los">Suchen</button>
+      </div>
+      <p class="pr-mnote" id="fremd-status">Sucht im Gebiet um deine Dörfer plus 8 Felder, je Zahl Flaggendoppler wie im Vergleich. Lädt dafür die Weltdaten der Seite (rund 700 KB) und rechnet etwa eine halbe Minute im Hintergrund.</p>
+      <div id="fremd-body"></div>
     </div>
   </section>
 
@@ -672,7 +702,7 @@ function run() {
   if (!parsed.villages.length) {
     st.textContent = $("paste").value.trim() ? "Keine Dorfzeile erkannt. Erwartet wird die Ansicht Übersichten › Gebäude, komplett markiert und kopiert." : "Noch keine Übersicht eingefügt.";
     if ($("paste").value.trim()) st.classList.add("err");
-    ["p-rec", "p-vorab", "p-routen", "p-more"].forEach(id => $(id).hidden = true);
+    ["p-rec", "p-vorab", "p-routen", "p-fremd", "p-more"].forEach(id => $(id).hidden = true);
     RESULT = null;
     return;
   }
@@ -686,7 +716,7 @@ function run() {
     + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "")
     + (inp.production ? " · Produktion × " + nf2.format(inp.prodFactor)
        + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
-  if (!villages.length) { ["p-rec", "p-vorab", "p-routen", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
+  if (!villages.length) { ["p-rec", "p-vorab", "p-routen", "p-fremd", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
 
   const passive = parsed.villages.filter(v => OFF.has(v.x + "|" + v.y));
   const base = st.textContent;
@@ -737,7 +767,7 @@ function show(token, R, villages, parsed) {
   if (WAHL_AKTIV && v !== VIEW) WAHL_AKTIV = false;
   VIEW = v;
   STEPS = [];
-  ["p-rec", "p-vorab", "p-routen", "p-more"].forEach(id => $(id).hidden = false);
+  ["p-rec", "p-vorab", "p-routen", "p-fremd", "p-more"].forEach(id => $(id).hidden = false);
   $("p-pk").hidden = !(R.pkg || R.zeitplan);                    // Zeitplan in beiden Berechnungsarten (10.11)
   $("p-pc").hidden = !R.pkg;                                     // Kurve nur bei „maximieren“
   renderRecommendation();
@@ -1182,6 +1212,7 @@ function renderKennzahlen(sel) {
   renderBilanz(m);
   renderVorab();
   renderRouten();
+  renderFremd();
 }
 
 /* Rohstoffbilanz der Pakete: Paket-Rohstoffe = rechtzeitig + nicht rechtzeitig + Überlauf + nicht prägbar */
@@ -1485,6 +1516,100 @@ function renderRouten() {
     + (pl.ov * 100 > P.maxOverflow + 1e-9 ? " und die Grenze von " + nfG.format(P.maxOverflow) + " % wird überschritten" : "") + ".");
   notes.push("Annahmen zur Spielmechanik, noch nicht belegt: eine Route mit einer Gruppe als Start lässt jedes Dorf der Gruppe die Menge schicken, und die Route wiederholt sich im angegebenen Abstand. Belegt: Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Pakete werden weiter von Hand nach dem Zeitplan eingelöst. Wer zusätzlich anfordert, verschickt mit den übrigen Händlern noch mehr.");
   box.appendChild(el("p", "pr-note", notes.join(" ")));
+}
+
+/* ---------- Nächstes Prägedorf adeln (10.17, Wunsch Dennis 09.11.2026) ----------
+   Auf Knopfdruck: Weltdaten nachladen, im eigenen Worker suchen, je Zahl Flaggendoppler eine Top 10 der fremden
+   Dörfer und die besten eigenen Dörfer ohne Adelshof. Ergebnis gilt für die Eingaben beim Suchen. */
+let WELT = null, FREMD = null, FWORKER = null;
+async function weltLaden() {
+  if (WELT) return WELT;
+  const [v, pl, al] = await Promise.all([loadData("villages"), loadData("players"), loadData("allies")]);
+  const fi = n => pl.fields.indexOf(n), ai = n => al.fields.indexOf(n), tags = {};
+  al.rows.forEach(r => { tags[r[ai("id")]] = r[ai("tag")]; });
+  WELT = {rows: v.rows, players: pl.rows.map(r => [r[fi("id")], r[fi("name")], r[fi("ally")]]), tags, stand: v.data_time_utc || v.source || ""};
+  return WELT;
+}
+async function fremdSuchen() {
+  const R = RESULT, st = $("fremd-status"), knopf = $("f-los");
+  if (!R) return;
+  knopf.disabled = true;
+  st.textContent = "lädt die Weltdaten …";
+  let welt;
+  try { welt = await weltLaden(); }
+  catch (e) { st.textContent = "Weltdaten konnten nicht geladen werden."; knopf.disabled = false; return; }
+  const opt = {barbaren: $("f-barbar").checked, spieler: $("f-spieler").checked, stamm: $("f-stamm").checked, eigene: $("f-eigen").checked,
+               maxPts: +$("f-pts").value || 0};
+  const token = RUN, start = Date.now();
+  if (FWORKER) FWORKER.terminate();
+  try { FWORKER = new Worker("praegen-worker.js"); } catch (e) { FWORKER = null; }
+  const fertig = res => {
+    knopf.disabled = false;
+    FREMD = {token, res, opt};
+    st.textContent = "Gesucht unter " + nf.format(res.kandidaten) + " Dörfern in " + nf1.format(Math.round((Date.now() - start) / 100) / 10) + " s"
+      + (res.stamm ? "; eigener Stamm: " + res.stamm : "") + ". Fremde Dörfer zählen nur als Empfänger, ohne eigene Pakete.";
+    renderFremd();
+  };
+  if (!FWORKER) { setTimeout(() => fertig(K.fremdeSuche(R.villages, R.Pin, R.passive, welt, opt)), 0); return; }
+  FWORKER.onmessage = e => {
+    const m = e.data;
+    if (m.error) { st.textContent = "Fehler bei der Suche."; knopf.disabled = false; console.error(m.error); return; }
+    if (m.fortschritt) { st.textContent = "sucht … " + Math.round(m.fortschritt[0] / m.fortschritt[1] * 100) + " %"; return; }
+    if (m.fremd) fertig(m.fremd);
+  };
+  FWORKER.postMessage({core: CORE_URL, token, fremd: true, villages: R.villages, P: R.Pin, passive: R.passive, welt, opt});
+}
+$("f-los").addEventListener("click", fremdSuchen);
+function renderFremd() {
+  const box = $("fremd-body");
+  box.replaceChildren();
+  if (!FREMD) return;
+  if (FREMD.token !== RUN) { box.appendChild(el("p", "empty", "Die Eingaben haben sich seit der Suche geändert. Bitte neu suchen.")); return; }
+  const typName = {barbar: "Barbarendorf", spieler: "Spieler", stamm: "eigener Stamm", eigen: "eigenes Dorf"};
+  FREMD.res.proK.forEach(x => {
+    const blk = el("div", "pr-fk"), h = el("h3");
+    h.append(document.createTextNode(fdName(x.k) + " "), el("span", "sub", "· deine beste Aufstellung: " + x.eigen.sites.join(" + ") + ", " + ganz(x.eigen.coins) + " Münzen, " + pakete(x.eigen.n)));
+    blk.appendChild(h);
+    const tabelle = (liste, mitBesitzer) => {
+      const maxPlus = Math.max(1, ...liste.map(c => c.coins - x.eigen.coins));
+      const cols = [["#", "", true], ["Dorf", "l", true]];
+      if (mitBesitzer) cols.push(["Besitzer", "l", true]);
+      cols.push(["Punkte", "", true], ["Münzen", "", true], ["mehr als jetzt", "", true], ["Pakete", "", true]);
+      if (x.k > 1) cols.push(["ersetzt", "l", true]);
+      const rows = liste.map((c, q) => {
+        const dorf = el("span");
+        dorf.append(el("b", null, c.x + "|" + c.y), el("span", "sub", c.name));
+        const wer = el("span");
+        wer.append(document.createTextNode(c.typ === "barbar" ? "Barbarendorf" : c.wer + (c.tag ? " [" + c.tag + "]" : "")));
+        if (c.typ === "stamm") wer.appendChild(el("span", "typ stamm", "eigener Stamm"));
+        const plus = c.coins - x.eigen.coins, pl = el("span");
+        if (plus > 0.5) { const b = el("span", "pr-fbar"); b.style.width = (plus / maxPlus * 44).toFixed(1) + "px"; pl.appendChild(b); }
+        pl.appendChild(el("b", null, (plus >= 0 ? "+" : "−") + ganz(Math.abs(plus)) + " · " + (plus >= 0 ? "+" : "−") + nf1.format(Math.round(Math.abs(plus) / x.eigen.coins * 1000) / 10) + " %"));
+        const z = [[String(q + 1), "", q + 1], [dorf, "l", c.x * 1000 + c.y]];
+        if (mitBesitzer) z.push([wer, "l", typName[c.typ] + c.wer]);
+        z.push([ganz(c.pts), "", c.pts], [ganz(c.coins), "", Math.round(c.coins)], [pl, "", Math.round(plus)], [String(c.n), "", c.n]);
+        if (x.k > 1) z.push([c.ersetzt.join(", "), "l", c.ersetzt.join()]);
+        return z;
+      });
+      const wrap = el("div");
+      wrap.style.overflowX = "auto";
+      const t = table(cols, rows);
+      t.classList.add("pr-ftab");
+      wrap.appendChild(t);
+      return wrap;
+    };
+    if (x.top.length) blk.appendChild(tabelle(x.top, true));
+    else blk.appendChild(el("p", "empty", "Keine fremden Dörfer mit diesen Filtern."));
+    if (x.eigeneTop.length) {
+      const besser = x.eigeneTop.filter(c => c.coins > x.eigen.coins + 0.5);
+      const p = el("p", "pr-note", besser.length
+        ? "Ohne Adeln: eigene Dörfer ohne Adelshof mit neu gebautem Adelshof, ebenfalls nur als Empfänger gerechnet:"
+        : "Eigene Dörfer ohne Adelshof bringen hier nicht mehr als deine jetzige Aufstellung.");
+      blk.appendChild(p);
+      if (besser.length) blk.appendChild(tabelle(besser, false));
+    }
+    box.appendChild(blk);
+  });
 }
 
 /* ---------- Zeitplan der Pakete ---------- */
@@ -2052,6 +2177,7 @@ function renderAssumptions() {
     P.mintLocal ? "Prägen in Lieferdörfern (an): Lieferdörfer mit Adelshof prägen beim Einlösen eines Pakets selbst, was sonst über den Speicher ginge, im Prägeverhältnis und zum Grundpreis (vorsichtig: ohne eigene Flagge und ohne Erlass). Geprägt wird der kleinste Wert über die drei Rohstoffe, der Rest läuft weiter über. Diese Münzen zählen zu den Münzen, der Überlauf sinkt entsprechend, auch für die Überlaufgrenze. Das gilt im Gleichschritt, also in Berechnung 2 und im Zeitplan von Berechnung 1."
       : "Prägen in Lieferdörfern (aus): Überlauf ist verloren, auch in Dörfern mit Adelshof.",
     "Tausch vor dem Start (eigenes Feld): je Dorf ein Vorrat an Lehm und Holz zu Beginn, eingetauscht gegen Eisen. Gesucht wird je Dorf der Vorrat mit den meisten Münzen, bei dem das Dorf nicht mehr überläuft und mindestens 90 % des Vorrats geprägt werden; der Zeitplan der Pakete bleibt. " + (P.ignoreRatio ? "Mit „Verhältnis ignorieren“ ein gemeinsamer Anteil für alle Lieferdörfer ohne Überlauf, dann je Prägedorf. " : "") + "Mit Lagerstand aus der Produktionsübersicht zählt, was schon im Lager liegt; fehlendes Eisen in Stunden Mine aus der Eisenproduktion des Dorfes.",
+    "Nächstes Prägedorf adeln (eigenes Feld, auf Knopfdruck): Kandidaten sind die Dörfer im Gebiet um die eigenen Dörfer plus 8 Felder aus den Weltdaten der Seite, je nach Auswahl Barbarendörfer, Dörfer anderer Spieler, des eigenen Stammes und eigene Dörfer ohne Adelshof. Ein solches Dorf zählt nur als Empfänger: Adelshof gilt als gebaut, keine eigenen Pakete und keine Produktion. Bei einem Flaggendoppler ist es das Prägedorf, sonst ersetzt es eines der Prägedörfer deiner besten Aufstellung. Vorauswahl mit dem Zeitplan der Empfehlung, für die besten Kandidaten werden Zeitplan und Paketzahl neu optimiert.",
     "Handelsrouten (eigenes Feld): statt Anfordern schickt jedes Dorf einer Gruppe alle 1 bis 12 Stunden eine feste Menge im Prägeverhältnis an sein Prägedorf, so viel, wie eine bestimmte Zahl Händler trägt. Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Für 1 bis 8 Routen werden Abstand und Menge je Route und die Zuordnung der Dörfer so gewählt, dass die meisten Münzen herauskommen; der Zeitplan der Pakete bleibt.",
     "Markttausch (nur Obergrenze unter der Rohstoffbilanz, nicht in den Münzen): Der nicht prägbare Überschuss" + (P.ignoreRatio ? " im Prägedorf" : "") + " wird 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf zum Flaggenpreis am Ende der 48 h geprägt. Unsicher, weil Händler den Überschuss bringen müssen und jemand die Angebote annehmen muss.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",

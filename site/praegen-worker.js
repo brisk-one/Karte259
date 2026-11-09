@@ -8,6 +8,12 @@ self.onmessage = e => {
   const m = e.data;
   try {
     if (loaded !== m.core) { importScripts(m.core); loaded = m.core; }
+    // 10.17: Suche nach dem nächsten Prägedorf unter fremden Dörfern, mit Fortschrittsmeldungen
+    if (m.fremd) {
+      const opt = Object.assign({}, m.opt, {fortschritt: (i, n) => self.postMessage({token: m.token, fortschritt: [i, n]})});
+      self.postMessage({token: m.token, fremd: self.Praegen.fremdeSuche(m.villages, m.P, m.passive, m.welt, opt)});
+      return;
+    }
     // „Rohstoffprozentpunkte vorgeben“ einfach wie bis v0.4 plus Zeitplan (10.11), „maximieren“ wie v0.5
     // m.k: nur eine gewählte Aufstellung nachrechnen (10.12)
     const R = m.k ? self.Praegen.packagesForK(m.villages, m.P, m.k, m.passive, m.perK)

@@ -569,7 +569,8 @@ function villageRun(s, tau, P, cnt, M, sink, send, ovClick, acc) {
    Prägen über den Speicher geht (meist Holz und Eisen, weil Lehm das Prägen begrenzt). */
 function siteRun(s, P, cnt, bins, acc) {
   const T = P.interval, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
-  const add1 = P.pkgSize / 100 * cap, start = Math.min(cap, cap * P.startPct / 100);
+  // s.leer (10.17): fremdes Dorf nur als Empfänger, ohne eigene Pakete und ohne Startbestand
+  const add1 = s.leer ? 0 : P.pkgSize / 100 * cap, start = s.leer ? 0 : Math.min(cap, cap * P.startPct / 100);
   const vb = s.vorab;                                                      // 10.16, wie in villageRun
   let w = vb ? Math.min(cap, start + vb[0]) : start, st = vb ? Math.min(cap, start + vb[1]) : start, ir = vb ? Math.min(cap, start + vb[2]) : start;
   let coins = 0, minted = 0, pkgRes = 0;
@@ -819,6 +820,75 @@ function routenPlan(src, P, sites, cnt, rMax) {
   return {base: base.coins, baseOv: base.ov, eigen, plans: out};
 }
 
+/* ---------- Nächstes Prägedorf adeln (10.17, Wunsch Dennis 09.11.2026; 1: auch eigener Stamm, 2a, Top 10) ----------
+   Kandidaten aus den Weltdaten der Seite (villages.json) im Rechteck um die eigenen Dörfer plus opt.rand Felder:
+   Barbarendörfer, Dörfer anderer Spieler, Dörfer des eigenen Stammes (die man sich schenken lassen kann) und eigene
+   Dörfer ohne Adelshof, je nach opt. Ein fremdes Dorf zählt nur als Empfänger: Adelshof gebaut, keine eigenen Pakete,
+   keine Produktion (vorsichtig). Je Zahl Flaggendoppler k: bei k = 1 ist der Kandidat das Prägedorf, sonst ersetzt
+   er eines der k eigenen Prägedörfer der besten eigenen Aufstellung. Vorfilter mit dem Zeitplan der Empfehlung,
+   danach für die besten opt.genau Kandidaten Zeitplan und Paketzahl neu optimiert wie im Rechner.
+   welt: {rows: [[x*1000+y, Spielerzeile, Punkte, Bonus, Name]], players: [[id, Name, Stamm-ID]], tags: {Stamm-ID: Kürzel}} */
+function fremdeSuche(villages, P0, passive, welt, opt) {
+  opt = Object.assign({rand: 8, barbaren: true, spieler: true, stamm: true, eigene: true, maxPts: 0, genau: 12, genauEigen: 3, top: 10}, opt || {});
+  const melde = typeof opt.fortschritt === "function" ? opt.fortschritt : () => {};
+  const R = planPackages(villages, P0, passive), P = R.P, src = R.src, pk = R.pkg;
+  const Kc = lastClick(P), cnt = toCnt(pk.pos, Kc), xy = s => s.x * 1000 + s.y;
+  const idx = new Map(src.map((s, i) => [xy(s), i]));
+  // eigener Spieler: häufigster Besitzer der eigenen Dörfer; eigener Stamm über players
+  const zahl = new Map();
+  welt.rows.forEach(r => { if (idx.has(r[0]) && r[1] >= 0) zahl.set(r[1], (zahl.get(r[1]) || 0) + 1); });
+  let ich = -1, best = 0;
+  zahl.forEach((n, p) => { if (n > best) { best = n; ich = p; } });
+  if (best < src.length / 2) ich = -1;                                       // nur, wenn die Mehrheit der Dörfer passt (z. B. nicht beim Beispiel)
+  const stamm = ich >= 0 ? welt.players[ich][2] || 0 : 0;
+  const xs = src.map(s => s.x), ys = src.map(s => s.y), d = opt.rand;
+  const x0 = Math.min(...xs) - d, x1 = Math.max(...xs) + d, y0 = Math.min(...ys) - d, y1 = Math.max(...ys) + d;
+  const kand = [];
+  welt.rows.forEach(r => {
+    const x = Math.floor(r[0] / 1000), y = r[0] % 1000;
+    if (x < x0 || x > x1 || y < y0 || y > y1) return;
+    let typ;
+    if (idx.has(r[0])) { if (!opt.eigene || src[idx.get(r[0])].snob) return; typ = "eigen"; }
+    else if (r[1] < 0) { if (!opt.barbaren) return; typ = "barbar"; }
+    else if (stamm && welt.players[r[1]][2] === stamm) { if (!opt.stamm || r[1] === ich) return; typ = "stamm"; }
+    else { if (!opt.spieler) return; typ = "spieler"; }
+    if (opt.maxPts > 0 && typ !== "eigen" && r[2] > opt.maxPts) return;
+    const pl = r[1] >= 0 ? welt.players[r[1]] : null;
+    kand.push({x, y, name: r[4], pts: r[2], typ, wer: typ === "eigen" ? "" : pl ? pl[1] : "", tag: pl ? (welt.tags[pl[2]] || "") : ""});
+  });
+  const pseudo = c => ({i: src.length, name: c.name, x: c.x, y: c.y, b: {}, cap: P.ignoreRatio ? storageCap(30) : 0, merchants: 0, snob: true,
+                        leer: true, pkg: {wood: 0, stone: 0, iron: 0}, prod: {wood: 0, stone: 0, iron: 0}});
+  // eigene Aufstellungen je Zahl Flaggendoppler (wie im Vergleich)
+  const eigen = (pk.perK || R.configs.map((c, q) => ({k: q + 1, n: pk.chosen, coins: pk.configCoins[q], sites: c.sites.map(i => src[i])})))
+    .slice(0, R.configs.length).map(o => ({k: o.k, n: o.n, coins: o.coins, sites: o.sites.map(s => idx.get(xy(s)))}));
+  const schritte = eigen.length * (1 + opt.genau + opt.genauEigen);
+  let fertig = 0;
+  const proK = eigen.map(e => {
+    const alle = kand.map(c => {
+      const s2 = src.concat([pseudo(c)]), j = src.length;
+      let bc = -1, bst = null;
+      (e.k === 1 ? [[j]] : e.sites.map((_, a) => { const st = e.sites.slice(); st[a] = j; return st; })).forEach(st => {
+        const v = lockstep(s2, P, st, cnt, false).coins;
+        if (v > bc) { bc = v; bst = st; }
+      });
+      return {c, st: bst, v: bc};
+    }).sort((a, b) => b.v - a.v);
+    melde(++fertig, schritte);
+    // genau nachrechnen: die besten fremden und die besten eigenen Dörfer ohne Adelshof getrennt
+    const genau = liste => liste.map(({c, st}) => {
+      const s2 = src.concat([pseudo(c)]), cv = packageCurve(s2, P, st, false), n = P.pkgCount || cv.optimal || 0, z = cv.curve[n];
+      melde(++fertig, schritte);
+      const bleibt = st.filter(i => i < src.length).map(i => src[i].name);
+      const ersetzt = e.k === 1 ? [] : e.sites.filter(i => !st.includes(i)).map(i => src[i].name);
+      return Object.assign({}, c, {coins: z.coins, n, ov: z.ov, ok: z.ok, bleibt, ersetzt});
+    }).sort((a, b) => b.coins - a.coins || a.pts - b.pts);
+    const top = genau(alle.filter(x => x.c.typ !== "eigen").slice(0, opt.genau)).slice(0, opt.top);
+    const eigeneTop = genau(alle.filter(x => x.c.typ === "eigen").slice(0, opt.genauEigen));
+    return {k: e.k, eigen: {coins: e.coins, n: e.n, sites: e.sites.map(i => src[i].name)}, top, eigeneTop};
+  });
+  return {kandidaten: kand.length, stamm: stamm ? (welt.tags[stamm] || "") : "", proK};
+}
+
 /* Markttausch als Obergrenze (10.15, Dennis 2a): Der nicht prägbare Überschuss (mit „Verhältnis ignorieren“
    der Rest im Prägedorf) wird 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf zum Flaggenpreis
    am Ende der 48 h geprägt. Nicht eingerechnet, weil unsicher: Händler müssen den Überschuss bringen und jemand
@@ -881,7 +951,7 @@ function lockstep(src, P, sites, cnt, detail) {
 
 /* Höchstwert eines Pakets: Paketgröße × Summe der Speicher, in Münzen zum Flaggenpreis (Flagge verdoppelt). */
 function packageValue(src, P) {
-  const capSum = src.reduce((a, s) => a + s.cap, 0);
+  const capSum = src.reduce((a, s) => a + (s.leer ? 0 : s.cap), 0);
   return P.pkgSize / 100 * capSum / Math.max(...COIN(P)) / (1 - Math.min(0.95, 2 * FLAG_PCT[P.flagLevel] / 100));
 }
 
@@ -1228,7 +1298,7 @@ const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packages
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,
-             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, parseLager, routeRun, routeMenge, routenPlan};
+             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, parseLager, routeRun, routeMenge, routenPlan, fremdeSuche};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Praegen = api;
 })(typeof window !== "undefined" ? window : globalThis);

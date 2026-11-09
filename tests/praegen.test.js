@@ -739,3 +739,32 @@ test("10.18: Routenplan wird mit mehr Routen nicht schlechter und ordnet jedes D
   });
   assert.ok(rt.plans[rt.plans.length - 1].coins > 0.5 * rt.base, "Routen schaffen einen großen Teil des Anforderns");
 });
+
+/* ---------- 10.17 Nächstes Prägedorf adeln (Wunsch Dennis 09.11.2026; eigener Stamm einbezogen, je Zahl Flaggendoppler) ---------- */
+test("10.17: Suche unter fremden Dörfern mit Filtern und eigenem Stamm", () => {
+  const v = konto63(), P = V5({maxOverflow: 10, optThreshold: 70});
+  const xy = d => d.x * 1000 + d.y;
+  const rows = v.map(d => [xy(d), 0, 9000, 0, d.name]);                       // eigene Dörfer: Spieler 0
+  const mitte = {x: Math.round(v.reduce((a, d) => a + d.x, 0) / v.length), y: Math.round(v.reduce((a, d) => a + d.y, 0) / v.length)};
+  const frei = (dx, dy) => { let x = mitte.x + dx, y = mitte.y + dy; while (rows.some(r => r[0] === x * 1000 + y)) y++; return x * 1000 + y; };
+  rows.push([frei(0, 0), -1, 300, 0, "Barbarendorf"], [frei(1, 1), 1, 5000, 0, "Stammesdorf"], [frei(-1, 2), 2, 12000, 0, "Feinddorf"], [frei(30, 30), -1, 100, 0, "weit weg"]);
+  const welt = {rows, players: [[10, "Ich", 7], [11, "Freund", 7], [12, "Fremder", 9]], tags: {7: "ICH", 9: "XY"}};
+  const r = K.fremdeSuche(v, P, [], welt, {genau: 3, genauEigen: 2, top: 3});
+  assert.equal(r.stamm, "ICH");
+  assert.ok(r.proK.length >= 1);
+  const x1 = r.proK[0];
+  assert.equal(x1.k, 1);
+  const typen = new Set(x1.top.map(c => c.typ));
+  assert.ok(typen.has("barbar") && typen.has("stamm") && typen.has("spieler"), [...typen].join());
+  assert.ok(!x1.top.some(c => c.name === "weit weg") || x1.top.length === 3);
+  for (let q = 1; q < x1.top.length; q++) assert.ok(x1.top[q - 1].coins >= x1.top[q].coins - 1e-9, "absteigend");
+  assert.ok(x1.eigeneTop.every(c => c.typ === "eigen"));
+  // eigene Dörfer mit Adelshof sind keine Kandidaten
+  const snobXY = new Set(v.filter(d => d.b.snob).map(xy));
+  r.proK.forEach(x => x.eigeneTop.forEach(c => assert.ok(!snobXY.has(c.x * 1000 + c.y))));
+  // Filter: ohne eigenen Stamm und mit Punktegrenze
+  const r2 = K.fremdeSuche(v, P, [], welt, {stamm: false, maxPts: 1000, eigene: false, genau: 3, genauEigen: 0, top: 3});
+  r2.proK.forEach(x => { assert.ok(x.top.every(c => c.typ === "barbar")); assert.equal(x.eigeneTop.length, 0); });
+  // ab 2 Flaggendopplern ersetzt der Kandidat genau eines der eigenen Prägedörfer
+  r.proK.filter(x => x.k > 1).forEach(x => x.top.forEach(c => { assert.equal(c.ersetzt.length, 1); assert.equal(c.bleibt.length, x.k - 1); }));
+});
