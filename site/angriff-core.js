@@ -490,19 +490,22 @@ class Fluss {
 }
 
 /* ---------- Truppen zusammenstellen ---------- */
-/** Fake (Dennis 10.11.2026): immer mindestens ein Späher; Katapulte vor Rammen, höchstens eine Ramme und nur, wenn kein
-    Katapult frei ist. Aufgefüllt wird bis zum Fakelimit mit Katapulten und Spähern („kata“: Katapulte zuerst, „spaeher“:
-    ein Katapult, Rest Späher), nie mit Rammen. null: aus diesem Dorf geht kein Fake. */
-function fakeAus(av, need, pop, modus) {
+/** Fake (Dennis 10.11.2026): immer mindestens ein Späher; Katapulte vor Rammen. Langsamste Einheit ist ein Katapult, nur
+    ohne freies Katapult eine Ramme. Aufgefüllt wird bis zum Fakelimit mit Katapulten und Spähern („kata“: Katapulte zuerst,
+    „spaeher“: ein Katapult, Rest Späher); Rammen nur im Notfall danach. rammenMax: höchstens so viele Rammen je Fake,
+    Standard 1, je Spieler einstellbar (Dennis 01:17); 0: keine Rammen. null: aus diesem Dorf geht kein Fake. */
+function fakeAus(av, need, pop, modus, rammenMax) {
+  const rMax = rammenMax == null ? 1 : Math.max(0, rammenMax);
   if (av.spy < 1) return null;
   const f = {catapult: 0, spy: 0, ram: 0};
-  if (av.catapult >= 1) f.catapult = 1; else if (av.ram >= 1) f.ram = 1; else return null;
+  if (av.catapult >= 1) f.catapult = 1; else if (av.ram >= 1 && rMax >= 1) f.ram = 1; else return null;
   let rest = need - f.catapult * pop.catapult - f.ram * pop.ram;
   const kata = n => { const c = Math.min(av.catapult - f.catapult, Math.max(0, n)); f.catapult += c; rest -= c * pop.catapult; };
   const spaeher = n => { const k = Math.min(av.spy - f.spy, Math.max(0, n)); f.spy += k; rest -= k * pop.spy; };
   if (modus !== "spaeher" && f.catapult) kata(Math.floor(rest / pop.catapult));
   if (rest > 0) spaeher(Math.ceil(rest / pop.spy));
   if (rest > 0 && f.catapult) kata(Math.ceil(rest / pop.catapult));
+  if (rest > 0) { const r = Math.min(av.ram - f.ram, rMax - f.ram, Math.ceil(rest / pop.ram)); if (r > 0) { f.ram += r; rest -= r * pop.ram; } }
   if (rest > 0) return null;
   if (f.spy < 1) f.spy = 1;
   return f;
@@ -593,7 +596,8 @@ function plan(input) {
     const fakeModus = ["dorf", "ziel"].includes(a.fakeModus) ? a.fakeModus : null;
     att.set(a.id, {id: a.id, name: a.name, points: a.points || 0, fenster, wunsch,
       cleanModus: cleanModus && zahl(a.cleanN, 3) != null ? cleanModus : null, cleanN: zahl(a.cleanN, 3),
-      fakeModus: fakeModus && zahl(a.fakeN, 20) != null ? fakeModus : null, fakeN: zahl(a.fakeN, 20)});
+      fakeModus: fakeModus && zahl(a.fakeN, 20) != null ? fakeModus : null, fakeN: zahl(a.fakeN, 20),
+      rammenMax: zahl(a.rammenMax, 1000) != null ? zahl(a.rammenMax, 1000) : 1});      // Rammen je Fake höchstens (Dennis 10.11.2026)
     if (!wunsch.length) warnings.push({art: "fenster", text: "Kein Abschickzeitraum für " + (a.name || a.id) + (streng ? "" : ", Abschickzeiten frei gewählt")});
     // Teilnahme je Spieler (Offs, AGs, Fakes) und Dorfauswahl für Offs und AGs (Dennis 16:57)
     const rollen = Object.assign({off: true, ag: true, fake: true}, a.rollen);
@@ -1081,7 +1085,7 @@ function plan(input) {
         if (schon.has(v.id)) continue;
         if (a.fakeModus === "dorf" && v.fakes >= a.fakeN) continue;          // Obergrenze je eigenem Dorf
         if (v.fakes >= maxQ) continue;                                          // höchstens N Fakes je eigenem Dorf
-        const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus);
+        const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus, att.get(v.att).rammenMax);
         if (!f) continue;
         v.fakeAv.catapult -= f.catapult; v.fakeAv.spy -= f.spy; v.fakeAv.ram -= f.ram;
         v.fakes++; schon.add(v.id); hat.set(k, (hat.get(k) || 0) + 1); paarPlus(v, t);
@@ -1121,7 +1125,7 @@ function plan(input) {
         best = {t, ex}; bestC = c;
       });
       if (!best) return;
-      const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus);
+      const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus, att.get(v.att).rammenMax);
       if (!f) return;
       v.fakeAv.catapult -= f.catapult; v.fakeAv.spy -= f.spy; v.fakeAv.ram -= f.ram;
       v.fakes++; zahl.set(best.t.id, (zahl.get(best.t.id) || 0) + 1); paarPlus(v, best.t);
@@ -1678,7 +1682,8 @@ function pruefePlan(res, input) {
       const u = it.units;
       if (u.catapult + u.ram < 1) v.push("Fake ohne Katapult und Ramme");
       if (u.spy < 1) v.push("Fake ohne Späher: " + it.v.id);
-      if (u.ram > 1 || (u.ram >= 1 && u.catapult >= 1)) v.push("Fake mit mehr als einer Ramme oder Ramme neben Katapult: " + it.v.id);
+      const rMax = (input.attackers || []).filter(a => a.id === it.att).map(a => a.rammenMax == null || a.rammenMax === "" ? 1 : +a.rammenMax)[0];
+      if (u.ram > (rMax == null ? 1 : rMax)) v.push("Fake mit mehr Rammen als erlaubt: " + it.v.id);
       const andere = UNITS.filter(x => !["catapult", "spy", "ram"].includes(x) && u[x] > 0);
       if (andere.length) v.push("Fake mit anderen Einheiten: " + andere.join(", "));
       const vv = (input.attackers || []).flatMap(a => a.villages).find(x => x.id === it.v.id);

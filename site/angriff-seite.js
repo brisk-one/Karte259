@@ -29,7 +29,7 @@ const INFO = {
   fakes_max_je_dorf: "Obergrenze für alle Fakes aus einem eigenen Dorf, auf alle Ziele zusammen. Gilt auch, wenn Fakes je Herkunftsdorf zählen.",
   fake_verteilung: "Reihum: zuerst bekommt jedes Pflicht- und weitere Fakeziel einen Fake, dann jedes gewählte Dorf der Stammesmitglieder, danach werden die Pflichtziele bis zur vollen Zahl aufgefüllt und zuletzt die Mitglieder bis zu ihrer Zahl. Hauptziele zuerst voll: die Pflichtziele bekommen erst ihre volle Zahl, die Mitglieder nur, was übrig bleibt.",
   fake_modus: "Zieldorf: jedes Fakeziel bekommt die Zahl darunter (wie bisher). Herkunftsdorf: jedes Dorf der Angreifer schickt die Zahl darunter, verteilt auf die Fakeziele, wenig befakte und nahe zuerst; gedacht für reine Fake-Pläne. Einstellungen je Spieler gehen vor.",
-  fake_extra_pop: "Ein Fake braucht mindestens 1 % der Dorfpunkte des abschickenden Dorfs in Bauernhofplätzen. Der Zuschlag fängt Punkte ab, die bis zum Abschicken dazukommen. Fakes laufen mit Katapult- oder Rammentempo und bestehen aus Katapulten und Spähern, jeder mit mindestens einem Späher (Dörfer ohne freien Späher schicken keine Fakes). Eine Ramme nur, wenn im Dorf kein Katapult frei ist, und dann genau eine; aufgefüllt wird nie mit Rammen.",
+  fake_extra_pop: "Ein Fake braucht mindestens 1 % der Dorfpunkte des abschickenden Dorfs in Bauernhofplätzen. Der Zuschlag fängt Punkte ab, die bis zum Abschicken dazukommen. Fakes laufen mit Katapult- oder Rammentempo und bestehen aus Katapulten und Spähern, jeder mit mindestens einem Späher (Dörfer ohne freien Späher schicken keine Fakes). Eine Ramme nur, wenn im Dorf kein Katapult frei ist; mehr Rammen nur, wenn Katapulte und Späher nicht reichen, höchstens so viele wie beim Spieler eingestellt (Standard 1).",
   extra_fakes: "Dörfer starker Stammesmitglieder der Zielspieler, gegen die der Angreifer mindestens die Moral-Schwelle hätte. Schwache Spieler sind schlechte Fakeziele: hohe Moral, kaum Truppen zum Unterstützen.",
   zart: "AG-Ziele bekommen AGs, Clean-Offs und Fakes. Fakeziele bekommen nur Fakes, gleichrangig mit den Pflichtzielen; ein reiner Fake-Plan braucht nur Fakeziele. Bei beiden zählen die Besitzer als Zielspieler: ihre übrigen Dörfer werden Pflicht-Fakeziele, ihre Stammesmitglieder stehen in Abschnitt 6 zur Wahl. Ein Dorf steht nur in einer der beiden Listen.",
   zmodus: "Automatisch: so viele Ziele wie möglich adeln (AGs plus mindestens eine Clean-Off), dann Clean-Offs bis zum Richtwert, dann Off vor AG möglichst oft, dann kürzeste Laufzeiten; gleichwertige Lösungen per Zufall. Je Angreifer: jedes Ziel bekommt in der Tabelle einen Angreifer, der es adelt; Clean-Offs dürfen von allen kommen.",
@@ -37,6 +37,7 @@ const INFO = {
   fen_je: "An: jeder Angreifer kann eigene Abschickzeiträume bekommen, ohne eigene gelten die gemeinsamen. Aus: für alle gelten die gemeinsamen Zeiträume; eigene bleiben gespeichert und gelten wieder, sobald der Schalter an ist. „Zurücksetzen“ löscht die eigenen Zeiträume eines Angreifers.",
   fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Jeder Angreifer kann unter „Je Angreifer“ eigene Zeiträume bekommen; sie ersetzen für ihn die gemeinsamen. Die Zeiträume sind ein Wunsch: geht ein Ziel nur mit Abschicken außerhalb, plant der Planer es trotzdem, markiert diese Befehle („außerhalb“, „nachts“) und sagt nach der Berechnung, wie die Zeiträume zu erweitern wären. Fakes kommen nur in Sitzungen, in denen ohnehin abgeschickt wird.",
   jeClean: "Gilt nur für diesen Spieler, statt der Einstellung „Clean-Offs je AG-Ziel“ oben. „Höchstens N je Ziel“: von diesem Spieler kommen je AG-Ziel höchstens N Clean-Offs (0: keine), die Zahl je Ziel bleibt beim Wert oben. „N für meine AG-Ziele“: Ziele, auf die dieser Spieler den AG-Train schickt, bekommen N Clean-Offs (mindestens 1). Ohnehin gilt: Clean-Offs kommen möglichst vom Spieler, der den Train schickt, damit er sein Timing selbst in der Hand hat.",
+  jeRammen: "Gilt nur für diesen Spieler: so viele Rammen darf ein Fake höchstens enthalten (leer: 1, 0: keine). Katapulte gehen immer vor: eine Ramme ist die langsamste Einheit nur, wenn im Dorf kein Katapult frei ist, und aufgefüllt wird mit Rammen erst, wenn Katapulte und Späher nicht reichen. Jeder Fake hat mindestens einen Späher.",
   jeFake: "Gilt nur für diesen Spieler. „Höchstens N je eigenem Dorf“: jedes seiner Dörfer schickt höchstens N Fakes, etwa bei wenig Katapulten (bei „Fakes zählen je Herkunftsdorf“ genau N, soweit Truppen reichen). „N je Fakeziel“: dieser Spieler schickt N Fakes auf jedes Fakeziel, zusätzlich zu den Fakes der übrigen Spieler nach „Fakes je Dorf“ oben. Fakes bleiben Richtwert: was in keine Abschicksitzung passt, entfällt.",
   teilnahme: "Offs: Clean-Offs und übrige Offs. AGs: Trains; eine Off läuft nur im Train mit, wenn der Spieler auch mit Offs teilnimmt. Fakes: aus allen Dörfern der Übersicht.",
   auswahl: "Nur diese Dörfer schicken Offs und AGs, etwa weil andere Offs schon für einen anderen Plan verplant sind. Je Dorf Koordinaten, mit oder ohne Namen, auch eingefügte Links. Fakes kommen weiter aus allen Dörfern; Offs außerhalb der Auswahl geben dafür keine Rammen her, Katapulte nur über dem Richtwert.",
@@ -74,7 +75,7 @@ const FELDER = [
 /* ---------- Zustand ---------- */
 const leererZeitraum = () => ({vonDatum: "", vonZeit: "", bisDatum: "", bisZeit: ""});
 const neuerAngreifer = () => ({text: "", rollen: {off: true, ag: true, fake: true}, auswahlText: "", fen: [leererZeitraum()], nobles: {}, useOff: {},
-                               cleanModus: "", cleanN: "", fakeModus: "", fakeN: ""});
+                               cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: ""});
 let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], fakeHaupt: [], zart: "ag", zmodus: "auto",
          ank: leererZeitraum(), ankListe: [], fen: [leererZeitraum()], fakeAus: [], fakeText: "", extraAus: [], extraEin: [], wahlKnapp: null, hilfe: false};
 /* Gespeicherte Stände aus der Zeit der Textfelder (ankunft, fenster, fensterText) in die getrennten Felder übernehmen. */
@@ -290,9 +291,15 @@ function attBlock(i) {
   };
   wahl("Clean-Offs", "cleanModus", [["", "wie oben"], ["beitrag", "höchstens N je Ziel von diesem Spieler"], ["eigene", "N für seine AG-Ziele"]], "cleanN", 3, "jeClean");
   wahl("Fakes", "fakeModus", [["", "wie oben"], ["dorf", "höchstens N je eigenem Dorf"], ["ziel", "N je Fakeziel von diesem Spieler"]], "fakeN", 20, "jeFake");
+  // Rammen je Fake höchstens, je Spieler (Dennis 10.11.2026 01:17); leer: 1
+  const lr = el("label"); lr.append(el("span", "ap-note", "Rammen je Fake höchstens"));
+  const rn = el("input"); rn.type = "number"; rn.min = 0; rn.max = 1000; rn.className = "ap-n"; rn.style.width = "4em"; rn.placeholder = "1";
+  rn.value = a.rammenMax == null ? "" : a.rammenMax; rn.setAttribute("aria-label", "Rammen je Fake höchstens für diesen Spieler");
+  rn.addEventListener("input", () => { a.rammenMax = rn.value; geaendert(true); });
+  lr.append(rn); eigen.append(lr, infoKnopf("jeRammen"));
   const out = el("div");
   out.id = "att-out-" + i;
-  box.append(kopf, ta, det1, eigen, hilfeFeld("jeClean"), hilfeFeld("jeFake"), out);
+  box.append(kopf, ta, det1, eigen, hilfeFeld("jeClean"), hilfeFeld("jeFake"), hilfeFeld("jeRammen"), out);
   return box;
 }
 function attsBauen() {
@@ -797,7 +804,7 @@ function kernInput(cfgExtra) {
     const own = A.own && A.own.fenster.length ? A.own.fenster : null;
     if (!own && !fw.fenster.length) fehler.push("Kein Abschickzeitraum für " + A.name + " (Abschnitt 5).");
     attackers.push({id: i, name: A.name, points: A.points || 0, rollen: a.rollen, auswahl: A.aus ? A.aus.keys : null, windows: own,
-      cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN,
+      cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax,
       villages: A.dorfer.map(d => ({id: d.id, name: d.name, x: d.x, y: d.y, pts: d.pts, units: d.units,
                                     nobles: agZahl(a, d), useOff: offEingeplant(a, d)}))});
   });

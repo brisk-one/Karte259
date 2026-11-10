@@ -161,7 +161,12 @@ test("Fakes aus Katapulten und Spähern: immer ein Späher, höchstens eine Ramm
   assert.equal(K.fakeAus({catapult: 0, spy: 100, ram: 0}, 105, W.pop, "kata"), null);   // ohne Katapult und Ramme kein Fake
   assert.deepEqual(K.fakeAus({catapult: 0, spy: 100, ram: 30}, 105, W.pop, "kata"), {catapult: 0, spy: 50, ram: 1});   // eine Ramme, Rest Späher
   assert.deepEqual(K.fakeAus({catapult: 2, spy: 100, ram: 30}, 105, W.pop, "kata"), {catapult: 2, spy: 45, ram: 0});   // Katapult vor Ramme
-  assert.equal(K.fakeAus({catapult: 0, spy: 10, ram: 30}, 105, W.pop, "kata"), null);   // nie mit Rammen auffüllen
+  assert.equal(K.fakeAus({catapult: 0, spy: 10, ram: 30}, 105, W.pop, "kata"), null);   // Standard: höchstens eine Ramme
+  // Rammen je Fake je Spieler einstellbar (Dennis 10.11.2026 01:17): erst Katapulte und Späher, dann Rammen bis zur Grenze
+  assert.deepEqual(K.fakeAus({catapult: 0, spy: 10, ram: 30}, 105, W.pop, "kata", 20), {catapult: 0, spy: 10, ram: 17});
+  assert.equal(K.fakeAus({catapult: 0, spy: 10, ram: 30}, 105, W.pop, "kata", 10), null);
+  assert.deepEqual(K.fakeAus({catapult: 5, spy: 10, ram: 30}, 105, W.pop, "kata", 20), {catapult: 5, spy: 10, ram: 9});
+  assert.equal(K.fakeAus({catapult: 0, spy: 100, ram: 30}, 105, W.pop, "kata", 0), null);   // 0: keine Rammen
   assert.equal(K.fakeAus({catapult: 5, spy: 10, ram: 0}, 105, W.pop, "kata"), null);   // reicht nicht
 });
 
