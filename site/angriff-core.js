@@ -71,6 +71,7 @@ const CFG_DEFAULT = {
 /* ---------- Abschicksitzungen (v0.5, Spezifikation 15) ---------- */
 const SITZUNG_PAUSE_MS = 15 * 60000;       // längere Pause: neue Abschicksitzung
 const FAKE_RAND_MS = 10 * 60000;           // Fakes höchstens so weit vor oder nach einer Sitzung
+const PAAR_S = 3600;                        // Streuung der Fakeziele je Angreifer: zwei Felder Rammenlaufzeit je Fake auf denselben Zielspieler
 const FAKE_SITZUNG_MS = 30 * 60000;        // reine Fake-Spieler: eine Sitzung von höchstens 2 × 30 min
 const ANKER_RAND_MS = 30 * 60000;          // Zuteilung: so weit vom Ankerzeitpunkt kostet nichts
 const ANKUNFT_MAX_MS = 90 * 60000;         // Orientierungswert 1,5 h, Hinweis ab 1 h; seit 10.11.2026 keine feste Grenze (Dennis: für Fakes sinnvoll)
@@ -1029,6 +1030,11 @@ function plan(input) {
   const herkunft = cfg.fake_modus === "herkunft";
   const sollQ = v => { const a = att.get(v.att); return Math.min(a.fakeModus === "dorf" ? a.fakeN : cfg.fakes_per_village, Math.max(1, Math.round(cfg.fakes_max_je_dorf || 4))); };
   const maxQ = Math.max(1, Math.round(cfg.fakes_max_je_dorf || 4));
+  // Ziele je Angreifer streuen (Dennis 10.11.2026 00:58: ein Spieler lief fast nur auf einen Zielspieler): jeder schon
+  // geplante Fake dieses Angreifers auf denselben Zielspieler kostet bei der Wahl so viel wie zwei Felder mehr Rammenlaufzeit
+  const paar = new Map(), paarK = (v, t) => v.att + ":" + (t.owner != null ? t.owner : "t" + t.id);
+  const paarZahl = (v, t) => paar.get(paarK(v, t)) || 0;
+  const paarPlus = (v, t) => paar.set(paarK(v, t), paarZahl(v, t) + 1);
   /** grenze: höchstens so viele Fakes je Ziel in diesem Lauf (Verteilung reihum). */
   const fakeLauf = (liste, istExtra, modus, grenze) => {
     const kand = liste.map(t => {
@@ -1045,7 +1051,7 @@ function plan(input) {
     if (!istExtra) kand.sort((a, b) => a.q.length - b.q.length);
     kand.forEach(({t, q}) => {
       const schon = new Set(fakes.filter(f => f.t.id === t.id).map(f => f.v.id));
-      const sortiert = q.map(v => ({v, c: travelS(world, "ram", dist(v, t)) + rng() * 1800 + v.fakes * 600}))
+      const sortiert = q.map(v => ({v, c: travelS(world, "ram", dist(v, t)) + rng() * 1800 + v.fakes * 600 + paarZahl(v, t) * PAAR_S}))
         .sort((a, b) => a.c - b.c);
       // Topf je Fakeziel: die Spieler mit „ziel“ je eigener Topf mit ihrer Zahl, alle übrigen zusammen die Zahl der Konfig
       const topf = v => { const a = att.get(v.att); return a.fakeModus === "ziel" ? "s" + a.id : "alle"; };
@@ -1064,7 +1070,7 @@ function plan(input) {
         const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus);
         if (!f) continue;
         v.fakeAv.catapult -= f.catapult; v.fakeAv.spy -= f.spy; v.fakeAv.ram -= f.ram;
-        v.fakes++; schon.add(v.id); hat.set(k, (hat.get(k) || 0) + 1);
+        v.fakes++; schon.add(v.id); hat.set(k, (hat.get(k) || 0) + 1); paarPlus(v, t);
         fakes.push({v, t, f, extra: istExtra});
       }
     });
@@ -1094,7 +1100,7 @@ function plan(input) {
         if (schon.has(t.id)) return;
         // je Fake auf dem Ziel 8 h Aufschlag: Gleichmäßigkeit geht vor Nähe (rund 16 Felder Rammenlaufzeit)
         if (ex && (zahl.get(t.id) || 0) >= cfg.extra_fakes_per_village) return;      // Stammesmitglieder: eigene Zahl je Zieldorf
-        const tr = travelS(world, "ram", dist(v, t)), c = (zahl.get(t.id) || 0) * 28800 + tr + rng() * 1800 + (ex ? 57600 : 0);
+        const tr = travelS(world, "ram", dist(v, t)), c = (zahl.get(t.id) || 0) * 28800 + tr + rng() * 1800 + (ex ? 57600 : 0) + paarZahl(v, t) * PAAR_S;
         if (c >= bestC) return;
         if (ex && !t.manuell && moral(world.moral, a.points, t.ownerPoints || 0, t.ownerDays) < cfg.moral_threshold) return;
         if (!tsetFake(v, tr * 1000).length || !fakeZeitOk(v, t)) return;
@@ -1104,7 +1110,7 @@ function plan(input) {
       const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus);
       if (!f) return;
       v.fakeAv.catapult -= f.catapult; v.fakeAv.spy -= f.spy; v.fakeAv.ram -= f.ram;
-      v.fakes++; zahl.set(best.t.id, (zahl.get(best.t.id) || 0) + 1);
+      v.fakes++; zahl.set(best.t.id, (zahl.get(best.t.id) || 0) + 1); paarPlus(v, best.t);
       fakes.push({v, t: best.t, f, extra: best.ex});
     });
   };

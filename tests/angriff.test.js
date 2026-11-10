@@ -691,3 +691,30 @@ test("Nie im Nachtbonus ankommen: „bis 23:00:00“ heißt höchstens 22:59:59,
   assert.ok(!rf.fehler && rf.items.length > 0 && rf.items.every(i => !K.istNacht(W, i.arrivalMs)));
   assert.deepEqual(K.pruefePlan(rf, fp), []);
 });
+
+test("Fakes: höchstens 4 je Dorf, Ziele je Angreifer über die Zielspieler gestreut (Dennis 10.11.2026)", () => {
+  const dorf = (id, x, y) => ({id, name: "D" + id, x, y, pts: 9000, units: truppen({catapult: 200, spy: 200, axe: 100}), nobles: 0});
+  const A = {id: 101, name: "A", points: 300000, villages: [], rollen: {off: false, ag: false, fake: true}};
+  const B = {id: 102, name: "B", points: 300000, villages: [], rollen: {off: false, ag: false, fake: true}};
+  for (let k = 0; k < 8; k++) { A.villages.push(dorf(1 + k, 490 + (k % 3), 498 + k)); B.villages.push(dorf(21 + k, 490 + (k % 3), 516 + k)); }
+  // A liegt näher an Spieler 900, B näher an Spieler 950; ohne Streuung fakt A nur 900 und B nur 950
+  const ziele = [];
+  for (let k = 0; k < 10; k++) { ziele.push({id: 901 + k, x: 468 + (k % 4), y: 497 + k, owner: 900}); ziele.push({id: 951 + k, x: 468 + (k % 4), y: 515 + k, owner: 950}); }
+  const input = {world: W, cfg: {seed: 3, fakes_per_village: 2}, attackers: [A, B], agTargets: [], fakeTargets: ziele, extraFakeTargets: [],
+    arrival: K.parseAnkunft("03.11.2026 08:00:00:000 bis 14:00:00:000"), windows: K.parseFenster("02.11.2026 08:00 bis 23:30").fenster, now: Date.UTC(2026, 10, 2, 6, 0)};
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  assert.equal(r.items.length, 40, "jedes Ziel 2 Fakes");
+  const jeDorf = new Map(); r.items.forEach(i => jeDorf.set(i.v.id, (jeDorf.get(i.v.id) || 0) + 1));
+  assert.ok(Math.max(...jeDorf.values()) <= 4, "höchstens 4 Fakes je Dorf");
+  r.items.forEach(i => assert.ok(i.units.spy >= 1 && i.units.ram === 0, "Späher dabei, keine Ramme bei freien Katapulten"));
+  [101, 102].forEach(a => {
+    const m = {}; r.items.filter(i => i.att === a).forEach(i => { m[i.t.owner] = (m[i.t.owner] || 0) + 1; });
+    const n = Object.values(m), s = n.reduce((x, y) => x + y, 0);
+    assert.equal(n.length, 2, "Angreifer " + a + " fakt beide Zielspieler: " + JSON.stringify(m));
+    assert.ok(Math.max(...n) / s <= 0.75, "Angreifer " + a + " höchstens 75 % auf einem Zielspieler: " + JSON.stringify(m));
+  });
+  input.cfg.fakes_max_je_dorf = 2;
+  const r2 = K.plan(input), je2 = new Map(); r2.items.forEach(i => je2.set(i.v.id, (je2.get(i.v.id) || 0) + 1));
+  assert.ok(Math.max(...je2.values()) <= 2, "Obergrenze aus der Konfig");
+});
