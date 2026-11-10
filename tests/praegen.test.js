@@ -679,6 +679,67 @@ test("10.16: Vorrat vor dem Start bringt Münzen, ohne mehr Überlauf, und wird 
   }
 });
 
+test("10.16: am Markt trägt ein Händler ohne Bonus (Hinweis Dennis 10.11.2026)", () => {
+  const mit = V5({}), ohne = K.params({pkgSize: 30, merchantBonus: false, flagLevel: 9, intervalMin: 60}, WELT);
+  assert.equal(mit.carry, 1500);
+  assert.equal(mit.carryMarkt, 1000);
+  assert.equal(ohne.carryMarkt, 1000);
+});
+
+test("10.16: mit „Verhältnis ignorieren“ tauschen auch Lieferdörfer, nicht nur das Prägedorf", () => {
+  const R = K.planPackages(konto63(), V5({maxOverflow: 10, ignoreRatio: true}), []), x = R.pkg.detail.vorab;
+  assert.ok(x.dorf.some(o => !o.site), "mindestens ein Lieferdorf tauscht");
+  assert.ok(x.coins1 > x.coins0 + 0.5);
+  near(x.coins1 - x.coins0, x.dorf.reduce((a, o) => a + o.plus, 0), 1e-6 * x.coins1);
+});
+
+test("10.16 Nachtrag: mit Lagerstand nur vorhandenes Eisen tauschen (Wunsch Dennis 10.11.2026)", () => {
+  for (const extra of [{maxOverflow: 10}, {maxOverflow: 10, ignoreRatio: true}, {maxOverflow: 1}]) {
+    const R = K.planPackages(konto63(), V5(extra), []), d = R.pkg.detail, P = R.P, src = R.src;
+    assert.deepEqual(d.sites, R.configs[R.recommend - 1].sites);
+    // Kunst-Lagerstand: wenig Lehm und Holz, Eisen je Dorf verschieden; ein Dorf fehlt, eines hat zu wenig Eisen
+    const lager = {};
+    src.forEach((s, i) => {
+      if (i === 3) return;
+      lager[s.x + "|" + s.y] = {wood: Math.round(0.1 * s.cap), stone: Math.round(0.05 * s.cap), iron: i === 4 ? 999 : Math.round((0.3 + (i % 5) * 0.15) * s.cap)};
+    });
+    for (const kurs of [1, 0.8]) {
+      const v = K.lagerTausch(src, P, d.sites, d.cnt, lager, kurs), tag = JSON.stringify(extra) + " Kurs " + kurs;
+      assert.equal(v.einheit, 1000, "Händlerlast ohne Bonus");
+      assert.equal(v.pro, Math.round(1000 * kurs));
+      assert.ok(v.dorf.length > 0, tag);
+      assert.ok(v.coins1 > v.coins0 + 0.5, tag);
+      assert.ok(v.ov1 <= v.ov0 + 1e-4, tag);
+      assert.equal(v.ohneLager, src.filter(s => !lager[s.x + "|" + s.y]).length);
+      assert.ok(v.ohneLager >= 1);
+      assert.ok(v.zuWenig >= 1);
+      v.dorf.forEach(o => {
+        const s = src[o.i], l = lager[s.x + "|" + s.y];
+        assert.ok(l, "nur Dörfer mit Lagerstand");
+        assert.ok(Number.isInteger(o.aL) && Number.isInteger(o.aH) && o.aL + o.aH > 0);
+        assert.equal(o.eisen, (o.aL + o.aH) * 1000);
+        assert.ok(o.eisen <= l.iron, "nie mehr Eisen, als da ist: " + s.name);
+        assert.equal(o.lehm, o.aL * v.pro);
+        assert.equal(o.holz, o.aH * v.pro);
+        assert.ok(o.nach[1] <= s.cap + 1e-6 && o.nach[0] <= s.cap + 1e-6 && o.nach[2] >= -1e-6);
+        assert.deepEqual(o.jetzt, [l.wood, l.stone, l.iron]);
+        assert.ok(o.plus > 0);
+      });
+      near(v.coins1 - v.coins0, v.dorf.reduce((a, o) => a + o.plus, 0), 1e-6 * v.coins1 + (P.ignoreRatio ? 0.5 * v.dorf.length : 0));
+      // Summen jetzt und nach dem Tausch
+      const jetzt = [0, 0, 0];                                             // Kunstdörfer können dieselben Koordinaten haben
+      src.forEach(s => { const l = lager[s.x + "|" + s.y]; if (l) { jetzt[0] += l.wood; jetzt[1] += l.stone; jetzt[2] += l.iron; } });
+      [0, 1, 2].forEach(r => near(v.jetzt[r], jetzt[r], 1e-6));
+      const e = v.dorf.reduce((a, o) => a + o.eisen, 0), L = v.dorf.reduce((a, o) => a + o.lehm, 0);
+      near(v.nach[2], jetzt[2] - e, 1e-6);
+      near(v.nach[1], jetzt[1] + L, 1e-6);
+      // ohne Nebenwirkung
+      assert.ok(src.every(s => s.vorab == null));
+      near(K.lockstep(src, P, d.sites, d.cnt, false).coins, d.coins, 1e-6 * d.coins);
+    }
+  }
+});
+
 test("10.16: Startbestand je Rohstoff im Gleichschritt", () => {
   const v = konto63(), R = K.planPackages(v, V5({maxOverflow: 10}), []), P = R.P, src = R.src;
   const sites = R.configs[R.recommend - 1].sites, cnt = K.toCnt(R.pkg.pos, K.lastClick(P));

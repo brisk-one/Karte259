@@ -195,8 +195,16 @@
   .pr-lg{display:flex; align-items:center; gap:7px; white-space:nowrap; margin:1px 0}
   .pr-lg .bar{display:flex; width:84px; height:8px; border-radius:2px; overflow:hidden; background:var(--edge-line); flex:none}
   .pr-lg .bar i{display:block; height:100%}
-  .pr-vtab .ok{color:var(--st-ok); font-weight:700}
-  .pr-vtab .fehlt{color:var(--bad); font-weight:700}
+  .pr-lg .e{background:var(--eisen)}
+  .pr-lg .bar{position:relative}
+  .pr-lg .bar s{position:absolute; top:0; bottom:0; width:2px; margin-left:-1px; background:var(--ink-2); opacity:.75}
+  .pr-lg b{font-weight:700}
+  /* Tabelle je Dorf zum Aufklappen (10.11.2026) */
+  .pr-vdet{margin-top:4px}
+  .pr-vdet summary{cursor:pointer; font-weight:700; color:var(--ink-2); padding:8px 12px; border:1px solid var(--edge-soft); border-radius:var(--radius); background:var(--panel-2)}
+  .pr-vdet summary::after{content:" · aufklappen"; font-weight:400; color:var(--muted)}
+  .pr-vdet[open] summary::after{content:" · zuklappen"}
+  .pr-vdet[open] summary{margin-bottom:8px}
   .pr-gb{display:inline-block; height:8px; background:var(--st-ok); border-radius:2px; margin-right:6px; vertical-align:0}
   .pr-markt{white-space:nowrap; font-weight:700}
   .pr-tag{display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:9px; border:1px solid var(--accent);
@@ -321,7 +329,7 @@
           </div>
           <div class="pr-modes" role="radiogroup" aria-label="Berechnung">
             <div class="pr-mode" id="mode-pct">
-              <label class="pr-mhead"><input type="radio" name="mode" value="pct"> 1 · Rohstoffprozentpunkte vorgeben</label>
+              <label class="pr-mhead"><input type="radio" name="mode" value="pct" checked> 1 · Rohstoffprozentpunkte vorgeben</label>
               <div class="pr-row">
                 <input type="number" id="pkgpct" min="0" max="2000" step="10" value="300" aria-label="Rohstoffpakete in Prozent der Speicherkapazität"> <span>% der Speicherkapazität</span>
               </div>
@@ -330,7 +338,7 @@
               <p class="pr-mnote">Prägedörfer, Münzen und Klickfrequenz: alle Pakete auf einmal, ohne Speichergrenze. Dazu ein Zeitplan der Pakete mit Speichergrenze.</p>
             </div>
             <div class="pr-mode" id="mode-max">
-              <label class="pr-mhead"><input type="radio" name="mode" value="max" checked> 2 · Rohstoffpakete maximieren</label>
+              <label class="pr-mhead"><input type="radio" name="mode" value="max"> 2 · Rohstoffpakete maximieren</label>
               <div class="pr-row">
                 <label class="pick"><span>Anzahl</span><select id="pkgcount" aria-label="Anzahl Pakete"></select></label>
               </div>
@@ -429,7 +437,7 @@
         <label class="pr-lager"><span class="lab">Lagerstand (freiwillig): Übersichten › Produktion öffnen, Strg+A, kopieren, hier einfügen</span>
           <textarea id="lager" rows="2" spellcheck="false" aria-describedby="lager-status"
             placeholder="[001] Dorfname (500|500) K55   10.393   123.456 234.567 345.678   400.000   110/235   24.000/24.000&#10;…"></textarea>
-          <span class="pr-mnote" id="lager-status">Ohne Lagerstand: die Tabelle nennt, was zu Beginn im Lager liegen soll und wie viel Eisen dafür nötig ist.</span>
+          <span class="pr-mnote" id="lager-status">Ohne Lagerstand: die Tabelle nennt, was zu Beginn im Lager liegen soll. Mit Lagerstand wird nur das Eisen getauscht, das jetzt in den Dörfern liegt.</span>
         </label>
       </div>
       <div id="vorab-body"></div>
@@ -616,7 +624,7 @@ const adelZahl = a => a.n === 1 ? "1 neues Adelsgeschlecht" : nf.format(a.n) + "
 ["coinstock", "coinnext"].forEach(id => $(id).addEventListener("input", () => { if (RESULT) { renderRecommendation(); renderCompare(); } }));
 
 /* Berechnungsart: "pct" Prozentpunkte vorgeben (einfache Rechnung wie bis v0.4), "max" Pakete maximieren (v0.5) */
-let MODE = "max";
+let MODE = "pct";                       // Standard: Berechnung 1 (Wunsch Dennis 10.11.2026)
 function setMode(m) {
   MODE = m;
   [["pct", "mode-pct"], ["max", "mode-max"]].forEach(([k, id]) => {
@@ -664,7 +672,7 @@ $("vorab-kurs").addEventListener("input", () => { if (RESULT) renderVorab(); });
 $("routen-max").addEventListener("change", () => { if (RESULT) renderRouten(); });       // 10.18: nur Anzeige, keine neue Rechnung
 $("lager").addEventListener("input", () => { LAGER = K.parseLager($("lager").value); if (RESULT) renderVorab(); else lagerStatus(); });
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
-setMode("max");
+setMode("pct");
 pctPakete();
 document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } });
 let rsz = null;
@@ -1299,7 +1307,7 @@ function renderBilanz(m) {
    einstellbar. 3b: optional der Lagerstand aus der Produktionsübersicht; dann zählt, was schon im Lager liegt, und
    die Tabelle zeigt, ob das Eisen reicht. Rohstoffmengen exakt und zusätzlich in Prozent (Dennis 13:08). */
 let LAGER = {lager: {}, count: 0};
-const ganz = v => nf.format(Math.round(v));
+const ganz = v => nf.format(Math.round(v) || 0);                          // nie „-0“
 function lagerZeile(cls, wort, v, cap) {
   const z = el("span", "pr-lg"), bar = el("span", "bar"), i = el("i", cls);
   i.style.width = Math.min(100, v / cap * 100).toFixed(1) + "%";
@@ -1307,15 +1315,50 @@ function lagerZeile(cls, wort, v, cap) {
   z.append(bar, document.createTextNode(wort + " " + ganz(v) + " · " + nf.format(Math.round(v / cap * 100)) + " %"));
   return z;
 }
-const stunden = h => h < 48 ? "rund " + nf.format(Math.max(1, Math.ceil(h))) + " h" : "rund " + nf1.format(Math.round(h / 24 * 10) / 10) + " Tage";
 function lagerStatus() {
   const st = $("lager-status"), txt = $("lager").value.trim();
-  if (!txt) { st.textContent = "Ohne Lagerstand: die Tabelle nennt, was zu Beginn im Lager liegen soll und wie viel Eisen dafür nötig ist."; return; }
+  if (!txt) { st.textContent = "Ohne Lagerstand: die Tabelle nennt, was zu Beginn im Lager liegen soll. Mit Lagerstand wird nur das Eisen getauscht, das jetzt in den Dörfern liegt."; return; }
   if (!LAGER.count) { st.textContent = "Keine Dörfer mit Lagerstand erkannt. Bitte Übersichten › Produktion kopieren, nicht die Gebäudeübersicht."; return; }
   const src = RESULT ? RESULT.src : [], fehlt = src.filter(s => !LAGER.lager[s.x + "|" + s.y]).length;
   st.textContent = "Lagerstand für " + nf.format(src.length ? src.length - fehlt : LAGER.count) + (src.length ? " von " + nf.format(src.length) : "")
-    + " Dörfern erkannt" + (fehlt ? "; für die übrigen rechnet die Tabelle ohne Lagerstand." : ".");
+    + " Dörfern erkannt; getauscht wird nur das Eisen, das dort jetzt liegt" + (fehlt ? ". Die übrigen beginnen mit dem eingestellten Startbestand und tauschen nicht." : ".");
 }
+/* Tabelle je Dorf zum Auf- und Zuklappen (Wunsch Dennis 10.11.2026: die Tabelle ist sehr groß), zu Beginn zu */
+let VORAB_OFFEN = false;
+function vorabTabelle(box, titel, cols, rows) {
+  const det = el("details", "pr-vdet");
+  det.open = VORAB_OFFEN;
+  det.addEventListener("toggle", () => { VORAB_OFFEN = det.open; });
+  det.appendChild(el("summary", null, titel));
+  const wrap = el("div");
+  wrap.style.overflowX = "auto";
+  const tab = table(cols, rows);
+  tab.classList.add("pr-vtab");
+  wrap.appendChild(tab);
+  det.appendChild(wrap);
+  box.appendChild(det);
+}
+const haendlerZelle = (n, M) => {
+  const r = Math.max(1, Math.ceil(n / Math.max(1, M) - 1e-9)), z = el("span");
+  z.append(document.createTextNode(ganz(n)), el("span", "sub", r <= 1 ? "in 1 Runde" : "in " + r + " Runden"));
+  return z;
+};
+const dorfZelle = (s, site) => {
+  const dn = el("span");
+  dn.append(el("b", null, s.name), document.createTextNode(" "));
+  dn.appendChild(el("span", "sub", s.x + "|" + s.y + (site ? "" : " · Markt " + s.marketFrom)));
+  if (site) dn.appendChild(el("span", "pr-tag", "Prägedorf"));
+  return dn;
+};
+const plusZelle = (v, max) => {
+  const pl = el("span"), gb = el("span", "pr-gb");
+  gb.style.width = (Math.max(0, v) / Math.max(1e-9, max) * 48).toFixed(1) + "px";
+  pl.append(gb, el("b", null, "+" + ganz(v)));
+  return pl;
+};
+// Am Markt trägt ein Händler ohne Bonus (Hinweis Dennis 10.11.2026: der Händlerbonus gilt nur fürs Versenden und Anfordern)
+const marktLast = P => P.carryMarkt || P.carry / (P.merchantBonus ? 1.5 : 1);
+
 function renderVorab() {
   const R = RESULT, box = $("vorab-body");
   if (!R) return;
@@ -1325,21 +1368,20 @@ function renderVorab() {
   $("vorab-hint").textContent = d ? fdName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %"
     + (R.pkg ? "" : " · Zeitplan der Berechnung 1") : "";
   if (!d) { box.appendChild(el("p", "empty", sel.laedt ? "rechnet …" : "Ohne Zeitplan der Pakete gibt es keinen Vorrat zu planen.")); return; }
+  const kurs = Math.max(0.1, (+$("vorab-kurs").value || 1000) / 1000);      // Lehm oder Holz je Eisen
+  if (LAGER.count > 0) { renderVorabLager(R, d, box, kurs); return; }
   const v = d.vorab;
   if (!v || !v.dorf.length) {
     box.appendChild(el("p", "empty", "Ein Tausch vor dem Start bringt mit diesem Zeitplan keine zusätzlichen Münzen: entweder bleibt kaum Holz oder Eisen liegen, oder die Dörfer mit Überschuss schaffen schon den Paketinhalt nicht rechtzeitig."));
     return;
   }
-  const kurs = Math.max(0.1, (+$("vorab-kurs").value || 1000) / 1000);      // Lehm oder Holz je Eisen
-  const start = s => Math.min(s.cap, s.cap * P.startPct / 100);
-  const mitLager = LAGER.count > 0;
+  const start = s => Math.min(s.cap, s.cap * P.startPct / 100), last = marktLast(P);
+  // Marktangebote (Wunsch Dennis 09.11.2026): je Angebot eine Händlerlast Eisen gegen Lehm bzw. Holz zum Kurs
+  const proAngebot = Math.max(1, Math.round(last * kurs));
   const zeilen = v.dorf.map(x => {
-    const s = R.src[x.i], z0 = start(s), H = z0 + x.vorab[0], L = z0 + x.vorab[1], lg = mitLager ? LAGER.lager[s.x + "|" + s.y] : null;
-    const kH = lg ? Math.max(0, H - lg.wood) : x.vorab[0], kL = lg ? Math.max(0, L - lg.stone) : x.vorab[1];
-    // Marktangebote (Wunsch Dennis 09.11.2026): je Angebot so viel Eisen, wie ein Händler trägt, gegen Lehm bzw. Holz zum Kurs
-    const proAngebot = Math.max(1, Math.round(P.carry * kurs)), aL = Math.ceil(kL / proAngebot - 1e-9), aH = Math.ceil(kH / proAngebot - 1e-9);
-    const gaenge = aL + aH, eisen = gaenge * P.carry, fehlt = lg ? Math.max(0, eisen - lg.iron) : null;
-    return {s, x, H, L, kH, kL, aL, aH, proAngebot, eisen, lg, fehlt, gaenge, runden: Math.ceil(gaenge / Math.max(1, s.merchants) - 1e-9)};
+    const s = R.src[x.i], z0 = start(s), H = z0 + x.vorab[0], L = z0 + x.vorab[1], kH = x.vorab[0], kL = x.vorab[1];
+    const aL = Math.max(0, Math.ceil(kL / proAngebot - 1e-9)), aH = Math.max(0, Math.ceil(kH / proAngebot - 1e-9)), gaenge = aL + aH;
+    return {s, x, H, L, kH, kL, aL, aH, eisen: gaenge * last, gaenge};
   });
   const sum = f => zeilen.reduce((a, z) => a + f(z), 0);
   const eisen = sum(z => z.eisen), kL = sum(z => z.kL), kH = sum(z => z.kH), plus = v.coins1 - v.coins0;
@@ -1349,123 +1391,191 @@ function renderVorab() {
     document.createTextNode(" gegen Lehm und Holz tauschen bringt "), el("em", null, "+" + ganz(plus) + " Münzen"),
     document.createTextNode(" (+" + nf1.format(Math.round(plus / v.coins0 * 1000) / 10) + " %)."));
   lead.appendChild(t);
+  lead.appendChild(el("span", "pr-mnote", "Mit deinem Lagerstand (Feld oben) rechnet der Rechner nur mit dem Eisen, das jetzt in den Dörfern liegt."));
   box.appendChild(lead);
 
   const grid = el("div", "pr-vgrid");
   // Warum: was nach 48 h liegen bleibt
   const g1 = kpiGruppe(grid, "Warum: was nach 48 h liegen bleibt"), in1 = el("div", "in");
-  const smax = Math.max(1, ...v.rest0, ...v.rest1);
-  const kopf = el("div", "pr-wh");
-  kopf.append(el("span"), el("span", null, "ohne Tausch"), el("span", null, "mit Tausch vorab"));
-  in1.appendChild(kopf);
-  RES_NAME.forEach((nm, r) => {
-    const zr = el("div", "pr-wr"), lab = el("span");
-    lab.append(resMarke(r), document.createTextNode(nm));
-    zr.appendChild(lab);
-    [v.rest0[r], v.rest1[r]].forEach(x => {
-      const wb = el("span", "pr-wb"), bk = el("span", "pr-bk"), i = el("i", "hle"[r]);
-      i.style.width = (Math.max(0, x) / smax * 100).toFixed(2) + "%";
-      bk.appendChild(i);
-      wb.append(bk, el("b", null, menge(Math.max(0, x))));
-      zr.appendChild(wb);
-    });
-    in1.appendChild(zr);
-  });
+  in1.appendChild(balkenVergleich(["ohne Tausch", "mit Tausch vorab"], [v.rest0, v.rest1]));
   in1.appendChild(el("p", "pr-vcap", "Eine Münze kostet " + ganz(P.coin.wood) + " Holz, " + ganz(P.coin.stone) + " Lehm und " + ganz(P.coin.iron)
     + " Eisen. Pakete und Minen bringen von allem etwa gleich viel, deshalb begrenzt Lehm das Prägen, und Holz und vor allem Eisen bleiben liegen. "
     + "Wer vorher Eisen gegen Lehm und Holz tauscht, startet mit dem fehlenden Rohstoff im Lager und verschickt dann auch das übrige Eisen."));
   g1.appendChild(in1);
   // Tauschen
-  const g2 = kpiGruppe(grid, "Tauschen vor dem Start"), in2 = el("div", "in"), flow = el("div", "pr-flow");
-  const bx1 = el("div", "bx"), d1 = el("div");
-  d1.append(resMarke(2), document.createTextNode("Eisen abgeben"));
-  bx1.append(d1, el("b", null, menge(eisen)));
-  const bx2 = el("div", "bx");
-  [[1, "Lehm", kL], [0, "Holz", kH]].forEach(([r, nm, x]) => { const z = el("div"); z.append(resMarke(r), document.createTextNode(nm + " "), el("b", null, menge(x))); bx2.appendChild(z); });
-  flow.append(bx1, el("span", "ar", "→"), bx2);
-  in2.appendChild(flow);
+  const g2 = kpiGruppe(grid, "Tauschen vor dem Start"), in2 = el("div", "in");
+  in2.appendChild(tauschFluss(eisen, kL, kH));
   const kv2 = el("div", "pr-vkv");
   kv2.append(el("span", null, "Dörfer mit Tausch"), el("span", "v", nf.format(zeilen.length) + " von " + nf.format(R.src.length)),
     el("span", null, "Angebote, je ein Händler"), el("span", "v", ganz(sum(z => z.gaenge))),
-    el("span", null, "Kurs"), el("span", "v", "1.000 Eisen : " + ganz(kurs * 1000)));
-  if (mitLager) {
-    const ok = zeilen.filter(z => z.lg && z.fehlt <= 0.5).length, mit = zeilen.filter(z => z.lg).length;
-    kv2.append(el("span", null, "Eisen reicht schon"), el("span", "v", nf.format(ok) + " von " + nf.format(mit)));
-    const f = sum(z => z.fehlt || 0);
-    if (f > 0.5) kv2.appendChild(el("span", "s", "es fehlen noch " + ganz(f) + " Eisen"));
-  } else kv2.appendChild(el("span", "s", "je Dorf am eigenen Markt, solange er für den Transport noch frei ist"));
+    el("span", null, "Kurs"), el("span", "v", "1.000 Eisen : " + ganz(kurs * 1000)),
+    el("span", "s", "am Markt trägt ein Händler " + ganz(last) + " Rohstoffe, der Händlerbonus gilt dort nicht"));
   in2.appendChild(kv2);
   g2.appendChild(in2);
   // Ergebnis
-  const g3 = kpiGruppe(grid, "Ergebnis in 48 h"), in3 = el("div", "in"), kv3 = el("div", "pr-vkv");
-  const ovGleich = Math.abs(v.ov1 - v.ov0) < 1e-6;
-  kv3.append(el("span", null, "Münzen"), el("span", "v big", ganz(v.coins1)), el("span", "s", "statt " + ganz(v.coins0)),
-    el("span", null, "Überschuss danach"), el("span", "v", menge(sum3(v.rest1))), el("span", "s", "statt " + menge(sum3(v.rest0))),
-    el("span", null, "Überlauf"), el("span", "v", ovGleich ? "unverändert" : pctf(v.ov1)),
-    el("span", "s", ovGleich ? "kein Dorf läuft durch den Vorrat mehr über" : "statt " + pctf(v.ov0)));
-  in3.appendChild(kv3);
-  g3.appendChild(in3);
+  ergebnisGruppe(grid, v.coins1, v.coins0, "ohne Tausch", v.ov1, v.ov0, [["Überschuss danach", menge(sum3(v.rest1)), "statt " + menge(sum3(v.rest0))]]);
   box.appendChild(grid);
+  box.appendChild(schritte("1 · Tage vorher", "Lehm und Holz bis zum Start im Lager lassen, Pakete erst nach dem Zeitplan einlösen."));
 
-  const steps = el("div", "pr-steps");
-  [["1 · Tage vorher", "Am Markt gleichzeitig Eisen gegen Lehm und Eisen gegen Holz anbieten, dann nimmt an, wer das eine oder das andere braucht. Angebote je Dorf aus der Tabelle, von oben nach unten in der Reihenfolge deiner Dörfer; „Markt öffnen“ führt zu „Eigene Angebote“ des Dorfes."],
-   ["2 · Vor dem Start", "Lehm und Holz bis zum Start im Lager lassen, Pakete erst nach dem Zeitplan einlösen."],
-   ["3 · Ab dem Flaggendoppler", "Pakete und Versand wie im Zeitplan; der Vorrat gleicht den Eisenüberschuss aus."]].forEach(([k, txt]) => {
-    const z = el("div"); z.append(el("b", null, k), document.createTextNode(txt)); steps.appendChild(z);
-  });
-  box.appendChild(steps);
-
-  // Tabelle je Dorf, nach Mehrmünzen sortiert, alle Spalten sortierbar
-  const cols = [["Dorf", "l", true], ["Lager zu Beginn", "l", true], ["Tauschen", "l", true]];
-  if (mitLager) cols.push(["Eisen im Lager", "l", true]);
-  cols.push(["Händler", "", true], ["Mehr Münzen", "", true], ["Markt", "l", false]);
+  const cols = [["Dorf", "l", true], ["Lager zu Beginn", "l", true], ["Tauschen", "l", true], ["Händler", "", true], ["Mehr Münzen", "", true], ["Markt", "l", false]];
   const maxPlus = Math.max(...zeilen.map(z => z.x.plus));
   dorfIdsLaden();
   // Reihenfolge wie in deiner Übersicht (so sortiert wie deine Dörfer im Spiel), damit man von oben nach unten durchklickt
   const rows = zeilen.slice().sort((a, b) => a.s.i - b.s.i).map(z => {
-    const s = z.s, dn = el("span");
-    dn.append(el("b", null, s.name), document.createTextNode(" "));
-    dn.appendChild(el("span", "sub", s.x + "|" + s.y + (z.x.site ? "" : " · Markt " + s.marketFrom)));
-    if (z.x.site) dn.appendChild(el("span", "pr-tag", "Prägedorf"));
-    const lg = el("span");
+    const s = z.s, lg = el("span");
     lg.append(lagerZeile("l", "Lehm", z.L, s.cap), lagerZeile("h", "Holz", z.H, s.cap));
     const ts = el("span");
-    if (z.kL + z.kH < 0.5) ts.append(el("b", null, "nichts"), el("span", "sub", "Lehm und Holz liegen schon im Lager"));
+    if (z.gaenge === 0) ts.append(el("b", null, "nichts"), el("span", "sub", "Lehm und Holz liegen schon im Lager"));
     else {
-      ts.appendChild(el("b", null, "Eisen " + ganz(z.eisen) + " → Lehm " + ganz(z.aL * z.proAngebot) + (z.aH ? " · Holz " + ganz(z.aH * z.proAngebot) : "")));
-      if (z.aL) ts.appendChild(el("span", "sub", "Angebot Lehm: " + ganz(z.aL) + " × " + ganz(P.carry) + " Eisen gegen " + ganz(z.proAngebot) + " Lehm"));
-      if (z.aH) ts.appendChild(el("span", "sub", "Angebot Holz: " + ganz(z.aH) + " × " + ganz(P.carry) + " Eisen gegen " + ganz(z.proAngebot) + " Holz"));
+      ts.appendChild(el("b", null, "Eisen " + ganz(z.eisen) + " → Lehm " + ganz(z.aL * proAngebot) + (z.aH ? " · Holz " + ganz(z.aH * proAngebot) : "")));
+      angebotZeilen(ts, z.aL, z.aH, last, proAngebot);
       if (z.eisen > s.cap) ts.appendChild(el("span", "sub", "mehr als ein Speicher, über mehrere Tage"));
     }
-    const zellen = [[dn, "l", s.i], [lg, "l", Math.round(z.L + z.H)], [ts, "l", Math.round(z.eisen)]];
-    if (mitLager) {
-      const e = el("span");
-      if (!z.lg) e.appendChild(el("span", "sub", "nicht im Lagerstand"));
-      else if (z.fehlt <= 0.5) e.append(el("span", "ok", "reicht"), el("span", "sub", "jetzt " + ganz(z.lg.iron)));
-      else e.append(el("span", "fehlt", "fehlen " + ganz(z.fehlt)), el("span", "sub", "jetzt " + ganz(z.lg.iron)
-        + (s.prod.iron > 0 ? " · " + stunden(z.fehlt / s.prod.iron) + " Mine" : "")));
-      zellen.push([e, "l", z.lg ? Math.round(z.fehlt) : -1]);
-    }
-    const hg = el("span");
-    hg.append(document.createTextNode(ganz(z.gaenge)), el("span", "sub", z.runden <= 1 ? "in 1 Runde" : "in " + z.runden + " Runden"));
-    const pl = el("span"), gb = el("span", "pr-gb");
-    gb.style.width = (z.x.plus / maxPlus * 48).toFixed(1) + "px";
-    pl.append(gb, el("b", null, "+" + ganz(z.x.plus)));
-    zellen.push([hg, "", z.gaenge], [pl, "", Math.round(z.x.plus * 100)], [marktLink(s), "l", 0]);
-    return zellen;
+    return [[dorfZelle(s, z.x.site), "l", s.i], [lg, "l", Math.round(z.L + z.H)], [ts, "l", Math.round(z.eisen)],
+            [haendlerZelle(z.gaenge, s.merchants), "", z.gaenge], [plusZelle(z.x.plus, maxPlus), "", Math.round(z.x.plus * 100)], [marktLink(s), "l", 0]];
   });
-  const wrap = el("div");
-  wrap.style.overflowX = "auto";
-  const tab = table(cols, rows);
-  tab.classList.add("pr-vtab");
-  wrap.appendChild(tab);
-  box.appendChild(wrap);
+  vorabTabelle(box, "Angebote je Dorf: " + nf.format(zeilen.length) + (zeilen.length === 1 ? " Dorf, " : " Dörfer, ") + ganz(sum(z => z.gaenge)) + " Angebote", cols, rows);
   const ohne = R.src.length - zeilen.length;
   box.appendChild(el("p", "pr-note", (ohne ? nf.format(ohne) + (ohne === 1 ? " Dorf bekommt" : " Dörfer bekommen") + " keinen Vorrat: entweder schaffen sie schon den Paketinhalt nicht rechtzeitig (Markt zu klein), oder es bliebe danach mehr liegen, als geprägt wird. " : "")
     + "Annahmen: gleicher Zeitplan der Pakete wie ohne Tausch; je Dorf so viel Vorrat, wie es mehr Münzen bringt, ohne dass das Dorf mehr überläuft und solange mindestens 90 % des Vorrats geprägt werden. "
-    + (mitLager ? "Was schon an Lehm und Holz im Lager liegt, muss nicht getauscht werden. " : "Ohne Lagerstand nimmt die Tabelle an, dass vor dem Tausch kein Lehm und kein Holz über den Startbestand hinaus im Lager liegt. ")
-    + "Ob andere Spieler die Angebote annehmen, kann der Rechner nicht wissen. "
-    + "„Markt öffnen“ öffnet nur die Seite „Eigene Angebote“ des Dorfes im Spiel, in einem neuen Tab und ohne Herkunftsangabe; diese Seite fragt beim Spiel nichts ab. Das Angebot trägst du dort selbst ein."));
+    + "Ohne Lagerstand nimmt die Tabelle an, dass vor dem Tausch kein Lehm und kein Holz über den Startbestand hinaus im Lager liegt und genug Eisen da ist. "
+    + "Ob andere Spieler die Angebote annehmen, kann der Rechner nicht wissen. " + MARKT_HINWEIS));
+}
+const MARKT_HINWEIS = "„Markt öffnen“ öffnet nur die Seite „Eigene Angebote“ des Dorfes im Spiel, in einem neuen Tab und ohne Herkunftsangabe; diese Seite fragt beim Spiel nichts ab. Das Angebot trägst du dort selbst ein.";
+
+/* ---------- Mit Lagerstand (Nachtrag 10.16, Wunsch Dennis 10.11.2026) ----------
+   Getauscht wird nur das Eisen, das jetzt in den Dörfern liegt, und zwar so, dass es am meisten Münzen bringt
+   (Kern: lagerTausch). Dörfer ohne Tausch stehen nicht in der Tabelle. Die Rechnung dauert unter 0,2 s und wird je
+   Zeitplan, Lagerstand und Kurs einmal gemacht. */
+let LT = null;
+function lagerErgebnis(R, d, kurs) {
+  if (LT && LT.d === d && LT.kurs === kurs && LT.lager === LAGER) return LT.v;
+  let v = null;
+  if (d.sites && d.cnt) try { v = K.lagerTausch(R.src, R.P, d.sites, d.cnt, LAGER.lager, kurs); } catch (e) { console.error(e); }
+  LT = {d, kurs, lager: LAGER, v};
+  return v;
+}
+function renderVorabLager(R, d, box, kurs) {
+  const P = R.P, v = lagerErgebnis(R, d, kurs);
+  if (!v) { box.appendChild(el("p", "empty", "Mit diesem Lagerstand lässt sich hier nichts rechnen. Bitte die Seite neu laden.")); return; }
+  const gruende = [];
+  if (v.zuWenig) gruende.push(nf.format(v.zuWenig) + (v.zuWenig === 1 ? " Dorf hat" : " Dörfer haben") + " weniger als " + ganz(v.einheit) + " Eisen, zu wenig für ein Angebot");
+  if (v.ohneNutzen > 0) gruende.push(nf.format(v.ohneNutzen) + (v.ohneNutzen === 1 ? " Dorf bringt" : " Dörfer bringen") + " mit Tausch nicht mehr Münzen (Lehm und Holz reichen dort schon, oder die Händler schaffen nicht mehr)");
+  if (v.ohneLager) gruende.push(nf.format(v.ohneLager) + (v.ohneLager === 1 ? " Dorf steht" : " Dörfer stehen") + " nicht im Lagerstand und tauschen nicht");
+  if (!v.dorf.length) {
+    box.appendChild(el("p", "empty", "Mit deinem Lagerstand bringt Tauschen keine zusätzlichen Münzen" + (gruende.length ? ": " + gruende.join("; ") + "." : ".")));
+    return;
+  }
+  const sum = f => v.dorf.reduce((a, x) => a + f(x), 0);
+  const eisen = sum(x => x.eisen), lehm = sum(x => x.lehm), holz = sum(x => x.holz), ang = sum(x => x.aL + x.aH), plus = v.coins1 - v.coins0;
+
+  const lead = el("div", "pr-vlead"), t = el("div", "t");
+  t.append(document.createTextNode("Mit deinem Lagerstand: "), el("em", null, menge(eisen) + " Eisen"),
+    document.createTextNode(" gegen Lehm und Holz tauschen bringt "), el("em", null, "+" + ganz(plus) + " Münzen"),
+    document.createTextNode(" (+" + nf1.format(Math.round(plus / v.coins0 * 1000) / 10) + " %)."));
+  lead.appendChild(t);
+  box.appendChild(lead);
+
+  const grid = el("div", "pr-vgrid");
+  const g1 = kpiGruppe(grid, "Lager jetzt und nach dem Tausch"), in1 = el("div", "in");
+  in1.appendChild(balkenVergleich(["jetzt", "nach dem Tausch"], [v.jetzt, v.nach]));
+  in1.appendChild(el("p", "pr-vcap", "Summe über " + nf.format(v.mitLager) + (v.mitLager === 1 ? " Dorf" : " Dörfer") + " aus deinem Lagerstand. "
+    + "Getauscht wird nur Eisen, das jetzt da ist, und nur so viel, wie danach als Lehm und Holz auch geprägt wird. "
+    + "Eine Münze kostet " + ganz(P.coin.wood) + " Holz, " + ganz(P.coin.stone) + " Lehm und " + ganz(P.coin.iron) + " Eisen."));
+  g1.appendChild(in1);
+  const g2 = kpiGruppe(grid, "Tauschen"), in2 = el("div", "in");
+  in2.appendChild(tauschFluss(eisen, lehm, holz));
+  const kv2 = el("div", "pr-vkv");
+  kv2.append(el("span", null, "Dörfer mit Tausch"), el("span", "v", nf.format(v.dorf.length) + " von " + nf.format(v.mitLager)),
+    el("span", null, "Angebote, je ein Händler"), el("span", "v", ganz(ang)),
+    el("span", null, "Kurs"), el("span", "v", "1.000 Eisen : " + ganz(kurs * 1000)),
+    el("span", "s", "am Markt trägt ein Händler " + ganz(v.einheit) + " Rohstoffe, der Händlerbonus gilt dort nicht"));
+  in2.appendChild(kv2);
+  g2.appendChild(in2);
+  ergebnisGruppe(grid, v.coins1, v.coins0, "ohne Tausch, beide mit deinem Lagerstand", v.ov1, v.ov0, []);
+  box.appendChild(grid);
+  box.appendChild(schritte("1 · Jetzt", "Eingetauschten Lehm und Holz bis zum Start im Lager lassen, Pakete erst nach dem Zeitplan einlösen."));
+
+  const cols = [["Dorf", "l", true], ["Lager jetzt → nach dem Tausch", "l", true], ["Angebote", "l", true], ["Händler", "", true], ["Mehr Münzen", "", true], ["Markt", "l", false]];
+  const maxPlus = Math.max(...v.dorf.map(x => x.plus));
+  dorfIdsLaden();
+  const rows = v.dorf.map(x => {
+    const s = R.src[x.i], lg = el("span"), n = x.aL + x.aH;
+    lg.append(lagerPfeil("e", "Eisen", x.jetzt[2], x.nach[2], s.cap), lagerPfeil("l", "Lehm", x.jetzt[1], x.nach[1], s.cap), lagerPfeil("h", "Holz", x.jetzt[0], x.nach[0], s.cap));
+    const ts = el("span");
+    ts.appendChild(el("b", null, "Eisen " + ganz(x.eisen) + " → " + [x.lehm ? "Lehm " + ganz(x.lehm) : "", x.holz ? "Holz " + ganz(x.holz) : ""].filter(Boolean).join(" · ")));
+    angebotZeilen(ts, x.aL, x.aH, v.einheit, v.pro);
+    return [[dorfZelle(s, x.site), "l", s.i], [lg, "l", Math.round(x.jetzt[2])], [ts, "l", n],
+            [haendlerZelle(n, s.merchants), "", n], [plusZelle(x.plus, maxPlus), "", Math.round(x.plus * 100)], [marktLink(s), "l", 0]];
+  });
+  vorabTabelle(box, "Angebote je Dorf: " + nf.format(v.dorf.length) + (v.dorf.length === 1 ? " Dorf, " : " Dörfer, ") + ganz(ang) + " Angebote", cols, rows);
+  box.appendChild(el("p", "pr-note", (gruende.length ? "Nicht in der Tabelle: " + gruende.join("; ") + ". " : "")
+    + "Annahmen: jedes Dorf beginnt den Flaggendoppler mit seinem Lagerstand von jetzt, was bis zum Start noch dazukommt, ist nicht eingerechnet; gleicher Zeitplan der Pakete wie ohne Tausch; "
+    + "je Dorf der Tausch mit den meisten Münzen, ohne dass das Dorf mehr überläuft und solange mindestens 90 % des eingetauschten Lehms und Holzes geprägt werden"
+    + (P.ignoreRatio ? "; mit „Verhältnis ignorieren“ tauschen die Lieferdörfer ohne Überlauf denselben Anteil ihres Eisens, die Mehrmünzen sind nach Angeboten aufgeteilt" : "") + ". "
+    + "Ob andere Spieler die Angebote annehmen, kann der Rechner nicht wissen. " + MARKT_HINWEIS));
+}
+
+/* Bausteine für beide Ansichten */
+function balkenVergleich(kopfTexte, werte) {
+  const box = el("div"), kopf = el("div", "pr-wh"), smax = Math.max(1, ...werte[0], ...werte[1]);
+  kopf.append(el("span"), el("span", null, kopfTexte[0]), el("span", null, kopfTexte[1]));
+  box.appendChild(kopf);
+  RES_NAME.forEach((nm, r) => {
+    const zr = el("div", "pr-wr"), lab = el("span");
+    lab.append(resMarke(r), document.createTextNode(nm));
+    zr.appendChild(lab);
+    werte.forEach(w => {
+      const x = Math.max(0, w[r]), wb = el("span", "pr-wb"), bk = el("span", "pr-bk"), i = el("i", "hle"[r]);
+      i.style.width = (x / smax * 100).toFixed(2) + "%";
+      bk.appendChild(i);
+      wb.append(bk, el("b", null, menge(x)));
+      zr.appendChild(wb);
+    });
+    box.appendChild(zr);
+  });
+  return box;
+}
+function tauschFluss(eisen, lehm, holz) {
+  const flow = el("div", "pr-flow"), bx1 = el("div", "bx"), d1 = el("div");
+  d1.append(resMarke(2), document.createTextNode("Eisen abgeben"));
+  bx1.append(d1, el("b", null, menge(eisen)));
+  const bx2 = el("div", "bx");
+  [[1, "Lehm", lehm], [0, "Holz", holz]].forEach(([r, nm, x]) => { const z = el("div"); z.append(resMarke(r), document.createTextNode(nm + " "), el("b", null, menge(x))); bx2.appendChild(z); });
+  flow.append(bx1, el("span", "ar", "→"), bx2);
+  return flow;
+}
+function ergebnisGruppe(grid, c1, c0, ohneText, ov1, ov0, extra) {
+  const g3 = kpiGruppe(grid, "Ergebnis in 48 h"), in3 = el("div", "in"), kv3 = el("div", "pr-vkv");
+  const ovGleich = Math.abs(ov1 - ov0) < 1e-6;
+  kv3.append(el("span", null, "Münzen"), el("span", "v big", ganz(c1)), el("span", "s", "statt " + ganz(c0) + " " + ohneText));
+  extra.forEach(([a, b, c]) => kv3.append(el("span", null, a), el("span", "v", b), el("span", "s", c)));
+  kv3.append(el("span", null, "Überlauf"), el("span", "v", ovGleich ? "unverändert" : pctf(ov1)),
+    el("span", "s", ovGleich ? "kein Dorf läuft durch den Tausch mehr über" : "statt " + pctf(ov0) + (ov1 < ov0 ? ", weniger Eisen im Lager läuft weniger über" : "")));
+  in3.appendChild(kv3);
+  g3.appendChild(in3);
+}
+function schritte(erster, zweiter) {
+  const steps = el("div", "pr-steps");
+  [[erster, "Am Markt gleichzeitig Eisen gegen Lehm und Eisen gegen Holz anbieten, dann nimmt an, wer das eine oder das andere braucht. Angebote je Dorf in der Tabelle unten, in der Reihenfolge deiner Dörfer; „Markt öffnen“ führt zu „Eigene Angebote“ des Dorfes."],
+   ["2 · Vor dem Start", zweiter],
+   ["3 · Ab dem Flaggendoppler", "Pakete und Versand wie im Zeitplan."]].forEach(([k, txt]) => {
+    const z = el("div"); z.append(el("b", null, k), document.createTextNode(txt)); steps.appendChild(z);
+  });
+  return steps;
+}
+function angebotZeilen(ts, aL, aH, last, pro) {
+  if (aL) ts.appendChild(el("span", "sub", "Angebot Lehm: " + ganz(aL) + " × " + ganz(last) + " Eisen gegen " + ganz(pro) + " Lehm"));
+  if (aH) ts.appendChild(el("span", "sub", "Angebot Holz: " + ganz(aH) + " × " + ganz(last) + " Eisen gegen " + ganz(pro) + " Holz"));
+}
+// Lager eines Rohstoffs jetzt → nach dem Tausch; Balken: nach dem Tausch, Strich: jetzt
+function lagerPfeil(cls, wort, a, b, cap) {
+  const z = el("span", "pr-lg"), bar = el("span", "bar"), i = el("i", cls), m = el("s");
+  i.style.width = Math.min(100, b / cap * 100).toFixed(1) + "%";
+  m.style.left = Math.min(99, a / cap * 100).toFixed(1) + "%";
+  bar.append(i, m);
+  z.append(bar, document.createTextNode(wort + " " + ganz(a) + " → "), el("b", null, ganz(b)));
+  return z;
 }
 
 /* Link zu „Eigene Angebote“ des Dorfes im Spiel (Wunsch Dennis 09.11.2026). Die Seite fragt beim Spiel nichts ab: die
@@ -1507,10 +1617,12 @@ function renderRouten() {
   $("routen-hint").textContent = d ? fdName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %" : "";
   if (!rt || !rt.plans.length) { box.appendChild(el("p", "empty", sel.laedt ? "rechnet …" : "Ohne Lieferdörfer gibt es keine Handelsrouten.")); return; }
   const want = +$("routen-max").value || 3, pl = rt.plans[Math.min(want, rt.plans.length) - 1], base = rt.base;
-  const anteil = x => nf1.format(Math.round(x / base * 1000) / 10) + " %";
+  // Vergleich mit dem Anfordern als Unterschied in Münzen, nicht als Prozent: das Anfordern im Takt der Klicks ist nur der
+  // Vergleichswert, nicht das Höchstmögliche (Frage Dennis 10.11.2026: „mehr als 100 % ergibt keinen Sinn“)
+  const vgl = x => { const d = Math.round(x - base); return d > 0 ? ganz(d) + " mehr als" : d < 0 ? ganz(-d) + " weniger als" : "so viel wie"; };
   const lead = el("div", "pr-vlead"), t = el("div", "t");
   t.append(document.createTextNode("Mit " + (pl.R === 1 ? "1 Handelsroute" : pl.R + " Handelsrouten") + " und ohne Anfordern: "),
-    el("em", null, ganz(pl.coins) + " Münzen"), document.createTextNode(", " + anteil(pl.coins) + " von " + ganz(base) + " beim Anfordern alle " + ivl(P.intervalMin) + "."));
+    el("em", null, ganz(pl.coins) + " Münzen"), document.createTextNode(", " + vgl(pl.coins) + " beim Anfordern alle " + ivl(P.intervalMin) + " (" + ganz(base) + ")."));
   lead.appendChild(t);
   if (pl.R < want) lead.appendChild(el("span", "pr-mnote", "Mehr als " + pl.R + " Routen bringen hier nichts mehr."));
   box.appendChild(lead);
@@ -1520,12 +1632,13 @@ function renderRouten() {
     const z = el("div", cls || null), bk = el("span", "bk"), i = el("i");
     i.style.width = (v / top * 100).toFixed(1) + "%";
     bk.appendChild(i);
-    z.append(el("span", null, lab), bk, el("span", "num", ganz(v) + " · " + anteil(v) + (extra || "")));
+    z.append(el("span", null, lab), bk, el("span", "num", ganz(v) + (extra || "")));
     kurve.appendChild(z);
   };
+  const zum = x => { const d = Math.round(x - base); return d ? " · " + (d > 0 ? "+" : "-") + ganz(Math.abs(d)) + " zum Anfordern" : " · wie Anfordern"; };
   rt.plans.forEach((x, q) => zeile(x.R === 1 ? "1 Route" : x.R + " Routen", x.coins, x === pl ? "on" : null,
-    q ? " · +" + ganz(x.coins - rt.plans[q - 1].coins) : ""));
-  zeile("Anfordern", base, "ref");
+    zum(x.coins) + (q ? " (Route " + x.R + ": +" + ganz(x.coins - rt.plans[q - 1].coins) + ")" : "")));
+  zeile("Anfordern", base, "ref", " · Vergleichswert");
   box.appendChild(kurve);
   // je Route eine Karte mit allem, was im Account-Manager einzutragen ist (3a)
   const grid = el("div", "pr-routen");
@@ -1550,9 +1663,13 @@ function renderRouten() {
   const notes = [];
   if (pl.ohne.length) notes.push(pl.ohne.length + (pl.ohne.length === 1 ? " Lieferdorf bekommt" : " Lieferdörfer bekommen") + " keine Route (zu wenige Händler oder zu wenig Ertrag für eine eigene Route): "
     + pl.ohne.slice(0, 12).map(i => R.src[i].name).join(", ") + (pl.ohne.length > 12 ? " und " + (pl.ohne.length - 12) + " weitere" : "") + ".");
-  notes.push("Überlauf mit Routen " + pctf(pl.ov) + " statt " + pctf(rt.baseOv) + " beim Anfordern" + (pl.ov > rt.baseOv + 1e-9
+  if (pctf(pl.ov) === pctf(rt.baseOv)) notes.push("Überlauf mit Routen wie beim Anfordern: " + pctf(pl.ov) + ".");
+  else notes.push("Überlauf mit Routen " + pctf(pl.ov) + " statt " + pctf(rt.baseOv) + " beim Anfordern" + (pl.ov > rt.baseOv
     ? ": der Zeitplan der Pakete ist fürs Anfordern geplant, mit Routen werden die Lieferdörfer langsamer leer" + (pl.ov * 100 > P.maxOverflow + 1e-9 ? " und die Grenze von " + nfG.format(P.maxOverflow) + " % wird überschritten" : "")
     : ": kurze Abstände leeren die Lieferdörfer gleichmäßiger als stündliches Anfordern, deshalb läuft weniger über") + ".");
+  if (pl.coins > base + 0.5) notes.push("Warum Routen mehr bringen können als das Anfordern: angefordert wird nur im Takt der Einlöseklicks (alle " + ivl(P.intervalMin)
+    + "). Händler, deren Hin- und Rückweg länger dauert, warten bis zum nächsten Klick; eine Route mit kurzem Abstand schickt sie bald nach der Rückkehr wieder los. "
+    + "Das Anfordern ist deshalb nur der Vergleichswert, nicht das Höchstmögliche.");
   notes.push("Annahmen zur Spielmechanik, noch nicht belegt: eine Route mit einer Gruppe als Start lässt jedes Dorf der Gruppe die Menge schicken, und die Route wiederholt sich im angegebenen Abstand. Belegt: Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Pakete werden weiter von Hand nach dem Zeitplan eingelöst. Wer zusätzlich anfordert, verschickt mit den übrigen Händlern noch mehr.");
   box.appendChild(el("p", "pr-note", notes.join(" ")));
 }

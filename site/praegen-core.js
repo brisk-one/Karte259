@@ -155,6 +155,9 @@ function params(input, world) {
     speed: +w.speed || 1,
     coin: w.coin,
     carry: (+w.merchant_carry || 1000) * bonus,
+    // Marktangebote: Händlerlast ohne Bonus (Hinweis Dennis 10.11.2026: der Händlerbonus gilt nur fürs Versenden und
+    // Anfordern, nicht für Tauschangebote am Markt)
+    carryMarkt: +w.merchant_carry || 1000,
     minPerField: (+w.base_min_per_field || 6) / (+w.speed || 1) / bonus,
     window: DOUBLER_HOURS,
   };
@@ -637,6 +640,73 @@ function mengenEinfach(src, r, P) {
 }
 /* Rohstoffe zu Münzeinheiten, je Rohstoff [Holz, Lehm, Eisen]; für den Mehrertrag in der Begründung (10.14). */
 const rohstoffeAus = (units, P) => COIN(P).map(c => units * c);
+/* Tausch in den Lieferdörfern mit „Verhältnis ignorieren“ (10.16, Nachtrag 10.11.2026). Das Prägedorf prägt aus
+   allem, was ankommt, deshalb hängt der Nutzen eines Tauschs in einem Lieferdorf von allen anderen ab. Bis 10.11.2026
+   bekamen alle Lieferdörfer ohne Überlauf denselben Anteil; das war zu grob, oft tauschte dann nur das Prägedorf
+   (Hinweis Dennis 10.11.2026). Jetzt Schritt für Schritt: je Lieferdorf ein Raster von Tauschmengen vorrechnen (was bis
+   zur Frist im Prägedorf ankommt, je Rohstoff, und der Überlauf des Dorfes); als Reihenfolge dient eine Näherung (Summe
+   aller Ankünfte samt Startbestand und eigenen Paketen des Prägedorfs, knappster Rohstoff), jeder Schritt wird aber mit
+   der ganzen Rechnung (all) geprüft, weil das Prägedorf mit seinem Speicher nicht alles aufnehmen kann. Ein Schritt
+   zählt, wenn er mindestens 0,25 Münzen bringt, das Dorf nicht mehr überläuft als ohne Tausch und mindestens 90 % des
+   zusätzlichen Lehms und Holzes geprägt werden; sonst wird dieser Schritt nicht mehr versucht. Höchstens maxEval
+   ganze Rechnungen.
+   punkte(i): [{a, b, holz, lehm}] mit ganzzahligen Rasterschritten a (Lehm) und b (Holz), punkte(i)[0] ohne Tausch;
+   setze(i, p) setzt s.vorab. Ergebnis: Map i -> {p, plus} (plus: Mehrmünzen der Schritte dieses Dorfes), Vorrat
+   bleibt gesetzt. */
+function poolWahl(src, P, sites, cnt, kand, punkte, setze, all, maxEval) {
+  const {site, tau} = src._ls, c = COIN(P), pool = new Map(), kset = new Set(kand);
+  for (const j of sites) {
+    const s = src[j], acc = {arr: [0, 0, 0], sov: [0, 0, 0]}, st = s.leer ? 0 : Math.min(s.cap, s.cap * P.startPct / 100), vb = s.vorab;
+    siteRun(s, P, cnt, null, acc);
+    pool.set(j, [0, 1, 2].map(r => acc.arr[r] + (vb ? Math.min(s.cap, st + vb[r]) : st)));
+  }
+  const lauf = i => {
+    const D = [0, 0, 0], s = src[i];
+    const r = villageRun(s, tau[i], P, cnt, s.merchants, (ta, a0, a1, a2) => { D[0] += a0; D[1] += a1; D[2] += a2; }, true, null, null);
+    return {D, ov: r.overflow, lok: r.lokal};
+  };
+  const tab = new Map();
+  src.forEach((s, i) => {
+    if (site[i] === i) return;
+    const v = pool.get(site[i]);
+    if (!kset.has(i)) { const e = lauf(i); for (let r = 0; r < 3; r++) v[r] += e.D[r]; return; }
+    const pts = punkte(i), werte = pts.map(p => { setze(i, p); return lauf(i); });
+    setze(i, pts[0]);
+    tab.set(i, {pts, werte, cur: 0, idx: new Map(pts.map((p, q) => [p.a + "," + p.b, q])), plus: 0, aus: new Set()});
+    for (let r = 0; r < 3; r++) v[r] += werte[0].D[r];
+  });
+  const f = v => Math.min(v[0] / c[0], v[1] / c[1], v[2] / c[2]);
+  let jetzt = all(), evals = 0;
+  while (evals < (maxEval || 400)) {
+    let best = null;
+    tab.forEach((t, i) => {
+      const p = t.pts[t.cur], w0 = t.werte[t.cur], v = pool.get(site[i]), f0 = f(v);
+      for (const [da, db] of [[1, 0], [0, 1], [1, 1]]) {
+        const q = t.idx.get((p.a + da) + "," + (p.b + db));
+        if (q == null || t.aus.has(q)) continue;
+        const w = t.werte[q];
+        if (w.ov > t.werte[0].ov + 1) continue;
+        const d = f([0, 1, 2].map(r => v[r] - w0.D[r] + w.D[r])) - f0 + (w.lok - w0.lok);
+        if (d > 1e-6 && (!best || d > best.d + 1e-9)) best = {i, q, d};
+      }
+    });
+    if (!best) break;
+    const t = tab.get(best.i), p0 = t.pts[t.cur], p1 = t.pts[best.q];
+    setze(best.i, p1);
+    const e = all();
+    evals++;
+    const du = e.u - jetzt.u, dL = p1.lehm - p0.lehm, dH = p1.holz - p0.holz;
+    if (e.c > jetzt.c + 0.25 && e.ov <= jetzt.ov + 1e-6 && du * c[1] >= 0.9 * dL - 1 && du * c[0] >= 0.9 * dH - 1) {
+      const v = pool.get(site[best.i]), w0 = t.werte[t.cur], w = t.werte[best.q];
+      for (let r = 0; r < 3; r++) v[r] += w.D[r] - w0.D[r];
+      t.plus += e.c - jetzt.c; t.cur = best.q; jetzt = e;
+    } else { setze(best.i, p0); t.aus.add(best.q); }
+  }
+  const out = new Map();
+  tab.forEach((t, i) => { setze(i, t.pts[t.cur]); if (t.cur) out.set(i, {p: t.pts[t.cur], plus: t.plus}); });
+  return out;
+}
+
 /* ---------- Tausch vor dem Start (10.16, Wunsch Dennis 08.11.2026, Entscheidung 1a, 2a, 3b) ----------
    Münzen kosten mehr Lehm als Holz und Eisen, deshalb bleibt Eisen (und etwas Holz) liegen. Wer vor dem Start
    Eisen gegen Lehm und Holz tauscht und mit diesem Vorrat beginnt, verschickt das übrige Eisen mit.
@@ -644,7 +714,8 @@ const rohstoffeAus = (units, P) => COIN(P).map(c => units * c);
    mit den meisten Münzen gesucht, bei dem das Dorf nicht mehr überläuft als ohne Vorrat; bei gleichen Münzen der
    kleinere Vorrat. Zeitplan der Pakete bleibt. Im Prägeverhältnis rechnet jedes Dorf für sich (Lieferdörfer
    beeinflussen sich nicht); mit „Verhältnis ignorieren“ gleicht erst das Prägedorf aus, deshalb wird dort mit der
-   ganzen Rechnung gesucht: ein gemeinsamer Anteil für alle Lieferdörfer ohne Überlauf, dann je Prägedorf.
+   ganzen Rechnung gesucht: Lieferdörfer Schritt für Schritt (poolWahl, seit 10.11.2026 statt eines gemeinsamen
+   Anteils), dann je Prägedorf.
    Ergebnis: dorf [{i, vorab: [Holz, Lehm, 0], plus}], coins0/1, units0/1, rest0/1 (liegen gebliebene Rohstoffe
    je Rohstoff vor und nach dem Tausch), ov0/1. */
 function vorabTausch(src, P, sites, cnt) {
@@ -677,21 +748,13 @@ function vorabTausch(src, P, sites, cnt) {
   const dorf = [];
   if (!P.ignoreRatio) src.forEach((s, i) => { const d = suche(i, () => one(i), b => b.ov + 1); if (d) dorf.push(d); });
   else {
-    // Lieferdörfer ohne Überlauf mit gleichem Anteil (die ganze Rechnung je Dorf wäre zu langsam), danach die
-    // Prägedörfer einzeln; die Mehrmünzen der Lieferdörfer werden nach ihrem Vorrat aufgeteilt
-    const kand = src.map((_, i) => i).filter(i => !isSite.has(i) && base.overflow[i] <= 1);
-    const capSum = kand.reduce((a, i) => a + src[i].cap, 0);
-    const setze = (f, g) => kand.forEach(i => { src[i].vorab = f + g > 0 ? [g * src[i].cap, f * src[i].cap, 0] : null; });
-    let bu = {f: 0, g: 0, c: base.coins};
-    const b0 = {u: base.units};
-    for (let f = 0; f <= 1 + EPS; f += 0.1) for (let g = 0; g <= 1 + EPS; g += 0.1) {
-      setze(f, g);
-      const e = all();
-      if (e.ov <= base.ov + 1e-6 && genutzt(e, b0, g * capSum, f * capSum) && (e.c > bu.c + 0.25 || (Math.abs(e.c - bu.c) <= 0.25 && f + g < bu.f + bu.g))) bu = {f, g, c: e.c};
-    }
-    if (bu.c <= base.coins + 0.5) bu = {f: 0, g: 0, c: base.coins};
-    setze(bu.f, bu.g);
-    if (bu.f + bu.g > 0) kand.forEach(i => dorf.push({i, vorab: src[i].vorab, plus: (bu.c - base.coins) * src[i].cap / capSum, site: false}));
+    // Lieferdörfer Schritt für Schritt (poolWahl), danach die Prägedörfer einzeln mit der ganzen Rechnung
+    const lief = src.map((_, i) => i).filter(i => !isSite.has(i));
+    const punkte = i => { const s = src[i], pts = [];
+      for (let a = 0; a <= 10; a++) for (let b = 0; b <= 10; b++) pts.push({a, b, lehm: a / 10 * s.cap, holz: b / 10 * s.cap});
+      return pts; };
+    const wahl = poolWahl(src, P, sites, cnt, lief, punkte, (i, p) => { src[i].vorab = p.a + p.b > 0 ? [p.holz, p.lehm, 0] : null; }, all);
+    wahl.forEach((w, i) => dorf.push({i, vorab: src[i].vorab, plus: w.plus, site: false}));
     for (const j of sites) {
       const d = suche(j, all, b => b.ov);
       if (d) { dorf.push(d); src[j].vorab = d.vorab; }
@@ -705,6 +768,111 @@ function vorabTausch(src, P, sites, cnt) {
   const rest1 = rest0.map((v, r) => Math.max(0, v + z[r] - du * COIN(P)[r]));
   return {dorf, coins0: base.coins, coins1: after.coins, units0: base.units, units1: after.units, ov0: base.ov, ov1: after.ov,
           vorab: z, rest0, rest1};
+}
+
+/* ---------- Tausch mit dem Lagerstand (10.16 Nachtrag, Wunsch Dennis 10.11.2026) ----------
+   Mit eingefügtem Lagerstand zählt, was jetzt in den Dörfern liegt: das vorhandene Eisen wird bestmöglich gegen
+   Lehm und Holz getauscht (nicht mehr: so viel Vorrat, wie die Pakete ohne Überlauf brauchen könnten). Jedes Dorf mit
+   Lagerstand beginnt mit seinem Lagerstand, Dörfer ohne Lagerstand wie eingestellt und tauschen nicht. Getauscht wird
+   in ganzen Marktangeboten zu je einer Händlerlast ohne Händlerbonus (P.carryMarkt), Eisen gegen Lehm oder Holz zum
+   Kurs (Lehm bzw. Holz je Eisen); nie mehr Eisen, als im Dorf liegt, nie mehr Lehm oder Holz, als der Speicher fasst.
+   Je Dorf die meisten Münzen, ohne dass es mehr überläuft als ohne Tausch und solange mindestens 90 % des
+   eingetauschten Lehms und Holzes geprägt werden; bei fast gleichen Münzen (0,25) weniger Angebote. Suche: Raster
+   über die Zahl der Angebote für Lehm und für Holz, dann Musterschritte bis auf einzelne Angebote. Mit „Verhältnis
+   ignorieren“ wie in vorabTausch: Lieferdörfer Schritt für Schritt (poolWahl), dann je Prägedorf mit der ganzen
+   Rechnung.
+   lager: {"x|y": {wood, stone, iron}} wie aus parseLager. Ergebnis: {einheit, pro, dorf [{i, aL, aH, eisen, lehm,
+   holz, plus, site, jetzt: [Holz, Lehm, Eisen], nach}], coins0, coins1, ov0, ov1, jetzt, nach (Summen über die Dörfer
+   mit Lagerstand), mitLager, ohneLager, zuWenig (Eisen unter einer Händlerlast), ohneNutzen}. */
+function lagerTausch(src, P, sites, cnt, lager, kurs) {
+  const unit = P.carryMarkt || P.carry / (P.merchantBonus ? 1.5 : 1);
+  const pro = Math.max(1, Math.round(unit * (kurs > 0 ? kurs : 1))), isSite = new Set(sites);
+  const start = s => Math.min(s.cap, s.cap * P.startPct / 100);
+  const X = src.map(s => {
+    const l = lager && lager[s.x + "|" + s.y];
+    return l ? [Math.min(s.cap, +l.wood || 0), Math.min(s.cap, +l.stone || 0), Math.min(s.cap, +l.iron || 0)] : null;
+  });
+  const nach = (i, aL, aH) => { const x = X[i]; return [x[0] + aH * pro, x[1] + aL * pro, x[2] - (aL + aH) * unit]; };
+  const setze = (i, aL, aH) => { const s = src[i], z = start(s); s.vorab = nach(i, aL, aH).map(v => v - z); };
+  const grenzen = i => {
+    const s = src[i], x = X[i];
+    return {nE: Math.floor(x[2] / unit + 1e-9), nL: Math.max(0, Math.floor((s.cap - x[1]) / pro + 1e-9)), nH: Math.max(0, Math.floor((s.cap - x[0]) / pro + 1e-9))};
+  };
+  try {
+    src.forEach((s, i) => { if (X[i]) setze(i, 0, 0); else s.vorab = null; });
+    const base = lockstep(src, P, sites, cnt, true), {tau} = src._ls;
+    const sink = acc => (ta, a0) => { acc.c += a0 / P.coin.wood / (1 - reduction(ta, P)); acc.u += a0 / P.coin.wood; };
+    const one = i => {
+      if (isSite.has(i)) { const r = siteRun(src[i], P, cnt, null); return {c: r.coins, ov: 0, u: r.minted}; }
+      const acc = {c: 0, u: 0}, r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, sink(acc), true, null, null);
+      return {c: acc.c + r.lokal, ov: r.overflow, u: acc.u + r.lokal};
+    };
+    const all = () => { const r = lockstep(src, P, sites, cnt, false); return {c: r.coins, ov: r.ov, u: r.units}; };
+    const genutzt = (e, b, holz, lehm) => (e.u - b.u) * P.coin.stone >= 0.9 * lehm - 1 && (e.u - b.u) * P.coin.wood >= 0.9 * holz - 1;
+    const wahl = new Map();                                                   // i -> [aL, aH]
+    const suche = (i, evalf, ovMax) => {
+      const {nE, nL, nH} = grenzen(i);
+      if (nE < 1 || nL + nH < 1) return;
+      setze(i, 0, 0);
+      const b = evalf(), seen = new Set();
+      let best = {aL: 0, aH: 0, c: b.c}, top = b.c;
+      const probe = (aL, aH) => {
+        aL = Math.round(aL); aH = Math.round(aH);
+        if (aL < 0 || aH < 0 || aL > nL || aH > nH || aL + aH > nE) return false;
+        const key = aL + "," + aH;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        setze(i, aL, aH);
+        const e = evalf();
+        if (e.ov > ovMax(b) + 1e-6 || !genutzt(e, b, aH * pro, aL * pro)) return false;
+        top = Math.max(top, e.c);
+        if (e.c > best.c + 0.25 || (e.c >= top - 0.25 && aL + aH < best.aL + best.aH)) { best = {aL, aH, c: e.c}; return true; }
+        return false;
+      };
+      const mL = Math.min(nL, nE), mH = Math.min(nH, nE), gL = Math.max(1, Math.ceil(mL / 10)), gH = Math.max(1, Math.ceil(mH / 10));
+      for (let aL = 0; aL <= mL; aL += gL) for (let aH = 0; aH <= Math.min(mH, nE - aL); aH += gH) probe(aL, aH);
+      probe(mL, 0); probe(0, mH); probe(mL, Math.min(mH, nE - mL));
+      for (let d = Math.max(1, Math.ceil(Math.max(gL, gH) / 2)); d >= 1; d = d === 1 ? 0 : Math.ceil(d / 2)) {
+        for (let runde = 0; runde < 40; runde++) {
+          const {aL, aH} = best;
+          let besser = false;
+          for (const [x, y] of [[d, 0], [-d, 0], [0, d], [0, -d], [d, -d], [-d, d], [d, d], [-d, -d]]) if (probe(aL + x, aH + y)) besser = true;
+          if (!besser) break;
+        }
+      }
+      if (best.aL + best.aH > 0 && best.c > b.c + 0.5) wahl.set(i, [best.aL, best.aH, best.c - b.c]);
+      setze(i, ...(wahl.get(i) || [0, 0]));
+    };
+    if (!P.ignoreRatio) src.forEach((_, i) => { if (X[i]) suche(i, () => one(i), b => b.ov + 1); });
+    else {
+      // Lieferdörfer Schritt für Schritt (poolWahl), dann die Prägedörfer mit der ganzen Rechnung
+      const kand = src.map((_, i) => i).filter(i => X[i] && !isSite.has(i) && grenzen(i).nE >= 1);
+      const punkte = i => {
+        const {nE, nL, nH} = grenzen(i), mL = Math.min(nL, nE), mH = Math.min(nH, nE);
+        const gL = Math.max(1, Math.ceil(mL / 10)), gH = Math.max(1, Math.ceil(mH / 10)), pts = [];
+        for (let a = 0; a * gL <= mL; a++) for (let b = 0; b * gH <= mH; b++) {
+          const aL = a * gL, aH = b * gH;
+          if (aL + aH <= nE) pts.push({a, b, aL, aH, lehm: aL * pro, holz: aH * pro});
+        }
+        return pts;
+      };
+      const pw = poolWahl(src, P, sites, cnt, kand, punkte, (i, p) => setze(i, p.aL, p.aH), all);
+      pw.forEach((w, i) => wahl.set(i, [w.p.aL, w.p.aH, w.plus]));
+      for (const j of sites) if (X[j]) suche(j, all, b => b.ov);
+    }
+    const after = lockstep(src, P, sites, cnt, false);
+    const dorf = [];
+    wahl.forEach(([aL, aH, plus], i) => dorf.push({i, aL, aH, eisen: (aL + aH) * unit, lehm: aL * pro, holz: aH * pro, plus,
+      site: isSite.has(i), jetzt: X[i].slice(), nach: nach(i, aL, aH)}));
+    dorf.sort((a, b) => a.i - b.i);
+    const summe = f => [0, 1, 2].map(r => src.reduce((a, _, i) => a + (X[i] ? f(i)[r] : 0), 0));
+    const mit = X.filter(Boolean).length, zuWenig = src.filter((_, i) => X[i] && grenzen(i).nE < 1).length;
+    return {einheit: unit, pro, dorf, coins0: base.coins, coins1: after.coins, ov0: base.ov, ov1: after.ov,
+            jetzt: summe(i => X[i]), nach: summe(i => wahl.has(i) ? nach(i, wahl.get(i)[0], wahl.get(i)[1]) : X[i]),
+            mitLager: mit, ohneLager: src.length - mit, zuWenig, ohneNutzen: mit - zuWenig - dorf.length};
+  } finally {
+    src.forEach(s => { s.vorab = null; });
+  }
 }
 
 /* ---------- Handelsrouten im Account-Manager (10.18, Wunsch Dennis 09.11.2026; 1c, 2a, 3a) ----------
@@ -1116,7 +1284,7 @@ function scheduleDetails(src, P, sites, pos, passive) {
   const lokalDorf = [];
   src.forEach((s, i) => { if (r.lokalDorf[i] > EPS) lokalDorf.push({i, coins: r.lokalDorf[i]}); });
   lokalDorf.sort((a, b) => b.coins - a.coins);
-  return {coins: r.coins, units: r.units, lokal: r.lokal, lokalDorf, mengen: r.mengen, vorab, routen, cnt, rows, overflow: r.overflow, pkgRes: r.pkgRes, limiting, passive: pas,
+  return {coins: r.coins, units: r.units, lokal: r.lokal, lokalDorf, mengen: r.mengen, vorab, routen, cnt, sites: sites.slice(), rows, overflow: r.overflow, pkgRes: r.pkgRes, limiting, passive: pas,
           overflowShare: pkgTotal > 0 ? ovTotal / pkgTotal : 0};
 }
 
@@ -1300,7 +1468,7 @@ const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packages
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,
-             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, parseLager, routeRun, routeMenge, routenPlan, fremdeSuche};
+             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, lagerTausch, parseLager, routeRun, routeMenge, routenPlan, fremdeSuche};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Praegen = api;
 })(typeof window !== "undefined" ? window : globalThis);
