@@ -71,6 +71,7 @@ const CFG_DEFAULT = {
 /* ---------- Abschicksitzungen (v0.5, Spezifikation 15) ---------- */
 const SITZUNG_PAUSE_MS = 15 * 60000;       // längere Pause: neue Abschicksitzung
 const FAKE_RAND_MS = 10 * 60000;           // Fakes höchstens so weit vor oder nach einer Sitzung
+const FAIR_S = 43200;                       // Fairness: zwölf Stunden Rammenlaufzeit (24 Felder) je Fake pro eigenem Dorf, den ein Angreifer schon hat
 const PAAR_S = 3600;                        // Streuung der Fakeziele je Angreifer: zwei Felder Rammenlaufzeit je Fake auf denselben Zielspieler
 const FAKE_SITZUNG_MS = 30 * 60000;        // reine Fake-Spieler: eine Sitzung von höchstens 2 × 30 min
 const ANKER_RAND_MS = 30 * 60000;          // Zuteilung: so weit vom Ankerzeitpunkt kostet nichts
@@ -981,7 +982,7 @@ function plan(input) {
   });
   const fakes = [];
   const fakeQuellen = villages.filter(v => v.fakeMin && v.rolleFake);
-  const ohneSpaeher = fakeQuellen.filter(v => v.fakeAv.spy < 1 && v.fakeAv.catapult + v.fakeAv.ram >= 1).length;
+  const ohneSpaeherListe = fakeQuellen.filter(v => v.fakeAv.spy < 1 && v.fakeAv.catapult + v.fakeAv.ram >= 1), ohneSpaeher = ohneSpaeherListe.length;
   if (villages.some(v => !v.fakeMin)) warnings.push({art: "punkte", text: "Dörfer ohne Dorfpunkte in den Weltdaten schicken keine Fakes"});
   // Stammesmitglieder reihum (je Mitglied ein Dorf, starke zuerst), damit jedes gewählte Mitglied Fakes bekommt, auch wenn
   // die Truppen nicht für alle Dörfer reichen (10.11.2026; vorher alle Dörfer des stärksten Mitglieds zuerst)
@@ -1005,15 +1006,23 @@ function plan(input) {
       const ivs = [];
       // nur Abschickzeiten ab jetzt (10.11.2026: sonst lag die Sitzung bei weiten Zielen in der Vergangenheit und alle Fakes entfielen)
       fakeQuellen.forEach(q => { if (q.att === a) fakeZiele.concat(extra).forEach(z => { const tr = travelS(world, "ram", dist(q, z)) * 1000; ivIntersect([[an.from - tr, an.to - tr]], ab).forEach(iv => ivs.push(iv)); }); });
-      const p = dichtesterPunkt(ivs, w);
-      const n = p == null ? 0 : ivs.filter(([x, y]) => x <= p && p <= y).length * (!w.length || ivHas(w, p) ? 1 : 0.5);
-      return {i, p, n};
+      // dichtester Punkt in den Abschickzeiträumen gegen den dichtesten überhaupt; außerhalb zählt halb, wie bisher (10.11.2026:
+      // sonst landete die Sitzung bei langen Ankunftszeiträumen jetzt mitten in der Nacht vor den Zeiträumen)
+      const drin = w.length ? [].concat(...ivs.map(iv => ivIntersect([iv], w))) : [];
+      const zahl = p => p == null ? 0 : ivs.filter(([x, y]) => x <= p && p <= y).length * (!w.length || ivHas(w, p) ? 1 : 0.5);
+      const pIn = drin.length ? dichtesterPunkt(drin, w) : null, pAll = dichtesterPunkt(ivs, w);
+      const p = zahl(pIn) >= zahl(pAll) ? pIn : pAll;
+      return {i, p, n: zahl(p)};
     });
     const max = Math.max(...wahl.map(x => x.n));
     if (!(max > 0)) return [];
     const best = wahl.filter(x => x.n >= max * 0.9).sort((x, y) => fensterLast[x.i] - fensterLast[y.i] || y.n - x.n || x.i - y.i)[0];
     fensterLast[best.i]++;
     let f = [[best.p - FAKE_SITZUNG_MS, best.p + FAKE_SITZUNG_MS]];
+    // Sitzung ganz in den Zeitraum mit dem Punkt schieben (eine Stunde, der Punkt bleibt drin), nicht vor jetzt
+    const wi = w.find(([x, y]) => x <= best.p && best.p <= y), lang = 2 * FAKE_SITZUNG_MS;
+    const von = Math.max(ab[0][0], wi ? wi[0] : -Infinity), bis = wi ? wi[1] : Infinity;
+    if (bis - von >= lang) { const lo = Math.min(Math.max(f[0][0], von), bis - lang); if (lo <= best.p && best.p <= lo + lang) f = [[lo, lo + lang]]; }
     if (w.length && ivIntersect(f, w).length) f = ivIntersect(f, w);         // nicht über die Zeiträume hinaus
     return f;
   };
@@ -1034,7 +1043,12 @@ function plan(input) {
   // geplante Fake dieses Angreifers auf denselben Zielspieler kostet bei der Wahl so viel wie zwei Felder mehr Rammenlaufzeit
   const paar = new Map(), paarK = (v, t) => v.att + ":" + (t.owner != null ? t.owner : "t" + t.id);
   const paarZahl = (v, t) => paar.get(paarK(v, t)) || 0;
-  const paarPlus = (v, t) => paar.set(paarK(v, t), paarZahl(v, t) + 1);
+  // Fakes fair über die Angreifer, im Verhältnis zu ihrer Dorfzahl (Dennis 10.11.2026 01:04): je Fake pro eigenem Dorf, den ein
+  // Angreifer schon hat, kostet die Wahl so viel wie 24 Felder mehr Rammenlaufzeit (bei Fakes zählt die Laufzeit wenig)
+  const attFakes = new Map(), attDoerfer = new Map();
+  fakeQuellen.forEach(v => attDoerfer.set(v.att, (attDoerfer.get(v.att) || 0) + 1));
+  const last = v => (attFakes.get(v.att) || 0) / (attDoerfer.get(v.att) || 1);
+  const paarPlus = (v, t) => { paar.set(paarK(v, t), paarZahl(v, t) + 1); attFakes.set(v.att, (attFakes.get(v.att) || 0) + 1); };
   /** grenze: höchstens so viele Fakes je Ziel in diesem Lauf (Verteilung reihum). */
   const fakeLauf = (liste, istExtra, modus, grenze) => {
     const kand = liste.map(t => {
@@ -1051,7 +1065,7 @@ function plan(input) {
     if (!istExtra) kand.sort((a, b) => a.q.length - b.q.length);
     kand.forEach(({t, q}) => {
       const schon = new Set(fakes.filter(f => f.t.id === t.id).map(f => f.v.id));
-      const sortiert = q.map(v => ({v, c: travelS(world, "ram", dist(v, t)) + rng() * 1800 + v.fakes * 600 + paarZahl(v, t) * PAAR_S}))
+      const sortiert = q.map(v => ({v, c: travelS(world, "ram", dist(v, t)) + rng() * 1800 + v.fakes * 600 + paarZahl(v, t) * PAAR_S + last(v) * FAIR_S}))
         .sort((a, b) => a.c - b.c);
       // Topf je Fakeziel: die Spieler mit „ziel“ je eigener Topf mit ihrer Zahl, alle übrigen zusammen die Zahl der Konfig
       const topf = v => { const a = att.get(v.att); return a.fakeModus === "ziel" ? "s" + a.id : "alle"; };
@@ -1129,9 +1143,13 @@ function plan(input) {
     const qs = fakeQuellen.filter(v => att.get(v.att).fakeModus !== "ziel"), unter = qs.filter(v => v.fakes < sollQ(v)).length;
     if (unter) warnings.push({art: "fake", text: unter + " von " + qs.length + " Herkunftsdörfern unter ihrer Fakezahl (Truppen, Fakelimit, Abschickzeiten oder zu wenige Fakeziele)"});
   }
-  if (ohneSpaeher && (fakeZiele.length || extra.length || herkunft))
+  if (ohneSpaeher && (fakeZiele.length || extra.length || herkunft)) {
+    // je Angreifer, damit klar ist, wem die Späher fehlen (10.11.2026)
+    const je = [...att.values()].map(a => ({a, n: ohneSpaeherListe.filter(v => v.att === a.id).length, m: fakeQuellen.filter(v => v.att === a.id).length}))
+      .filter(x => x.n).sort((x, y) => y.n - x.n).map(x => x.a.name + " " + x.n + " von " + x.m).join(", ");
     warnings.push({art: "fake", text: ohneSpaeher + (ohneSpaeher === 1 ? " Dorf" : " Dörfer") + " ohne freien Späher " + (ohneSpaeher === 1 ? "schickt" : "schicken") +
-      " keine Fakes: jeder Fake braucht mindestens einen Späher" + (cfg.spies_per_off > 0 ? " (Späher je Off sind vorher abgezogen)" : "")});
+      " keine Fakes, jeder Fake braucht mindestens einen Späher (" + je + ")" + (cfg.spies_per_off > 0 && villages.some(offVerplant) ? "; Späher je Off sind vorher abgezogen" : "")});
+  }
 
   /* ---- 6. Truppen zusammenstellen ---- */
   fakes.forEach(({v, f}) => { v.avail.catapult -= f.catapult; v.avail.spy -= f.spy; v.avail.ram -= f.ram; });
