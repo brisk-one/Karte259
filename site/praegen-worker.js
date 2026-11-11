@@ -3,11 +3,20 @@
    ältere Fassung aus dem Zwischenspeicher lädt. Nachricht: {core, token, villages, P, passive, k?, perK?}, Antwort: {token, R}
    oder {token, error}. */
 "use strict";
-let loaded = null;
+let loaded = null, loadedU = null;
 self.onmessage = e => {
   const m = e.data;
   try {
     if (loaded !== m.core) { importScripts(m.core); loaded = m.core; }
+    // Lieferung über Zwischendörfer (inaktiv bis Supportfreigabe, 11.11.2026): {umwege: Adresse von praegen-umwege.js,
+    // src, P, sites, cnt, opt}, Antwort mit Fortschritt je Klick und {token, umwegeErgebnis}
+    if (m.umwege) {
+      if (loadedU !== m.umwege) { importScripts(m.umwege); loadedU = m.umwege; }
+      let zuletzt = 0;
+      const melde = (i, n) => { const t = Date.now(); if (i === n || t - zuletzt > 150) { zuletzt = t; self.postMessage({token: m.token, fortschritt: [i, n]}); } };
+      self.postMessage({token: m.token, umwegeErgebnis: self.PraegenUmwege.vergleich(m.src, m.P, m.sites, m.cnt, m.opt, melde)});
+      return;
+    }
     // 10.17: Suche nach dem nächsten Prägedorf unter fremden Dörfern, mit Fortschrittsmeldungen
     if (m.fremd) {
       const opt = Object.assign({}, m.opt, {fortschritt: (i, n) => self.postMessage({token: m.token, fortschritt: [i, n]})});

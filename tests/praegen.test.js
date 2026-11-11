@@ -829,3 +829,7 @@ test("10.17: Suche unter fremden Dörfern mit Filtern und eigenem Stamm", () => 
   // ab 2 Flaggendopplern ersetzt der Kandidat genau eines der eigenen Prägedörfer
   r.proK.filter(x => x.k > 1).forEach(x => x.top.forEach(c => { assert.equal(c.ersetzt.length, 1); assert.equal(c.bleibt.length, x.k - 1); }));
 });
+
+// Lieferung über Zwischendörfer (site/praegen-umwege.js, inaktiv bis Supportfreigabe): eigene Testdatei, hier
+// eingebunden, damit der Seitenlauf sie mitprüft
+require("./praegen-umwege.test.js");

@@ -210,6 +210,10 @@
   .pr-tag{display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:9px; border:1px solid var(--accent);
     color:var(--accent); line-height:15px; margin-left:4px}
 
+  /* Lieferung über Zwischendörfer (inaktiv bis Supportfreigabe, 11.11.2026) */
+  .pr-inaktiv{display:inline-block; font-size:11px; font-weight:700; padding:1px 8px; border-radius:9px; border:1px dashed var(--bad);
+    color:var(--bad); margin-left:6px; vertical-align:2px; white-space:nowrap}
+
   /* Handelsrouten (10.18) */
   .pr-rkurve{display:grid; gap:4px; margin:0 0 12px; max-width:640px}
   .pr-rkurve>div{display:grid; grid-template-columns:76px minmax(0,1fr) 150px; gap:10px; align-items:center; font-size:12px}
@@ -455,6 +459,21 @@
         <span class="pr-mnote">je mehr Routen, desto genauer, aber jede muss im Account-Manager von Hand angelegt werden</span>
       </div>
       <div id="routen-body"></div>
+    </div>
+  </section>
+
+  <!-- Lieferung über Zwischendörfer wie im eigenen Schnellleistenskript (Wunsch Dennis 11.11.2026, Entscheidung 13:57):
+       inaktiv bis Supportfreigabe, ausgeblendet; sichtbar nur mit UMWEGE_FREIGABE oder ?vorschau=umwege -->
+  <section class="panel" aria-labelledby="h-umwege" id="p-umwege" hidden>
+    <h2 id="h-umwege">Lieferung über Zwischendörfer <span class="pr-inaktiv">inaktiv bis Supportfreigabe</span> <span class="hint" id="umwege-hint"></span></h2>
+    <div class="body">
+      <div class="pr-row" style="margin-bottom:6px">
+        <label class="pick"><span>Planungsfenster</span><input type="number" id="u-fenster" min="1" max="48" step="1" value="8" aria-label="Planungsfenster in Stunden"></label>
+        <span>h</span>
+        <button type="button" class="tw" id="u-los">Rechnen</button>
+      </div>
+      <p class="pr-mnote" id="umwege-status">Rechnet für die gewählte Aufstellung, was Umwege über Zwischendörfer bringen würden, so wie das eigene Schnellleistenskript sie plant. Das Skript darf erst nach der Freigabe durch den Support genutzt werden; bis dahin fließt nichts davon in die übrige Rechnung ein.</p>
+      <div id="umwege-body"></div>
     </div>
   </section>
 
@@ -711,7 +730,7 @@ function run() {
   if (!parsed.villages.length) {
     st.textContent = $("paste").value.trim() ? "Keine Dorfzeile erkannt. Erwartet wird die Ansicht Übersichten › Gebäude, komplett markiert und kopiert." : "Noch keine Übersicht eingefügt.";
     if ($("paste").value.trim()) st.classList.add("err");
-    ["p-rec", "p-vorab", "p-routen", "p-fremd", "p-more"].forEach(id => $(id).hidden = true);
+    ["p-rec", "p-vorab", "p-routen", "p-umwege", "p-fremd", "p-more"].forEach(id => $(id).hidden = true);
     RESULT = null;
     return;
   }
@@ -725,7 +744,7 @@ function run() {
     + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "")
     + (inp.production ? " · Produktion × " + nf2.format(inp.prodFactor)
        + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
-  if (!villages.length) { ["p-rec", "p-vorab", "p-routen", "p-fremd", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
+  if (!villages.length) { ["p-rec", "p-vorab", "p-routen", "p-umwege", "p-fremd", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
 
   const passive = parsed.villages.filter(v => OFF.has(v.x + "|" + v.y));
   const base = st.textContent;
@@ -777,6 +796,7 @@ function show(token, R, villages, parsed) {
   VIEW = v;
   STEPS = [];
   ["p-rec", "p-vorab", "p-routen", "p-fremd", "p-more"].forEach(id => $(id).hidden = false);
+  $("p-umwege").hidden = !UMWEGE_SICHTBAR;                      // inaktiv bis Supportfreigabe
   $("p-pk").hidden = !(R.pkg || R.zeitplan);                    // Zeitplan in beiden Berechnungsarten (10.11)
   $("p-pc").hidden = !R.pkg;                                     // Kurve nur bei „maximieren“
   renderRecommendation();
@@ -1221,6 +1241,7 @@ function renderKennzahlen(sel) {
   renderBilanz(m);
   renderVorab();
   renderRouten();
+  renderUmwege();
   renderFremd();
 }
 
@@ -1671,6 +1692,116 @@ function renderRouten() {
     + "). Händler, deren Hin- und Rückweg länger dauert, warten bis zum nächsten Klick; eine Route mit kurzem Abstand schickt sie bald nach der Rückkehr wieder los. "
     + "Das Anfordern ist deshalb nur der Vergleichswert, nicht das Höchstmögliche.");
   notes.push("Annahmen zur Spielmechanik, noch nicht belegt: eine Route mit einer Gruppe als Start lässt jedes Dorf der Gruppe die Menge schicken, und die Route wiederholt sich im angegebenen Abstand. Belegt: Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Pakete werden weiter von Hand nach dem Zeitplan eingelöst. Wer zusätzlich anfordert, verschickt mit den übrigen Händlern noch mehr.");
+  box.appendChild(el("p", "pr-note", notes.join(" ")));
+}
+
+/* ---------- Lieferung über Zwischendörfer (Wunsch Dennis 11.11.2026, Entscheidung 13:57) ----------
+   Rechnet für die gewählte Aufstellung, was das eigene Schnellleistenskript mit Umwegen bringen würde
+   (praegen-umwege.js). Inaktiv bis zur Supportfreigabe des Skripts: der Abschnitt ist ausgeblendet und fließt
+   nirgends ein. Sichtbar nur mit UMWEGE_FREIGABE = true oder zur Vorschau mit ?vorschau=umwege in der Adresse. */
+const UMWEGE_FREIGABE = false;
+const UMWEGE_SICHTBAR = UMWEGE_FREIGABE || new URLSearchParams(location.search).get("vorschau") === "umwege";
+const UMWEGE_URL = new URL("praegen-umwege.js", location.href).href;
+let UMWEGE = null, UWORKER = null;
+function umwegePlan() {
+  const R = RESULT;
+  if (!R) return null;
+  const sel = gewaehlt(), plan = R.pkg ? sel.pk : sel.z, d = plan && plan.detail;
+  return d ? {sel, plan, d, n: R.pkg ? plan.chosen : plan.n} : null;
+}
+// ohne Worker (Datei lokal geöffnet): Skript nachladen und in Häppchen rechnen, damit die Seite bedienbar bleibt
+function umwegeLokal(msg, fortschritt) {
+  return new Promise((ok, fehler) => {
+    const los = () => {
+      const U = window.PraegenUmwege;
+      if (msg.P.ignoreRatio) return ok({fehler: "verhaeltnis"});
+      const direkt = U.lauf(msg.src, msg.P, msg.sites, msg.cnt, Object.assign({}, msg.opt, {politik: "direkt"}));
+      const s = U.start(msg.src, msg.P, msg.sites, msg.cnt, Object.assign({}, msg.opt, {politik: "umwege"}));
+      const weiter = () => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 40) if (s.schritt()) return ok({direkt, umwege: s.ergebnis()});
+        fortschritt(s.k(), s.K);
+        setTimeout(weiter, 0);
+      };
+      weiter();
+    };
+    if (window.PraegenUmwege) return los();
+    const sc = document.createElement("script");
+    sc.src = UMWEGE_URL;
+    sc.onload = los;
+    sc.onerror = () => fehler(new Error("praegen-umwege.js nicht geladen"));
+    document.head.appendChild(sc);
+  });
+}
+function umwegeRechnen() {
+  const x = umwegePlan(), st = $("umwege-status"), knopf = $("u-los");
+  if (!x) { st.textContent = "Erst wenn der Zeitplan der gewählten Aufstellung steht, kann gerechnet werden."; return; }
+  const fenster = Math.max(1, Math.min(48, Math.round(+$("u-fenster").value || 8)));
+  const token = RUN, start = Date.now(), R = RESULT;
+  const msg = {core: CORE_URL, umwege: UMWEGE_URL, token, src: R.src, P: R.P, sites: x.d.sites, cnt: Array.from(x.d.cnt), opt: {fenster}};
+  knopf.disabled = true;
+  st.textContent = "rechnet … 0 %";
+  const fortschritt = (i, n) => { if (token === RUN) st.textContent = "rechnet … " + Math.round(i / Math.max(1, n) * 100) + " %"; };
+  const fertig = res => {
+    knopf.disabled = false;
+    if (token !== RUN) return;
+    UMWEGE = {token, d: x.d, res, fenster, s: (Date.now() - start) / 1000};
+    st.textContent = "Gerechnet in " + nf1.format(Math.round(UMWEGE.s * 10) / 10) + " s, Planungsfenster " + fenster + " h.";
+    renderUmwege();
+  };
+  const fehler = e => { knopf.disabled = false; st.textContent = "Fehler bei der Rechnung."; console.error(e); };
+  if (UWORKER) UWORKER.terminate();
+  UWORKER = null;
+  if (typeof Worker !== "undefined" && CORE_URL) { try { UWORKER = new Worker("praegen-worker.js"); } catch (e) { UWORKER = null; } }
+  if (!UWORKER) { umwegeLokal(msg, fortschritt).then(fertig, fehler); return; }
+  UWORKER.onmessage = e => {
+    const m = e.data;
+    if (m.token !== token) return;
+    if (m.error) { fehler(m.error); return; }
+    if (m.fortschritt) { fortschritt(m.fortschritt[0], m.fortschritt[1]); return; }
+    if (m.umwegeErgebnis) fertig(m.umwegeErgebnis);
+  };
+  UWORKER.onerror = ev => { ev.preventDefault(); UWORKER = null; umwegeLokal(msg, fortschritt).then(fertig, fehler); };
+  UWORKER.postMessage(msg);
+}
+$("u-los").addEventListener("click", umwegeRechnen);
+function renderUmwege() {
+  if (!UMWEGE_SICHTBAR) return;
+  const box = $("umwege-body"), x = umwegePlan(), R = RESULT;
+  box.replaceChildren();
+  $("umwege-hint").textContent = x ? fdName(x.sel.k) + " · " + pakete(x.n) + " zu " + nfG.format(R.P.pkgSize) + " %" : "";
+  if (!UMWEGE) return;
+  if (UMWEGE.token !== RUN || !x || UMWEGE.d !== x.d) {
+    box.appendChild(el("p", "empty", "Die Eingaben oder die gewählte Aufstellung haben sich seit der Rechnung geändert. Bitte neu rechnen."));
+    return;
+  }
+  const r = UMWEGE.res, P = R.P;
+  if (r.fehler === "verhaeltnis") {
+    box.appendChild(el("p", "empty", "Mit „Rohstoffverhältnis ignorieren“ nicht gerechnet: das Skript schickt immer im Münzverhältnis."));
+    return;
+  }
+  const base = r.direkt.coins, um = r.umwege.coins, d = Math.round(um - base);
+  const lead = el("div", "pr-vlead"), t = el("div", "t");
+  t.append(document.createTextNode("Mit Umwegen über Zwischendörfer: "), el("em", null, ganz(um) + " Münzen"),
+    document.createTextNode(", " + (d > 0 ? ganz(d) + " mehr als" : d < 0 ? ganz(-d) + " weniger als" : "so viel wie") + " beim Anfordern alle " + ivl(P.intervalMin) + " (" + ganz(base) + ")."));
+  lead.appendChild(t);
+  box.appendChild(lead);
+  const kurve = el("div", "pr-rkurve"), top = Math.max(base, um, 1);
+  [["Umwege", um, "on"], ["Anfordern", base, "ref"]].forEach(([lab, v, cls]) => {
+    const z = el("div", cls), bk = el("span", "bk"), i = el("i");
+    i.style.width = (v / top * 100).toFixed(1) + "%";
+    bk.appendChild(i);
+    z.append(el("span", null, lab), bk, el("span", "num", ganz(v)));
+    kurve.appendChild(z);
+  });
+  box.appendChild(kurve);
+  const u = r.umwege, notes = [];
+  notes.push("Über Zwischendörfer laufen " + menge(u.anZwischen) + " Rohstoffe. Je Klick im Mittel " + nf1.format(Math.round(u.anfragen.mittel * 10) / 10)
+    + " Anforderungen, höchstens " + nf.format(u.anfragen.max) + "; im Skript ist jede ein Enter.");
+  if (u.verloren > 0.5) notes.push("Beim Ankommen in Zwischendörfern laufen " + menge(u.verloren) + " Rohstoffe über den Speicher, meist wenn dort gerade ein Paket eingelöst wurde.");
+  if (Math.abs(r.direkt.coins - x.d.coins) > Math.max(1, 0.001 * x.d.coins)) notes.push("Gegenprobe: Das Anfordern ergibt hier " + ganz(r.direkt.coins) + " statt " + ganz(x.d.coins) + " Münzen wie oben.");
+  notes.push("Gerechnet wie im Skript: bei jedem Klick ein Plan über die nächsten " + UMWEGE.fenster + " h, ohne Wissen über künftige Pakete und über die Rückkehrzeiten der Händler. Zwischendörfer schicken weiter, was bei ihnen ankommt. "
+    + "Inaktiv bis Supportfreigabe: Empfehlung, Kennzahlen, Vergleich und Handelsrouten rechnen weiter nur mit dem Anfordern.");
   box.appendChild(el("p", "pr-note", notes.join(" ")));
 }
 
