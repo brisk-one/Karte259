@@ -247,6 +247,10 @@
   .pr-routen .amt{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:14px; font-weight:700; font-variant-numeric:tabular-nums}
   .pr-routen .amt span{display:inline-flex; align-items:center}
   .pr-routen .sub{font-size:11px; color:var(--muted)}
+  /* Gruppe als reine Koordinatenliste für „Koordinaten hinzufügen“ in der Gruppenverwaltung (Wunsch Dennis 11.11.2026 18:51) */
+  .pr-routen .kop{display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px}
+  .pr-routen pre{margin:4px 0 6px; padding:4px 6px; white-space:pre-wrap; overflow-wrap:normal; max-height:150px; overflow:auto; user-select:all;
+    font:12px/1.5 ui-monospace,Consolas,monospace; background:var(--panel-2); border:1px solid var(--edge); border-radius:var(--radius)}
   .pr-routen details summary{cursor:pointer; color:var(--ink-2); font-weight:700}
   .pr-routen details ol{margin:5px 0 0; padding-left:20px; font-size:11.5px; columns:2; column-gap:18px}
   @media (max-width:640px){ .pr-rkurve>div{grid-template-columns:64px minmax(0,1fr) 116px} .pr-routen details ol{columns:1} }
@@ -1728,11 +1732,23 @@ function renderRouten() {
     const wann = el("div");
     wann.append(document.createTextNode("je Dorf alle "), el("b", null, abstand(r.dt)),
       document.createTextNode(" ab Start des Flaggendopplers, bis zu " + ganz(r.sends) + " Lieferungen in 48 h"));
+    // Gruppe: Koordinaten mit Leerzeichen getrennt wie im Feld „Koordinaten hinzufügen“ der Gruppenverwaltung (18:51)
+    const dorf = r.dorf.slice().sort((a, b) => R.src[a].name.localeCompare(R.src[b].name));
+    const text = dorf.map(i => R.src[i].x + "|" + R.src[i].y).join(" ");
+    const kop = el("div", "kop"), b = el("button", "tw small", "Koordinaten kopieren");
+    b.type = "button";
+    b.setAttribute("aria-label", "Koordinaten der " + dorf.length + " Dörfer von Route " + (q + 1) + " kopieren");
+    b.addEventListener("click", async () => {
+      b.textContent = await kopieren(text) ? "Kopiert" : "Fehler";
+      setTimeout(() => { b.textContent = "Koordinaten kopieren"; }, 1500);
+    });
+    kop.append(b, el("span", "sub", "zum Einfügen unter „Koordinaten hinzufügen“ in der Gruppenverwaltung"));
     const det = el("details"), ol = el("ol");
-    det.appendChild(el("summary", null, "Gruppe: " + r.dorf.length + (r.dorf.length === 1 ? " Dorf" : " Dörfer")));
-    r.dorf.slice().sort((a, b) => R.src[a].name.localeCompare(R.src[b].name)).forEach(i => ol.appendChild(el("li", null, R.src[i].name + " (" + R.src[i].x + "|" + R.src[i].y + ")")));
+    det.appendChild(el("summary", null, "Gruppe: " + dorf.length + (dorf.length === 1 ? " Dorf" : " Dörfer")));
+    det.appendChild(el("pre", null, text));
+    dorf.forEach(i => ol.appendChild(el("li", null, R.src[i].name + " (" + R.src[i].x + "|" + R.src[i].y + ")")));
     det.appendChild(ol);
-    inn.append(zz, amt, el("div", "sub", r.n + " Händler je Lieferung"), wann, det,
+    inn.append(zz, amt, el("div", "sub", r.n + " Händler je Lieferung"), wann, kop, det,
       el("div", null, "bringt " + ganz(r.coins) + " Münzen" + (r.skipped ? "; " + ganz(r.skipped) + " Lieferungen fallen aus, weil gerade zu wenig Rohstoffe oder Händler da sind (bei kurzen Abständen normal)" : "")));
     g.appendChild(inn);
   });
