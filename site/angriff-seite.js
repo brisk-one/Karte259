@@ -11,6 +11,10 @@ const INFO = {
   split_full: "Schickt ein Off-Dorf einen Train, läuft seine Off im Train mit. Aus: komplett mit dem ersten AG. An: gleichmäßig auf alle AGs verteilt, damit jedes AG genug Truppen gegen getabbte Deff hat. Sinnvoll, wenn das Dorf genau einen Train an AGs hat.",
   split_two: "Die Off des Dorfs geht Hälfte und Hälfte mit beiden AGs. So ist der 2er-Train kaum zu tabben.",
   send_gap_target_s: "Richtwert für den Abstand zwischen zwei Abschickvorgängen innerhalb einer Sitzung. Der Planer bündelt die Befehle in möglichst wenige, kurze Sitzungen und hält dabei möglichst diesen Abstand, damit nicht alle 3 Sekunden ein Befehl raus muss. Der Mindestabstand bleibt die harte Grenze.",
+  zeitraeume: "Richtwert (Standard): Offs und AGs gehen bevorzugt in deinen Abschickzeiträumen los. Geht ein Ziel nur mit Befehlen außerhalb, etwa ein Adelsgeschlecht, das sonst nicht ankäme, schlägt der Planer sie trotzdem vor und markiert sie im Abschickplan mit „außerhalb“. Fest: nur innerhalb der Zeiträume, ein Ziel fällt dann lieber weg.",
+  max_lauf_off_h: "Richtwert für die Laufzeit von Clean-Offs und übrigen Offs. Darüber nur, wenn sonst ein Ziel weniger geadelt würde oder die Clean-Offs unter den Richtwert fielen; solche Befehle stehen im Abschickplan mit „lange Laufzeit“. Übrige Offs auf Nicht-AG-Dörfer gehen nie darüber. Eine Off, die im Train mit dem ersten AG läuft, zählt wie der AG-Train. 0: keine Grenze.",
+  max_lauf_ag_h: "Richtwert für die Laufzeit der AG-Trains, auch für die Off, die im Train mit dem ersten AG läuft (sie hat AG-Tempo). Darüber nur, wenn sonst ein Ziel weniger geadelt würde; markiert mit „lange Laufzeit“. 0: keine Grenze.",
+  fake_vorlauf_h: "Die ersten Fakes laufen etwa so viele Stunden vor dem ersten Off- oder AG-Abschick des ganzen Plans los. Jeder Angreifer bekommt dafür höchstens eine zusätzliche frühe Sitzung (rund eine Stunde, höchstens eine Stunde vom Richtwert entfernt), in die etwa ein Viertel seiner Fakes geht; die übrigen bleiben in seinen Off-Sitzungen. Weil die Fakes trotzdem im Ankunftszeitraum ankommen, gehen früh nur Dörfer, die weit genug weg liegen (je Stunde früher rund zwei Felder mehr). Ohne Offs und AGs im Plan gilt kein Vorlauf. 0: aus.",
   zeit_rangfolge: "Wie der Planer abwägt, wenn nicht alles zugleich geht. Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Standard: so viele Ziele wie möglich, dann Befehle innerhalb der Abschickzeiträume, dann Clean-Offs bis zum Richtwert, dann Off vor AG abgeschickt, dann wenige und kurze Sitzungen, dann kurze Laufzeiten, zuletzt Fakes. Kurze Sitzungen zuerst: lieber eine Clean-Off weniger oder ein AG vor der Off als eine zweite Weckzeit. Nachtruhe: Offs und AGs nachts außerhalb deiner Zeiträume nur, wenn es nicht anders geht; sonst fällt das Ziel lieber weg.",
   min_send_gap_s: "Kleinster Abstand zwischen zwei Abschickvorgängen eines Spielers, damit keine zwei Befehle fast gleichzeitig abgeschickt werden müssen. Ein gereihter Train aus einem Dorf zählt als ein Vorgang.",
   off_min_pop: "Ab dieser Größe in Bauernhofplätzen zählt ein Dorf als Off. Beispiel 16.250 BH: 5.000 Äxte, 2.500 LKav, 250 Rammen. Gezählt werden Axt, LKav, berittene Bogenschützen, Rammen, Katapulte und, in Off-Dörfern, Schwere Kavallerie.",
@@ -51,6 +55,9 @@ const FELDER = [
   {k: "split_two", l: "Off splitten bei 2er-Trains", t: "chk"},
   {k: "min_send_gap_s", l: "Mindestabstand Abschickvorgänge", t: "num", u: "s", min: 0, max: 600},
   {k: "send_gap_target_s", l: "Mindestabstandtendenz", t: "num", u: "s", min: 0, max: 600},
+  {k: "zeitraeume", l: "Abschickzeiträume", t: "sel", o: [["wunsch", "Richtwert: notfalls außerhalb"], ["streng", "fest: nur innerhalb"]]},
+  {k: "max_lauf_off_h", l: "Laufzeit Offs höchstens (Richtwert, 0: keine)", t: "num", u: "h", min: 0, max: 240, step: 0.5},
+  {k: "max_lauf_ag_h", l: "Laufzeit AG-Trains höchstens (Richtwert, 0: keine)", t: "num", u: "h", min: 0, max: 240, step: 0.5},
   {k: "zeit_rangfolge", l: "Rangfolge beim Abwägen", t: "sel", o: [["standard", "Standard: Off vor AG vor kurzen Sitzungen"], ["sitzungen", "kurze Sitzungen zuerst"], ["nachtruhe", "Nachtruhe: lieber ein Ziel weniger"]]},
   {k: "off_min_pop", l: "Off-Richtwert", t: "num", u: "BH", min: 0, max: 40000, step: 50,
    x: "Beispiel: 5.000 Axt + 2.500 LKav × 4 + 250 Rammen × 5 = 16.250 BH"},
@@ -69,6 +76,7 @@ const FELDER = [
   {k: "fakes_max_je_dorf", l: "Fakes aus einem eigenen Dorf höchstens", t: "num", min: 1, max: 20},
   {k: "fake_verteilung", l: "Fakes verteilen", t: "sel", o: [["reihum", "reihum: erst jedes Ziel einen"], ["haupt", "Hauptziele zuerst voll"]]},
   {k: "fake_extra_pop", l: "Zuschlag Fakelimit", t: "num", u: "BH", min: 0, max: 500},
+  {k: "fake_vorlauf_h", l: "Erste Fakes vor der ersten Off (Richtwert, 0: aus)", t: "num", u: "h", min: 0, max: 48, step: 0.5},
   {k: "extra_fakes", l: "Zusätzliche Fakeziele aus dem Stamm", t: "chkNum", n: "moral_threshold", u: "% Moral mindestens", f: 0.01, min: 30, max: 100},
 ];
 
@@ -966,8 +974,8 @@ function zeigen() {
       return [[K.fmtZeit(it.sendMs, true), "num", it.sendMs], [K.fmtZeit(it.arrivalMs, true), "num", it.arrivalMs],
               [el("span", "ap-kind k-" + it.kind, K.KIND_NAME[it.kind])], [it.v.name + " (" + it.v.x + "|" + it.v.y + ")"],
               [it.t.x + "|" + it.t.y + (d ? " · " + spielerName(d.p) : ""), null], [el("span", "ap-units", einheiten(it.units))],
-              [[it.ausserhalb ? "außerhalb" + (it.nachtSenden ? ", nachts" : "") : (it.nachtSenden ? "nachts" : ""), it.nacht ? "Ankunft im Nachtbonus" : ""].filter(Boolean).join(" · "),
-               it.nacht || it.ausserhalb ? "down" : ""]];
+              [[it.ausserhalb ? "außerhalb" + (it.nachtSenden ? ", nachts" : "") : (it.nachtSenden ? "nachts" : ""), it.zuLang ? "lange Laufzeit" : "", it.nacht ? "Ankunft im Nachtbonus" : ""].filter(Boolean).join(" · "),
+               it.nacht || it.ausserhalb || it.zuLang ? "down" : ""]];
     });
     const sc = el("div", "ap-scroll");
     sc.append(table([["Abschicken", "num", true], ["Ankunft", "num", true], ["Typ"], ["Von"], ["Nach"], ["Einheiten"], [""]], rows));
@@ -981,7 +989,7 @@ function zeigen() {
 function sitzungenBox(r) {
   const d = el("div");
   d.append(el("h3", null, "Abschicksitzungen"),
-    el("p", "ap-note", "Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. „Außerhalb“: außerhalb deiner Abschickzeiträume, nötig für dieses Ziel."));
+    el("p", "ap-note", "Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. „Außerhalb“: außerhalb deiner Abschickzeiträume, nötig für dieses Ziel. „Lange Laufzeit“: über dem Laufzeit-Richtwert, nötig für dieses Ziel."));
   const hm = ms => K.fmtZeit(ms).slice(0, 5) + ". " + K.fmtZeit(ms).slice(11, 16);
   ERG.input.attackers.forEach(at => {
     const sz = (r.sitzungen && r.sitzungen[at.id]) || [];

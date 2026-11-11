@@ -723,3 +723,50 @@ test("Fakes: höchstens 4 je Dorf, Ziele je Angreifer über die Zielspieler gest
   const r2 = K.plan(input), je2 = new Map(); r2.items.forEach(i => je2.set(i.v.id, (je2.get(i.v.id) || 0) + 1));
   assert.ok(Math.max(...je2.values()) <= 2, "Obergrenze aus der Konfig");
 });
+
+test("Laufzeit-Richtwerte für Offs und AGs: überschritten nur, wenn nötig, dann markiert (Dennis 11.11.2026, 2.1a und 2.2a)", () => {
+  const ohne = K.plan(szenario({}));
+  const lauf = (r, k) => Math.max(...r.items.filter(i => i.kind === k).map(i => i.travelMs));
+  // Grenze über allen Laufzeiten: nichts markiert, gleicher Plan
+  const weit = K.plan(szenario({max_lauf_off_h: 20, max_lauf_ag_h: 20}));
+  assert.equal(weit.items.filter(i => i.zuLang).length, 0);
+  assert.deepEqual(weit.items.map(i => i.sendMs), ohne.items.map(i => i.sendMs));
+  // Grenze unter allen Laufzeiten: genauso viele Ziele geadelt, alle Clean-Offs und AGs markiert, Hinweis
+  const input = szenario({max_lauf_off_h: 1, max_lauf_ag_h: 1});
+  const eng = K.plan(input);
+  assert.deepEqual(K.pruefePlan(eng, input), []);
+  assert.equal(eng.stats.geadelt, ohne.stats.geadelt);
+  assert.equal(eng.items.filter(i => i.kind === "clean").length, ohne.items.filter(i => i.kind === "clean").length, "Clean-Offs bleiben beim Richtwert");
+  eng.items.filter(i => i.kind !== "fake").forEach(i => assert.ok(i.zuLang, "markiert"));
+  eng.items.filter(i => i.kind === "fake").forEach(i => assert.ok(!i.zuLang, "Fakes nie"));
+  assert.ok(eng.warnings.some(w => w.art === "laufzeit" && /Offs 1 h, AGs 1 h/.test(w.text)));
+  // nur die AG-Grenze: Offs bleiben unmarkiert (Off im Train zählt wie der AG)
+  const ag = K.plan(szenario({max_lauf_ag_h: 1}));
+  ag.items.forEach(i => assert.equal(!!i.zuLang, i.kind === "ag"));
+  assert.ok(lauf(ag, "ag") > 3600000);
+  // übrige Offs auf Nicht-AG-Dörfer: nie über dem Richtwert
+  const rest0 = K.plan(szenario({rest_offs: "nicht_ag"})), rest1 = K.plan(szenario({rest_offs: "nicht_ag", max_lauf_off_h: 1}));
+  assert.ok(rest0.items.some(i => i.kind === "rest"));
+  assert.equal(rest1.items.filter(i => i.kind === "rest").length, 0);
+});
+
+test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Rest in den Sitzungen (Dennis 11.11.2026, 1.1a und 1.2a)", () => {
+  const input = szenario({fakes_per_village: 3, fake_vorlauf_h: 2});
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  const t0 = Math.min(...r.items.filter(i => i.kind !== "fake").map(i => i.sendMs));
+  const f = r.items.filter(i => i.kind === "fake"), frueh = f.filter(i => i.sendMs < t0 - 3600000);
+  assert.ok(frueh.length > 0, "frühe Fakes vorhanden");
+  assert.ok(frueh.length <= Math.ceil(f.length / 2), "nicht alle Fakes früh: " + frueh.length + " von " + f.length);
+  const erste = Math.min(...f.map(i => i.sendMs));
+  assert.ok(t0 - erste >= 1.5 * 3600000 && t0 - erste <= 3 * 3600000, "erste Fakes rund 2 h vorher: " + (t0 - erste) / 3600000);
+  assert.ok(r.warnings.some(w => w.art === "vorlauf" && /Fake-Vorlauf 2 h/.test(w.text)));
+  // ohne Vorlauf kein Fake so früh
+  const r0 = K.plan(szenario({fakes_per_village: 3}));
+  const t00 = Math.min(...r0.items.filter(i => i.kind !== "fake").map(i => i.sendMs));
+  assert.equal(r0.items.filter(i => i.kind === "fake" && i.sendMs < t00 - 3600000).length, 0);
+  // so früh nicht erreichbar: Hinweis statt Fehler
+  const r10 = K.plan(szenario({fakes_per_village: 3, fake_vorlauf_h: 10}));
+  assert.ok(r10.warnings.some(w => w.art === "vorlauf" && /so früh keine Fakes möglich/.test(w.text)));
+  assert.equal(r10.items.filter(i => i.kind === "fake").length, r0.items.filter(i => i.kind === "fake").length);
+});
