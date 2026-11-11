@@ -758,6 +758,17 @@ test("10.16: Startbestand je Rohstoff im Gleichschritt", () => {
 });
 
 /* ---------- 10.18 Handelsrouten im Account-Manager (Wunsch Dennis 09.11.2026, 1c, 2a, 3a) ---------- */
+test("10.18: Abstände ab 1 Minute, fester Abstand für alle Routen, 1 Minute nicht schlechter als 6 Minuten", () => {
+  assert.ok(Math.abs(K.ROUTE_DT[0] - 1 / 60) < 1e-12 && K.ROUTE_DT.every((x, i) => !i || x > K.ROUTE_DT[i - 1]));
+  const v = konto63(), R = K.planPackages(v, V5({maxOverflow: 10, optThreshold: 70}), []), d = R.pkg.detail;
+  const fest = K.routenPlan(R.src, R.P, d.sites, d.cnt, 3, [7 / 60]);
+  fest.plans.forEach(pl => pl.routes.forEach(r => near(r.dt, 7 / 60, 1e-12)));
+  const eins = K.routenPlan(R.src, R.P, d.sites, d.cnt, 3, [1 / 60]), sechs = K.routenPlan(R.src, R.P, d.sites, d.cnt, 3, [0.1]);
+  assert.ok(eins.plans[eins.plans.length - 1].coins >= sechs.plans[sechs.plans.length - 1].coins - 1e-6);
+  // die automatische Wahl ist mindestens so gut wie jeder feste Abstand aus ihrer Liste
+  assert.ok(d.routen.plans[Math.min(3, d.routen.plans.length) - 1].coins >= eins.plans[eins.plans.length - 1].coins - 1e-6);
+});
+
 test("10.18: Menge je Lieferung passt auf die Händler und ins Prägeverhältnis", () => {
   const P = V5({});
   for (const n of [5, 70, 235]) {

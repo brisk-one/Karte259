@@ -921,9 +921,11 @@ function routeMenge(n, P) {
   const tot = n * P.carry, c = COIN(P), u = P.unitRes;
   return c.map(x => Math.floor(tot * x / u / 100) * 100);
 }
-// Abstände in Stunden, so wie sie im Account-Manager eingetragen werden: Stunden mit Komma (Hinweis Dennis 09.11.2026
-// 16:42 und 17:01: auch kurze Abstände sind möglich, einzutragen z. B. als 0,25 für 15 Minuten)
-const ROUTE_DT = [0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6];
+// Abstände in Stunden (Hinweis Dennis 09.11.2026 16:42 und 17:01: Eintrag im Account-Manager in Stunden mit Komma;
+// 11.11.2026 19:13: beliebige Abstände bis hinunter zu 1 Minute). Die automatische Wahl prüft diese Minutenwerte;
+// einen festen Abstand wählt die Seite über routenPlan(…, [dt]).
+const ROUTE_MIN = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 45, 60, 90, 120, 180, 240, 360];
+const ROUTE_DT = ROUTE_MIN.map(m => m / 60);
 const ROUTE_N = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 235];
 /* Beste Routen für 1 bis rMax Routen. Je Lieferdorf, Abstand und Händlerzahl die Münzen aus den Lieferungen
    (Dörfer rechnen im Prägeverhältnis unabhängig voneinander); eine Route ist (Prägedorf, Abstand, Händlerzahl),
@@ -1468,7 +1470,7 @@ const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packages
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,
-             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, lagerTausch, parseLager, routeRun, routeMenge, routenPlan, fremdeSuche};
+             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, lagerTausch, parseLager, routeRun, routeMenge, routenPlan, ROUTE_DT, fremdeSuche};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Praegen = api;
 })(typeof window !== "undefined" ? window : globalThis);

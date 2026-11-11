@@ -515,7 +515,10 @@
         <label class="pick"><span>Höchstens</span><select id="routen-max" aria-label="Höchstzahl Handelsrouten">
           <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
         <span>Handelsrouten</span>
-        <span class="pr-mnote">je mehr Routen, desto genauer, aber jede muss im Account-Manager von Hand angelegt werden</span>
+        <label class="pick"><span>Abstand</span><input type="number" id="routen-abstand" min="1" max="720" step="1" placeholder="bester"
+          style="width:72px" aria-label="Abstand der Handelsrouten in Minuten, leer für den besten"></label>
+        <span>min</span>
+        <span class="pr-mnote">je mehr Routen, desto genauer, aber jede muss im Account-Manager von Hand angelegt werden; Abstand leer: der beste ab 1 Minute</span>
       </div>
       <div id="routen-body"></div>
     </div>
@@ -748,6 +751,7 @@ $("fdcount").addEventListener("change", gainZustand);
 // Tausch vor dem Start (10.16): Kurs und Lagerstand ändern nur dieses Feld, keine neue Rechnung
 $("vorab-kurs").addEventListener("input", () => { if (RESULT) renderVorab(); });
 $("routen-max").addEventListener("change", () => { if (RESULT) renderRouten(); });       // 10.18: nur Anzeige, keine neue Rechnung
+$("routen-abstand").addEventListener("input", () => { if (RESULT) renderRouten(); });    // fester Abstand (Wunsch Dennis 11.11.2026 19:14)
 $("lager").addEventListener("input", () => { LAGER = K.parseLager($("lager").value); if (RESULT) renderVorab(); else lagerStatus(); });
 $("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
 setMode("pct");
@@ -1688,13 +1692,26 @@ function marktLink(s) {
 /* ---------- Handelsrouten im Account-Manager (10.18, Wunsch Dennis 09.11.2026) ----------
    1c: Routen ersetzen das Anfordern die ganzen 48 h; 2a: Höchstzahl wählbar, dazu was jede weitere Route bringt;
    3a: je Route alles, was im Account-Manager einzutragen ist. Gerechnet für 1 bis 8 Routen, die Auswahl zeigt nur an. */
-// Abstand so, wie er im Account-Manager einzutragen ist (Stunden mit Komma), dazu Minuten (Hinweis Dennis 17:01)
-const abstand = dt => nfG.format(dt) + " h" + (dt < 1 ? " (" + nf.format(Math.round(dt * 60)) + " Minuten)" : "");
+// Abstand so, wie er im Account-Manager einzutragen ist (Stunden mit Komma, Hinweis Dennis 09.11. 17:01), unter einer
+// Stunde zuerst in Minuten (beliebige Abstände ab 1 Minute, Hinweis Dennis 11.11.2026 19:13)
+const nfH = new Intl.NumberFormat("de-DE", {maximumFractionDigits: 4});
+const abstand = dt => { const m = Math.round(dt * 60); return dt < 1 ? (m === 1 ? "1 Minute" : nf.format(m) + " Minuten") + " (" + nfH.format(m / 60) + " h)" : nfG.format(dt) + " h"; };
+/* Fester Abstand (Wunsch Dennis 11.11.2026 19:14): Routen für genau diesen Abstand, auf der Seite gerechnet (eine Rechnung
+   mit einem Abstand dauert Millisekunden bis wenige Zehntelsekunden), je Zeitplan und Abstand gemerkt. */
+const ROUTEN_FEST = new WeakMap();
+function routenFest(R, d, minuten) {
+  let m = ROUTEN_FEST.get(d);
+  if (!m) { m = new Map(); ROUTEN_FEST.set(d, m); }
+  if (!m.has(minuten)) m.set(minuten, K.routenPlan(R.src, R.P, d.sites, d.cnt, 8, [minuten / 60]));
+  return m.get(minuten);
+}
 function renderRouten() {
   const R = RESULT, box = $("routen-body");
   if (!R) return;
   box.replaceChildren();
-  const P = R.P, sel = gewaehlt(), plan = R.pkg ? sel.pk : sel.z, d = plan && plan.detail, rt = d && d.routen;
+  const P = R.P, sel = gewaehlt(), plan = R.pkg ? sel.pk : sel.z, d = plan && plan.detail;
+  const fest = Math.round(+$("routen-abstand").value || 0), festMin = fest >= 1 ? Math.min(720, fest) : 0;
+  const rt = d && (festMin && d.routen ? routenFest(R, d, festMin) : d.routen);
   $("routen-hint").textContent = d ? fdName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %" : "";
   if (!rt || !rt.plans.length) { box.appendChild(el("p", "empty", sel.laedt ? "rechnet …" : "Ohne Lieferdörfer gibt es keine Handelsrouten.")); return; }
   const want = +$("routen-max").value || 3, pl = rt.plans[Math.min(want, rt.plans.length) - 1], base = rt.base;
@@ -1702,7 +1719,7 @@ function renderRouten() {
   // Vergleichswert, nicht das Höchstmögliche (Frage Dennis 10.11.2026: „mehr als 100 % ergibt keinen Sinn“)
   const vgl = x => { const d = Math.round(x - base); return d > 0 ? ganz(d) + " mehr als" : d < 0 ? ganz(-d) + " weniger als" : "so viel wie"; };
   const lead = el("div", "pr-vlead"), t = el("div", "t");
-  t.append(document.createTextNode("Mit " + (pl.R === 1 ? "1 Handelsroute" : pl.R + " Handelsrouten") + " und ohne Anfordern: "),
+  t.append(document.createTextNode("Mit " + (pl.R === 1 ? "1 Handelsroute" : pl.R + " Handelsrouten") + (festMin ? " alle " + abstand(festMin / 60) : "") + " und ohne Anfordern: "),
     el("em", null, ganz(pl.coins) + " Münzen"), document.createTextNode(", " + vgl(pl.coins) + " beim Anfordern alle " + ivl(P.intervalMin) + " (" + ganz(base) + ")."));
   lead.appendChild(t);
   if (pl.R < want) lead.appendChild(el("span", "pr-mnote", "Mehr als " + pl.R + " Routen bringen hier nichts mehr."));
