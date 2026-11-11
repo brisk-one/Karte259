@@ -455,11 +455,12 @@ def build(out_dir):
     except Exception as e:
         unit_info = {"units": 0, "error": repr(e)}
 
-    # Prägerechner: nur Münzkosten und Weltgeschwindigkeit, gerechnet wird im Browser
+    # Prägerechner: Münzkosten, Weltgeschwindigkeit und Bauwerte, gerechnet wird im Browser
     praegen_info = {"ok": False}
     try:
         wc = store.load_json(store.dpath("world_config.json"), {}) or {}
-        pp = praegen.payload(wc.get("settings"))
+        bi = store.load_json(store.dpath("building_info.json"), {}) or {}
+        pp = praegen.payload(wc.get("settings"), bi.get("settings"))
         if pp:
             _dump(os.path.join(ddir, "praegen.json"), pp)
             praegen_info = {"ok": True}

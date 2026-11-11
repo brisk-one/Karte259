@@ -24,6 +24,18 @@ class Payload(unittest.TestCase):
         self.assertEqual(p["coin"], praegen.DEFAULT_COIN)
         self.assertFalse(p["auto_minting"])
 
+    def test_bauwerte_aus_get_building_info(self):
+        b = {}
+        for g, w in (("main", 90), ("market", 100), ("storage", 60), ("farm", 45)):
+            for f in praegen.GEB_FELDER:
+                b[g + "." + f] = "30" if f == "max_level" else str(w if f == "wood" else 1.2)
+        b.pop("farm.build_time")                      # unvollständig: Bauernhof fällt weg
+        p = praegen.payload(WELT, b)
+        self.assertEqual(sorted(p["gebaeude"]), ["main", "market", "storage"])
+        self.assertEqual(p["gebaeude"]["main"]["wood"], 90)
+        self.assertEqual(p["gebaeude"]["storage"]["max_level"], 30)
+        self.assertNotIn("gebaeude", praegen.payload(WELT))
+
     def test_ohne_welteinstellungen_keine_datei(self):
         self.assertIsNone(praegen.payload(None))
         self.assertIsNone(praegen.payload({}))

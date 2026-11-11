@@ -18,8 +18,26 @@ def _num(value, default=None):
         return default
 
 
-def payload(settings):
-    """praegen.json aus den Welteinstellungen; None, wenn sie fehlen."""
+GEBAEUDE = ("main", "market", "storage", "farm")
+GEB_FELDER = ("wood", "stone", "iron", "pop", "wood_factor", "stone_factor", "iron_factor", "pop_factor",
+              "build_time", "build_time_factor", "max_level")
+
+
+def gebaeude(buildings):
+    """Bauwerte der Gebäude, die die Sitzungsanzahlplanung braucht (Hauptgebäude, Marktplatz, Speicher, Bauernhof),
+    aus get_building_info; nur vollständige Gebäude, sonst nimmt die Seite Standardwerte."""
+    out = {}
+    for g in GEBAEUDE:
+        werte = {f: _num((buildings or {}).get(g + "." + f)) for f in GEB_FELDER}
+        if all(v is not None for v in werte.values()):
+            werte["max_level"] = int(werte["max_level"])
+            out[g] = werte
+    return out
+
+
+def payload(settings, buildings=None):
+    """praegen.json aus den Welteinstellungen; None, wenn sie fehlen. Mit Bauwerten (get_building_info) kommt
+    „gebaeude“ dazu."""
     s = settings or {}
     speed = _num(s.get("speed"))
     if not speed:
@@ -36,4 +54,5 @@ def payload(settings):
         "min_per_field": round(BASE_MIN_PER_FIELD / speed, 6),
         "auto_minting": _num(s.get("snob.auto_minting"), 0) == 1,
         "merchant_bonus": _num(s.get("premium.MerchantBonus"), 0) == 1,
+        **({"gebaeude": gebaeude(buildings)} if gebaeude(buildings) else {}),
     }

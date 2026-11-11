@@ -833,3 +833,5 @@ test("10.17: Suche unter fremden Dörfern mit Filtern und eigenem Stamm", () => 
 // Lieferung über Zwischendörfer (site/praegen-umwege.js, inaktiv bis Supportfreigabe): eigene Testdatei, hier
 // eingebunden, damit der Seitenlauf sie mitprüft
 require("./praegen-umwege.test.js");
+// Sitzungsanzahlplanung (site/praegen-sitzungen.js), ebenso eingebunden
+require("./praegen-sitzungen.test.js");

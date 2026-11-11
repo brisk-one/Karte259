@@ -3,7 +3,7 @@
    ältere Fassung aus dem Zwischenspeicher lädt. Nachricht: {core, token, villages, P, passive, k?, perK?}, Antwort: {token, R}
    oder {token, error}. */
 "use strict";
-let loaded = null, loadedU = null;
+let loaded = null, loadedU = null, loadedS = null;
 self.onmessage = e => {
   const m = e.data;
   try {
@@ -15,6 +15,14 @@ self.onmessage = e => {
       let zuletzt = 0;
       const melde = (i, n) => { const t = Date.now(); if (i === n || t - zuletzt > 150) { zuletzt = t; self.postMessage({token: m.token, fortschritt: [i, n]}); } };
       self.postMessage({token: m.token, umwegeErgebnis: self.PraegenUmwege.vergleich(m.src, m.P, m.sites, m.cnt, m.opt, melde)});
+      return;
+    }
+    // Sitzungsanzahlplanung (11.11.2026): {sitzungen: Adresse von praegen-sitzungen.js, eingabe}, Antwort mit
+    // Fortschritt je Strategie und {token, sitzErgebnis}
+    if (m.sitzungen) {
+      if (loadedS !== m.sitzungen) { importScripts(m.sitzungen); loadedS = m.sitzungen; }
+      const melde = (i, n) => self.postMessage({token: m.token, fortschritt: [i, n]});
+      self.postMessage({token: m.token, sitzErgebnis: self.PraegenSitzungen.plane(m.eingabe, melde)});
       return;
     }
     // 10.17: Suche nach dem nächsten Prägedorf unter fremden Dörfern, mit Fortschrittsmeldungen

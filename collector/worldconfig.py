@@ -1,7 +1,8 @@
-"""Welteinstellungen und Einheitendaten (interface.php?func=get_config bzw. get_unit_info).
+"""Welteinstellungen, Einheitendaten und Bauwerte (interface.php?func=get_config, get_unit_info, get_building_info).
 
-Beides ändert sich während einer Welt praktisch nie. Deshalb höchstens ein Abruf je Woche und Datei;
-data/world_config.json und data/unit_info.json werden nur neu geschrieben, wenn sich ein Wert ändert.
+Alles ändert sich während einer Welt praktisch nie. Deshalb höchstens ein Abruf je Woche und Datei;
+data/world_config.json, data/unit_info.json und data/building_info.json werden nur neu geschrieben, wenn sich ein
+Wert ändert. Die Bauwerte braucht der Prägerechner für die Sitzungsanzahlplanung (Ausbau eroberter Dörfer).
 """
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -54,10 +55,13 @@ def _update_one(state, now_utc, func, filename, required, key):
 
 
 def update(state, now_utc):
-    """Beide Abrufe, höchstens einer je Woche und Datei. Einheitendaten sind für die Laufzeiten
+    """Alle drei Abrufe, höchstens einer je Woche und Datei. Einheitendaten sind für die Laufzeiten
     auf der Karte nötig, die Welteinstellungen für den Moralrechner."""
     out = {"config": _update_one(state, now_utc, "get_config", "world_config.json",
                                  ("moral", "speed"), "world_config_checked_utc")}
     out["units"] = _update_one(state, now_utc, "get_unit_info", "unit_info.json",
                                ("spear.speed", "snob.speed"), "unit_info_checked_utc")
+    # zuletzt, damit ein Fehler hier die beiden anderen nicht aufhält
+    out["buildings"] = _update_one(state, now_utc, "get_building_info", "building_info.json",
+                                   ("main.build_time", "storage.build_time"), "building_info_checked_utc")
     return out

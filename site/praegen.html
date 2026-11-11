@@ -210,6 +210,24 @@
   .pr-tag{display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border-radius:9px; border:1px solid var(--accent);
     color:var(--accent); line-height:15px; margin-left:4px}
 
+  /* Reiter (Wunsch Dennis 11.11.2026 14:08, Namen 14:23) */
+  .pr-reiter{display:flex; flex-wrap:wrap; margin:0 0 12px}
+  .pr-reiter button.tw{border-radius:0; margin-left:-1px; font-size:13px; padding:7px 18px; position:relative}
+  .pr-reiter button.tw:first-child{margin-left:0; border-radius:var(--radius) 0 0 var(--radius)}
+  .pr-reiter button.tw:last-child{border-radius:0 var(--radius) var(--radius) 0}
+  .pr-reiter button.tw[aria-selected="true"]{z-index:1; background:var(--btn-on); color:var(--accent-ink); box-shadow:inset 0 0 0 1px var(--accent)}
+  body.pr-tab-sitz .nur-fd{display:none !important}
+  body:not(.pr-tab-sitz) .nur-sitz{display:none !important}
+  /* Sitzungsanzahlplanung */
+  .pr-sitz-ein{display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin:0 0 8px}
+  .pr-sitz-ein input[type="number"]{width:82px}
+  .pr-sitz-ein .lab{min-width:auto}
+  .pr-sbalken{height:6px; max-width:420px; background:var(--edge-line); border-radius:3px; overflow:hidden; margin:6px 0 2px}
+  .pr-sbalken i{display:block; height:100%; width:0; background:var(--accent); transition:width .2s}
+  .pr-stab{overflow-x:auto; margin:4px 0 10px}
+  .pr-stab td, .pr-stab th{white-space:nowrap}
+  .pr-sitz-lage{display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; margin:0 0 12px}
+
   /* Lieferung über Zwischendörfer (inaktiv bis Supportfreigabe, 11.11.2026) */
   .pr-inaktiv{display:inline-block; font-size:11px; font-weight:700; padding:1px 8px; border-radius:9px; border:1px dashed var(--bad);
     color:var(--bad); margin-left:6px; vertical-align:2px; white-space:nowrap}
@@ -314,6 +332,11 @@
 <header class="appbar" id="appbar"></header>
 
 <main class="wrap">
+  <!-- Reiter (Wunsch Dennis 11.11.2026 14:08; Namen 14:23: Flaggendopplerplanung und Sitzungsanzahlplanung) -->
+  <nav class="pr-reiter" role="tablist" aria-label="Prägerechner">
+    <button type="button" class="tw" role="tab" id="r-fd" aria-selected="true">Flaggendopplerplanung</button>
+    <button type="button" class="tw" role="tab" id="r-sitz" aria-selected="false">Sitzungsanzahlplanung</button>
+  </nav>
   <section class="panel" aria-labelledby="h-in">
     <h2 id="h-in">Gebäudeübersicht einfügen
       <span class="hint">Übersichten › Gebäude öffnen, Strg+A, kopieren, hier einfügen. Die Daten bleiben in deinem Browser und werden nicht gespeichert.</span>
@@ -331,7 +354,7 @@
             <label class="pick" style="margin-left:8px"><span>Überlauf höchstens</span><input type="number" id="maxov" min="0" max="100" step="0.1" value="1" aria-label="Überlauf höchstens in Prozent der Paket-Rohstoffe"></label>
             <span>%</span>
           </div>
-          <div class="pr-modes" role="radiogroup" aria-label="Berechnung">
+          <div class="pr-modes nur-fd" role="radiogroup" aria-label="Berechnung">
             <div class="pr-mode" id="mode-pct">
               <label class="pr-mhead"><input type="radio" name="mode" value="pct" checked> 1 · Rohstoffprozentpunkte vorgeben</label>
               <div class="pr-row">
@@ -416,7 +439,39 @@
     </div>
   </section>
 
-  <section class="panel" aria-labelledby="h-rec" id="p-rec" hidden>
+  <!-- Sitzungsanzahlplanung (Wunsch Dennis 11.11.2026 14:08, Entscheidungen 14:23: 1a, 2c, 3a mit HG 22, Marktplatz 22,
+       Speicher 30, 4a, 5a) -->
+  <section class="panel nur-sitz" aria-labelledby="h-sitz" id="p-sitz">
+    <h2 id="h-sitz">Sitzungsanzahlplanung <span class="hint">wie viele Flaggendoppler-Sitzungen, bevor wieder geadelt und ausgebaut wird</span></h2>
+    <div class="body">
+      <div class="pr-sitz-ein">
+        <label class="pick"><span>Paketvorrat</span><input type="number" id="s-vorrat" min="0" step="30" placeholder="z. B. 1200" aria-label="Paketvorrat in Prozentpunkten"></label>
+        <span>%</span>
+        <label class="pick"><span>Zugang je Woche</span><input type="number" id="s-zugang" min="0" step="10" value="0" aria-label="Zugang an Paketprozentpunkten je Woche"></label>
+        <span>%</span>
+        <label class="pick"><span>Zeitspanne</span><input type="number" id="s-tage" min="4" max="90" step="1" value="30" aria-label="Zeitspanne in Tagen"></label>
+        <span>Tage</span>
+      </div>
+      <div class="pr-sitz-ein">
+        <span class="lab">Ausbau eroberter Dörfer</span>
+        <label class="pick"><span>Hauptgebäude</span><input type="number" id="s-hg" min="1" max="30" step="1" value="22" aria-label="Zielstufe Hauptgebäude"></label>
+        <label class="pick"><span>Marktplatz</span><input type="number" id="s-markt" min="1" max="25" step="1" value="22" aria-label="Zielstufe Marktplatz"></label>
+        <label class="pick"><span>Speicher</span><input type="number" id="s-speicher" min="1" max="30" step="1" value="30" aria-label="Zielstufe Speicher"></label>
+      </div>
+      <div class="pr-sitz-ein">
+        <span class="lab">Barbarendörfer</span>
+        <label class="pick"><span>von</span><input type="number" id="s-pmin" min="0" step="1" value="26" aria-label="Barbarendörfer ab Punkten"></label>
+        <label class="pick"><span>bis</span><input type="number" id="s-pmax" min="0" step="1" value="500" aria-label="Barbarendörfer bis Punkten"></label>
+        <span>Punkte</span>
+        <button type="button" class="tw" id="s-los">Rechnen</button>
+      </div>
+      <div class="pr-sbalken" id="s-balken" hidden><i></i></div>
+      <p class="pr-mnote" id="sitz-status">Nutzt oben die Gebäudeübersicht, Paketgröße, Überlaufgrenze, Flagge, Klickabstand, Händlerbonus, Erlass, „Weiterer Flaggendoppler ab“ sowie Münzen im Vorrat und „nächstes kostet“. Lädt die Weltdaten der Seite (rund 700 KB) und rechnet etwa eine halbe bis eine Minute im Hintergrund.</p>
+      <div id="sitz-body"></div>
+    </div>
+  </section>
+
+  <section class="panel nur-fd" aria-labelledby="h-rec" id="p-rec" hidden>
     <h2 id="h-rec">Empfehlung <span class="hint" id="rec-hint"></span></h2>
     <div class="body pr-verdict">
       <div class="pr-big" id="rec-title"></div>
@@ -429,7 +484,7 @@
   </section>
 
   <!-- 10.16: Tausch vor dem Start (Wunsch Dennis 08.11.2026, Entscheidung 1a, 2a, 3b) -->
-  <section class="panel" aria-labelledby="h-vorab" id="p-vorab" hidden>
+  <section class="panel nur-fd" aria-labelledby="h-vorab" id="p-vorab" hidden>
     <h2 id="h-vorab">Vorbereitung: vor dem Start tauschen <span class="hint" id="vorab-hint"></span></h2>
     <div class="body">
       <div class="pr-vin">
@@ -449,7 +504,7 @@
   </section>
 
   <!-- 10.18: Handelsrouten im Account-Manager (Wunsch Dennis 09.11.2026, Entscheidung 1c, 2a, 3a) -->
-  <section class="panel" aria-labelledby="h-routen" id="p-routen" hidden>
+  <section class="panel nur-fd" aria-labelledby="h-routen" id="p-routen" hidden>
     <h2 id="h-routen">Handelsrouten im Account-Manager <span class="hint" id="routen-hint"></span></h2>
     <div class="body">
       <div class="pr-row" style="margin-bottom:10px">
@@ -464,7 +519,7 @@
 
   <!-- Lieferung über Zwischendörfer wie im eigenen Schnellleistenskript (Wunsch Dennis 11.11.2026, Entscheidung 13:57):
        inaktiv bis Supportfreigabe, ausgeblendet; sichtbar nur mit UMWEGE_FREIGABE oder ?vorschau=umwege -->
-  <section class="panel" aria-labelledby="h-umwege" id="p-umwege" hidden>
+  <section class="panel nur-fd" aria-labelledby="h-umwege" id="p-umwege" hidden>
     <h2 id="h-umwege">Lieferung über Zwischendörfer <span class="pr-inaktiv">inaktiv bis Supportfreigabe</span> <span class="hint" id="umwege-hint"></span></h2>
     <div class="body">
       <div class="pr-row" style="margin-bottom:6px">
@@ -478,7 +533,7 @@
   </section>
 
   <!-- 10.17: Nächstes Prägedorf adeln (Wunsch Dennis 09.11.2026; Frage 1: auch eigener Stamm, Frage 2: wie empfohlen) -->
-  <section class="panel" aria-labelledby="h-fremd" id="p-fremd" hidden>
+  <section class="panel nur-fd" aria-labelledby="h-fremd" id="p-fremd" hidden>
     <h2 id="h-fremd">Nächstes Prägedorf adeln <span class="hint">auch Dörfer, die dir noch nicht gehören</span></h2>
     <div class="body">
       <div class="pr-row pr-fopt">
@@ -495,7 +550,7 @@
     </div>
   </section>
 
-  <div class="grid" id="p-more" hidden>
+  <div class="grid nur-fd" id="p-more" hidden>
     <section class="panel c6" aria-labelledby="h-cmp">
       <h2 id="h-cmp">Wie viele Flaggendoppler</h2>
       <div class="body" id="cmp" style="overflow-x:auto"></div>
@@ -1243,6 +1298,7 @@ function renderKennzahlen(sel) {
   renderRouten();
   renderUmwege();
   renderFremd();
+  renderSitz();
 }
 
 /* Rohstoffbilanz der Pakete: Paket-Rohstoffe = rechtzeitig + nicht rechtzeitig + Überlauf + nicht prägbar */
@@ -1802,6 +1858,168 @@ function renderUmwege() {
   if (Math.abs(r.direkt.coins - x.d.coins) > Math.max(1, 0.001 * x.d.coins)) notes.push("Gegenprobe: Das Anfordern ergibt hier " + ganz(r.direkt.coins) + " statt " + ganz(x.d.coins) + " Münzen wie oben.");
   notes.push("Gerechnet wie im Skript: bei jedem Klick ein Plan über die nächsten " + UMWEGE.fenster + " h, ohne Wissen über künftige Pakete und über die Rückkehrzeiten der Händler. Zwischendörfer schicken weiter, was bei ihnen ankommt. "
     + "Inaktiv bis Supportfreigabe: Empfehlung, Kennzahlen, Vergleich und Handelsrouten rechnen weiter nur mit dem Anfordern.");
+  box.appendChild(el("p", "pr-note", notes.join(" ")));
+}
+
+/* ---------- Reiter (Wunsch Dennis 11.11.2026 14:08, Namen 14:23) ----------
+   „Flaggendopplerplanung“ zeigt alles Bisherige, „Sitzungsanzahlplanung“ den neuen Abschnitt; die Eingabe oben gilt
+   für beide (ohne die Wahl der Berechnung). Mit #sitzungsanzahl in der Adresse öffnet die Seite den zweiten Reiter. */
+function reiter(name) {
+  const sitz = name === "sitzungen";
+  document.body.classList.toggle("pr-tab-sitz", sitz);
+  $("r-fd").setAttribute("aria-selected", String(!sitz));
+  $("r-sitz").setAttribute("aria-selected", String(sitz));
+  try { history.replaceState(null, "", location.pathname + location.search + (sitz ? "#sitzungsanzahl" : "")); } catch (e) { /* ohne Verlauf */ }
+  if (sitz) renderSitz();
+}
+$("r-fd").addEventListener("click", () => reiter("fd"));
+$("r-sitz").addEventListener("click", () => reiter("sitzungen"));
+["r-fd", "r-sitz"].forEach((id, q, alle) => $(id).addEventListener("keydown", e => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const ziel = alle[(q + 1) % 2];
+  $(ziel).focus();
+  reiter(ziel === "r-sitz" ? "sitzungen" : "fd");
+}));
+
+/* ---------- Sitzungsanzahlplanung (praegen-sitzungen.js) ---------- */
+const SITZ_URL = new URL("praegen-sitzungen.js", location.href).href;
+let SITZ = null, SWORKER = null;
+function sitzEingaben() {
+  const zahl = (id, min, max, std) => { const v = parseFloat(String($(id).value).replace(",", ".")); return isFinite(v) ? Math.max(min, Math.min(max, v)) : std; };
+  return {vorrat: $("s-vorrat").value.trim() === "" ? null : zahl("s-vorrat", 0, 1e6, 0), zugang: zahl("s-zugang", 0, 1e5, 0), tage: Math.round(zahl("s-tage", 4, 90, 30)),
+          ziel: {main: Math.round(zahl("s-hg", 1, 30, 22)), market: Math.round(zahl("s-markt", 1, 25, 22)), storage: Math.round(zahl("s-speicher", 1, 30, 30))},
+          pmin: zahl("s-pmin", 0, 1e5, 26), pmax: zahl("s-pmax", 0, 1e5, 500),
+          muenzen: Math.max(0, +$("coinstock").value || 0), naechstes: Math.max(0, Math.round(+$("coinnext").value || 0))};
+}
+function sitzSchluessel() { return RUN + "|" + JSON.stringify(sitzEingaben()); }
+function sitzBalken(a) {
+  const b = $("s-balken");
+  b.hidden = a == null;
+  if (a != null) b.firstElementChild.style.width = Math.round(Math.max(0, Math.min(1, a)) * 100) + "%";
+}
+async function sitzRechnen() {
+  const R = RESULT, st = $("sitz-status"), knopf = $("s-los"), ein = sitzEingaben();
+  if (!R || !R.villages) { st.textContent = "Erst oben die Gebäudeübersicht einfügen."; return; }
+  if (ein.vorrat == null) { st.textContent = "Bitte den Paketvorrat in Prozentpunkten eintragen (0, wenn nur der Zugang zählt)."; $("s-vorrat").focus(); return; }
+  if (ein.pmax < ein.pmin) { st.textContent = "Die Punktegrenze „bis“ liegt unter „von“."; return; }
+  knopf.disabled = true;
+  st.textContent = "lädt die Weltdaten …";
+  sitzBalken(0);
+  let welt;
+  try { welt = await weltLaden(); }
+  catch (e) { st.textContent = "Weltdaten konnten nicht geladen werden."; knopf.disabled = false; sitzBalken(null); return; }
+  // Barbarendörfer im Punktebereich rund um die eigenen Dörfer (60 Felder Rand reichen für Hunderte Dörfer)
+  const xs = R.villages.map(v => v.x), ys = R.villages.map(v => v.y), rand = 60;
+  const x0 = Math.min(...xs) - rand, x1 = Math.max(...xs) + rand, y0 = Math.min(...ys) - rand, y1 = Math.max(...ys) + rand;
+  const barbaren = [];
+  welt.rows.forEach(r => {
+    if (r[1] >= 0 || r[2] < ein.pmin || r[2] > ein.pmax) return;
+    const x = Math.floor(r[0] / 1000), y = r[0] % 1000;
+    if (x >= x0 && x <= x1 && y >= y0 && y <= y1) barbaren.push({x, y, pts: r[2]});
+  });
+  const eingabe = {villages: R.villages, P: R.Pin, welt: WORLD, vorrat: ein.vorrat, zugang: ein.zugang, tage: ein.tage, ziel: ein.ziel,
+                   barbaren, muenzen: ein.muenzen, naechstes: ein.naechstes, mMax: 8};
+  const token = RUN, schluessel = sitzSchluessel(), start = Date.now();
+  st.textContent = "rechnet … 0 %";
+  const fortschritt = (i, n) => { if (token !== RUN) return; sitzBalken(i / Math.max(1, n)); st.textContent = "rechnet … " + Math.round(i / Math.max(1, n) * 100) + " %"; };
+  const fertig = res => {
+    knopf.disabled = false;
+    sitzBalken(null);
+    if (token !== RUN) return;
+    SITZ = {schluessel, res, ein, s: (Date.now() - start) / 1000, stand: welt.stand, barbaren: barbaren.length};
+    st.textContent = "Gerechnet in " + nf1.format(Math.round(SITZ.s * 10) / 10) + " s mit " + nf.format(barbaren.length) + " Barbarendörfern von " + ein.pmin + " bis " + ein.pmax + " Punkten.";
+    renderSitz();
+  };
+  const fehler = e => { knopf.disabled = false; sitzBalken(null); st.textContent = "Fehler bei der Rechnung."; console.error(e); };
+  if (SWORKER) SWORKER.terminate();
+  SWORKER = null;
+  if (typeof Worker !== "undefined" && CORE_URL) { try { SWORKER = new Worker("praegen-worker.js"); } catch (e) { SWORKER = null; } }
+  const lokal = () => {
+    const los = () => setTimeout(() => { try { fertig(window.PraegenSitzungen.plane(eingabe, fortschritt)); } catch (e) { fehler(e); } }, 30);
+    if (window.PraegenSitzungen) return los();
+    const sc = document.createElement("script");
+    sc.src = SITZ_URL;
+    sc.onload = los;
+    sc.onerror = () => fehler(new Error("praegen-sitzungen.js nicht geladen"));
+    document.head.appendChild(sc);
+  };
+  if (!SWORKER) { lokal(); return; }
+  SWORKER.onmessage = e => {
+    const m = e.data;
+    if (m.token !== token) return;
+    if (m.error) { fehler(m.error); return; }
+    if (m.fortschritt) { fortschritt(m.fortschritt[0], m.fortschritt[1]); return; }
+    if (m.sitzErgebnis) fertig(m.sitzErgebnis);
+  };
+  SWORKER.onerror = ev => { ev.preventDefault(); SWORKER = null; lokal(); };
+  SWORKER.postMessage({core: CORE_URL, sitzungen: SITZ_URL, token, eingabe});
+}
+$("s-los").addEventListener("click", sitzRechnen);
+const tage1 = h => nf1.format(Math.round(h / 24 * 10) / 10);
+const sitzWort = m => m === 1 ? "1 Sitzung" : m + " Sitzungen";
+function renderSitz() {
+  const box = $("sitz-body");
+  box.replaceChildren();
+  if (!SITZ) return;
+  if (SITZ.schluessel !== sitzSchluessel()) { box.appendChild(el("p", "empty", "Die Eingaben haben sich seit der Rechnung geändert. Bitte neu rechnen.")); return; }
+  const r = SITZ.res, R = RESULT, P = R.Pin;
+  if (r.fehler) { box.appendChild(el("p", "empty", "Mit diesen Dörfern ließ sich keine Sitzung rechnen.")); return; }
+  const best = r.ergebnisse[r.beste - 1], runde1 = best.sitzungen.filter(x => x.runde === 1);
+  const proz1 = runde1.reduce((a, x) => a + x.prozent, 0), pak1 = runde1.reduce((a, x) => a + x.n, 0);
+  // Aussage
+  const lead = el("div", "pr-vlead"), t = el("div", "t");
+  t.append(document.createTextNode("Bei " + nf.format(r.dorfJetzt) + " Dörfern: "), el("em", null, runde1.length === 1 ? "1 Sitzung" : runde1.length + " Sitzungen hintereinander"),
+    document.createTextNode(", zusammen " + nf.format(Math.round(proz1)) + " % (" + nf.format(pak1) + (pak1 === 1 ? " Paket" : " Pakete") + "), dann adeln und ausbauen."));
+  lead.appendChild(t);
+  lead.appendChild(el("span", "pr-mnote", "Nach " + SITZ.ein.tage + " Tagen +" + nf.format(best.doerfer) + " Dörfer (" + nf.format(best.fertig) + " fertig ausgebaut), +"
+    + ganz(best.punkte) + " Punkte; jetzt " + ganz(r.punkteJetzt) + " Punkte."));
+  box.appendChild(lead);
+  // Punkte je Zahl der Sitzungen
+  const kurve = el("div", "pr-rkurve"), top = Math.max(1, ...r.ergebnisse.map(x => x.punkte));
+  r.ergebnisse.forEach(x => {
+    const z = el("div", x.m === r.beste ? "on" : null), bk = el("span", "bk"), i = el("i");
+    i.style.width = (x.punkte / top * 100).toFixed(1) + "%";
+    bk.appendChild(i);
+    z.append(el("span", null, sitzWort(x.m)), bk, el("span", "num", "+" + ganz(x.punkte) + " Punkte"));
+    z.title = nf.format(x.doerfer) + " Dörfer, " + nf.format(x.runden) + (x.runden === 1 ? " Runde" : " Runden") + ", " + nf.format(Math.round(x.pakete)) + " % Pakete und "
+      + nf.format(Math.round(x.ausbauGenutzt)) + " % für Ausbau und AG";
+    kurve.appendChild(z);
+  });
+  box.appendChild(el("p", "pr-mnote", "Punkte der neuen Dörfer nach " + SITZ.ein.tage + " Tagen, je Zahl der Sitzungen vor jeder Pause zum Adeln und Ausbauen:"));
+  box.appendChild(kurve);
+  // Verlauf der empfohlenen Planung
+  const zeilen = best.sitzungen.map(x => [
+    [String(x.runde), "", x.runde], ["Tag " + tage1(x.start), "", x.start], [nf.format(x.dorf), "", x.dorf], [nf.format(x.k), "", x.k],
+    [x.n ? nf.format(x.n) + " × " + nfG.format(P.pkgSize) + " %" : "keine", "", x.n], [ganz(x.coins), "", Math.round(x.coins)], [nf.format(x.ag), "", x.ag],
+    [nf.format(x.erobert), "", x.erobert], [nf.format(Math.round(x.ausbauVorrat)) + " %", "", Math.round(x.ausbauVorrat)], [nf.format(Math.round(x.vorrat)) + " %", "", Math.round(x.vorrat)]]);
+  const cols = [["Runde", "", true], ["Beginn", "", true], ["Dörfer", "", true], ["Flaggendoppler", "", true], ["Pakete", "", true], ["Münzen", "", true],
+                ["Adelsgeschlechter", "", true], ["erobert", "", true], ["Ausbau und AG", "", true], ["Vorrat danach", "", true]];
+  const wrap = el("div", "pr-stab");
+  wrap.appendChild(table(cols, zeilen));
+  box.appendChild(el("p", "pr-mnote", "Ablauf mit " + sitzWort(best.m) + " je Runde (" + nf.format(best.runden) + (best.runden === 1 ? " Runde" : " Runden")
+    + "). Dörfer: liefernde Dörfer der Sitzung, neue erst nach ihrem Ausbau."));
+  box.appendChild(wrap);
+  // Ausbau eines Dorfes
+  const a = r.ausbau, lage = el("div", "pr-sitz-lage"), g = kpiGruppe(lage, "Ausbau eines eroberten Dorfes");
+  kpi(g, "Dauer", tage1(a.dauer) + " Tage", ["Hauptgebäude " + SITZ.ein.ziel.main + ", Speicher " + SITZ.ein.ziel.storage + ", Marktplatz " + SITZ.ein.ziel.market
+    + ", dazu Bauernhof " + a.bauernhof + ", nacheinander in einer Bauschleife"]);
+  kpi(g, "Rohstoffe", menge(a.kosten[0] + a.kosten[1] + a.kosten[2]), [nf.format(a.kosten[0]) + " Holz, " + nf.format(a.kosten[1]) + " Lehm, " + nf.format(a.kosten[2]) + " Eisen, dazu ein AG"]);
+  kpi(g, "Punkte", "+" + nf.format(a.punkte), ["zu den Punkten des Barbarendorfs"]);
+  const g2 = kpiGruppe(lage, "Empfindlichkeit");
+  kpi(g2, "kürzerer Ausbau", sitzWort(r.empfindlich.kurz), ["bei halber Ausbaudauer"]);
+  kpi(g2, "längerer Ausbau", sitzWort(r.empfindlich.lang), ["bei anderthalbfacher Ausbaudauer"]);
+  box.appendChild(lage);
+  // Hinweise
+  const notes = [];
+  if (r.quelle !== "welt") notes.push("Bauwerte: Standardwerte, bis der Sammler die Werte der Welt geladen hat.");
+  if (r.naechstesGeschaetzt) notes.push("„nächstes kostet“ ist leer, gerechnet mit " + nf.format(r.naechstes) + " Münzen (Dorfzahl + 1); bitte im Adelshof ablesen und oben eintragen.");
+  if (best.fehltBarbaren > 0) notes.push("Es reichen die Barbarendörfer im Punktebereich nicht: " + nf.format(best.fehltBarbaren) + " Adelsgeschlechter bleiben ohne Dorf.");
+  if (best.ausProduktion > 0.5) notes.push("Der Paketvorrat reicht nicht für den ganzen Ausbau: " + nf.format(Math.round(best.ausProduktion)) + " % der Speichersumme kommen aus der Produktion.");
+  if (best.sitzungen.some(x => x.genaehert)) notes.push("Sitzungen mit wenig mehr Dörfern als zuletzt genau gerechnet sind genähert (Paketanteil wächst mit der Speichersumme).");
+  notes.push("So wird gerechnet: Jede Sitzung wie „2 · Rohstoffpakete maximieren“ (Flaggendoppler automatisch, optimale Paketzahl, nur Anfordern im Prägeverhältnis), begrenzt durch Vorrat und Zugang. "
+    + "Münzen werden zu Adelsgeschlechtern, je Adelsgeschlecht das nächste Barbarendorf zum Prägedorf, ausgebaut auf die Zielstufen; fertige Dörfer liefern ab der nächsten Sitzung mit. "
+    + "Nach den Sitzungen einer Runde ruht das Prägen, bis die Dörfer der letzten Sitzung fertig sind. Rohstoffe für Ausbau und AG gehen vom Paketvorrat ab (Prozentpunkte der Speichersumme), Produktion zwischen den Sitzungen zählt nicht. "
+    + "Annahmen, nicht im Spiel geprüft: ein Adelsgeschlecht und ein verbrauchtes AG je Dorf, Erobern dauert kaum etwas, Bauzeitformel aus dem Forum-Leitfaden „Building Formulas“.");
   box.appendChild(el("p", "pr-note", notes.join(" ")));
 }
 
@@ -2496,6 +2714,7 @@ function renderAssumptions() {
   $("mpf-note").textContent = nf.format(WORLD.base_min_per_field) + " ÷ Weltgeschwindigkeit " + nf1.format(WORLD.speed) + "; der Händlerbonus wird zusätzlich abgezogen";
   if ($("paste").value.trim()) run();
 })();
+if (location.hash === "#sitzungsanzahl") reiter("sitzungen");
 </script>
 </body>
 </html>
