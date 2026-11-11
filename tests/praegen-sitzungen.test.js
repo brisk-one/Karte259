@@ -25,6 +25,13 @@ test("Bauwerte: Kosten, Bevölkerung, Bauernhof und Punkte wie in den Tabellen d
   assert.equal(S.punkte("storage", 30), speicher.reduce((a, v) => a + v, 0));
   // Bauwerte der Welt ersetzen die Standardwerte je Gebäude
   assert.equal(S.bauwerte({gebaeude: {main: Object.assign({}, g.main, {build_time: 450})}}).main.build_time, 450);
+  // get_building_info liefert Bauzeiten schon durch die Weltgeschwindigkeit geteilt (Welt 259: 562,5 = 900 ÷ 1,6):
+  // mit den Werten der Welt kommt dieselbe Ausbaudauer heraus wie mit den Standardwerten
+  const welt = {speed: 1.6, gebaeude: {}};
+  for (const k of ["main", "market", "storage", "farm"]) welt.gebaeude[k] = Object.assign({}, g[k], {build_time: g[k].build_time / 1.6});
+  assert.equal(S.bauwerte(welt).storage.build_time, 1020);
+  const a1 = S.ausbau({main: 22, market: 22, storage: 30}, g, 1.6), a2 = S.ausbau({main: 22, market: 22, storage: 30}, S.bauwerte(welt), 1.6);
+  assert.ok(Math.abs(a1.dauer - a2.dauer) < 1e-9);
 });
 
 test("Bauzeit: jede Stufe Hauptgebäude verkürzt um den Faktor 1,05, Weltgeschwindigkeit teilt", () => {

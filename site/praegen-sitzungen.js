@@ -29,7 +29,7 @@ const Core = root.Praegen || (typeof require === "function" ? require("./praegen
 // Standard-Bauwerte, bis der Sammler die Werte der Welt (get_building_info) geliefert hat
 const GEB_STANDARD = {
   main:    {wood: 90,  stone: 80,  iron: 70,  pop: 5,  wood_factor: 1.26,  stone_factor: 1.275, iron_factor: 1.26,  pop_factor: 1.17, build_time: 900,  build_time_factor: 1.2, max_level: 30},
-  market:  {wood: 100, stone: 100, iron: 100, pop: 20, wood_factor: 1.26,  stone_factor: 1.27,  iron_factor: 1.26,  pop_factor: 1.17, build_time: 2700, build_time_factor: 1.2, max_level: 25},
+  market:  {wood: 100, stone: 100, iron: 100, pop: 20, wood_factor: 1.26,  stone_factor: 1.275, iron_factor: 1.26,  pop_factor: 1.17, build_time: 2700, build_time_factor: 1.2, max_level: 25},
   storage: {wood: 60,  stone: 50,  iron: 40,  pop: 0,  wood_factor: 1.265, stone_factor: 1.27,  iron_factor: 1.245, pop_factor: 1.15, build_time: 1020, build_time_factor: 1.2, max_level: 30},
   farm:    {wood: 45,  stone: 40,  iron: 30,  pop: 0,  wood_factor: 1.3,   stone_factor: 1.32,  iron_factor: 1.29,  pop_factor: 1,    build_time: 1200, build_time_factor: 1.2, max_level: 30},
 };
@@ -37,7 +37,14 @@ const GEB_STANDARD = {
 const PUNKTE_BASIS = {main: 10, market: 10, storage: 6, farm: 5};
 const AG_KOSTEN = [40000, 50000, 50000];                         // ein AG: Holz, Lehm, Eisen
 
-const bauwerte = welt => Object.assign({}, GEB_STANDARD, (welt && welt.gebaeude) || {});
+/* Bauwerte der Welt (praegen.json „gebaeude“) vor den Standardwerten. get_building_info liefert die Grundbauzeiten
+   schon geteilt durch die Weltgeschwindigkeit (Welt 259: Hauptgebäude 562,5 = 900 ÷ 1,6, Speicher 637,5 = 1.020 ÷ 1,6,
+   geprüft 11.11.2026); hier auf Tempo 1 zurückgerechnet, weil bauzeit() selbst durch die Geschwindigkeit teilt. */
+function bauwerte(welt) {
+  const out = Object.assign({}, GEB_STANDARD), g = (welt && welt.gebaeude) || {}, sp = (welt && +welt.speed) || 1;
+  for (const k of Object.keys(g)) out[k] = Object.assign({}, g[k], {build_time: g[k].build_time * sp});
+  return out;
+}
 const kosten = (g, L) => [Math.round(g.wood * Math.pow(g.wood_factor, L - 1)), Math.round(g.stone * Math.pow(g.stone_factor, L - 1)),
                           Math.round(g.iron * Math.pow(g.iron_factor, L - 1))];
 const bevoelkerung = (g, L) => L > 0 ? Math.round(g.pop * Math.pow(g.pop_factor, L - 1)) : 0;
