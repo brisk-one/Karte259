@@ -117,6 +117,34 @@ test("Truppenübersicht, Ansicht Alle", () => {
   assert.equal(r.villages[2].units.snob, 2);
 });
 
+test("Stammes-Truppenübersicht eines Spielers (Dennis 12.11.2026): Punkte vorn, Einheiten ohne Miliz, Rest ignoriert", () => {
+  // Kunstdaten im Format von Stamm › Mitglieder › Truppen (Kopf, Spielername, Erklärsatz, Kopfzeile, eine Zeile je Dorf)
+  const z = (u, rest) => K.UNITS.map(c => u[c] || 0).concat(rest).join("\t");
+  const text = [
+    "Rangliste", "(12.|345.678 P)", "Truppen", "Kunstspieler",
+    "Die Truppenübersicht zeigt die Anzahl der Truppen jedes Dorfes, einschließlich der Truppen, die sich derzeit nicht im Dorf befinden.",
+    "Dorf\tPunkte\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t (0)",
+    "0001.01 (101|102) K11\t9.866\t" + z(OFF(), [0, 3, 0]),
+    "0001.02 (103|104) K11\t706\t" + z(DEFF(1), [0, 0, 0]),
+    "Serverzeit: 18:24:07 12/11/2026",
+  ].join("\n");
+  const r = K.parseOverview(text);
+  assert.equal(r.stamm, true);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.villages.length, 2);
+  assert.deepEqual(r.villages[0].units, Object.assign(truppen({}), OFF()));
+  assert.equal(r.villages[1].units.snob, 1);
+  assert.equal(r.villages[1].units.spear, DEFF(1).spear);
+  assert.match(r.warnings.join(" "), /Stammes-Truppenübersicht: zählt auch Truppen/);
+  // ohne Kopfzeile: Hinweis statt stiller Fehllesung
+  const ohne = K.parseOverview("0001.01 (101|102) K11\t9.866\t" + z(OFF(), [0, 3, 0]));
+  assert.equal(ohne.stamm, false);
+  assert.match(ohne.warnings.join(" "), /Kopfzeile „Dorf Punkte“/);
+  // zu wenige Zahlen
+  const kurz = K.parseOverview("Dorf\tPunkte\n0001.01 (101|102) K11\t9.866\t1\t2\t3");
+  assert.match(kurz.errors[0], /3 Zahlen nach den Punkten, erwartet 12/);
+});
+
 test("Truppenübersicht, Ansicht Eigene und Fehlerfälle", () => {
   const z = K.OVERVIEW_COLUMNS.map(c => OFF()[c] || 0).join("\t");
   const r = K.parseOverview("[001] Eins (10|20) K21\t" + z + "\tBefehle\n[002] Zwei (11|20) K21\t" + z);

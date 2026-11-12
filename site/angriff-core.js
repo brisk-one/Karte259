@@ -356,20 +356,27 @@ function zeilenZahlen(rest) {
 /**
  * Liest die Truppenübersicht (Übersichten, Truppen, Ansicht „Alle“ oder „Eigene“).
  * Gelesen wird die Zeile „eigene“, also was jetzt im Dorf steht; Unterstützungen zählen nicht.
- * @returns {{villages, errors, warnings, header}}
+ * Dazu die Stammes-Truppenübersicht eines Spielers (Stamm, Mitglieder, Truppen; Dennis 12.11.2026): eine Zeile je Dorf
+ * mit den Punkten, danach die Einheiten in der Reihenfolge der Welt ohne Miliz, dahinter weitere Spalten, die nicht
+ * gelesen werden. Sie zählt auch Truppen, die gerade nicht im Dorf sind.
+ * @returns {{villages, errors, warnings, header, stamm}}
  */
 function parseOverview(text, columns) {
   columns = columns || OVERVIEW_COLUMNS;
   const lines = String(text || "").split(/\r?\n/);
   const villages = [], errors = [], warnings = [], seen = new Set();
-  let header = null, erwartet = null, offen = null;
-  const fertig = (v, nums, nr) => {
-    if (nums.length < columns.length) {
-      errors.push("Zeile " + nr + ": " + nums.length + " Zahlen, erwartet " + columns.length + " (" + v.name + ")");
+  let header = null, erwartet = null, offen = null, zuviel = null;
+  const stamm = lines.some(l => /^\s*Dorf\s+Punkte\b/.test(l) || /Truppenübersicht zeigt die Anzahl der Truppen jedes Dorfes/.test(l));
+  const einheiten = columns.filter(c => UNITS.includes(c));
+  const fertig = (v, alle, nr) => {
+    const cols = stamm ? einheiten : columns, nums = stamm ? alle.slice(1) : alle;      // Stamm: erste Zahl sind die Punkte
+    if (nums.length < cols.length) {
+      errors.push("Zeile " + nr + ": " + nums.length + " Zahlen" + (stamm ? " nach den Punkten" : "") + ", erwartet " + cols.length + " (" + v.name + ")");
       return;
     }
+    if (!stamm && nums.length > cols.length + 1 && zuviel == null) zuviel = nr;
     const units = emptyUnits(), extra = {};
-    columns.forEach((c, i) => { if (c in units) units[c] = nums[i]; else extra[c] = nums[i]; });
+    cols.forEach((c, i) => { if (c in units) units[c] = nums[i]; else extra[c] = nums[i]; });
     const key = v.x * 1000 + v.y;
     if (seen.has(key)) { warnings.push("Zeile " + nr + ": Dorf " + v.x + "|" + v.y + " doppelt, nur das erste zählt"); return; }
     seen.add(key);
@@ -406,8 +413,10 @@ function parseOverview(text, columns) {
     warnings.push("Übersicht nennt " + erwartet + " Dörfer, gelesen " + villages.length +
                   (erwartet > villages.length ? " (weitere Seiten? „Dörfer pro Seite“ hochstellen)" : ""));
   }
-  if (!villages.length && !errors.length) errors.push("Keine Dörfer erkannt. Erwartet wird die Truppenübersicht, Ansicht „Alle“ oder „Eigene“.");
-  return {villages, errors, warnings, header};
+  if (stamm && villages.length) warnings.push("Stammes-Truppenübersicht: zählt auch Truppen, die gerade unterwegs sind oder in anderen Dörfern stehen");
+  if (zuviel != null) warnings.push("Zeile " + zuviel + ": mehr Zahlen als Einheiten. Stammes-Truppenübersicht? Dann bitte mit der Kopfzeile „Dorf Punkte“ einfügen");
+  if (!villages.length && !errors.length) errors.push("Keine Dörfer erkannt. Erwartet wird die Truppenübersicht (Ansicht „Alle“ oder „Eigene“) oder die Stammes-Truppenübersicht eines Spielers.");
+  return {villages, errors, warnings, header, stamm};
 }
 
 /* ---------- Dörfer einordnen ---------- */
