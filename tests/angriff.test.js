@@ -794,6 +794,12 @@ test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Re
   const r0 = K.plan(szenario({fakes_per_village: 3}));
   const t00 = Math.min(...r0.items.filter(i => i.kind !== "fake").map(i => i.sendMs));
   assert.equal(r0.items.filter(i => i.kind === "fake" && i.sendMs < t00 - 3600000).length, 0);
+  // Spanne 1 bis 3 h (Dennis 12.11.2026): erste Fakes irgendwo dazwischen
+  const rs = K.plan(szenario({fakes_per_village: 3, fake_vorlauf_h: 1, fake_vorlauf_bis_h: 3}));
+  const fs = rs.items.filter(i => i.kind === "fake"), t0s = Math.min(...rs.items.filter(i => i.kind !== "fake").map(i => i.sendMs));
+  const vor = (t0s - Math.min(...fs.map(i => i.sendMs))) / 3600000;
+  assert.ok(vor >= 0.9 && vor <= 3.6, "erste Fakes in der Spanne: " + vor);
+  assert.ok(rs.warnings.some(w => w.art === "vorlauf" && /Fake-Vorlauf 1 bis 3 h/.test(w.text)));
   // so früh nicht erreichbar: Hinweis statt Fehler
   const r10 = K.plan(szenario({fakes_per_village: 3, fake_vorlauf_h: 10}));
   assert.ok(r10.warnings.some(w => w.art === "vorlauf" && /so früh keine Fakes möglich/.test(w.text)));

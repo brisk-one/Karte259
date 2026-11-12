@@ -15,7 +15,7 @@ const INFO = {
   zeitraeume: "Richtwert (Standard): Offs und AGs gehen bevorzugt in deinen Abschickzeiträumen los. Geht ein Ziel nur mit Befehlen außerhalb, etwa ein Adelsgeschlecht, das sonst nicht ankäme, schlägt der Planer sie trotzdem vor und markiert sie im Abschickplan mit „außerhalb“. Fest: nur innerhalb der Zeiträume, ein Ziel fällt dann lieber weg.",
   max_lauf_off_h: "Richtwert für die Laufzeit von Clean-Offs und übrigen Offs. Darüber nur, wenn sonst ein Ziel weniger geadelt würde oder die Clean-Offs unter den Richtwert fielen; solche Befehle stehen im Abschickplan mit „lange Laufzeit“. Übrige Offs auf Nicht-AG-Dörfer gehen nie darüber. Eine Off, die im Train mit dem ersten AG läuft, zählt wie der AG-Train. 0: keine Grenze.",
   max_lauf_ag_h: "Richtwert für die Laufzeit der AG-Trains, auch für die Off, die im Train mit dem ersten AG läuft (sie hat AG-Tempo). Darüber nur, wenn sonst ein Ziel weniger geadelt würde; markiert mit „lange Laufzeit“. 0: keine Grenze.",
-  fake_vorlauf_h: "Die ersten Fakes laufen etwa so viele Stunden vor dem ersten Off- oder AG-Abschick des ganzen Plans los. Jeder Angreifer bekommt dafür höchstens eine zusätzliche frühe Sitzung (rund eine Stunde, höchstens eine Stunde vom Richtwert entfernt), in die etwa ein Viertel seiner Fakes geht; die übrigen bleiben in seinen Off-Sitzungen. Weil die Fakes trotzdem im Ankunftszeitraum ankommen, gehen früh nur Dörfer, die weit genug weg liegen (je Stunde früher rund zwei Felder mehr). Ohne Offs und AGs im Plan gilt kein Vorlauf. 0: aus.",
+  fake_vorlauf_h: "Die ersten Fakes laufen etwa so viele Stunden vor dem ersten Off- oder AG-Abschick des ganzen Plans los. Mit einem zweiten Wert eine Spanne, etwa 3 bis 10 h: dann liegt der Beginn irgendwo dazwischen, wo die meisten Fakes passen; „bis“ leer oder 0 heißt ein fester Wert. Jeder Angreifer bekommt dafür höchstens eine zusätzliche frühe Sitzung (rund eine Stunde, höchstens eine Stunde vom Richtwert entfernt), in die etwa ein Viertel seiner Fakes geht; die übrigen bleiben in seinen Off-Sitzungen. Weil die Fakes trotzdem im Ankunftszeitraum ankommen, gehen früh nur Dörfer, die weit genug weg liegen (je Stunde früher rund zwei Felder mehr). Ohne Offs und AGs im Plan gilt kein Vorlauf. 0: aus.",
   zeit_rangfolge: "Wie der Planer abwägt, wenn nicht alles zugleich geht. Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Standard: so viele Ziele wie möglich, dann Befehle innerhalb der Abschickzeiträume, dann Clean-Offs bis zum Richtwert, dann Off vor AG abgeschickt, dann wenige und kurze Sitzungen, dann kurze Laufzeiten, zuletzt Fakes. Kurze Sitzungen zuerst: lieber eine Clean-Off weniger oder ein AG vor der Off als eine zweite Weckzeit. Nachtruhe: Offs und AGs nachts außerhalb deiner Zeiträume nur, wenn es nicht anders geht; sonst fällt das Ziel lieber weg.",
   min_send_gap_s: "Kleinster Abstand zwischen zwei Abschickvorgängen eines Spielers, damit keine zwei Befehle fast gleichzeitig abgeschickt werden müssen. Ein gereihter Train aus einem Dorf zählt als ein Vorgang.",
   off_min_pop: "Ab dieser Größe in Bauernhofplätzen zählt ein Dorf als Off. Beispiel 16.250 BH: 5.000 Äxte, 2.500 LKav, 250 Rammen. Gezählt werden Axt, LKav, berittene Bogenschützen, Rammen, Katapulte und, in Off-Dörfern, Schwere Kavallerie.",
@@ -78,7 +78,7 @@ const FELDER = [
   {k: "fakes_max_je_dorf", l: "Fakes aus einem eigenen Dorf höchstens", t: "num", min: 1, max: 20},
   {k: "fake_verteilung", l: "Fakes verteilen", t: "sel", o: [["reihum", "reihum: erst jedes Ziel einen"], ["haupt", "Hauptziele zuerst voll"]]},
   {k: "fake_extra_pop", l: "Zuschlag Fakelimit", t: "num", u: "BH", min: 0, max: 500},
-  {k: "fake_vorlauf_h", l: "Erste Fakes vor der ersten Off (Richtwert, 0: aus)", t: "num", u: "h", min: 0, max: 48, step: 0.5},
+  {k: "fake_vorlauf_h", l: "Erste Fakes vor der ersten Off (Richtwert, 0: aus)", t: "spanne", a: ["fake_vorlauf_h", "bis"], b: ["fake_vorlauf_bis_h", "h"], min: 0, max: 48, step: 0.5},
   {k: "extra_fakes", l: "Zusätzliche Fakeziele aus dem Stamm", t: "chkNum", n: "moral_threshold", u: "% Moral mindestens", f: 0.01, min: 30, max: 100},
 ];
 
@@ -202,6 +202,10 @@ function cfgBauen() {
       if (F.t === "chkNum") num(F.n, F.u, F.f, F.min, F.max);
     } else if (F.t === "num") {
       num(F.k, F.u, 1, F.min, F.max, F.step);
+    } else if (F.t === "spanne") {
+      // Wert oder Spanne „von bis“ (Dennis 12.11.2026); „bis“ leer oder 0: nur der eine Wert
+      num(F.a[0], F.a[1], 1, F.min, F.max, F.step);
+      num(F.b[0], F.b[1], 1, F.min, F.max, F.step);
     } else if (F.t === "pair") {
       num(F.a[0], F.a[1], 1, 0, 50000, 50);
       num(F.b[0], F.b[1], 1, 0, 1000, 1);
@@ -629,7 +633,10 @@ function zeitraumListe(box, zeilen, fn, opt) {
       // Kopie als Vorlage für den nächsten Zeitraum, hinten angefügt (Dennis 10.11.2026)
       const kopie = knopf("kopieren", () => { popZu(); zeilen.push(Object.assign({}, z)); zeichnen(); fn(); }, "tw ap-kopie");
       kopie.title = "Diesen Zeitraum als weiteren Zeitraum hinzufügen";
-      zeile.append(kopie);
+      // Felder dieses Zeitraums leeren (Dennis 12.11.2026)
+      const zurueck = knopf("zurücksetzen", () => { popZu(); Object.assign(z, leererZeitraum()); zeichnen(); fn(); }, "tw ap-zurueck-z");
+      zurueck.title = "Diesen Zeitraum leeren";
+      zeile.append(kopie, zurueck);
       if (zeilen.length > 1) zeile.append(knopf("entfernen", () => { popZu(); zeilen.splice(i, 1); zeichnen(); fn(); }, "tw"));
       liste.append(zeile);
     });

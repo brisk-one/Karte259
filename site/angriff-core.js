@@ -60,6 +60,7 @@ const CFG_DEFAULT = {
   uebrige_auf_ag: "alle",     // am Ende freie Offs zusätzlich auf die AG-Ziele, wenigste Offs zuerst (Dennis 12.11.2026):
                               // "alle", "sitzung" (nur in bestehende Sitzungen des Spielers) oder "aus"
   fake_vorlauf_h: 0,          // erste Fakes etwa so viele Stunden vor dem ersten Off/AG des Plans (Richtwert, 0: aus; Dennis 11.11.2026)
+  fake_vorlauf_bis_h: 0,      // mit Wert über fake_vorlauf_h: Spanne, erste Fakes zwischen beiden Werten (Dennis 12.11.2026, z. B. 3 bis 10 h)
   max_lauf_off_h: 0,          // Laufzeit Clean-Offs und übrige Offs höchstens (Richtwert, 0: keine Grenze; Dennis 11.11.2026)
   max_lauf_ag_h: 0,           // Laufzeit AG-Trains höchstens, auch die Off im Train (Richtwert, 0: keine Grenze)
   extra_fakes: false,         // zusätzliche Fakeziele aus dem Stamm der Zielspieler
@@ -181,6 +182,8 @@ function berlinToUtc(y, mo, d, h, mi, s, ms) {
 }
 const pad = (n, l) => String(n).padStart(l || 2, "0");
 /** „03.11.2026 08:00:10:200“; ohne Millisekunden „03.11.2026 08:00:10“. */
+/** Stunden für Texte: 3, 2,5 */
+function fmtStd(h) { return (Math.round(h * 10) / 10).toLocaleString("de-DE"); }
 function fmtZeit(ms, mitMs) {
   const p = berlinParts(ms);
   return pad(p.d) + "." + pad(p.mo) + "." + p.y + " " + pad(p.h) + ":" + pad(p.mi) + ":" + pad(p.s) + (mitMs ? ":" + pad(p.ms, 3) : "");
@@ -1107,14 +1110,20 @@ function plan(input) {
   // Fake-Vorlauf (Dennis 11.11.2026, 1.1a und 1.2a): die ersten Fakes laufen etwa so viele Stunden vor dem ersten Off- oder
   // AG-Abschick des ganzen Plans los. Je Angreifer höchstens eine zusätzliche frühe Sitzung (eine Stunde, im Umkreis von
   // einer Stunde um den Richtwert); die übrigen Fakes bleiben in seinen Sitzungen. Ohne Offs und AGs im Plan kein Vorlauf.
-  const vorlaufMs = !streng && cfg.fake_vorlauf_h > 0 ? cfg.fake_vorlauf_h * 3600000 : 0;
+  // Spanne (Dennis 12.11.2026): mit „bis“ über „von“ liegt die frühe Sitzung irgendwo zwischen beiden Werten vor T0,
+  // sonst im Umkreis von einer Stunde um den einen Wert
+  const vorVon = Math.max(0, +cfg.fake_vorlauf_h || 0), vorBis = Math.max(0, +cfg.fake_vorlauf_bis_h || 0);
+  const vorSpanne = vorBis > vorVon;
+  const vorlaufMs = !streng && (vorVon > 0 || vorSpanne) ? Math.max(vorVon, vorBis) * 3600000 : 0;
+  const vorlaufText = vorSpanne ? fmtStd(vorVon) + " bis " + fmtStd(vorBis) + " h" : fmtStd(vorVon) + " h";
   const fakeFrueh = new Map();
   const fruehFenster = a => {
     if (!fakeFrueh.has(a)) {
       let f = [];
       if (vorlaufMs && T0 < Infinity) {
-        const ziel = T0 - vorlaufMs, ivs = [];
-        ANK.forEach(an => fakeIvs(a, an).forEach(iv => ivIntersect([iv], [[ziel - VORLAUF_TOL_MS, ziel + VORLAUF_TOL_MS]]).forEach(x => ivs.push(x))));
+        const bereich = vorSpanne ? [[T0 - vorBis * 3600000, T0 - vorVon * 3600000]] : [[T0 - vorVon * 3600000 - VORLAUF_TOL_MS, T0 - vorVon * 3600000 + VORLAUF_TOL_MS]];
+        const ivs = [];
+        ANK.forEach(an => fakeIvs(a, an).forEach(iv => ivIntersect([iv], bereich).forEach(x => ivs.push(x))));
         const w = att.get(a).wunsch, pw = ivs.length ? punktWahl(ivs, w) : {p: null};
         if (pw.p != null) f = sitzungUm(pw.p, w);
       }
@@ -1370,7 +1379,7 @@ function plan(input) {
     const kern1 = items.filter(it => it.kind !== "fake").map(it => it.sendMs);
     const t1 = kern1.length ? Math.min(...kern1) : T0;
     const ohne = [...att.values()].filter(a => fakeFrueh.has(a.id) && !fakeFrueh.get(a.id).length).map(a => a.name);
-    warnings.push({art: "vorlauf", text: "Fake-Vorlauf " + cfg.fake_vorlauf_h + " h: erste Off oder AG " + fmtZeit(t1).slice(0, 16) +
+    warnings.push({art: "vorlauf", text: "Fake-Vorlauf " + vorlaufText + ": erste Off oder AG " + fmtZeit(t1).slice(0, 16) +
       (erste != null ? ", erste Fakes " + fmtZeit(erste).slice(0, 16) + " (" + (Math.round((t1 - erste) / 360000) / 10).toLocaleString("de-DE") + " h vorher)" : ", keine Fakes") +
       (ohne.length ? "; so früh keine Fakes möglich für " + ohne.join(", ") : "")});
   }
