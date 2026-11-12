@@ -58,7 +58,8 @@ const CFG_DEFAULT = {
   fake_modus: "ziel",         // "ziel": je Fakeziel (wie bisher), "herkunft": je eigenem Dorf (Dennis 09.11.2026)
   fake_extra_pop: 5,          // Zuschlag auf das Fakelimit, Dorfpunkte steigen bis zum Abschicken
   uebrige_auf_ag: "alle",     // am Ende freie Offs zusätzlich auf die AG-Ziele, wenigste Offs zuerst (Dennis 12.11.2026):
-                              // "alle", "sitzung" (nur in bestehende Sitzungen des Spielers) oder "aus"
+                              // "alle", "sitzung" (nur in bestehende Sitzungen des Spielers), "erzwingen" (auch außerhalb
+                              // der Zeiträume und über dem Laufzeit-Richtwert, Knopf „Freie Offs trotzdem verteilen“) oder "aus"
   fake_vorlauf_h: 0,          // erste Fakes etwa so viele Stunden vor dem ersten Off/AG des Plans (Richtwert, 0: aus; Dennis 11.11.2026)
   fake_vorlauf_bis_h: 0,      // mit Wert über fake_vorlauf_h: Spanne, erste Fakes zwischen beiden Werten (Dennis 12.11.2026, z. B. 3 bis 10 h)
   max_lauf_off_h: 0,          // Laufzeit Clean-Offs und übrige Offs höchstens (Richtwert, 0: keine Grenze; Dennis 11.11.2026)
@@ -84,19 +85,25 @@ const PAAR_S = 3600;                        // Streuung der Fakeziele je Angreif
 const VORLAUF_TOL_MS = 60 * 60000;          // Fake-Vorlauf: frühe Sitzung höchstens so weit vom Richtwert entfernt
 const FRUEH_ANTEIL = 0.25;                  // Fake-Vorlauf: etwa so viele der Fakes eines Angreifers in die frühe Sitzung
 const FRUEH_BONUS_S = 72000;                // dafür bei der Wahl ein Vorteil von 20 h Rammenlaufzeit (weite Dörfer laufen früh)
-const ZU_LANG = 150000;                     // Laufzeit über dem Richtwert: unter „innerhalb der Abschickzeiträume“, über „Off vor AG“
+const ZU_LANG = 150000;                     // Laufzeit über dem Richtwert: unter „innerhalb der Abschickzeiträume“
+// Clean-Off vor dem ersten AG abschicken, wenn es irgendwie geht (Dennis 12.11.2026 22:00): über Abschickzeitraum und
+// Laufzeit-Richtwert (bis dahin 100000, darunter)
+const OFF_ZUERST = 1e8;
+// Spieler mit „eigene AG-Ziele stark“ (Dennis 12.11.2026 22:05): seine Offs auf seine Ziele, fremde Offs selten vor seine
+// AGs; geht sogar vor „Off vor AG“ (dann lieber seine eigene Off nach seinem AG als eine fremde davor)
+const EIGENE_STARK = 1e9;
 const FAKE_SITZUNG_MS = 30 * 60000;        // reine Fake-Spieler: eine Sitzung von höchstens 2 × 30 min
 const ANKER_RAND_MS = 30 * 60000;          // Zuteilung: so weit vom Ankerzeitpunkt kostet nichts
 const ANKUNFT_MAX_MS = 90 * 60000;         // Orientierungswert 1,5 h, Hinweis ab 1 h; seit 10.11.2026 keine feste Grenze (Dennis: für Fakes sinnvoll)
 const ANKUNFT_RAT_MS = 60 * 60000;
 /* Gewichte je Rangfolge. Zeitplanung in Minuten-Äquivalenten, Zuteilung in Sekunden wie die Laufzeiten.
-   standard:  Ziele, innerhalb der Zeiträume, Clean-Off-Richtwert, Off vor AG, Sitzungen, Laufzeiten, Fakes
-   sitzungen: Sitzungen vor Clean-Off-Richtwert und Off vor AG
+   standard:  Ziele, Off vor AG (seit 12.11.2026 22:00), innerhalb der Zeiträume, Clean-Off-Richtwert, Sitzungen, Laufzeiten, Fakes
+   sitzungen: Sitzungen vor Clean-Off-Richtwert und Off vor AG (Off vor AG bleibt dort unter den Zeiträumen)
    nachtruhe: wie standard, aber nachts außerhalb der Zeiträume nur, wenn es nicht anders geht, sonst fällt das Ziel weg */
 const RANGFOLGE = {
-  standard:  {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: false, fuellNurAnker: false},
-  sitzungen: {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 240, minute: 3, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 4000, kopplungMax: Infinity, nachtSperre: false, fuellNurAnker: true},
-  nachtruhe: {aus: 1000, ausMin: 1, nacht: 20, sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: true,  fuellNurAnker: false},
+  standard:  {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: false, fuellNurAnker: false, offZuerst: OFF_ZUERST},
+  sitzungen: {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 240, minute: 3, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 4000, kopplungMax: Infinity, nachtSperre: false, fuellNurAnker: true,  offZuerst: 100000},
+  nachtruhe: {aus: 1000, ausMin: 1, nacht: 20, sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: true,  fuellNurAnker: false, offZuerst: OFF_ZUERST},
 };
 // Außerhalb zählt vor allem, dass es außerhalb ist; die Minuten wenig, sonst zöge jeder Befehl einzeln an den Rand des
 // Zeitraums und es entstünden viele kleine Sitzungen. kopplungMax: Bündeln bleibt unter „Off vor AG“ (100.000).
@@ -625,7 +632,8 @@ function plan(input) {
     att.set(a.id, {id: a.id, name: a.name, points: a.points || 0, fenster, wunsch,
       cleanModus: cleanModus && zahl(a.cleanN, 3) != null ? cleanModus : null, cleanN: zahl(a.cleanN, 3),
       fakeModus: fakeModus && zahl(a.fakeN, 20) != null ? fakeModus : null, fakeN: zahl(a.fakeN, 20),
-      rammenMax: zahl(a.rammenMax, 1000) != null ? zahl(a.rammenMax, 1000) : 1});      // Rammen je Fake höchstens (Dennis 10.11.2026)
+      rammenMax: zahl(a.rammenMax, 1000) != null ? zahl(a.rammenMax, 1000) : 1,       // Rammen je Fake höchstens (Dennis 10.11.2026)
+      stark: !!a.eigeneStark});                                                         // eigene AG-Ziele stark (Dennis 12.11.2026 22:05)
     if (!wunsch.length) warnings.push({art: "fenster", text: "Kein Abschickzeitraum für " + (a.name || a.id) + (streng ? "" : ", Abschickzeiten frei gewählt")});
     // Teilnahme je Spieler (Offs, AGs, Fakes) und Dorfauswahl für Offs und AGs (Dennis 16:57)
     const rollen = Object.assign({off: true, ag: true, fake: true}, a.rollen);
@@ -865,6 +873,9 @@ function plan(input) {
     const sendeOff = pos * cfg.gap_clean_ms - travelS(world, "ram", dist(o, t)) * 1000;
     return sendeOff + cfg.off_first_lead_s * 1000 <= frueh;
   };
+  // Off von einem Spieler, der auf dieses Ziel keinen Train schickt; „stark“: er oder ein Spieler mit Train dort will unter sich bleiben
+  const fremdAuf = (o, t) => !trains.get(t.id).some(g => g.v.att === o.att);
+  const starkBetroffen = (o, t) => att.get(o.att).stark || trains.get(t.id).some(g => att.get(g.v.att).stark);
   const offKosten = (o, t, pos, nClean) => {
     let c = travelS(world, "ram", dist(o, t)) + rng() * 60 + zuLangKosten(travelS(world, "ram", dist(o, t)), maxOffS);
     // Abschickzeitraum vor eigenen Offs (Dennis 12.11.2026 20:52): passt die Off zu den AGs dieses Ziels nur außerhalb der
@@ -874,10 +885,13 @@ function plan(input) {
       const w = att.get(o.att).wunsch, tr = travelS(world, "ram", dist(o, t)) * 1000;
       if (w.length && ivAbstand(w, sendIv(tr, pos * cfg.gap_clean_ms)) === 0 && !ivIntersect(agSet(t, nClean), zeitBasis(A, w, tr, pos * cfg.gap_clean_ms)).length) c += R.ausFlow;
     }
-    if (cfg.off_first && !offZuerst(o, t, pos, nClean)) c += 100000;
+    if (cfg.off_first && !offZuerst(o, t, pos, nClean)) c += R.offZuerst;
     // Clean-Offs möglichst vom Spieler, der den Train schickt: dann timt er alles selbst (Dennis 15:00, niedrige Priorität:
     // unter „Off vor AG“ und dem Bündeln, über den Laufzeiten)
-    if (!trains.get(t.id).some(g => g.v.att === o.att)) c += cfg.clean_eigene === "nachrang" ? SPIELER_FREMD : SPIELER_FREMD_VORRANG;
+    if (fremdAuf(o, t)) {
+      c += cfg.clean_eigene === "nachrang" ? SPIELER_FREMD : SPIELER_FREMD_VORRANG;
+      if (starkBetroffen(o, t)) c += EIGENE_STARK;
+    }
     c += zeitKosten(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms);
     // Bündeln: Abstand der Abschickzeit zu den Trains desselben Spielers, egal für welches Ziel. Bis 03.11. zählte nur der
     // Train dieses Ziels; das schob Clean-Offs zu fremden Spielern, ohne eine Sitzung zu sparen.
@@ -996,56 +1010,81 @@ function plan(input) {
   }
   // Übrige Offs zusätzlich auf die AG-Ziele (Dennis 12.11.2026): was am Ende frei bleibt, geht als weitere Clean-Off auf die
   // geadelten Ziele, zuerst auf die mit den wenigsten Offs (Clean-Offs und Off im Train). Sie sind nicht nötig, deshalb nur
-  // innerhalb des Laufzeit-Richtwerts und, wenn „Off vor AG“ an ist, nur vor den AGs.
+  // innerhalb des Laufzeit-Richtwerts und der Abschickzeiträume; „erzwingen“ (Knopf „Freie Offs trotzdem verteilen“, Dennis
+  // 22:00) auch darüber hinaus. „Off vor AG“ ist für sie nur Vorzug (Dennis 22:00: wenn möglich): sie kommen vor dem AG an,
+  // und die nötigen Clean-Offs gehen ohnehin vorher los.
   let zusatzVerteilt = 0;
-  const zusatzModus = cfg.uebrige_auf_ag === false || cfg.uebrige_auf_ag === "aus" ? "aus" : cfg.uebrige_auf_ag === "sitzung" ? "sitzung" : "alle";
+  const zusatzModus = cfg.uebrige_auf_ag === false || cfg.uebrige_auf_ag === "aus" ? "aus"
+    : ["sitzung", "erzwingen"].includes(cfg.uebrige_auf_ag) ? cfg.uebrige_auf_ag : "alle";
+  // Blockbeginne, an denen eine Off im Abschickzeitraum ihres Spielers losgeht
+  const imZeitraum = (o, trS, pos) => { const a0 = att.get(o.att); return zeitBasis(A, a0.wunsch.length ? a0.wunsch : a0.fenster, trS * 1000, pos * cfg.gap_clean_ms); };
+  // gemeinsame Blockbeginne von AGs und Clean-Offs eines Ziels; zusätzliche Offs im Zeitraum behalten ihren Zeitraum
+  const offBasis = (t, liste, nClean) => {
+    let basis = agSet(t, nClean);
+    for (let i = 0; i < liste.length && basis.length; i++) {
+      const o = liste[i], trS = travelS(world, "ram", dist(o, t));
+      basis = ivIntersect(basis, o.zusatz && o.zusatzStreng ? imZeitraum(o, trS, i) : tset(o, trS * 1000, i * cfg.gap_clean_ms));
+    }
+    return basis;
+  };
+  // passt eine weitere Off auf dieses Ziel? lauf/fenster: Laufzeit-Richtwert und Abschickzeitraum als harte Grenze
+  const zusatzPruefen = (o, t, lauf, fenster) => {
+    const liste = cleanOffs.get(t.id), pos = liste.length, trS = travelS(world, "ram", dist(o, t));
+    if (lauf && trS > maxOffS) return null;
+    const basis = offBasis(t, liste, pos + 1);
+    if (!basis.length) return null;
+    const imZ = ivIntersect(basis, imZeitraum(o, trS, pos));
+    if (fenster && !imZ.length) return null;
+    return passt(o, t, pos, pos + 1, imZ.length ? imZ : basis) ? {imZ: imZ.length > 0} : null;
+  };
+  // „sitzung“: der Spieler schickt auf dieses Ziel ohnehin innerhalb von 15 Minuten etwas ab
+  const inSitzung = (o, t) => {
+    const liste = cleanOffs.get(t.id), pos = liste.length;
+    const imBlock = agAktionen(t, trains.get(t.id), pos + 1).concat(liste.map((x, i) => ({att: x.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(x, t)) * 1000})));
+    const rel = pos * cfg.gap_clean_ms - travelS(world, "ram", dist(o, t)) * 1000;
+    return imBlock.some(x => x.att === o.att && Math.abs(x.rel - rel) <= SITZUNG_PAUSE_MS);
+  };
+  const zusatzZiele = () => geadelt.filter(t => trains.has(t.id));
   if (zusatzModus !== "aus") {
     const offsAuf = t => cleanOffs.get(t.id).length + trains.get(t.id).filter(g => g.carriesOff).length;
+    const hart = zusatzModus !== "erzwingen";
     // wenigste Offs zuerst über alle Ziele (Dennis 12.11.2026 20:55: geht vor „eigene Ziele“); unter den passenden Offs für
-    // dieses Ziel bevorzugen die Kosten den Spieler des Trains (SPIELER_FREMD)
-    {
+    // dieses Ziel wählen die Kosten (Off vor AG, Zeitraum, Laufzeit, Spieler des Trains). Spieler mit „eigene AG-Ziele stark“
+    // (Dennis 22:05) geben ihre Offs nur an fremde Ziele, wenn keines ihrer eigenen sie noch nimmt.
     const voll = new Set();
     for (let runde = 0; runde < 5000; runde++) {
       const pool = cleanPool();
       if (!pool.length) break;
-      const kand = geadelt.filter(t => trains.has(t.id) && !voll.has(t.id));
+      const kand = zusatzZiele().filter(t => !voll.has(t.id));
       if (!kand.length) break;
       kand.sort((p, q) => offsAuf(p) - offsAuf(q) || p.id - q.id);
       const t = kand[0], liste = cleanOffs.get(t.id), pos = liste.length;
-      let basis = agSet(t, pos + 1);
-      liste.forEach((o, i) => { basis = ivIntersect(basis, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms)); });
-      // Abschickzeiten der Befehle auf dieses Ziel relativ zum gemeinsamen Blockbeginn: für „sitzung“ genau prüfbar
-      const imBlock = agAktionen(t, trains.get(t.id), pos + 1).concat(liste.map((o, i) => ({att: o.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(o, t)) * 1000})));
-      let best = null, bc = Infinity;
+      let best = null, bc = Infinity, bestZ = false;
+      const eigenesFrei = o => kand.some(u => u !== t && !fremdAuf(o, u) && (zusatzModus !== "sitzung" || inSitzung(o, u)) && zusatzPruefen(o, u, hart, hart));
       pool.forEach(o => {
-        const tr = travelS(world, "ram", dist(o, t)), a0 = att.get(o.att);
-        if (zusatzModus === "sitzung") {
-          const rel = pos * cfg.gap_clean_ms - tr * 1000;
-          if (!imBlock.some(x => x.att === o.att && Math.abs(x.rel - rel) <= SITZUNG_PAUSE_MS)) return;
-        }
-        if (tr > maxOffS) return;
-        if (cfg.off_first && !offZuerst(o, t, pos, pos + 1)) return;
-        // nur in den Abschickzeiträumen des Spielers
-        if (!ivIntersect(basis, zeitBasis(A, a0.wunsch.length ? a0.wunsch : a0.fenster, tr * 1000, pos * cfg.gap_clean_ms)).length) return;
-        if (!passt(o, t, pos, pos + 1, basis)) return;
-        const c = offKosten(o, t, pos, pos + 1);
-        if (c < bc) { bc = c; best = o; }
+        if (zusatzModus === "sitzung" && !inSitzung(o, t)) return;
+        const p = zusatzPruefen(o, t, hart, hart);
+        if (!p) return;
+        if (att.get(o.att).stark && fremdAuf(o, t) && eigenesFrei(o)) return;
+        const c = offKosten(o, t, pos, pos + 1) + (p.imZ ? 0 : R.ausFlow);
+        if (c < bc) { bc = c; best = o; bestZ = p.imZ; }
       });
-      if (best) { liste.push(best); best.verplant = true; best.zusatz = true; zusatzVerteilt++; }
+      if (best) { liste.push(best); best.verplant = true; best.zusatz = true; best.zusatzStreng = bestZ; zusatzVerteilt++; }
       else voll.add(t.id);
     }
-    }
-    if (zusatzVerteilt) warnings.push({art: "zusatz", text: zusatzVerteilt + (zusatzVerteilt === 1 ? " übrige Off" : " übrige Offs") +
-      " zusätzlich auf AG-Ziele verteilt, zuerst auf die Ziele mit den wenigsten Offs"});
+    if (zusatzVerteilt) warnings.push({art: "zusatz", text: zusatzVerteilt + (zusatzVerteilt === 1 ? " freie Off" : " freie Offs") +
+      " zusätzlich auf AG-Ziele verteilt, zuerst auf die Ziele mit den wenigsten Offs" +
+      (zusatzModus === "erzwingen" ? " (auch außerhalb der Abschickzeiträume und über dem Laufzeit-Richtwert)" : "")});
   }
-  // Reihenfolge der Clean-Offs je Ziel: mehr Rammen kommen zuerst an (Dennis 12.11.2026 20:58), wenn Zeiten, Abstände und
-  // „Off vor AG“ dabei halten; sonst bleibt die Reihenfolge der Zuteilung
+  // Reihenfolge der Clean-Offs je Ziel: mehr Rammen kommen zuerst an (Dennis 12.11.2026 20:58), wenn Zeiten und Abstände
+  // halten und keine Off dadurch erst nach dem AG losgeht; sonst bleibt die Reihenfolge der Zuteilung
   const rammen = o => (o.units && o.units.ram) || 0;
-  const reiheOk = (t, liste) => {
-    let basis = agSet(t, liste.length);
-    for (let i = 0; i < liste.length && basis.length; i++) basis = ivIntersect(basis, tset(liste[i], travelS(world, "ram", dist(liste[i], t)) * 1000, i * cfg.gap_clean_ms));
-    if (!basis.length) return false;
-    if (cfg.off_first && liste.some((o, i) => !offZuerst(o, t, i, liste.length))) return false;
+  const reiheOk = (t, liste, alt) => {
+    if (!offBasis(t, liste, liste.length).length) return false;
+    if (cfg.off_first) {
+      const vorher = new Set(alt.filter((o, i) => !offZuerst(o, t, i, alt.length)));
+      if (liste.some((o, i) => !offZuerst(o, t, i, liste.length) && !vorher.has(o))) return false;
+    }
     const akt = agAktionen(t, trains.get(t.id), liste.length).concat(liste.map((o, i) => ({att: o.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(o, t)) * 1000})));
     for (let i = 0; i < akt.length; i++) for (let j = i + 1; j < akt.length; j++) if (akt[i].att === akt[j].att && Math.abs(akt[i].rel - akt[j].rel) < gapSicher) return false;
     return true;
@@ -1055,18 +1094,35 @@ function plan(input) {
     const liste = cleanOffs.get(t.id);
     if (liste.length < 2) return;
     const neu = liste.slice().sort((p, q) => rammen(q) - rammen(p));
-    if (neu.some((o, i) => o !== liste[i]) && reiheOk(t, neu)) cleanOffs.set(t.id, neu);
+    if (neu.some((o, i) => o !== liste[i]) && reiheOk(t, neu, liste)) cleanOffs.set(t.id, neu);
   });
+  // Freie Offs (Dennis 12.11.2026 22:00): warum keine mehr auf ein AG-Ziel passt, je Off der erste Grund, der sie hält
   const freieOffs = cleanPool();
+  const freiGrund = new Map();
+  if (freieOffs.length && zusatzModus !== "aus") {
+    const zl = zusatzZiele();
+    freieOffs.forEach(o => {
+      const geht = (lauf, fenster) => zl.some(t => zusatzPruefen(o, t, lauf, fenster));
+      freiGrund.set(o.id, zusatzModus === "erzwingen" ? "zeit" : geht(true, true) ? (zusatzModus === "sitzung" ? "sitzung" : "zeit")
+        : geht(false, true) ? "laufzeit" : geht(true, false) ? "zeitraum" : geht(false, false) ? "beides" : "zeit");
+    });
+  }
+  const FREI_TEXT = {laufzeit: "nur über dem Laufzeit-Richtwert", zeitraum: "nur außerhalb der Abschickzeiträume",
+    beides: "nur über dem Laufzeit-Richtwert und außerhalb der Zeiträume", sitzung: "nicht in eine bestehende Sitzung",
+    zeit: "zeitlich gar nicht (Ankunft, Mindestabstand)"};
   const freiJe = new Map(); freieOffs.forEach(o => freiJe.set(o.att, (freiJe.get(o.att) || 0) + 1));
-  if (freieOffs.length && geadelt.length) warnings.push({art: "frei", text: freieOffs.length + (freieOffs.length === 1 ? " Off bleibt" : " Offs bleiben") +
-    " übrig (" + [...freiJe].map(([a, n]) => (att.get(a) ? att.get(a).name : a) + " " + n).join(", ") + ")" + (zusatzModus !== "aus" ? ": passen auf kein AG-Ziel (Reichweite, Zeit, Laufzeit-Richtwert, Off vor AG" + (zusatzModus === "sitzung" ? " oder keine bestehende Sitzung" : "") + ")" : "")});
+  if (freieOffs.length && geadelt.length) {
+    const zahl = {}; freiGrund.forEach(g => { zahl[g] = (zahl[g] || 0) + 1; });
+    const gruende = Object.keys(FREI_TEXT).filter(g => zahl[g]).map(g => zahl[g] + " passen " + FREI_TEXT[g]);
+    warnings.push({art: "frei", text: freieOffs.length + " freie " + (freieOffs.length === 1 ? "Off" : "Offs") + " (" +
+      [...freiJe].map(([a, n]) => (att.get(a) ? att.get(a).name : a) + " " + n).join(", ") + ")" + (gruende.length ? ": " + gruende.join(", ") : "")});
+  }
 
   /* ---- 4b. Vorläufige Zeitlage der Offs und AGs (v0.5): Sitzungen, in die die Fakes passen sollen ---- */
   const kernBloecke = () => {
     const out = [];
     let nr = 0;
-    const offIt = (o, t, offset, kind) => ({kind, att: o.att, v: o, t, travelMs: travelS(world, "ram", dist(o, t)) * 1000, offset, aktion: ++nr, streng: !!o.zusatz});
+    const offIt = (o, t, offset, kind) => ({kind, att: o.att, v: o, t, travelMs: travelS(world, "ram", dist(o, t)) * 1000, offset, aktion: ++nr, streng: !!(o.zusatz && o.zusatzStreng)});
     geadelt.forEach(t => {
       const its = cleanOffs.get(t.id).map((o, i) => offIt(o, t, i * cfg.gap_clean_ms, "clean"));
       let off = offsetErstesAG(cleanOffs.get(t.id).length);
@@ -1369,7 +1425,7 @@ function plan(input) {
   geadelt.forEach(t => {
     const its = [];
     const offs = cleanOffs.get(t.id);
-    offs.forEach((o, i) => its.push(Object.assign(item("clean", o, t, offEinheiten(o), langsamste(null), i * cfg.gap_clean_ms, ++aktionNr), o.zusatz ? {zusatz: true, streng: true} : {})));
+    offs.forEach((o, i) => its.push(Object.assign(item("clean", o, t, offEinheiten(o), langsamste(null), i * cfg.gap_clean_ms, ++aktionNr), o.zusatz ? {zusatz: true, streng: !!o.zusatzStreng} : {})));
     let off = offsetErstesAG(offs.length);
     agBefehle.get(t.id).forEach(({g, ags}) => {
       const a = ++aktionNr;
@@ -1404,6 +1460,8 @@ function plan(input) {
   items.sort((a, b) => a.sendMs - b.sendMs || a.offset - b.offset);
 
   // Hinweise je Ziel
+  let zusatzNachAG = 0;
+  const dauerText = ms => { const sek = Math.round(ms / 1000); return sek < 60 ? sek + " s" : sek < 3600 ? Math.round(sek / 60) + " Min." : (Math.round(sek / 360) / 10).toLocaleString("de-DE") + " h"; };
   const zielInfo = ziele.map(t => {
     const b = blocks.find(x => x.art === "ag" && x.ziel.id === t.id);
     // Bilanz (Dennis 12.11.2026): wie viele AGs oder Clean-Offs fehlen, wem das Ziel zugewiesen ist
@@ -1411,8 +1469,29 @@ function plan(input) {
       agFehlt: agFehlt.get(t.id) || 0, offFehlt: offFehlt.get(t.id) || 0, assignee: t.assignee != null ? t.assignee : null};
     const offs = b.items.filter(i => i.kind === "clean"), ags = b.items.filter(i => i.kind === "ag");
     const ersteAG = Math.min(...ags.map(i => i.sendMs));
-    const zuerst = offs.every(o => o.sendMs + cfg.off_first_lead_s * 1000 <= ersteAG);
-    if (cfg.off_first && !zuerst) warnings.push({art: "reihenfolge", ziel: t.id, text: "Ziel " + t.x + "|" + t.y + ": AG vor der Clean-Off abgeschickt"});
+    // „Off vor AG“ gilt für die nötigen Clean-Offs; zusätzliche dürfen danach losgehen (kommen trotzdem vorher an)
+    const lead = cfg.off_first_lead_s * 1000, noetig = offs.filter(o => !o.zusatz);
+    const zuerst = noetig.every(o => o.sendMs + lead <= ersteAG);
+    zusatzNachAG += offs.filter(o => o.zusatz && o.sendMs + lead > ersteAG).length;
+    if (cfg.off_first && !zuerst) {
+      const spaet = noetig.filter(o => o.sendMs + lead > ersteAG), d = Math.max(...spaet.map(o => o.sendMs)) - ersteAG;
+      // Grund (Dennis 22:00, „wenn möglich immer“): gibt es überhaupt eine Off, die früh genug losgehen kann?
+      const n = offs.length, basis = agSet(t, n);
+      const kand = villages.filter(o => o.offHier && !offImTrain.has(o.id) && offZuerst(o, t, 0, n) &&
+        ivIntersect(basis, tset(o, travelS(world, "ram", dist(o, t)) * 1000, 0)).length);
+      // „eigene AG-Ziele stark“ hält Offs fern: fremde vom Ziel eines solchen Spielers, seine eigenen von fremden Zielen
+      const starkNamen = new Set();
+      const frei = kand.filter(o => {
+        if (!fremdAuf(o, t) || !starkBetroffen(o, t)) return true;
+        if (att.get(o.att).stark) starkNamen.add(att.get(o.att).name);
+        trains.get(t.id).forEach(g => { if (att.get(g.v.att).stark) starkNamen.add(att.get(g.v.att).name); });
+        return false;
+      });
+      warnings.push({art: "reihenfolge", ziel: t.id, text: "Ziel " + t.x + "|" + t.y + ": " + (d >= 0
+        ? "erster AG geht " + dauerText(d) + " vor der Clean-Off los" : "Clean-Off geht nur " + dauerText(-d) + " vor dem ersten AG los (Vorlauf " + dauerText(lead) + ")") +
+        (!kand.length ? "; keine Off läuft lang genug, um vor dem AG loszugehen"
+          : !frei.length ? "; „eigene AG-Ziele stark“ bei " + [...starkNamen].join(", ") : "; die Offs, die vorher losgehen könnten, sind für andere Ziele nötig")});
+    }
     return {id: t.id, x: t.x, y: t.y, geadelt: true, clean: offs.length, zusatz: offs.filter(o => o.zusatz).length, ags: ags.length, offZuerst: zuerst, T: b.T,
             soll: richtwert(t), offFehlt: Math.max(0, richtwert(t) - offs.filter(o => !o.zusatz).length), assignee: t.assignee != null ? t.assignee : null,
             agVon: [...new Set(ags.map(i => i.att))]};
@@ -1426,10 +1505,14 @@ function plan(input) {
     // Laufzeit über dem Richtwert (Dennis 11.11.2026): Offs mit ihrem Wert, AGs (auch mit der Off im Train) mit dem der AGs
     if (it.kind !== "fake" && it.travelMs > (it.kind === "ag" ? maxAgS : maxOffS) * 1000) it.zuLang = true;
   });
-  const zuLang = items.filter(it => it.zuLang);
+  const zuLang = items.filter(it => it.zuLang && !it.zusatz), zuLangZ = items.filter(it => it.zuLang && it.zusatz);
+  const lwert = "(" + [maxOffS < Infinity ? "Offs " + cfg.max_lauf_off_h + " h" : "", maxAgS < Infinity ? "AGs " + cfg.max_lauf_ag_h + " h" : ""].filter(Boolean).join(", ") + ")";
   if (zuLang.length) warnings.push({art: "laufzeit", text: new Set(zuLang.map(it => it.att + ":" + it.aktion)).size +
-    " Abschickvorgänge mit Laufzeit über dem Richtwert (" + [maxOffS < Infinity ? "Offs " + cfg.max_lauf_off_h + " h" : "", maxAgS < Infinity ? "AGs " + cfg.max_lauf_ag_h + " h" : ""].filter(Boolean).join(", ") +
-    "), nötig für diese Ziele"});
+    " Abschickvorgänge mit Laufzeit über dem Richtwert " + lwert + ", nötig für diese Ziele" +
+    (zuLangZ.length ? "; dazu " + zuLangZ.length + " zusätzliche Offs (freie Offs verteilt)" : "")});
+  else if (zuLangZ.length) warnings.push({art: "laufzeit", text: zuLangZ.length + " zusätzliche Offs mit Laufzeit über dem Richtwert " + lwert + " (freie Offs verteilt)"});
+  if (cfg.off_first && zusatzNachAG) warnings.push({art: "zusatz", text: zusatzNachAG + (zusatzNachAG === 1 ? " zusätzliche Off geht" : " zusätzliche Offs gehen") +
+    " erst nach dem ersten AG ihres Ziels los (kommen vorher an); die nötigen Clean-Offs gehen vorher los"});
   if (vorlaufMs && T0 < Infinity) {
     const fr = items.filter(it => it.kind === "fake"), erste = fr.length ? Math.min(...fr.map(it => it.sendMs)) : null;
     const kern1 = items.filter(it => it.kind !== "fake").map(it => it.sendMs);
@@ -1443,11 +1526,12 @@ function plan(input) {
   const hinweise = streng ? [] : zeitHinweise(items, att, world);
   const aussenKern = items.filter(it => it.ausserhalb && it.kind !== "fake");
   if (aussenKern.length) warnings.push({art: "ausserhalb", text: new Set(aussenKern.map(it => it.att + ":" + it.aktion)).size +
-    " Abschickvorgänge für Offs und AGs außerhalb der Abschickzeiträume" + (aussenKern.some(it => it.nachtSenden) ? ", davon nachts" : "") + ", siehe Hinweise je Angreifer"});
+    " Abschickvorgänge für Offs und AGs außerhalb der Abschickzeiträume" + (aussenKern.some(it => it.nachtSenden) ? ", davon nachts" : "") +
+    (aussenKern.some(it => it.zusatz) ? ", davon " + new Set(aussenKern.filter(it => it.zusatz).map(it => it.att + ":" + it.aktion)).size + " zusätzliche Offs" : "") + ", siehe Hinweise je Angreifer"});
   if (items.some(it => it.nacht)) warnings.push({art: "nacht", text: "Ankünfte im Nachtbonus (" + world.night.start_hour + " bis " + world.night.end_hour + " Uhr)"});
   if (input.now != null && items.some(it => it.sendMs < input.now)) warnings.push({art: "vergangen", text: "Abschickzeiten in der Vergangenheit"});
 
-  return {items, ziele: zielInfo, freieOffs: freieOffs.map(v => ({id: v.id, x: v.x, y: v.y, name: v.name, att: v.att, offPop: v.offPop})),
+  return {items, ziele: zielInfo, freieOffs: freieOffs.map(v => ({id: v.id, x: v.x, y: v.y, name: v.name, att: v.att, offPop: v.offPop, grund: freiGrund.get(v.id) || null})),
           freieAGs: agVillages.map(v => ({id: v.id, x: v.x, y: v.y, att: v.att, frei: v.nobles - verplanteAGs(v, trains)})).filter(x => x.frei > 0),
           warnings, stats: statistik(items, zielInfo, att), cfg, k, form, zeit, knapp, sitzungen, hinweise,
           bewertung: bewertung(items, zielInfo, att, world)};

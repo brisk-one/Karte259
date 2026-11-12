@@ -809,14 +809,14 @@ test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Re
 test("Übrige Offs zusätzlich auf AG-Ziele, wenigste Offs zuerst, nur in Zeiträumen und Sitzungen (Dennis 12.11.2026)", () => {
   const ohne = K.plan(szenario({clean_per_target: 1}));
   assert.equal(ohne.freieOffs.length, 5);
-  assert.ok(ohne.warnings.some(w => w.art === "frei" && /5 Offs bleiben übrig/.test(w.text)));
+  assert.ok(ohne.warnings.some(w => w.art === "frei" && /^5 freie Offs/.test(w.text)));
   const input = szenario({clean_per_target: 1, uebrige_auf_ag: "alle"});
   const r = K.plan(input);
   assert.deepEqual(K.pruefePlan(r, input), []);
   assert.equal(r.stats.geadelt, ohne.stats.geadelt);
   const zusatz = r.items.filter(i => i.zusatz);
   assert.ok(zusatz.length > 0 && r.freieOffs.length < ohne.freieOffs.length);
-  assert.ok(r.warnings.some(w => w.art === "zusatz" && new RegExp(zusatz.length + " übrige Offs? zusätzlich").test(w.text)));
+  assert.ok(r.warnings.some(w => w.art === "zusatz" && new RegExp(zusatz.length + " freie Offs? zusätzlich").test(w.text)));
   zusatz.forEach(i => assert.equal(i.kind, "clean"));
   // Offs je Ziel: Clean-Offs plus Off im Train
   const offsJe = rr => rr.ziele.filter(z => z.geadelt).map(z => rr.items.filter(i => i.t.id === z.id && (i.kind === "clean" || (i.kind === "ag" && i.units.ram > 0))).length);
@@ -845,7 +845,72 @@ test("Übrige Offs zusätzlich auf AG-Ziele, wenigste Offs zuerst, nur in Zeitr�
   // Laufzeit-Richtwert: zusätzliche Offs nie darüber
   const r3 = K.plan(szenario({clean_per_target: 1, uebrige_auf_ag: "alle", max_lauf_off_h: 1}));
   assert.equal(r3.items.filter(i => i.zusatz).length, 0);
-  assert.ok(r3.warnings.some(w => w.art === "frei" && /passen auf kein AG-Ziel/.test(w.text)));
+  // Grund je freier Off (Dennis 12.11.2026 22:00): hier hält sie nur der Laufzeit-Richtwert
+  assert.ok(r3.freieOffs.length > 0 && r3.freieOffs.every(o => o.grund === "laufzeit"), r3.freieOffs.map(o => o.grund).join(","));
+  assert.ok(r3.warnings.some(w => w.art === "frei" && new RegExp(r3.freieOffs.length + " passen nur über dem Laufzeit-Richtwert").test(w.text)));
+  // „Freie Offs trotzdem verteilen“ (erzwingen): auch über dem Richtwert, gleichmäßig, Regeln eingehalten
+  const i4 = szenario({clean_per_target: 1, uebrige_auf_ag: "erzwingen", max_lauf_off_h: 1}), r4 = K.plan(i4);
+  assert.deepEqual(K.pruefePlan(r4, i4), []);
+  assert.equal(r4.stats.geadelt, r3.stats.geadelt);
+  assert.ok(r4.freieOffs.length < r3.freieOffs.length && r4.items.some(i => i.zusatz && i.zuLang));
+  const o4 = offsJe(r4);
+  assert.ok(Math.max(...o4) - Math.min(...o4) <= 1, "erzwungen gleichmäßig: " + o4.join("/"));
+  assert.ok(r4.warnings.some(w => w.art === "laufzeit" && /zusätzliche Offs/.test(w.text)));
+});
+
+// Kunstfall „Off vor AG“ (Dennis 12.11.2026 22:00): AG aus 10 Feldern (5:50 h), Off aus 11 Feldern (5:30 h, geht nach dem AG
+// los, im Zeitraum) und Off aus 16 Feldern (8 h, geht vorher los, aber nachts außerhalb des Zeitraums 06 bis 08 Uhr)
+function offVorAG(cfg, stark) {
+  const v = (id, x, y, units) => ({id, name: "D" + id, x, y, pts: 10000, units, nobles: units.snob});
+  const alpha = {id: 101, name: "Alpha", points: 3e5, eigeneStark: !!stark, villages: [v(1, 480, 500, DEFF(4)), v(2, 481, 500, OFF()), v(3, 486, 540, OFF())]};
+  const beta = {id: 102, name: "Beta", points: 3e5, villages: [v(21, 480, 540, DEFF(4)), v(22, 486, 500, OFF()), v(23, 481, 540, OFF())]};
+  return {world: W, cfg: Object.assign({seed: 3, clean_per_target: 1, uebrige_auf_ag: "aus", clean_eigene: "vorrang"}, cfg), attackers: [alpha, beta],
+    agTargets: [{id: 901, x: 470, y: 500, owner: 900}, {id: 902, x: 470, y: 540, owner: 900}], fakeTargets: [],
+    arrival: K.parseAnkunft("03.11.2026 12:00:00:000 bis 13:00:00:000"), windows: K.parseFenster("03.11.2026 06:00 bis 08:00").fenster,
+    now: Date.UTC(2026, 10, 2, 23, 0)};
+}
+const cleanAuf = (r, ziel) => r.items.filter(i => i.kind === "clean" && i.t.id === ziel);
+
+test("Off vor AG geht vor Abschickzeitraum, zusätzliche Offs dürfen nach dem AG los (Dennis 12.11.2026 22:00)", () => {
+  const input = offVorAG({}), r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  assert.equal(r.stats.geadelt, 2);
+  // je Ziel die Off, die vor dem AG losgeht, obwohl außerhalb des Zeitraums; kein Hinweis „AG vor der Clean-Off“
+  [[901, 22], [902, 3]].forEach(([z, dorf]) => {
+    const c = cleanAuf(r, z);
+    assert.equal(c.length, 1); assert.equal(c[0].v.id, dorf); assert.ok(c[0].ausserhalb);
+    const ag = Math.min(...r.items.filter(i => i.kind === "ag" && i.t.id === z).map(i => i.sendMs));
+    assert.ok(c[0].sendMs + 120000 <= ag, "Clean-Off vor dem AG");
+  });
+  assert.ok(!r.warnings.some(w => w.art === "reihenfolge"));
+  // Rangfolge „sitzungen“ behält die alte Ordnung: Zeitraum vor Off vor AG, mit Hinweis samt Grund
+  const rs = K.plan(offVorAG({zeit_rangfolge: "sitzungen"}));
+  assert.equal(cleanAuf(rs, 901)[0].v.id, 2);
+  assert.ok(rs.warnings.some(w => w.art === "reihenfolge" && /^Ziel 470\|500: erster AG geht 20 Min\. vor der Clean-Off los; die Offs, die vorher/.test(w.text)), rs.warnings.map(w => w.text).join(" | "));
+  // freie Offs gehen als zusätzliche auch nach dem AG los; die nötige Clean-Off bleibt vorn
+  const ia = offVorAG({uebrige_auf_ag: "alle"}), ra = K.plan(ia);
+  assert.deepEqual(K.pruefePlan(ra, ia), []);
+  const z = ra.items.filter(i => i.zusatz);
+  assert.equal(z.length, 2);
+  z.forEach(i => { const ag = Math.min(...ra.items.filter(x => x.kind === "ag" && x.t.id === i.t.id).map(x => x.sendMs)); assert.ok(i.sendMs > ag); assert.ok(!i.ausserhalb); });
+  assert.ok(!ra.warnings.some(w => w.art === "reihenfolge"));
+  assert.ok(ra.warnings.some(w => w.art === "zusatz" && /^2 zusätzliche Offs gehen erst nach dem ersten AG/.test(w.text)));
+  assert.equal(ra.freieOffs.length, 0);
+});
+
+test("Je Spieler: eigene AG-Ziele stark (Dennis 12.11.2026 22:05)", () => {
+  const input = offVorAG({}, true), r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  assert.equal(r.stats.geadelt, 2);
+  // Alpha (stark) bekommt seine eigene Off, seine Offs gehen nicht auf Betas Ziel, auch wenn sie dort vor dem AG lägen
+  assert.equal(cleanAuf(r, 901)[0].att, 101);
+  assert.equal(cleanAuf(r, 902)[0].att, 102);
+  assert.ok(r.warnings.some(w => w.art === "reihenfolge" && /470\|500: .*„eigene AG-Ziele stark“ bei Alpha/.test(w.text)));
+  assert.ok(r.warnings.some(w => w.art === "reihenfolge" && /470\|540: .*„eigene AG-Ziele stark“ bei Alpha/.test(w.text)));
+  // freie Offs eines solchen Spielers gehen zuerst auf seine eigenen Ziele
+  const ia = offVorAG({uebrige_auf_ag: "alle"}, true), ra = K.plan(ia);
+  assert.deepEqual(K.pruefePlan(ra, ia), []);
+  ra.items.filter(i => i.zusatz && i.att === 101).forEach(i => assert.equal(i.t.id, 901));
 });
 
 test("AG-Laufzeit: feste Grenze, Standard 7 h (Dennis 12.11.2026)", () => {

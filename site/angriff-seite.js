@@ -11,14 +11,14 @@ const INFO = {
   split_full: "Schickt ein Off-Dorf einen Train, läuft seine Off im Train mit. Aus: komplett mit dem ersten AG. An: gleichmäßig auf alle AGs verteilt, damit jedes AG genug Truppen gegen getabbte Deff hat. Sinnvoll, wenn das Dorf genau einen Train an AGs hat.",
   split_two: "Die Off des Dorfs geht Hälfte und Hälfte mit beiden AGs. So ist der 2er-Train kaum zu tabben.",
   send_gap_target_s: "Richtwert für den Abstand zwischen zwei Abschickvorgängen innerhalb einer Sitzung. Der Planer bündelt die Befehle in möglichst wenige, kurze Sitzungen und hält dabei möglichst diesen Abstand, damit nicht alle 3 Sekunden ein Befehl raus muss. Der Mindestabstand bleibt die harte Grenze.",
-  clean_eigene: "Wer die Clean-Offs auf ein AG-Ziel schickt. Vor kurzen Sitzungen (Standard): möglichst der Spieler, der dort auch die AGs schickt, selbst wenn er dafür eine Abschicksitzung mehr hat. Nach kurzen Sitzungen: lieber ein anderer Spieler, wenn das eine Sitzung spart. „Off vor AG“ und die Abschickzeiträume gehen in beiden Fällen vor.",
-  uebrige_auf_ag: "Offs, die am Ende des Plans frei bleiben, gehen als zusätzliche Clean-Offs auf die AG-Ziele, zuerst auf die Ziele mit den wenigsten Offs (Clean-Offs und Off im Train), dann reihum. Nur in den Abschickzeiträumen des Spielers, innerhalb des Laufzeit-Richtwerts und, wenn „Off vor den AGs“ an ist, vor den AGs; im Abschickplan als „zusätzliche Off“ markiert. Wenigste Offs zuerst gilt vor „Clean-Offs vom Spieler des Trains“; unter den passenden Offs für ein Ziel wird der Spieler des Trains bevorzugt. Wie viele zusätzlich sind, steht bei den AG-Zielen. „Notfalls mit eigener Sitzung“ (Standard): eine zusätzliche Off darf für ihren Spieler eine weitere Abschicksitzung bedeuten. „Nur in bestehende Sitzungen“: nur, wenn der Spieler auf dasselbe Ziel ohnehin innerhalb von 15 Minuten etwas abschickt. Das Ergebnis nennt, wie viele verteilt wurden und wie viele übrig bleiben. Mit „Übrige Offs auf Nicht-AG-Dörfer“ gehen sie zuerst dorthin.",
+  clean_eigene: "Wer die Clean-Offs auf ein AG-Ziel schickt. Vor kurzen Sitzungen (Standard): möglichst der Spieler, der dort auch die AGs schickt, selbst wenn er dafür eine Abschicksitzung mehr hat. Nach kurzen Sitzungen: lieber ein anderer Spieler, wenn das eine Sitzung spart. „Off vor AG“ und die Abschickzeiträume gehen in beiden Fällen vor. Stärker je Spieler: „eigene AG-Ziele stark“ bei den Angreifern.",
+  uebrige_auf_ag: "Offs, die am Ende des Plans frei bleiben (freie Offs), gehen als zusätzliche Clean-Offs auf die AG-Ziele, zuerst auf die Ziele mit den wenigsten Offs (Clean-Offs und Off im Train), dann reihum; im Abschickplan als „zusätzliche Off“ markiert, wie viele es je Ziel sind, steht bei den AG-Zielen. Sie kommen vor den AGs an; losgehen sollen sie möglichst vor dem ersten AG, notfalls danach, denn die nötigen Clean-Offs gehen ohnehin vorher los. Wenigste Offs zuerst gilt vor „Clean-Offs vom Spieler des Trains“; unter den passenden Offs für ein Ziel wird der Spieler des Trains bevorzugt. „Notfalls mit eigener Sitzung“ (Standard): nur in den Abschickzeiträumen des Spielers und innerhalb des Laufzeit-Richtwerts, eine zusätzliche Off darf für ihren Spieler eine weitere Abschicksitzung bedeuten. „Nur in bestehende Sitzungen“: dazu nur, wenn der Spieler auf dasselbe Ziel ohnehin innerhalb von 15 Minuten etwas abschickt. „Alle, auch außerhalb“: auch außerhalb der Zeiträume und über dem Laufzeit-Richtwert, dann verteilen sie sich gleichmäßig; das stellt auch der Knopf „Freie Offs trotzdem verteilen“ in der Bilanz ein. Was frei bleibt, steht in der Bilanz mit Grund (Laufzeit-Richtwert, Zeitraum, zeitlich gar nicht). Mit „Übrige Offs auf Nicht-AG-Dörfer“ gehen sie zuerst dorthin.",
   zeitraeume: "Richtwert (Standard): Offs und AGs gehen bevorzugt in deinen Abschickzeiträumen los. Geht ein Ziel nur mit Befehlen außerhalb, etwa ein Adelsgeschlecht, das sonst nicht ankäme, schlägt der Planer sie trotzdem vor und markiert sie im Abschickplan mit „außerhalb“. Fest: nur innerhalb der Zeiträume, ein Ziel fällt dann lieber weg.",
   max_lauf_off_h: "Richtwert für die Laufzeit von Clean-Offs und übrigen Offs. Darüber nur, wenn sonst ein Ziel weniger geadelt würde oder die Clean-Offs unter den Richtwert fielen; solche Befehle stehen im Abschickplan mit „lange Laufzeit“. Übrige Offs auf Nicht-AG-Dörfer gehen nie darüber. Eine Off, die im Train mit dem ersten AG läuft, zählt wie der AG-Train. 0: keine Grenze.",
   max_lauf_ag_h: "Grenze für die Laufzeit der AG-Trains, auch für die Off, die im Train mit dem ersten AG läuft (sie hat AG-Tempo). Standard 7 Stunden. Wie streng, steht in „AG-Laufzeit-Grenze“. 0: keine Grenze.",
   lauf_ag_art: "Fest (Standard): kein AG-Train läuft länger; ein Ziel, das nur mit längeren Trains geht, wird nicht geadelt (Grund steht beim Ziel). Richtwert: länger nur, wenn sonst ein Ziel weniger geadelt würde; solche Befehle sind mit „lange Laufzeit“ markiert.",
   fake_vorlauf_h: "Die ersten Fakes laufen etwa so viele Stunden vor dem ersten Off- oder AG-Abschick des ganzen Plans los. Mit einem zweiten Wert eine Spanne, etwa 3 bis 10 h: dann liegt der Beginn irgendwo dazwischen, wo die meisten Fakes passen; „bis“ leer oder 0 heißt ein fester Wert. Jeder Angreifer bekommt dafür höchstens eine zusätzliche frühe Sitzung (rund eine Stunde, höchstens eine Stunde vom Richtwert entfernt), in die etwa ein Viertel seiner Fakes geht; die übrigen bleiben in seinen Off-Sitzungen. Weil die Fakes trotzdem im Ankunftszeitraum ankommen, gehen früh nur Dörfer, die weit genug weg liegen (je Stunde früher rund zwei Felder mehr). Ohne Offs und AGs im Plan gilt kein Vorlauf. 0: aus.",
-  zeit_rangfolge: "Wie der Planer abwägt, wenn nicht alles zugleich geht. Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Standard: so viele Ziele wie möglich, dann Befehle innerhalb der Abschickzeiträume, dann Clean-Offs bis zum Richtwert, dann Off vor AG abgeschickt, dann wenige und kurze Sitzungen, dann kurze Laufzeiten, zuletzt Fakes. Kurze Sitzungen zuerst: lieber eine Clean-Off weniger oder ein AG vor der Off als eine zweite Weckzeit. Nachtruhe: Offs und AGs nachts außerhalb deiner Zeiträume nur, wenn es nicht anders geht; sonst fällt das Ziel lieber weg.",
+  zeit_rangfolge: "Wie der Planer abwägt, wenn nicht alles zugleich geht. Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Standard: so viele Ziele wie möglich, dann Clean-Offs vor dem AG abgeschickt (wenn an), dann Befehle innerhalb der Abschickzeiträume, dann Clean-Offs bis zum Richtwert, dann wenige und kurze Sitzungen, dann kurze Laufzeiten, zuletzt Fakes. Kurze Sitzungen zuerst: lieber eine Clean-Off weniger oder ein AG vor der Off als eine zweite Weckzeit. Nachtruhe: Offs und AGs nachts außerhalb deiner Zeiträume nur, wenn es nicht anders geht; sonst fällt das Ziel lieber weg.",
   min_send_gap_s: "Kleinster Abstand zwischen zwei Abschickvorgängen eines Spielers, damit keine zwei Befehle fast gleichzeitig abgeschickt werden müssen. Ein gereihter Train aus einem Dorf zählt als ein Vorgang.",
   off_min_pop: "Ab dieser Größe in Bauernhofplätzen zählt ein Dorf als Off. Beispiel 16.250 BH: 5.000 Äxte, 2.500 LKav, 250 Rammen. Gezählt werden Axt, LKav, berittene Bogenschützen, Rammen, Katapulte und, in Off-Dörfern, Schwere Kavallerie.",
   off_min_rams: "Offs mit weniger Rammen werden nicht als Clean-Off verplant.",
@@ -28,7 +28,7 @@ const INFO = {
   gap_off_ag_ms: "Gilt für die Ankunft. Standard 200 ms: Off 08:00:10:000, erstes AG 08:00:10:200. Wer seine Off nicht so genau timen kann, stellt mehr ein.",
   gap_clean_ms: "Ankunft der Clean-Offs untereinander. Sie kommen aus verschiedenen Dörfern und dürfen enger liegen als 200 ms.",
   gap_ag_ms: "Nur bei 2er-Trains und einzeln. Kleiner als 200 ms ist möglich, weil der Befehlsabstand des Spiels nur für Angriffe aus demselben Dorf gilt.",
-  off_first: "Gilt nur für das Abschicken, nicht für die Ankunft (die bleibt beim Abstand letzte Clean-Off zum ersten AG). Jede Clean-Off geht mindestens so viele Minuten vor dem ersten AG los. Grund: Schickt jemand die Off zu spät oder kommt sie von einem anderen Spieler, kann der AG-Spieler seine AGs noch an die echte Ankunft der Off anpassen. Kostet kaum etwas: Weil AGs langsamer laufen (35 statt 30 Minuten je Feld), muss das Off-Dorf ohnehin mindestens 7/6 so weit vom Ziel entfernt sein wie das AG-Dorf, 2 Minuten Vorlauf verlangen nur 0,07 Felder mehr. 0 heißt: nur die Reihenfolge, ohne Mindestabstand.",
+  off_first: "Gilt nur für das Abschicken, nicht für die Ankunft (die bleibt beim Abstand letzte Clean-Off zum ersten AG). Jede Clean-Off geht mindestens so viele Minuten vor dem ersten AG los. Grund: Schickt jemand die Off zu spät oder kommt sie von einem anderen Spieler, kann der AG-Spieler seine AGs noch an die echte Ankunft der Off anpassen. Kostet kaum etwas: Weil AGs langsamer laufen (35 statt 30 Minuten je Feld), muss das Off-Dorf ohnehin mindestens 7/6 so weit vom Ziel entfernt sein wie das AG-Dorf, 2 Minuten Vorlauf verlangen nur 0,07 Felder mehr. 0 heißt: nur die Reihenfolge, ohne Mindestabstand. Vorrang (seit 12.11.2026): geht vor Abschickzeitraum und Laufzeit-Richtwert, eine Clean-Off geht also lieber außerhalb des Zeitraums vor dem AG los als im Zeitraum danach; nur „eigene AG-Ziele stark“ bei einem Spieler und die Rangfolge „kurze Sitzungen zuerst“ gehen vor. Geht es nicht, nennt das Ergebnis je Ziel, wie viel der AG zu früh losgeht und warum. Zusätzliche Offs (aus den freien) dürfen nach dem AG losgehen.",
   spies_per_off: "So viele Späher laufen mit jeder Off.",
   escort_pop: "Truppen, die ein AG ohne mitlaufende Off begleiten: Äxte zuerst, ohne Äxte Schwertkämpfer, dann Speerträger.",
   fakes_per_village: "Richtwert für die Zahl der Fakes je Zieldorf oder je Herkunftsdorf, je nach Auswahl darüber. Ein Ziel bekommt nie zwei Fakes aus demselben Dorf.",
@@ -44,6 +44,7 @@ const INFO = {
   fen_je: "An: jeder Angreifer kann eigene Abschickzeiträume bekommen, ohne eigene gelten die gemeinsamen. Aus: für alle gelten die gemeinsamen Zeiträume; eigene bleiben gespeichert und gelten wieder, sobald der Schalter an ist. „Zurücksetzen“ löscht die eigenen Zeiträume eines Angreifers.",
   fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Jeder Angreifer kann unter „Je Angreifer“ eigene Zeiträume bekommen; sie ersetzen für ihn die gemeinsamen. Die Zeiträume sind ein Wunsch: geht ein Ziel nur mit Abschicken außerhalb, plant der Planer es trotzdem, markiert diese Befehle („außerhalb“, „nachts“) und sagt nach der Berechnung, wie die Zeiträume zu erweitern wären. Fakes kommen nur in Sitzungen, in denen ohnehin abgeschickt wird.",
   jeClean: "Gilt nur für diesen Spieler, statt der Einstellung „Clean-Offs je AG-Ziel“ oben. „Höchstens N je Ziel“: von diesem Spieler kommen je AG-Ziel höchstens N Clean-Offs (0: keine), die Zahl je Ziel bleibt beim Wert oben. „N für meine AG-Ziele“: Ziele, auf die dieser Spieler den AG-Train schickt, bekommen N Clean-Offs (mindestens 1). Ohnehin gilt: Clean-Offs kommen möglichst vom Spieler, der den Train schickt, damit er sein Timing selbst in der Hand hat.",
+  jeStark: "Gilt nur für diesen Spieler: seine AG-Ziele bekommen ihre Clean-Offs möglichst von ihm selbst, und seine Offs gehen möglichst auf seine eigenen AG-Ziele, auch seine freien Offs. Fremde Offs vor seinen AGs gibt es dann nur, wenn er selbst keine passende Off hat. Das geht vor Abschickzeitraum, Laufzeit-Richtwert und sogar vor „Off vor AG“: lieber seine eigene Off nach seinem AG als eine fremde davor. Nur das Adeln selbst geht vor (fehlt einem Ziel sonst eine Clean-Off, kommt sie doch von einem anderen).",
   jeRammen: "Gilt nur für diesen Spieler: so viele Rammen darf ein Fake höchstens enthalten (leer: 1, 0: keine). Katapulte gehen immer vor: eine Ramme ist die langsamste Einheit nur, wenn im Dorf kein Katapult frei ist, und aufgefüllt wird mit Rammen erst, wenn Katapulte und Späher nicht reichen. Jeder Fake hat mindestens einen Späher.",
   jeFake: "Gilt nur für diesen Spieler. „Höchstens N je eigenem Dorf“: jedes seiner Dörfer schickt höchstens N Fakes, etwa bei wenig Katapulten (bei „Fakes zählen je Herkunftsdorf“ genau N, soweit Truppen reichen). „N je Fakeziel“: dieser Spieler schickt N Fakes auf jedes Fakeziel, zusätzlich zu den Fakes der übrigen Spieler nach „Fakes je Dorf“ oben. Fakes bleiben Richtwert: was in keine Abschicksitzung passt, entfällt.",
   teilnahme: "Offs: Clean-Offs und übrige Offs. AGs: Trains; eine Off läuft nur im Train mit, wenn der Spieler auch mit Offs teilnimmt. Fakes: aus allen Dörfern der Übersicht.",
@@ -69,7 +70,7 @@ const FELDER = [
   {k: "growth", l: "Zuwachs bis zum Abschicken je Tag", t: "pair", a: ["growth_pop_per_day", "BH"], b: ["growth_rams_per_day", "Rammen"]},
   {k: "clean_per_target", l: "Clean-Offs je AG-Ziel", t: "sel", o: [[1, "1"], [2, "2"], [3, "3"]]},
   {k: "clean_eigene", l: "Clean-Offs vom Spieler des Trains", t: "sel", o: [["vorrang", "vor kurzen Sitzungen"], ["nachrang", "nach kurzen Sitzungen"]]},
-  {k: "uebrige_auf_ag", l: "Übrige Offs zusätzlich auf AG-Ziele", t: "sel", o: [["alle", "ja, notfalls mit eigener Sitzung"], ["sitzung", "ja, nur in bestehende Sitzungen"], ["aus", "nein"]]},
+  {k: "uebrige_auf_ag", l: "Freie Offs zusätzlich auf AG-Ziele", t: "sel", o: [["alle", "ja, notfalls mit eigener Sitzung"], ["sitzung", "ja, nur in bestehende Sitzungen"], ["erzwingen", "ja, alle, auch außerhalb Zeitraum und Laufzeit"], ["aus", "nein"]]},
   {k: "rest_offs", l: "Übrige Offs", t: "sel", o: [["frei", "nicht verplanen"], ["nicht_ag", "auf Nicht-AG-Dörfer der Zielspieler"]]},
   {k: "gap_off_ag_ms", l: "Abstand letzte Clean-Off zum ersten AG", t: "num", u: "ms", min: 0, max: 60000},
   {k: "gap_clean_ms", l: "Abstand zwischen Clean-Offs", t: "num", u: "ms", min: 0, max: 60000},
@@ -89,7 +90,7 @@ const FELDER = [
 /* ---------- Zustand ---------- */
 const leererZeitraum = () => ({vonDatum: "", vonZeit: "", bisDatum: "", bisZeit: ""});
 const neuerAngreifer = () => ({text: "", rollen: {off: true, ag: true, fake: true}, auswahlText: "", fen: [leererZeitraum()], nobles: {}, useOff: {},
-                               cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: "", pala: {}});
+                               cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: "", eigeneStark: false, pala: {}});
 let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], fakeHaupt: [], zart: "ag", zmodus: "auto",
          ank: leererZeitraum(), ankListe: [], fen: [leererZeitraum()], fakeAus: [], fakeText: "", extraAus: [], extraEin: [], wahlKnapp: null, hilfe: false};
 /* Gespeicherte Stände aus der Zeit der Textfelder (ankunft, fenster, fensterText) in die getrennten Felder übernehmen. */
@@ -315,9 +316,15 @@ function attBlock(i) {
   rn.value = a.rammenMax == null ? "" : a.rammenMax; rn.setAttribute("aria-label", "Rammen je Fake höchstens für diesen Spieler");
   rn.addEventListener("input", () => { a.rammenMax = rn.value; geaendert(true); });
   lr.append(rn); eigen.append(lr, infoKnopf("jeRammen"));
+  // eigene AG-Ziele stark (Dennis 12.11.2026 22:05): Offs unter sich, kaum fremde Offs vor seinen AGs
+  const ls = el("label"), cs = el("input"); cs.type = "checkbox"; cs.checked = !!a.eigeneStark;
+  cs.setAttribute("aria-label", "eigene AG-Ziele stark für diesen Spieler");
+  cs.addEventListener("change", () => { a.eigeneStark = cs.checked; geaendert(true); });
+  ls.append(cs, el("span", "ap-note", "eigene AG-Ziele stark"));
+  eigen.append(ls, infoKnopf("jeStark"));
   const out = el("div");
   out.id = "att-out-" + i;
-  box.append(kopf, ta, det1, eigen, hilfeFeld("jeClean"), hilfeFeld("jeFake"), hilfeFeld("jeRammen"), out);
+  box.append(kopf, ta, det1, eigen, hilfeFeld("jeClean"), hilfeFeld("jeFake"), hilfeFeld("jeRammen"), hilfeFeld("jeStark"), out);
   return box;
 }
 function attsBauen() {
@@ -871,7 +878,7 @@ function kernInput(cfgExtra) {
     const own = A.own && A.own.fenster.length ? A.own.fenster : null;
     if (!own && !fw.fenster.length) fehler.push("Kein Abschickzeitraum für " + A.name + " (Abschnitt 5).");
     attackers.push({id: i, name: A.name, points: A.points || 0, rollen: a.rollen, auswahl: A.aus ? A.aus.keys : null, windows: own,
-      cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax,
+      cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax, eigeneStark: !!a.eigeneStark,
       villages: A.dorfer.map(d => ({id: d.id, name: d.name, x: d.x, y: d.y, pts: d.pts, units: d.units,
                                     nobles: agZahl(a, d), useOff: offEingeplant(a, d), pala: !!(a.pala && a.pala[d.xy])}))});
   });
@@ -950,8 +957,11 @@ function zeigen() {
   // Kennzahlen
   const sum = el("div", "ap-sum");
   const anzahl = k => r.items.filter(i => i.kind === k).length;
-  [["geadelt", r.stats.geadelt + " / " + r.stats.ziele], ["Clean-Offs", anzahl("clean")], ["AGs", anzahl("ag")], ["Fakes", anzahl("fake")],
-   ["übrige Offs", anzahl("rest")], ["freie Offs", r.freieOffs.length]].forEach(([t, v]) => {
+  // Kacheln (Dennis 12.11.2026 22:00): „freie Offs“ sind gar nicht verplant; Offs auf Nicht-AG-Ziele nur, wenn eingestellt
+  const zus = r.items.filter(i => i.zusatz).length;
+  [["geadelt", r.stats.geadelt + " / " + r.stats.ziele], ["Clean-Offs" + (zus ? ", davon " + zus + " zusätzlich" : ""), anzahl("clean")], ["AGs", anzahl("ag")], ["Fakes", anzahl("fake")]]
+    .concat(anzahl("rest") || ERG.input.cfg.rest_offs === "nicht_ag" ? [["Offs auf Nicht-AG-Ziele", anzahl("rest")]] : [])
+    .concat([["freie Offs", r.freieOffs.length]]).forEach(([t, v]) => {
     const d = el("div"); d.append(el("b", null, String(v)), document.createTextNode(" " + t)); sum.append(d);
   });
   box.append(sum, bilanzBox(r));
@@ -984,9 +994,11 @@ function zeigen() {
             [z.geadelt ? K.fmtZeit(z.T, true) : "", "num", z.T || 0], [z.geadelt ? (z.offZuerst ? "ja" : "nein") : "", z.geadelt && !z.offZuerst ? "down" : ""],
             [z.grund || ""]];
   });
-  const zsec = el("div");
-  zsec.append(el("h3", null, "AG-Ziele"), table([["Ziel", "num"], ["Besitzer"], ["Ergebnis"], ["Clean-Offs", "num"], ["AGs", "num"],
+  const zsec = el("div"), zsc = el("div");
+  zsc.style.overflowX = "auto";                     // am Handy waagrecht scrollen statt abschneiden
+  zsc.append(table([["Ziel", "num"], ["Besitzer"], ["Ergebnis"], ["Clean-Offs", "num"], ["AGs", "num"],
     ["Erste Clean-Off kommt an", "num", true], ["Off vor AG abgeschickt"], ["Grund"]], zrows));
+  zsec.append(el("h3", null, "AG-Ziele"), zsc);
   box.append(zsec);
   // Export
   const exp = el("div", "ap-exp-box");
@@ -1080,8 +1092,38 @@ function bilanzBox(r) {
     if (offEin || offFrei) teile.push("Offs " + offEin + " eingeplant" + (offFrei ? ", " + offFrei + " frei" : ""));
     if (!teile.length) return;
     const ok = !eigene.length || eigene.every(z => z.geadelt && !z.offFehlt);
-    zeile(ok, (a.name || "Angreifer") + ": " + teile.join(" · "));
+    zeile(ok, (a.name || "Angreifer") + ": " + teile.join(" · ") + (a.eigeneStark ? " · eigene AG-Ziele stark" : ""));
   });
+  // Freie Offs (Dennis 12.11.2026 22:00): je Spieler mit Grund; Knopf „trotzdem verteilen“ stellt die Konfig um und rechnet neu
+  const modus = ERG.input.cfg.uebrige_auf_ag;
+  const modusKnopf = (text, wert) => {
+    const k = el("button", "tw", text); k.type = "button";
+    k.addEventListener("click", () => { S.cfg.uebrige_auf_ag = wert; cfgBauen(); geaendert(true); rechnen(); $("h-calc").scrollIntoView(); });
+    return k;
+  };
+  if (r.freieOffs.length && r.ziele.some(z => z.geadelt)) {
+    const GR = {laufzeit: "nur über dem Laufzeit-Richtwert", zeitraum: "nur außerhalb der Zeiträume", beides: "nur über Laufzeit und außerhalb",
+                sitzung: "nicht in bestehende Sitzungen", zeit: "zeitlich gar nicht"};
+    const je = new Map();
+    r.freieOffs.forEach(o => { if (!je.has(o.att)) je.set(o.att, []); je.get(o.att).push(o); });
+    const name = id => { const a = (ERG.input.attackers || []).find(x => x.id === id); return a ? a.name : "Angreifer"; };
+    const teile = [...je].map(([id, os]) => {
+      const g = {}; os.forEach(o => { if (o.grund) g[o.grund] = (g[o.grund] || 0) + 1; });
+      const gt = Object.keys(GR).filter(k => g[k]).map(k => g[k] + " " + GR[k]);
+      return name(id) + " " + os.length + (gt.length ? " (" + gt.join(", ") + ")" : "");
+    });
+    const aus = modus === "aus" || modus === false;
+    const li = el("li", null, "Freie Offs: " + r.freieOffs.length + (aus ? " (zusätzliche Offs auf AG-Ziele sind aus): " : ", passen auf kein AG-Ziel mehr: ") + teile.join(" · ") + " ");
+    if (aus) li.append(modusKnopf("auf AG-Ziele verteilen", "alle"));
+    else if (modus !== "erzwingen" && r.freieOffs.some(o => o.grund && o.grund !== "zeit")) li.append(modusKnopf("Freie Offs trotzdem verteilen", "erzwingen"));
+    ul.append(li);
+  }
+  if (modus === "erzwingen") {
+    const z = r.items.filter(i => i.zusatz), drauss = new Set(z.filter(i => i.ausserhalb || i.zuLang).map(i => i.att + ":" + i.aktion)).size;
+    const li = el("li", null, "Freie Offs verteilt: " + z.length + " zusätzliche Offs" + (drauss ? ", davon " + drauss + " außerhalb der Zeiträume oder über dem Laufzeit-Richtwert" : "") + " ");
+    li.append(modusKnopf("nur im Zeitraum verteilen", "alle"));
+    ul.append(li);
+  }
   if (!ul.children.length) return box;
   box.append(el("h3", null, "Bilanz"), ul);
   return box;
@@ -1089,7 +1131,7 @@ function bilanzBox(r) {
 function sitzungenBox(r) {
   const d = el("div");
   d.append(el("h3", null, "Abschicksitzungen"),
-    el("p", "ap-note", "Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Rot: Die Sitzung enthält Offs oder AGs, die außerhalb der Abschickzeiträume dieses Spielers losgehen müssen. Sie sind nötig, weil das Ziel sonst nicht geadelt würde oder keine Clean-Off rechtzeitig käme (Abschickzeiträume sind Richtwert). „Hinweis“: So müsste der Spieler einen Zeitraum verlängern oder früher beginnen, damit diese Befehle hineinfallen; am Plan ändert das nichts, die Zeiten bleiben gleich. Über „i“ stehen die einzelnen Befehle. „Lange Laufzeit“: über dem Laufzeit-Richtwert, nötig für dieses Ziel."));
+    el("p", "ap-note", "Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Rot: Die Sitzung enthält Offs oder AGs, die außerhalb der Abschickzeiträume dieses Spielers losgehen müssen. Sie sind nötig, weil das Ziel sonst nicht geadelt würde, keine Clean-Off rechtzeitig käme oder sonst ein AG vor der Clean-Off losginge (Abschickzeiträume sind Richtwert), oder es sind zusätzliche Offs nach „Freie Offs trotzdem verteilen“. „Hinweis“: So müsste der Spieler einen Zeitraum verlängern oder früher beginnen, damit diese Befehle hineinfallen; am Plan ändert das nichts, die Zeiten bleiben gleich. Über „i“ stehen die einzelnen Befehle. „Lange Laufzeit“: über dem Laufzeit-Richtwert, nötig für dieses Ziel oder eine zusätzliche Off."));
   const hm = ms => K.fmtZeit(ms).slice(0, 5) + ". " + K.fmtZeit(ms).slice(11, 16);
   const dauer = ms => { const m = Math.round(ms / 60000); return m >= 60 ? Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min" : m + " min"; };
   let nr = 0;
