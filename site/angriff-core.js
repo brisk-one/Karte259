@@ -635,10 +635,10 @@ function plan(input) {
       const useOff = v.useOff != null ? !!v.useOff : (info.offPop >= cfg.off_min_pop && v.units.ram >= cfg.off_min_rams);
       const inAuswahl = !auswahl || auswahl.has(v.x * 1000 + v.y);
       const offHier = useOff && rollen.off && inAuswahl;
-      // Zustimmungs-Paladin (Dennis 12.11.2026): ein ganzer Train aus diesem Dorf braucht nur 3 AGs, der Paladin läuft mit
-      // dem ersten AG; nur mit Paladin in der Übersicht und bei ganzen Trains
-      const pala = !!v.pala && palaGanz && (v.units.knight || 0) >= 1;
-      if (v.pala && !pala) palaOhne.push((v.name || v.id) + (palaGanz ? " (kein Paladin in der Übersicht)" : ""));
+      // Zustimmungs-Paladin (Dennis 12.11.2026, 20:42): steht im Dorf (vom Spieler festgelegt, nicht aus der Übersicht), läuft
+      // nicht mit; jeder ganze Train aus diesem Dorf braucht dann nur 3 AGs
+      const pala = !!v.pala && palaGanz;
+      if (v.pala && !pala) palaOhne.push(v.name || v.id);
       villages.push(Object.assign({}, v, {att: a.id, offPop: info.offPop, heavyAsOff: info.heavyAsOff, useOff, offHier, pala,
         rolleAG: rollen.ag && inAuswahl, rolleFake: rollen.fake,
         reserviert: useOff && !offHier,              // Off bleibt für etwas anderes: Fakes nehmen ihr nichts Wichtiges
@@ -654,10 +654,11 @@ function plan(input) {
 
   /* ---- 1. AGs auf Ziele ---- */
   const form = cfg.train_form === "zwei" ? "zwei" : cfg.train_form === "einzeln" ? "einzeln" : "ganz";
-  if (palaOhne.length) warnings.push({art: "pala", text: "Zustimmungs-Pala ohne Wirkung" + (palaGanz ? "" : " (nur bei ganzen Trains)") + ": " + palaOhne.slice(0, 6).join(", ") + (palaOhne.length > 6 ? " …" : "")});
+  if (palaOhne.length) warnings.push({art: "pala", text: "Zustimmungs-Pala ohne Wirkung (nur bei ganzen Trains): " + palaOhne.slice(0, 6).join(", ") + (palaOhne.length > 6 ? " …" : "")});
   const capJeDorf = form === "ganz" ? k : form === "zwei" ? 2 : 1;
-  // ganze Trains je Dorf; mit Zustimmungs-Paladin einer zu 3 AGs, die übrigen zu k
-  const zuegeAus = v => v.pala ? (v.nobles >= PALA_AGS ? 1 + Math.floor((v.nobles - PALA_AGS) / k) : 0) : Math.floor(v.nobles / k);
+  // ganze Trains je Dorf; mit Zustimmungs-Paladin im Dorf alle zu 3 AGs
+  const kVon = v => v.pala ? PALA_AGS : k;
+  const zuegeAus = v => Math.floor(v.nobles / kVon(v));
   const agVillages = villages.filter(v => v.nobles > 0 && v.rolleAG);
   let ziele = (input.agTargets || []).map(t => Object.assign({}, t, {status: "offen"}));
   const ausgeschlossen = new Map();          // Ziel-ID → Grund
@@ -750,7 +751,7 @@ function plan(input) {
       fl.add(tBase + j, T, form === "ganz" ? 1 : k, 0);
       agVillages.forEach((v, i) => {
         if (t.assignee != null && t.assignee !== v.att) return;
-        if (form === "ganz" && v.nobles < (v.pala ? PALA_AGS : k)) return;
+        if (form === "ganz" && v.nobles < kVon(v)) return;
         if (verboten.has(v.id + ":" + t.id)) return;
         const d = dist(v, t);
         if (d > world.snob_max_dist + 1e-9) return;
@@ -765,14 +766,11 @@ function plan(input) {
       });
     });
     fl.run(S, T);
-    const zuteilung = new Map(), palaWeg = new Set();
+    const zuteilung = new Map();
     kanten.forEach(({e, v, t}) => {
       if (e.flow <= 0) return;
       if (!zuteilung.has(t.id)) zuteilung.set(t.id, []);
-      // Pala-Dorf: der erste Train ist der 3er-Train mit Paladin, weitere brauchen k AGs
-      const mitPala = form === "ganz" && v.pala && !palaWeg.has(v.id);
-      if (mitPala) palaWeg.add(v.id);
-      zuteilung.get(t.id).push({v, n: form === "ganz" ? (mitPala ? PALA_AGS : k) : e.flow, pala: mitPala});
+      zuteilung.get(t.id).push({v, n: form === "ganz" ? kVon(v) : e.flow, pala: form === "ganz" && !!v.pala});
     });
     return {aktiv, zuteilung};
   }
@@ -1313,7 +1311,6 @@ function plan(input) {
     trains.get(t.id).forEach(g => {
       const ags = [];
       for (let i = 0; i < g.n; i++) { const u = emptyUnits(); u.snob = 1; ags.push(u); }
-      if (g.pala) { ags[0].knight = 1; g.v.avail.knight = Math.max(0, (g.v.avail.knight || 0) - 1); }
       if (!g.carriesOff) ags.forEach(u => Object.assign(u, addUnits(u, begleitschutz(g.v.avail, cfg.escort_pop, pop))));
       liste.push({g, ags});
     });
@@ -1900,9 +1897,10 @@ function pruefePlan(res, input) {
   jeZiel.forEach((its, z) => {
     const offs = its.filter(i => i.kind === "clean"), ags = its.filter(i => i.kind === "ag");
     if (ags.length && !offs.length) v.push("Ziel " + z + " ohne Clean-Off");
-    // AGs je Ziel: k, mit Zustimmungs-Paladin im Train 3 (Dennis 12.11.2026)
+    // AGs je Ziel: k, aus einem Dorf mit Zustimmungs-Paladin 3 (Dennis 12.11.2026)
     const kZiel = cfg.ags_per_target === 5 ? 5 : 4;
-    if (ags.length && ags.length < kZiel && !(ags.length >= PALA_AGS && ags.some(i => (i.units.knight || 0) >= 1))) v.push("Zu wenige AGs auf " + z + ": " + ags.length);
+    const palaDorf = new Set((input.attackers || []).flatMap(a => a.villages || []).filter(x => x.pala).map(x => x.id));
+    if (ags.length && ags.length < kZiel && !(ags.length >= PALA_AGS && ags.every(i => palaDorf.has(i.v.id)))) v.push("Zu wenige AGs auf " + z + ": " + ags.length);
     if (ags.length && offs.length && Math.max(...offs.map(i => i.arrivalMs)) >= Math.min(...ags.map(i => i.arrivalMs))) v.push("Clean-Off nicht vor dem ersten AG: " + z);
     const jeDorf = new Map();
     ags.forEach(i => { if (!jeDorf.has(i.v.id)) jeDorf.set(i.v.id, []); jeDorf.get(i.v.id).push(i.arrivalMs); });

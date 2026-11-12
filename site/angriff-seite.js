@@ -393,12 +393,11 @@ function attAnalyse(i) {
     nAG.addEventListener("input", () => { const v = parseInt(nAG.value, 10); a.nobles[d.xy] = isNaN(v) ? 0 : Math.max(0, v); sv(nAG, a.nobles[d.xy]); agMarkieren(); geaendert(); });
     agZelle.append(nAG, agInfo);
     agMarkieren();
-    // Zustimmungs-Paladin im Dorf (Dennis 12.11.2026): ganzer Train mit 3 AGs, der Paladin läuft mit dem ersten AG
+    // Zustimmungs-Paladin im Dorf (Dennis 12.11.2026): vom Spieler festgelegt, steht im Dorf und läuft nicht mit; jeder ganze
+    // Train aus diesem Dorf braucht dann nur 3 AGs
     if (!a.pala) a.pala = {};
     const cPala = el("input"); cPala.type = "checkbox"; cPala.checked = !!a.pala[d.xy];
-    const knight = d.units.knight || 0;
-    cPala.disabled = !knight && !a.pala[d.xy];
-    cPala.title = knight ? "Zustimmungs-Paladin im Dorf: 3 AGs reichen (ganzer Train)" : "kein Paladin in der Übersicht";
+    cPala.title = "Zustimmungs-Paladin steht in diesem Dorf: 3er-Trains";
     cPala.addEventListener("change", () => { if (cPala.checked) a.pala[d.xy] = true; else delete a.pala[d.xy]; sv(cPala, cPala.checked ? 1 : 0); geaendert(true); });
     const status = d.c.isOff ? "Off" : d.c.knapp ? "knapp" : d.c.offPop > 0 && d.c.offPop >= 3000 ? "zu klein" : "Deff";
     const rang = {Off: 3, knapp: 2, "zu klein": 1, Deff: 0}[status];
@@ -421,7 +420,7 @@ function attAnalyse(i) {
   tab.tHead.addEventListener("click", merken);
   tab.tHead.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") merken(); });
   sc.append(tab);
-  det.append(sm, el("p", "ap-note", "„Off“: als Off einplanen (vorausgewählt: Offs und knappe Offs). „AGs“: Anzahl, die bis zum Abschicken im Dorf steht, gezielt je Dorf anpassen. „Pala“: Zustimmungs-Paladin im Dorf, dann reichen aus diesem Dorf 3 AGs (ganzer Train, der Paladin läuft mit dem ersten AG; nur ein solcher Train je Dorf)."), sc);
+  det.append(sm, el("p", "ap-note", "„Off“: als Off einplanen (vorausgewählt: Offs und knappe Offs). „AGs“: Anzahl, die bis zum Abschicken im Dorf steht, gezielt je Dorf anpassen. „Pala“: Zustimmungs-Paladin steht in diesem Dorf (du legst fest, wo; er bleibt dort und läuft nicht mit), dann schickt das Dorf 3er-Trains, weil 3 AGs reichen. Nur bei ganzen Trains."), sc);
   if (A.dorfer.length <= 80) det.open = true;
   box.append(det);
   out.replaceChildren(box);

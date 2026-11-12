@@ -884,31 +884,28 @@ test("Clean-Offs vom Spieler des Trains vor kurzen Sitzungen (Dennis 12.11.2026)
   assert.deepEqual(K.pruefePlan(vor.r, szenario({clean_eigene: "vorrang"})), []);
 });
 
-test("Zustimmungs-Paladin: ganzer Train aus 3 AGs, Paladin mit dem ersten AG (Dennis 12.11.2026)", () => {
-  // 5 AGs je Ziel: ohne Pala reichen nur die 5 AGs aus D1; D2 hat 4 AGs und mit Pala einen 3er-Train
+test("Zustimmungs-Paladin steht im Dorf: alle ganzen Trains von dort mit 3 AGs, Paladin läuft nicht mit (Dennis 12.11.2026)", () => {
+  // 5 AGs je Ziel: ohne Pala reichen nur die 5 AGs aus D1; D2 hat 4 AGs und mit Pala einen 3er-Train, ohne Paladin in der Übersicht
   const ohne = K.plan(szenario({ags_per_target: 5}));
   const input = szenario({ags_per_target: 5});
-  const d2 = input.attackers[0].villages.find(v => v.id === 2);
-  d2.units = Object.assign({}, d2.units, {knight: 1}); d2.pala = true;
+  input.attackers[0].villages.find(v => v.id === 2).pala = true;
   const r = K.plan(input);
   assert.deepEqual(K.pruefePlan(r, input), []);
   assert.equal(r.stats.geadelt, ohne.stats.geadelt + 1);
   const palaZiel = r.ziele.find(z => z.geadelt && r.items.some(i => i.t.id === z.id && i.kind === "ag" && i.v.id === 2));
-  const ags = r.items.filter(i => i.t.id === palaZiel.id && i.kind === "ag").sort((a, b) => a.arrivalMs - b.arrivalMs);
+  const ags = r.items.filter(i => i.t.id === palaZiel.id && i.kind === "ag");
   assert.equal(ags.length, 3);
-  assert.equal(ags[0].units.knight, 1, "Paladin mit dem ersten AG");
-  assert.equal(ags.filter(i => i.units.knight).length, 1);
-  assert.equal(K.toDSU(ags).items[0].knight, "1");
-  // ohne Paladin in der Übersicht: keine Wirkung, Hinweis
-  const i2 = szenario({ags_per_target: 5}); i2.attackers[0].villages.find(v => v.id === 2).pala = true;
-  const r2 = K.plan(i2);
-  assert.equal(r2.stats.geadelt, ohne.stats.geadelt);
-  assert.ok(r2.warnings.some(w => w.art === "pala" && /kein Paladin/.test(w.text)));
+  assert.ok(r.items.every(i => !(i.units.knight > 0)), "Paladin läuft nie mit");
+  // mehrere 3er-Trains aus einem Pala-Dorf: 6 AGs ergeben zwei Trains
+  const i6 = szenario({ags_per_target: 5}); const d6 = i6.attackers[0].villages.find(v => v.id === 2);
+  d6.units = Object.assign({}, d6.units, {snob: 6}); d6.nobles = 6; d6.pala = true;
+  const r6 = K.plan(i6);
+  assert.deepEqual(K.pruefePlan(r6, i6), []);
+  assert.equal(r6.items.filter(i => i.kind === "ag" && i.v.id === 2).length % 3, 0);
   // 2er-Trains: keine Wirkung, Hinweis
-  const i3 = szenario({ags_per_target: 5, train_form: "zwei"}); const d3 = i3.attackers[0].villages.find(v => v.id === 2);
-  d3.units = Object.assign({}, d3.units, {knight: 1}); d3.pala = true;
+  const i3 = szenario({ags_per_target: 5, train_form: "zwei"}); i3.attackers[0].villages.find(v => v.id === 2).pala = true;
   assert.ok(K.plan(i3).warnings.some(w => w.art === "pala" && /nur bei ganzen Trains/.test(w.text)));
-  // Prüfung: 3 AGs ohne Paladin sind zu wenig
-  const kaputt = JSON.parse(JSON.stringify(r)); kaputt.items.forEach(i => { if (i.units.knight) i.units.knight = 0; });
-  assert.ok(K.pruefePlan(kaputt, input).some(x => /Zu wenige AGs/.test(x)));
+  // Prüfung: 3 AGs aus einem Dorf ohne Pala sind zu wenig
+  const ohnePala = JSON.parse(JSON.stringify(input)); ohnePala.attackers[0].villages.find(v => v.id === 2).pala = false;
+  assert.ok(K.pruefePlan(r, ohnePala).some(x => /Zu wenige AGs/.test(x)));
 });
