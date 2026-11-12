@@ -812,6 +812,21 @@ test("10.18: Routenplan wird mit mehr Routen nicht schlechter und ordnet jedes D
   assert.ok(rt.plans[rt.plans.length - 1].coins > 0.5 * rt.base, "Routen schaffen einen großen Teil des Anforderns");
 });
 
+test("4a: Lieferungen je Route für die Menge je Stunde", () => {
+  const v = konto63(), R = K.planPackages(v, V5({maxOverflow: 10, optThreshold: 70}), []), d = R.pkg.detail;
+  const eins = K.routenPlan(R.src, R.P, d.sites, d.cnt, 3, [1 / 60]), tau = R.src._ls.tau;   // Laufzeiten aus diesem Lauf
+  for (const rt of [d.routen, eins]) {
+    rt.plans.forEach(pl => pl.routes.forEach(r => {
+      assert.ok(Number.isInteger(r.sent) && r.sent >= 0);
+      // je Dorf höchstens so viele Lieferungen, wie Termine in die Prägephase passen
+      assert.ok(r.sent + r.skipped <= r.dorf.length * r.sends, "Termine");
+      // gleich der Summe der Einzelrechnungen je Dorf
+      const summe = r.dorf.reduce((a, i) => a + K.routeRun(R.src[i], tau[i], R.P, d.cnt, r.a, r.dt, null).sent, 0);
+      assert.equal(r.sent, summe);
+    }));
+  }
+});
+
 /* ---------- 10.17 Nächstes Prägedorf adeln (Wunsch Dennis 09.11.2026; eigener Stamm einbezogen, je Zahl Flaggendoppler) ---------- */
 test("10.17: Suche unter fremden Dörfern mit Filtern und eigenem Stamm", () => {
   const v = konto63(), P = V5({maxOverflow: 10, optThreshold: 70});

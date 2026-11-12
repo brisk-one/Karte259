@@ -945,23 +945,23 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
   const cands = [];
   for (const j of sites) for (const dt of (nurDt || ROUTE_DT)) for (const n of ROUTE_N) cands.push({site: j, dt, n, a: routeMenge(n, P)});
   const lief = src.map((_, i) => i).filter(i => site[i] !== i);
-  const val = new Map(), ovv = new Map(), info = new Map();
+  const val = new Map(), ovv = new Map(), info = new Map(), gesch = new Map();
   let ov0 = 0, pkSum = 0, eigen = 0;
   for (const j of sites) { const r = siteRun(src[j], P, cnt, null); eigen += r.coins; pkSum += r.pkgRes; }
   const leer = new Map();
   for (const i of lief) {
     const r0 = villageRun(src[i], tau[i], P, cnt, 0, null, false);              // ohne Route: nur Pakete, kein Versand
     leer.set(i, r0.overflow); ov0 += r0.overflow; pkSum += r0.pkgRes;
-    const v = new Float64Array(cands.length), o = new Float64Array(cands.length), sk = new Int16Array(cands.length);
+    const v = new Float64Array(cands.length), o = new Float64Array(cands.length), sk = new Int32Array(cands.length), sn = new Int32Array(cands.length);
     cands.forEach((c, ci) => {
       if (c.site !== site[i] || c.n > src[i].merchants) { v[ci] = -1; return; }
       let coins = 0;
       const r = routeRun(src[i], tau[i], P, cnt, c.a, c.dt, (ta, a0, a1, a2) => {
         if (ta <= P.window + EPS) coins += Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron) / (1 - reduction(ta, P));
       });
-      v[ci] = coins; o[ci] = r.overflow; sk[ci] = r.skipped;
+      v[ci] = coins; o[ci] = r.overflow; sk[ci] = r.skipped; sn[ci] = r.sent;
     });
-    val.set(i, v); ovv.set(i, o); info.set(i, sk);
+    val.set(i, v); ovv.set(i, o); info.set(i, sk); gesch.set(i, sn);
   }
   const wert = sel => { let s = 0; for (const i of lief) { const v = val.get(i); let b = 0; for (const ci of sel) if (v[ci] > b) b = v[ci]; s += b; } return s; };
   const out = [];
@@ -984,14 +984,15 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
       if (!besser) break;
     }
     // Ergebnis für R Routen: Dörfer den Routen zuordnen
-    const routes = sel.map(ci => ({...cands[ci], dorf: [], coins: 0, skipped: 0, sends: 0}));
+    // sent: Lieferungen, die in der Rechnung tatsächlich abgehen (alle Dörfer der Route zusammen; 4a, Dennis 12.11.2026)
+    const routes = sel.map(ci => ({...cands[ci], dorf: [], coins: 0, skipped: 0, sends: 0, sent: 0}));
     let ov = 0;
     for (const i of lief) {
       const v = val.get(i); let b = 0, bq = -1;
       sel.forEach((ci, q) => { if (v[ci] > b) { b = v[ci]; bq = q; } });
       if (bq < 0) { ov += leer.get(i); continue; }
       const ci = sel[bq];
-      routes[bq].dorf.push(i); routes[bq].coins += b; routes[bq].skipped += info.get(i)[ci]; ov += ovv.get(i)[ci];
+      routes[bq].dorf.push(i); routes[bq].coins += b; routes[bq].skipped += info.get(i)[ci]; routes[bq].sent += gesch.get(i)[ci]; ov += ovv.get(i)[ci];
     }
     routes.forEach(r => { r.sends = Math.max(0, Math.floor((P.window - 1e-9) / r.dt) + 1); });
     routes.sort((x, y) => y.coins - x.coins);

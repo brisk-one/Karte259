@@ -1827,7 +1827,13 @@ function renderRouten() {
     det.appendChild(el("pre", null, text));
     dorf.forEach(i => ol.appendChild(el("li", null, R.src[i].name + " (" + R.src[i].x + "|" + R.src[i].y + ")")));
     det.appendChild(ol);
-    inn.append(zz, amt, el("div", "sub", r.n + " Händler je Lieferung"), wann, kop, det,
+    // Menge je Stunde (4a, Dennis 12.11.2026): die feste Menge gilt je Dorf und Lieferung, nicht für die ganze Gruppe
+    const summe = r.a[0] + r.a[1] + r.a[2], schnitt = r.sent * summe / P.window, leist = el("div", "pr-rstd");
+    leist.append(document.createTextNode("Das sind je Dorf bis zu "), el("b", null, ganz(summe / r.dt) + " Rohstoffe je Stunde"),
+      document.createTextNode(". Im Schnitt der " + nfG.format(P.window) + " h schickt die Gruppe " + ganz(schnitt) + " je Stunde"
+        + (dorf.length > 1 ? " (je Dorf " + ganz(schnitt / dorf.length) + ")" : "")
+        + (r.skipped ? ", weniger als möglich, weil Händler oder Rohstoffe nicht für jede Lieferung reichen." : ".")));
+    inn.append(zz, amt, el("div", "sub", r.n + " Händler je Lieferung"), wann, leist, kop, det,
       el("div", null, "bringt " + ganz(r.coins) + " Münzen" + (r.skipped ? "; " + ganz(r.skipped) + " Lieferungen fallen aus, weil gerade zu wenig Rohstoffe oder Händler da sind (bei kurzen Abständen normal)" : "")));
     g.appendChild(inn);
   });
