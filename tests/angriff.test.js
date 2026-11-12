@@ -883,3 +883,32 @@ test("Clean-Offs vom Spieler des Trains vor kurzen Sitzungen (Dennis 12.11.2026)
   assert.equal(vor.e, vor.n);
   assert.deepEqual(K.pruefePlan(vor.r, szenario({clean_eigene: "vorrang"})), []);
 });
+
+test("Zustimmungs-Paladin: ganzer Train aus 3 AGs, Paladin mit dem ersten AG (Dennis 12.11.2026)", () => {
+  // 5 AGs je Ziel: ohne Pala reichen nur die 5 AGs aus D1; D2 hat 4 AGs und mit Pala einen 3er-Train
+  const ohne = K.plan(szenario({ags_per_target: 5}));
+  const input = szenario({ags_per_target: 5});
+  const d2 = input.attackers[0].villages.find(v => v.id === 2);
+  d2.units = Object.assign({}, d2.units, {knight: 1}); d2.pala = true;
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  assert.equal(r.stats.geadelt, ohne.stats.geadelt + 1);
+  const palaZiel = r.ziele.find(z => z.geadelt && r.items.some(i => i.t.id === z.id && i.kind === "ag" && i.v.id === 2));
+  const ags = r.items.filter(i => i.t.id === palaZiel.id && i.kind === "ag").sort((a, b) => a.arrivalMs - b.arrivalMs);
+  assert.equal(ags.length, 3);
+  assert.equal(ags[0].units.knight, 1, "Paladin mit dem ersten AG");
+  assert.equal(ags.filter(i => i.units.knight).length, 1);
+  assert.equal(K.toDSU(ags).items[0].knight, "1");
+  // ohne Paladin in der Übersicht: keine Wirkung, Hinweis
+  const i2 = szenario({ags_per_target: 5}); i2.attackers[0].villages.find(v => v.id === 2).pala = true;
+  const r2 = K.plan(i2);
+  assert.equal(r2.stats.geadelt, ohne.stats.geadelt);
+  assert.ok(r2.warnings.some(w => w.art === "pala" && /kein Paladin/.test(w.text)));
+  // 2er-Trains: keine Wirkung, Hinweis
+  const i3 = szenario({ags_per_target: 5, train_form: "zwei"}); const d3 = i3.attackers[0].villages.find(v => v.id === 2);
+  d3.units = Object.assign({}, d3.units, {knight: 1}); d3.pala = true;
+  assert.ok(K.plan(i3).warnings.some(w => w.art === "pala" && /nur bei ganzen Trains/.test(w.text)));
+  // Prüfung: 3 AGs ohne Paladin sind zu wenig
+  const kaputt = JSON.parse(JSON.stringify(r)); kaputt.items.forEach(i => { if (i.units.knight) i.units.knight = 0; });
+  assert.ok(K.pruefePlan(kaputt, input).some(x => /Zu wenige AGs/.test(x)));
+});

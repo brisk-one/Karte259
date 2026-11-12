@@ -89,7 +89,7 @@ const FELDER = [
 /* ---------- Zustand ---------- */
 const leererZeitraum = () => ({vonDatum: "", vonZeit: "", bisDatum: "", bisZeit: ""});
 const neuerAngreifer = () => ({text: "", rollen: {off: true, ag: true, fake: true}, auswahlText: "", fen: [leererZeitraum()], nobles: {}, useOff: {},
-                               cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: ""});
+                               cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: "", pala: {}});
 let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], fakeHaupt: [], zart: "ag", zmodus: "auto",
          ank: leererZeitraum(), ankListe: [], fen: [leererZeitraum()], fakeAus: [], fakeText: "", extraAus: [], extraEin: [], wahlKnapp: null, hilfe: false};
 /* Gespeicherte Stände aus der Zeit der Textfelder (ankunft, fenster, fensterText) in die getrennten Felder übernehmen. */
@@ -393,20 +393,27 @@ function attAnalyse(i) {
     nAG.addEventListener("input", () => { const v = parseInt(nAG.value, 10); a.nobles[d.xy] = isNaN(v) ? 0 : Math.max(0, v); sv(nAG, a.nobles[d.xy]); agMarkieren(); geaendert(); });
     agZelle.append(nAG, agInfo);
     agMarkieren();
+    // Zustimmungs-Paladin im Dorf (Dennis 12.11.2026): ganzer Train mit 3 AGs, der Paladin läuft mit dem ersten AG
+    if (!a.pala) a.pala = {};
+    const cPala = el("input"); cPala.type = "checkbox"; cPala.checked = !!a.pala[d.xy];
+    const knight = d.units.knight || 0;
+    cPala.disabled = !knight && !a.pala[d.xy];
+    cPala.title = knight ? "Zustimmungs-Paladin im Dorf: 3 AGs reichen (ganzer Train)" : "kein Paladin in der Übersicht";
+    cPala.addEventListener("change", () => { if (cPala.checked) a.pala[d.xy] = true; else delete a.pala[d.xy]; sv(cPala, cPala.checked ? 1 : 0); geaendert(true); });
     const status = d.c.isOff ? "Off" : d.c.knapp ? "knapp" : d.c.offPop > 0 && d.c.offPop >= 3000 ? "zu klein" : "Deff";
     const rang = {Off: 3, knapp: 2, "zu klein": 1, Deff: 0}[status];
     const fehlt = d.c.isOff ? "" : (d.c.fehltBH ? nf.format(d.c.fehltBH) + " BH" : "") + (d.c.fehltRammen ? (d.c.fehltBH ? ", " : "") + d.c.fehltRammen + " Rammen" : "");
     const imAus = ausSet ? ausSet.has(d.xy) : true;
     return [[d.name], [koord(d.xy), "num", d.xy], [nf.format(d.c.offPop), "num", d.c.offPop], [nf.format(d.units.ram), "num", d.units.ram],
             [status, null, rang], [fehlt ? "fehlen " + fehlt : "", null, fehlt ? d.c.fehltBH + d.c.fehltRammen * 5 : null],
-            [cOff, null, cOff.checked ? 1 : 0], [agZelle, null, agZahl(a, d)], [d.c.fakeMin != null ? nf.format(d.c.fakeMin) : "?", "num", d.c.fakeMin],
+            [cOff, null, cOff.checked ? 1 : 0], [agZelle, null, agZahl(a, d)], [cPala, null, cPala.checked ? 1 : 0], [d.c.fakeMin != null ? nf.format(d.c.fakeMin) : "?", "num", d.c.fakeMin],
             [ausSet ? (imAus ? "ja" : "nein") : "alle", null, imAus ? 1 : 0]];
   });
   const det = el("details"), sm = el("summary", null, "Dörfer (" + A.dorfer.length + "), AG-Anzahl und Offs anpassen");
   const sc = el("div", "ap-scroll");
-  const sortWahl = a.sortDorf && a.sortDorf.col >= 0 && a.sortDorf.col < 10 ? a.sortDorf : {col: 0, dir: "asc"};
+  const sortWahl = a.sortDorf && a.sortDorf.col >= 0 && a.sortDorf.col < 11 ? a.sortDorf : {col: 0, dir: "asc"};
   const tab = table([["Dorf", null, "text"], ["Koord.", "num", true], ["Off-BH", "num", true], ["Rammen", "num", true], ["Einordnung", null, true], ["Fehlt", null, true],
-                     ["Off", null, true], ["AGs", null, true], ["Fakelimit", "num", true], ["Auswahl", null, true]], rows, {sort: sortWahl.col, dir: sortWahl.dir});
+                     ["Off", null, true], ["AGs", null, true], ["Pala", null, true], ["Fakelimit", "num", true], ["Auswahl", null, true]], rows, {sort: sortWahl.col, dir: sortWahl.dir});
   const merken = () => setTimeout(() => {
     const ths = [...tab.tHead.rows[tab.tHead.rows.length - 1].cells], col = ths.findIndex(c => c.hasAttribute("aria-sort"));
     if (col >= 0) { a.sortDorf = {col, dir: ths[col].getAttribute("aria-sort") === "ascending" ? "asc" : "desc"}; speichern(); }
@@ -414,7 +421,7 @@ function attAnalyse(i) {
   tab.tHead.addEventListener("click", merken);
   tab.tHead.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") merken(); });
   sc.append(tab);
-  det.append(sm, el("p", "ap-note", "„Off“: als Off einplanen (vorausgewählt: Offs und knappe Offs). „AGs“: Anzahl, die bis zum Abschicken im Dorf steht, gezielt je Dorf anpassen."), sc);
+  det.append(sm, el("p", "ap-note", "„Off“: als Off einplanen (vorausgewählt: Offs und knappe Offs). „AGs“: Anzahl, die bis zum Abschicken im Dorf steht, gezielt je Dorf anpassen. „Pala“: Zustimmungs-Paladin im Dorf, dann reichen aus diesem Dorf 3 AGs (ganzer Train, der Paladin läuft mit dem ersten AG; nur ein solcher Train je Dorf)."), sc);
   if (A.dorfer.length <= 80) det.open = true;
   box.append(det);
   out.replaceChildren(box);
@@ -867,7 +874,7 @@ function kernInput(cfgExtra) {
     attackers.push({id: i, name: A.name, points: A.points || 0, rollen: a.rollen, auswahl: A.aus ? A.aus.keys : null, windows: own,
       cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax,
       villages: A.dorfer.map(d => ({id: d.id, name: d.name, x: d.x, y: d.y, pts: d.pts, units: d.units,
-                                    nobles: agZahl(a, d), useOff: offEingeplant(a, d)}))});
+                                    nobles: agZahl(a, d), useOff: offEingeplant(a, d), pala: !!(a.pala && a.pala[d.xy])}))});
   });
   if (!attackers.length) fehler.push("Kein Angreifer mit Truppenübersicht (Abschnitt 2).");
   if (!IDS) fehler.push("Dorf-IDs fehlen (dorf_ids.json), ohne sie gibt es keinen Export.");
