@@ -349,9 +349,22 @@ function attAnalyse(i) {
   if (A.aus) meld.push([A.auswahlFehlt.length ? "warn" : "", "Dorfauswahl: " + A.aus.keys.length + " Dörfer" +
     (A.auswahlFehlt.length ? ", nicht in der Übersicht: " + A.auswahlFehlt.slice(0, 8).join(", ") : "")]);
   if (A.own && A.own.fehler.length) A.own.fehler.forEach(f => meld.push(["warn", f]));
+  // AG-Zahlen von Hand (Dennis 12.11.2026): sie gelten statt der Übersicht und bleiben im Browser, auch nach neuem Einfügen;
+  // deshalb sichtbar machen, mit Zurücksetzen
+  const hand = A.dorfer.filter(d => a.nobles[d.xy] != null && a.nobles[d.xy] !== d.units.snob);
+  if (hand.length) {
+    const mehr = hand.reduce((n, d) => n + a.nobles[d.xy] - d.units.snob, 0);
+    meld.push(["warn", hand.length + (hand.length === 1 ? " Dorf" : " Dörfer") + " mit AG-Zahl von Hand statt aus der Übersicht" +
+      (mehr > 0 ? ", zusammen " + mehr + " AGs mehr (noch zu bauen)" : mehr < 0 ? ", zusammen " + (-mehr) + " AGs weniger" : "") + ": " +
+      hand.slice(0, 6).map(d => d.name + " " + a.nobles[d.xy] + " statt " + d.units.snob).join(", ") + (hand.length > 6 ? " …" : ""), "agHand"]);
+  }
   if (meld.length) {
     const ul = el("ul", "ap-list");
-    meld.forEach(([c, t]) => ul.append(el("li", c, t)));
+    meld.forEach(([c, t, art]) => {
+      const li = el("li", c, t);
+      if (art === "agHand") li.append(" ", knopf("alle auf die Übersicht zurücksetzen", () => { hand.forEach(d => { delete a.nobles[d.xy]; }); attAnalyse(i); geaendert(); }, "tw"));
+      ul.append(li);
+    });
     box.append(ul);
   }
   // Tabelle: Offs, knappe Offs, AG-Dörfer und alle übrigen
@@ -364,14 +377,29 @@ function attAnalyse(i) {
     cOff.addEventListener("change", () => { a.useOff[d.xy] = cOff.checked; sv(cOff, cOff.checked ? 1 : 0); geaendert(true); });
     const nAG = el("input", "ap-n"); nAG.type = "number"; nAG.min = 0; nAG.max = 99; nAG.value = agZahl(a, d);
     nAG.title = "AGs, die bis zum Abschicken im Dorf stehen";
-    nAG.addEventListener("input", () => { const v = parseInt(nAG.value, 10); a.nobles[d.xy] = isNaN(v) ? 0 : Math.max(0, v); sv(nAG, a.nobles[d.xy]); geaendert(); });
+    // von Hand abweichend von der Übersicht: markiert, mit Hinweis „noch N bauen“ und Zurücksetzen (Dennis 12.11.2026)
+    const agZelle = el("span", "ap-agzelle"), agInfo = el("span", "ap-note");
+    const agMarkieren = () => {
+      const h = a.nobles[d.xy] != null && a.nobles[d.xy] !== d.units.snob;
+      nAG.classList.toggle("ap-hand", h);
+      agInfo.replaceChildren();
+      if (!h) return;
+      const diff = a.nobles[d.xy] - d.units.snob;
+      agInfo.append(" Übersicht " + d.units.snob + (diff > 0 ? ", noch " + diff + " bauen " : " "));
+      const r = knopf("↺", () => { delete a.nobles[d.xy]; nAG.value = d.units.snob; sv(nAG, d.units.snob); agMarkieren(); attAnalyse(i); geaendert(); }, "tw");
+      r.title = "auf die Übersicht zurücksetzen (" + d.units.snob + ")";
+      agInfo.append(r);
+    };
+    nAG.addEventListener("input", () => { const v = parseInt(nAG.value, 10); a.nobles[d.xy] = isNaN(v) ? 0 : Math.max(0, v); sv(nAG, a.nobles[d.xy]); agMarkieren(); geaendert(); });
+    agZelle.append(nAG, agInfo);
+    agMarkieren();
     const status = d.c.isOff ? "Off" : d.c.knapp ? "knapp" : d.c.offPop > 0 && d.c.offPop >= 3000 ? "zu klein" : "Deff";
     const rang = {Off: 3, knapp: 2, "zu klein": 1, Deff: 0}[status];
     const fehlt = d.c.isOff ? "" : (d.c.fehltBH ? nf.format(d.c.fehltBH) + " BH" : "") + (d.c.fehltRammen ? (d.c.fehltBH ? ", " : "") + d.c.fehltRammen + " Rammen" : "");
     const imAus = ausSet ? ausSet.has(d.xy) : true;
     return [[d.name], [koord(d.xy), "num", d.xy], [nf.format(d.c.offPop), "num", d.c.offPop], [nf.format(d.units.ram), "num", d.units.ram],
             [status, null, rang], [fehlt ? "fehlen " + fehlt : "", null, fehlt ? d.c.fehltBH + d.c.fehltRammen * 5 : null],
-            [cOff, null, cOff.checked ? 1 : 0], [nAG, null, agZahl(a, d)], [d.c.fakeMin != null ? nf.format(d.c.fakeMin) : "?", "num", d.c.fakeMin],
+            [cOff, null, cOff.checked ? 1 : 0], [agZelle, null, agZahl(a, d)], [d.c.fakeMin != null ? nf.format(d.c.fakeMin) : "?", "num", d.c.fakeMin],
             [ausSet ? (imAus ? "ja" : "nein") : "alle", null, imAus ? 1 : 0]];
   });
   const det = el("details"), sm = el("summary", null, "Dörfer (" + A.dorfer.length + "), AG-Anzahl und Offs anpassen");
