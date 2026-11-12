@@ -62,7 +62,9 @@ const CFG_DEFAULT = {
   fake_vorlauf_h: 0,          // erste Fakes etwa so viele Stunden vor dem ersten Off/AG des Plans (Richtwert, 0: aus; Dennis 11.11.2026)
   fake_vorlauf_bis_h: 0,      // mit Wert über fake_vorlauf_h: Spanne, erste Fakes zwischen beiden Werten (Dennis 12.11.2026, z. B. 3 bis 10 h)
   max_lauf_off_h: 0,          // Laufzeit Clean-Offs und übrige Offs höchstens (Richtwert, 0: keine Grenze; Dennis 11.11.2026)
-  max_lauf_ag_h: 0,           // Laufzeit AG-Trains höchstens, auch die Off im Train (Richtwert, 0: keine Grenze)
+  max_lauf_ag_h: 7,           // Laufzeit AG-Trains höchstens, auch die Off im Train (0: keine Grenze; Standard 7 h, Dennis 12.11.2026)
+  lauf_ag_art: "fest",
+  clean_eigene: "vorrang",    // Clean-Offs vom Spieler des Trains vor kurzen Sitzungen (Dennis 12.11.2026), "nachrang": danach        // "fest": AG-Trains nie länger (Dennis 12.11.2026: Obergrenze); "richtwert": nur wenn nötig (2.2a)
   extra_fakes: false,         // zusätzliche Fakeziele aus dem Stamm der Zielspieler
   extra_fakes_per_village: 1, // Fakes je Zieldorf für diese Stammesmitglieder, nachrangig zu den Pflicht- und weiteren Fakezielen (Dennis 10.11.2026)
   fakes_max_je_dorf: 4,       // höchstens so viele Fakes aus einem eigenen Dorf (Dennis 10.11.2026 00:52)
@@ -99,7 +101,10 @@ const RANGFOLGE = {
 // Außerhalb zählt vor allem, dass es außerhalb ist; die Minuten wenig, sonst zöge jeder Befehl einzeln an den Rand des
 // Zeitraums und es entstünden viele kleine Sitzungen. kopplungMax: Bündeln bleibt unter „Off vor AG“ (100.000).
 const HART = 1e7;
-const SPIELER_FREMD = 6000;                 // Clean-Off nicht vom Spieler des Trains: so viel wie rund 3,3 Felder Rammentempo                          // Mindestabstand unterschritten
+// Clean-Off nicht vom Spieler des Trains. Konfig clean_eigene (Dennis 12.11.2026: „jeder hauptsächlich seine eigenen Ziele“):
+// „vorrang“ über dem Bündeln (kopplungMax 50.000), unter „Off vor AG“ (100.000) und den Zeiträumen; „nachrang“ wie bis
+// 12.11. (6.000, rund 3,3 Felder Rammentempo, unter dem Bündeln)
+const SPIELER_FREMD = 6000, SPIELER_FREMD_VORRANG = 60000;                          // Mindestabstand unterschritten
 
 /* ---------- Kleinigkeiten ---------- */
 const emptyUnits = () => Object.fromEntries(UNITS.map(u => [u, 0]));
@@ -678,6 +683,7 @@ function plan(input) {
   const maxOffS = cfg.max_lauf_off_h > 0 ? cfg.max_lauf_off_h * 3600 : Infinity;
   const maxAgS = cfg.max_lauf_ag_h > 0 ? cfg.max_lauf_ag_h * 3600 : Infinity;
   const zuLangKosten = (trS, maxS) => trS > maxS ? ZU_LANG + Math.min(100000, (trS - maxS) / 60 * 50) : 0;
+  const agFest = cfg.lauf_ag_art !== "richtwert" && maxAgS < Infinity;      // feste Obergrenze für AG-Trains
   // Ankerzeit: der Zeitpunkt, zu dem die meisten möglichen AGs (ohne AGs: Offs) des Angreifers losgehen könnten,
   // innerhalb der Wunschzeiträume bevorzugt. Die Zuteilung zieht die Befehle dorthin (Bündeln). AG-Dörfer sind knapp
   // und am wenigsten beweglich, deshalb richtet sich der Anker zuerst nach ihnen; nach der AG-Zuteilung wird er neu
@@ -689,7 +695,7 @@ function plan(input) {
       zl.forEach(t => {
         if (t.assignee != null && t.assignee !== v.att) return;
         const d = dist(v, t);
-        if (!nurOffs && v.nobles > 0 && v.rolleAG && d <= world.snob_max_dist + 1e-9) ag.push(sendIv(travelS(world, "snob", d) * 1000, offsetErstesAG(clean)));
+        if (!nurOffs && v.nobles > 0 && v.rolleAG && d <= world.snob_max_dist + 1e-9 && !(agFest && travelS(world, "snob", d) > maxAgS)) ag.push(sendIv(travelS(world, "snob", d) * 1000, offsetErstesAG(clean)));
         if (v.offHier) off.push(sendIv(travelS(world, "ram", d) * 1000, 0));
       });
     });
@@ -740,6 +746,7 @@ function plan(input) {
         const d = dist(v, t);
         if (d > world.snob_max_dist + 1e-9) return;
         const tr = travelS(world, "snob", d);
+        if (agFest && tr > maxAgS) return;                                   // AG-Laufzeit über der festen Grenze
         if (!tset(v, tr * 1000, offsetErstesAG(clean)).length) return;
         if (gesperrt(v, tr * 1000, offsetErstesAG(clean))) return;
         let cost = form === "ganz" ? tr + rng() * 60 : rng() * 3600 + tr / 10;
@@ -765,7 +772,7 @@ function plan(input) {
     z1.aktiv.forEach(t => {
       const g = z1.zuteilung.get(t.id) || [];
       const n = g.reduce((s, x) => s + x.n, 0);
-      if (!n) ausgeschlossen.set(t.id, "kein freies AG in Reichweite und Abschickzeitraum");
+      if (!n) ausgeschlossen.set(t.id, "kein freies AG in Reichweite und Abschickzeitraum" + (agFest ? " (AG-Laufzeit höchstens " + fmtStd(cfg.max_lauf_ag_h) + " h)" : ""));
       else if (n < k) teil.push({t, n});
     });
     // Unvollständige Ziele einzeln streichen (das mit den wenigsten AGs), damit die übrigen ihre AGs bekommen
@@ -851,7 +858,7 @@ function plan(input) {
     if (cfg.off_first && !offZuerst(o, t, pos, nClean)) c += 100000;
     // Clean-Offs möglichst vom Spieler, der den Train schickt: dann timt er alles selbst (Dennis 15:00, niedrige Priorität:
     // unter „Off vor AG“ und dem Bündeln, über den Laufzeiten)
-    if (!trains.get(t.id).some(g => g.v.att === o.att)) c += SPIELER_FREMD;
+    if (!trains.get(t.id).some(g => g.v.att === o.att)) c += cfg.clean_eigene === "nachrang" ? SPIELER_FREMD : SPIELER_FREMD_VORRANG;
     c += zeitKosten(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms);
     // Bündeln: Abstand der Abschickzeit zu den Trains desselben Spielers, egal für welches Ziel. Bis 03.11. zählte nur der
     // Train dieses Ziels; das schob Clean-Offs zu fremden Spielern, ohne eine Sitzung zu sparen.
@@ -972,8 +979,10 @@ function plan(input) {
   let zusatzVerteilt = 0;
   const zusatzModus = cfg.uebrige_auf_ag === false || cfg.uebrige_auf_ag === "aus" ? "aus" : cfg.uebrige_auf_ag === "sitzung" ? "sitzung" : "alle";
   if (zusatzModus !== "aus") {
-    const voll = new Set();
     const offsAuf = t => cleanOffs.get(t.id).length + trains.get(t.id).filter(g => g.carriesOff).length;
+    // zuerst nur auf Ziele, auf die der Spieler selbst AGs schickt (Dennis 12.11.2026), dann auf alle
+    for (const nurEigene of [true, false]) {
+    const voll = new Set();
     for (let runde = 0; runde < 5000; runde++) {
       const pool = cleanPool();
       if (!pool.length) break;
@@ -986,8 +995,10 @@ function plan(input) {
       // Abschickzeiten der Befehle auf dieses Ziel relativ zum gemeinsamen Blockbeginn: für „sitzung“ genau prüfbar
       const imBlock = agAktionen(t, trains.get(t.id), pos + 1).concat(liste.map((o, i) => ({att: o.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(o, t)) * 1000})));
       let best = null, bc = Infinity;
+      const eigene = new Set(trains.get(t.id).map(g => g.v.att));
       pool.forEach(o => {
         const tr = travelS(world, "ram", dist(o, t)), a0 = att.get(o.att);
+        if (nurEigene && !eigene.has(o.att)) return;
         if (zusatzModus === "sitzung") {
           const rel = pos * cfg.gap_clean_ms - tr * 1000;
           if (!imBlock.some(x => x.att === o.att && Math.abs(x.rel - rel) <= SITZUNG_PAUSE_MS)) return;
@@ -1002,6 +1013,7 @@ function plan(input) {
       });
       if (best) { liste.push(best); best.verplant = true; best.zusatz = true; zusatzVerteilt++; }
       else voll.add(t.id);
+    }
     }
     if (zusatzVerteilt) warnings.push({art: "zusatz", text: zusatzVerteilt + (zusatzVerteilt === 1 ? " übrige Off" : " übrige Offs") +
       " zusätzlich auf AG-Ziele verteilt, zuerst auf die Ziele mit den wenigsten Offs"});
@@ -1710,7 +1722,10 @@ function zeitHinweise(items, att, world) {
   const ab5 = ms => Math.floor(ms / 300000) * 300000, auf5 = ms => Math.ceil(ms / 300000) * 300000;
   const out = [];
   att.forEach(a => {
-    const s = [...new Set(items.filter(it => it.att === a.id && it.ausserhalb && it.kind !== "fake").map(it => it.sendMs))].sort((p, q) => p - q);
+    // ein Abschickvorgang je Befehl oder ganzem Train (Aktion), nicht je AG (bis 12.11.2026 je Einzelbefehl gezählt)
+    const erste = new Map();
+    items.forEach(it => { if (it.att === a.id && it.ausserhalb && it.kind !== "fake") { const k = it.aktion; if (!erste.has(k) || it.sendMs < erste.get(k)) erste.set(k, it.sendMs); } });
+    const s = [...erste.values()].sort((p, q) => p - q);
     if (!s.length) return;
     sitzungenAus(s).forEach(([von, bis]) => {
       const n = s.filter(x => x >= von && x <= bis).length;

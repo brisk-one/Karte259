@@ -213,7 +213,7 @@ function szenario(cfg, extra) {
   const agTargets = [z(901, 470, 500), z(902, 471, 502), z(903, 469, 498), z(904, 472, 499)];
   const fakeTargets = [z(905, 468, 503), z(906, 473, 504), z(907, 466, 497), z(908, 474, 495)];
   // übrige Offs bleiben in den älteren Tests frei (Verhalten vor 12.11.2026); eigener Test für die Verteilung auf AG-Ziele
-  return Object.assign({world: W, cfg: Object.assign({seed: 3, uebrige_auf_ag: "aus"}, cfg), attackers: [alpha, beta], agTargets, fakeTargets,
+  return Object.assign({world: W, cfg: Object.assign({seed: 3, uebrige_auf_ag: "aus", max_lauf_ag_h: 0, clean_eigene: "nachrang"}, cfg), attackers: [alpha, beta], agTargets, fakeTargets,
     arrival: K.parseAnkunft("03.11.2026 08:00:00:000 bis 09:00:00:000"),
     windows: K.parseFenster("02.11.2026 16:00 bis 20:00\n02.11.2026 22:00 bis 23:30").fenster,
     now: Date.UTC(2026, 10, 2, 12, 0)}, extra);
@@ -386,7 +386,7 @@ test("Export im Format von DS-Ultimate", () => {
 test("Plan: zwei gleich weit entfernte Dörfer eines Angreifers nicht im selben Block", () => {
   // 499|501 und 499|499 liegen gleich weit von 470|500: Abschicken fast gleichzeitig, also nicht beide als Clean-Off
   const v = (id, x, y, units) => ({id, name: "D" + id, x, y, pts: 10000, units, nobles: units.snob});
-  const input = {world: W, cfg: {seed: 1, clean_per_target: 2}, attackers: [{id: 101, name: "Alpha", points: 300000, villages: [
+  const input = {world: W, cfg: {seed: 1, clean_per_target: 2, max_lauf_ag_h: 0}, attackers: [{id: 101, name: "Alpha", points: 300000, villages: [
       v(1, 492, 500, DEFF(4)), v(2, 499, 501, OFF()), v(3, 499, 499, OFF())]}],
     agTargets: [{id: 901, x: 470, y: 500, owner: 900}], fakeTargets: [],
     arrival: K.parseAnkunft("03.11.2026 08:00:00:000 bis 09:00:00:000"),
@@ -757,11 +757,11 @@ test("Laufzeit-Richtwerte für Offs und AGs: überschritten nur, wenn nötig, da
   const ohne = K.plan(szenario({}));
   const lauf = (r, k) => Math.max(...r.items.filter(i => i.kind === k).map(i => i.travelMs));
   // Grenze über allen Laufzeiten: nichts markiert, gleicher Plan
-  const weit = K.plan(szenario({max_lauf_off_h: 20, max_lauf_ag_h: 20}));
+  const weit = K.plan(szenario({max_lauf_off_h: 20, max_lauf_ag_h: 20, lauf_ag_art: "richtwert"}));
   assert.equal(weit.items.filter(i => i.zuLang).length, 0);
   assert.deepEqual(weit.items.map(i => i.sendMs), ohne.items.map(i => i.sendMs));
   // Grenze unter allen Laufzeiten: genauso viele Ziele geadelt, alle Clean-Offs und AGs markiert, Hinweis
-  const input = szenario({max_lauf_off_h: 1, max_lauf_ag_h: 1});
+  const input = szenario({max_lauf_off_h: 1, max_lauf_ag_h: 1, lauf_ag_art: "richtwert"});
   const eng = K.plan(input);
   assert.deepEqual(K.pruefePlan(eng, input), []);
   assert.equal(eng.stats.geadelt, ohne.stats.geadelt);
@@ -770,7 +770,7 @@ test("Laufzeit-Richtwerte für Offs und AGs: überschritten nur, wenn nötig, da
   eng.items.filter(i => i.kind === "fake").forEach(i => assert.ok(!i.zuLang, "Fakes nie"));
   assert.ok(eng.warnings.some(w => w.art === "laufzeit" && /Offs 1 h, AGs 1 h/.test(w.text)));
   // nur die AG-Grenze: Offs bleiben unmarkiert (Off im Train zählt wie der AG)
-  const ag = K.plan(szenario({max_lauf_ag_h: 1}));
+  const ag = K.plan(szenario({max_lauf_ag_h: 1, lauf_ag_art: "richtwert"}));
   ag.items.forEach(i => assert.equal(!!i.zuLang, i.kind === "ag"));
   assert.ok(lauf(ag, "ag") > 3600000);
   // übrige Offs auf Nicht-AG-Dörfer: nie über dem Richtwert
@@ -818,9 +818,14 @@ test("Übrige Offs zusätzlich auf AG-Ziele, wenigste Offs zuerst, nur in Zeitr�
   assert.ok(zusatz.length > 0 && r.freieOffs.length < ohne.freieOffs.length);
   assert.ok(r.warnings.some(w => w.art === "zusatz" && new RegExp(zusatz.length + " übrige Offs? zusätzlich").test(w.text)));
   zusatz.forEach(i => assert.equal(i.kind, "clean"));
-  // wenigste Offs zuerst: Offs je Ziel (Clean-Offs plus Off im Train) unterscheiden sich höchstens um 1
-  const offsJe = r.ziele.filter(z => z.geadelt).map(z => r.items.filter(i => i.t.id === z.id && (i.kind === "clean" || (i.kind === "ag" && i.units.ram > 0))).length);
-  assert.ok(Math.max(...offsJe) - Math.min(...offsJe) <= 1, "gleichmäßig: " + offsJe.join("/"));
+  // ohne Vorrang der eigenen Ziele: wenigste Offs zuerst, Offs je Ziel (Clean-Offs plus Off im Train) höchstens 1 auseinander
+  const offsJe = rr => rr.ziele.filter(z => z.geadelt).map(z => rr.items.filter(i => i.t.id === z.id && (i.kind === "clean" || (i.kind === "ag" && i.units.ram > 0))).length);
+  // eigene Ziele zuerst (Dennis 12.11.2026): zusätzliche Offs gehen mindestens so oft auf Ziele des eigenen Spielers wie auf fremde
+  const aufEigenes = i => r.items.some(x => x.t.id === i.t.id && x.kind === "ag" && x.att === i.att);
+  assert.ok(zusatz.filter(aufEigenes).length >= zusatz.filter(i => !aufEigenes(i)).length, "eigene Ziele zuerst");
+  const r1 = K.plan(szenario({clean_per_target: 1, uebrige_auf_ag: "alle", train_form: "ganz"}, {attackers: [input.attackers[0]]}));
+  const o1 = offsJe(r1);
+  assert.ok(Math.max(...o1) - Math.min(...o1) <= 1, "ein Spieler: gleichmäßig " + o1.join("/"));
   // nur innerhalb der Abschickzeiträume
   zusatz.forEach(i => assert.ok(K.ivHas(input.windows, i.sendMs), "zusätzliche Off im Abschickzeitraum"));
   // „nur in bestehende Sitzungen“: keine zusätzliche Sitzung, höchstens so viele zusätzliche Offs wie bei „alle“
@@ -840,4 +845,41 @@ test("Übrige Offs zusätzlich auf AG-Ziele, wenigste Offs zuerst, nur in Zeitr�
   const r3 = K.plan(szenario({clean_per_target: 1, uebrige_auf_ag: "alle", max_lauf_off_h: 1}));
   assert.equal(r3.items.filter(i => i.zusatz).length, 0);
   assert.ok(r3.warnings.some(w => w.art === "frei" && /passen auf kein AG-Ziel/.test(w.text)));
+});
+
+test("AG-Laufzeit: feste Grenze, Standard 7 h (Dennis 12.11.2026)", () => {
+  assert.equal(K.CFG_DEFAULT.max_lauf_ag_h, 7);
+  assert.equal(K.CFG_DEFAULT.lauf_ag_art, "fest");
+  const ohne = K.plan(szenario({}));
+  const lang = Math.max(...ohne.items.filter(i => i.kind === "ag").map(i => i.travelMs)) / 3600000;
+  assert.ok(lang > 7, "Kunstszenario hat lange Trains: " + lang);
+  // Standard: Trains über 7 h gibt es nicht, betroffene Ziele mit Grund
+  const r = K.plan(szenario({max_lauf_ag_h: 7, lauf_ag_art: "fest"}));
+  r.items.filter(i => i.kind === "ag").forEach(i => assert.ok(i.travelMs <= 7 * 3600000));
+  assert.ok(r.stats.geadelt < ohne.stats.geadelt);
+  assert.ok(r.ziele.some(z => !z.geadelt && /AG-Laufzeit höchstens 7 h/.test(z.grund || "")), JSON.stringify(r.ziele.map(z => z.grund)));
+  // Grenze über allen Laufzeiten: gleicher Plan wie ohne Grenze
+  const weit = K.plan(szenario({max_lauf_ag_h: 20, lauf_ag_art: "fest"}));
+  assert.deepEqual(weit.items.map(i => i.sendMs), ohne.items.map(i => i.sendMs));
+});
+
+test("Hinweise zu den Abschickzeiträumen zählen einen Train als einen Abschickvorgang (12.11.2026)", () => {
+  const input = szenario({}, {windows: K.parseFenster("02.11.2026 16:00 bis 17:00").fenster});
+  const r = K.plan(input);
+  const aussen = new Set(r.items.filter(i => i.ausserhalb && i.kind !== "fake").map(i => i.att + ":" + i.aktion));
+  assert.ok(aussen.size > 0, "Szenario hat Befehle außerhalb");
+  const summe = r.hinweise.reduce((n, h) => n + h.n, 0);
+  assert.equal(summe, aussen.size);
+});
+
+test("Clean-Offs vom Spieler des Trains vor kurzen Sitzungen (Dennis 12.11.2026)", () => {
+  assert.equal(K.CFG_DEFAULT.clean_eigene, "vorrang");
+  const anteil = c => { const r = K.plan(szenario(c)); let e = 0, n = 0;
+    r.ziele.filter(z => z.geadelt).forEach(z => { const tr = new Set(r.items.filter(i => i.t.id === z.id && i.kind === "ag").map(i => i.att));
+      r.items.filter(i => i.t.id === z.id && i.kind === "clean").forEach(i => { n++; if (tr.has(i.att)) e++; }); });
+    return {e, n, r}; };
+  const vor = anteil({clean_eigene: "vorrang"}), nach = anteil({clean_eigene: "nachrang"});
+  assert.ok(vor.e / vor.n > nach.e / nach.n, "Vorrang: mehr eigene Clean-Offs " + vor.e + "/" + vor.n + " gegen " + nach.e + "/" + nach.n);
+  assert.equal(vor.e, vor.n);
+  assert.deepEqual(K.pruefePlan(vor.r, szenario({clean_eigene: "vorrang"})), []);
 });
