@@ -19,7 +19,7 @@
   .so-status{margin:0; font-size:12px; font-weight:700}
   .so-status.err{color:var(--bad)}
   .so-status .warn{display:block; font-weight:400; color:var(--ink-2)}
-  /* Off und Deff nebeneinander, noch nicht zuordbar mit Grund darunter über die ganze Breite; schmal untereinander */
+  /* Off und Deff nebeneinander, noch nicht zugeordnet mit Grund darunter über die ganze Breite; schmal untereinander */
   .so-listen{display:grid; gap:12px; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start}
   .so-liste.offen{grid-column:1 / -1}
   @media (max-width:900px){ .so-listen{grid-template-columns:minmax(0,1fr)} }
@@ -75,7 +75,7 @@ buildAppbar("sortieren", "Dörfer sortieren");
 const S = window.Sortieren, K = window.Angriff;
 const NAME = {spear: "Speer", sword: "Schwert", axe: "Axt", archer: "Bogen", spy: "Späher", light: "LKav", marcher: "BBogen",
               heavy: "SKav", ram: "Rammen", catapult: "Katapulte", knight: "Paladin", snob: "AG", militia: "Miliz"};
-const LISTEN = [["off", "Off"], ["deff", "Deff"], ["offen", "Noch nicht zuordbar"]];
+const LISTEN = [["off", "Off"], ["deff", "Deff"], ["offen", "Noch nicht zugeordnet"]];
 let SPALTEN = K.OVERVIEW_COLUMNS, POP = K.POP;
 
 /* ---------- Eingaben merken (wie im Prägerechner, Dennis 3a vom 12.11.2026) ----------
@@ -103,7 +103,7 @@ function regelText(c) {
   return "Gezählt werden die eigenen Truppen, die gerade im Dorf stehen. Speer bis " + nf.format(c.raubzug) +
     " gelten als Raubzug-Speer und zählen nicht. Off: Axt, LKav, berittene Bogen, Rammen, Katapulte. Deff: übrige Speer, " +
     "Schwert, Bogen. Schwere Kavallerie zählt zur Seite mit mehr Infanterie; Späher, Paladin und AGs zählen nicht. " +
-    "Unter " + nf.format(c.min_bh) + " BH oder wenn die stärkere Seite unter " + c.anteil + " % liegt: noch nicht zuordbar.";
+    "Unter " + nf.format(c.min_bh) + " BH oder wenn die stärkere Seite unter " + c.anteil + " % liegt: noch nicht zugeordnet.";
 }
 function einheitenText(v) {
   const t = SPALTEN.filter(u => u !== "militia" && v.units[u] > 0)
@@ -177,7 +177,7 @@ function rechnen() {
   const r = S.sortieren(text, c, SPALTEN, POP);
   const teile = [];
   if (r.gelesen) teile.push(nf.format(r.gelesen) + (r.gelesen === 1 ? " Dorf" : " Dörfer") + " gelesen: " +
-    r.off.length + " Off, " + r.deff.length + " Deff, " + r.offen.length + " noch nicht zuordbar.");
+    r.off.length + " Off, " + r.deff.length + " Deff, " + r.offen.length + " noch nicht zugeordnet.");
   st.replaceChildren(document.createTextNode(teile.join(" ")));
   if (r.errors.length) st.className = "so-status err";
   r.errors.concat(r.warnings).slice(0, 6).forEach(m => st.appendChild(el("span", "warn", m)));

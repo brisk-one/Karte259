@@ -1,4 +1,4 @@
-// Dörfer sortieren: Off, Deff, noch nicht zuordbar (Wunsch Dennis 12.11.2026)
+// Dörfer sortieren: Off, Deff, noch nicht zugeordnet (Wunsch Dennis 12.11.2026)
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const K = require("../site/angriff-core.js");
@@ -26,7 +26,7 @@ test("Off und Deff, Raubzug-Speer zählt nicht", () => {
   assert.ok(!deff.heavyOff);
 });
 
-test("Noch nicht zuordbar: leer, nur Raubzug-Speer, zu wenig, gemischt", () => {
+test("Noch nicht zugeordnet: leer, nur Raubzug-Speer, zu wenig, gemischt", () => {
   const leer = S.einordnen(truppen({}));
   assert.deepEqual([leer.art, leer.grund], ["offen", "keine Truppen"]);
   assert.deepEqual([S.einordnen(truppen({spy: 20, knight: 1})).grund], ["keine Truppen"]);

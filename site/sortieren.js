@@ -1,5 +1,5 @@
 /* Dörfer sortieren (Wunsch Dennis 12.11.2026): Truppenübersicht einfügen, jedes Dorf nach den Truppen, die gerade
-   im Dorf stehen, als Off, Deff oder noch nicht zuordbar einordnen, Listen als Koordinaten zum Kopieren.
+   im Dorf stehen, als Off, Deff oder noch nicht zugeordnet einordnen, Listen als Koordinaten zum Kopieren.
 
    Gelesen wird mit dem Leser des Angriffsplaners (Angriff.parseOverview, Zeile „eigene“ der Ansicht „Alle“ oder die
    Ansicht „Eigene“), damit es für die Truppenübersicht genau einen Leser gibt. Einordnung (Standard, auf der Seite
@@ -8,8 +8,8 @@
    - Off-Seite in BH: Axt, LKav, berittene Bogen, Rammen, Katapulte. Deff-Seite: übrige Speer, Schwert, Bogen.
      Schwere Kavallerie zählt zur Seite mit mehr Infanterie (nach Abzug des Raubzug-Speers).
      Späher, Paladin, Adelsgeschlechter und Miliz zählen nicht.
-   - Unter min_bh zusammen: noch nicht zuordbar. Hat die stärkere Seite weniger als anteil Prozent: gemischt, ebenfalls
-     noch nicht zuordbar.
+   - Unter min_bh zusammen: noch nicht zugeordnet. Hat die stärkere Seite weniger als anteil Prozent: gemischt, ebenfalls
+     noch nicht zugeordnet.
    Ohne DOM, im Browser window.Sortieren (braucht window.Angriff aus angriff-core.js), in Node module.exports. */
 (function (root) {
 "use strict";
@@ -18,7 +18,7 @@ const K = typeof module !== "undefined" && module.exports ? require("./angriff-c
 const STANDARD = {raubzug: 1000, min_bh: 500, anteil: 67};
 const GRENZEN = {raubzug: [0, 100000], min_bh: [0, 100000], anteil: [50, 100]};
 const OFF_INF = ["axe", "light", "marcher"], OFF_REST = ["ram", "catapult"], DEFF_INF = ["sword", "archer"];
-const ART_NAME = {off: "Off", deff: "Deff", offen: "Noch nicht zuordbar"};
+const ART_NAME = {off: "Off", deff: "Deff", offen: "Noch nicht zugeordnet"};   // Bezeichnung Dennis 12.11.2026 15:25
 
 /** Einstellungen auf erlaubte Ganzzahlen bringen, fehlende Werte aus dem Standard. */
 function einstellungen(cfg) {
