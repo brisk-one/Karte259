@@ -13,6 +13,8 @@
     color:var(--muted); font-weight:700}
   .ap-f .ctl{display:flex; flex-wrap:wrap; gap:6px; align-items:center}
   .ap-f input[type="number"]{width:7.5em}
+  .ap-f, .ap-f .ctl{min-width:0}
+  .ap-f select{max-width:100%; min-width:0}   /* lange Optionen nicht in die Nachbarspalte (Dennis 13.11.2026) */
   .ap-f .extra{font-size:11px; color:var(--muted)}
   .ap-i{font:700 10px/1 Georgia,serif; width:15px; height:15px; border-radius:50%; border:1px solid var(--edge);
     background:var(--btn); color:var(--ink); cursor:pointer; padding:0; flex:none; letter-spacing:0; text-transform:none}
