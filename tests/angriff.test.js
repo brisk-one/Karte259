@@ -919,3 +919,15 @@ test("Abschickzeitraum vor eigenen Clean-Offs: Off, die nur außerhalb zu den AG
   assert.equal(r.stats.geadelt, 3);
   assert.ok(new Set(r.items.filter(i => i.ausserhalb && i.kind === "clean").map(i => i.aktion)).size <= 1);
 });
+
+test("Clean-Offs mit mehr Rammen kommen zuerst an (Dennis 12.11.2026)", () => {
+  const input = szenario({clean_per_target: 3});
+  // Rammen unterschiedlich: 3, 4, 5 = 300, 260, 220 … (alle über dem Richtwert)
+  input.attackers[0].villages.forEach((v, i) => { if (v.units.axe >= 6000) v.units = Object.assign({}, v.units, {ram: 200 + 20 * i}); });
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  r.ziele.filter(z => z.geadelt).forEach(z => {
+    const offs = r.items.filter(i => i.t.id === z.id && i.kind === "clean").sort((a, b) => a.arrivalMs - b.arrivalMs);
+    for (let i = 1; i < offs.length; i++) assert.ok(offs[i - 1].units.ram >= offs[i].units.ram, "Rammen absteigend: " + offs.map(o => o.units.ram).join("/"));
+  });
+});

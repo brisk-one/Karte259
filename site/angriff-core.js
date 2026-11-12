@@ -1038,9 +1038,29 @@ function plan(input) {
     if (zusatzVerteilt) warnings.push({art: "zusatz", text: zusatzVerteilt + (zusatzVerteilt === 1 ? " übrige Off" : " übrige Offs") +
       " zusätzlich auf AG-Ziele verteilt, zuerst auf die Ziele mit den wenigsten Offs"});
   }
+  // Reihenfolge der Clean-Offs je Ziel: mehr Rammen kommen zuerst an (Dennis 12.11.2026 20:58), wenn Zeiten, Abstände und
+  // „Off vor AG“ dabei halten; sonst bleibt die Reihenfolge der Zuteilung
+  const rammen = o => (o.units && o.units.ram) || 0;
+  const reiheOk = (t, liste) => {
+    let basis = agSet(t, liste.length);
+    for (let i = 0; i < liste.length && basis.length; i++) basis = ivIntersect(basis, tset(liste[i], travelS(world, "ram", dist(liste[i], t)) * 1000, i * cfg.gap_clean_ms));
+    if (!basis.length) return false;
+    if (cfg.off_first && liste.some((o, i) => !offZuerst(o, t, i, liste.length))) return false;
+    const akt = agAktionen(t, trains.get(t.id), liste.length).concat(liste.map((o, i) => ({att: o.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(o, t)) * 1000})));
+    for (let i = 0; i < akt.length; i++) for (let j = i + 1; j < akt.length; j++) if (akt[i].att === akt[j].att && Math.abs(akt[i].rel - akt[j].rel) < gapSicher) return false;
+    return true;
+  };
+  geadelt.forEach(t => {
+    if (!trains.has(t.id)) return;
+    const liste = cleanOffs.get(t.id);
+    if (liste.length < 2) return;
+    const neu = liste.slice().sort((p, q) => rammen(q) - rammen(p));
+    if (neu.some((o, i) => o !== liste[i]) && reiheOk(t, neu)) cleanOffs.set(t.id, neu);
+  });
   const freieOffs = cleanPool();
+  const freiJe = new Map(); freieOffs.forEach(o => freiJe.set(o.att, (freiJe.get(o.att) || 0) + 1));
   if (freieOffs.length && geadelt.length) warnings.push({art: "frei", text: freieOffs.length + (freieOffs.length === 1 ? " Off bleibt" : " Offs bleiben") +
-    " übrig" + (zusatzModus !== "aus" ? ": passen auf kein AG-Ziel (Reichweite, Zeit, Laufzeit-Richtwert, Off vor AG" + (zusatzModus === "sitzung" ? " oder keine bestehende Sitzung" : "") + ")" : "")});
+    " übrig (" + [...freiJe].map(([a, n]) => (att.get(a) ? att.get(a).name : a) + " " + n).join(", ") + ")" + (zusatzModus !== "aus" ? ": passen auf kein AG-Ziel (Reichweite, Zeit, Laufzeit-Richtwert, Off vor AG" + (zusatzModus === "sitzung" ? " oder keine bestehende Sitzung" : "") + ")" : "")});
 
   /* ---- 4b. Vorläufige Zeitlage der Offs und AGs (v0.5): Sitzungen, in die die Fakes passen sollen ---- */
   const kernBloecke = () => {
