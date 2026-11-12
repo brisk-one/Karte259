@@ -45,6 +45,8 @@ const INFO = {
   fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Jeder Angreifer kann unter „Je Angreifer“ eigene Zeiträume bekommen; sie ersetzen für ihn die gemeinsamen. Die Zeiträume sind ein Wunsch: geht ein Ziel nur mit Abschicken außerhalb, plant der Planer es trotzdem, markiert diese Befehle („außerhalb“, „nachts“) und sagt nach der Berechnung, wie die Zeiträume zu erweitern wären. Fakes kommen nur in Sitzungen, in denen ohnehin abgeschickt wird.",
   jeClean: "Gilt nur für diesen Spieler, statt der Einstellung „Clean-Offs je AG-Ziel“ oben. „Höchstens N je Ziel“: von diesem Spieler kommen je AG-Ziel höchstens N Clean-Offs (0: keine), die Zahl je Ziel bleibt beim Wert oben. „N für meine AG-Ziele“: Ziele, auf die dieser Spieler den AG-Train schickt, bekommen N Clean-Offs (mindestens 1). Ohnehin gilt: Clean-Offs kommen möglichst vom Spieler, der den Train schickt, damit er sein Timing selbst in der Hand hat.",
   jeStark: "Gilt nur für diesen Spieler: seine AG-Ziele bekommen ihre Clean-Offs möglichst von ihm selbst, und seine Offs gehen möglichst auf seine eigenen AG-Ziele, auch seine freien Offs. Fremde Offs vor seinen AGs gibt es dann nur, wenn er selbst keine passende Off hat. Das geht vor Abschickzeitraum und Laufzeit-Richtwert, aber nicht vor „Off vor AG“: kann seine eigene Off nur nach seinem AG losgehen, kommt lieber eine fremde, die vorher losgeht. Das Adeln selbst geht ebenfalls vor (fehlt einem Ziel sonst eine Clean-Off, kommt sie doch von einem anderen).",
+  agListe: "Für Listen wie „in diesen Dörfern baue ich je 4 AGs“: Koordinaten einfügen, Zahl wählen, übernehmen. Die Zahl ist die AG-Zahl im Dorf insgesamt, wie wenn du sie in der Dorfliste von Hand einträgst; die Dorfliste zeigt dann „Übersicht N, noch M bauen“, ↺ setzt einzeln zurück. Steht in der Übersicht schon so viel oder mehr, gilt die Übersicht. Die Dörfer müssen in seiner Truppenübersicht stehen; was dort fehlt, wird mit Koordinaten genannt.",
+  zielFuer: "Mit einem Angreifer gewählt gehören alle Dörfer aus der Liste (oder alle Dörfer des Spielers) ihm als AG-Ziele, auch die schon vorhandenen; die Verteilung springt auf „je Angreifer eigene Ziele“. „automatisch“: wie bisher, der Planer verteilt.",
   jeRammen: "Gilt nur für diesen Spieler: so viele Rammen darf ein Fake höchstens enthalten (leer: 1, 0: keine). Katapulte gehen immer vor: eine Ramme ist die langsamste Einheit nur, wenn im Dorf kein Katapult frei ist, und aufgefüllt wird mit Rammen erst, wenn Katapulte und Späher nicht reichen. Jeder Fake hat mindestens einen Späher.",
   jeFake: "Gilt nur für diesen Spieler. „Höchstens N je eigenem Dorf“: jedes seiner Dörfer schickt höchstens N Fakes, etwa bei wenig Katapulten (bei „Fakes zählen je Herkunftsdorf“ genau N, soweit Truppen reichen). „N je Fakeziel“: dieser Spieler schickt N Fakes auf jedes Fakeziel, zusätzlich zu den Fakes der übrigen Spieler nach „Fakes je Dorf“ oben. Fakes bleiben Richtwert: was in keine Abschicksitzung passt, entfällt.",
   teilnahme: "Offs: Clean-Offs und übrige Offs. AGs: Trains; eine Off läuft nur im Train mit, wenn der Spieler auch mit Offs teilnimmt. Fakes: aus allen Dörfern der Übersicht.",
@@ -322,9 +324,36 @@ function attBlock(i) {
   cs.addEventListener("change", () => { a.eigeneStark = cs.checked; geaendert(true); });
   ls.append(cs, el("span", "ap-note", "eigene AG-Ziele stark"));
   eigen.append(ls, infoKnopf("jeStark"));
+  // AG-Dörfer als Liste (Dennis 13.11.2026): Dörfer, in denen der Spieler AGs baut, setzen dort die AG-Zahl wie von Hand
+  const agl = el("details", "ap-agliste");
+  agl.append(el("summary", null, "AG-Dörfer als Liste einfügen"));
+  const agTa = el("textarea", "ap-ta klein");
+  agTa.spellcheck = false; agTa.setAttribute("aria-label", "AG-Dörfer Angreifer " + (i + 1));
+  agTa.placeholder = "Dörfer, in denen er AGs baut: je Zeile Koordinaten, mit oder ohne Namen, z. B. 512|488";
+  const agN = el("input"); agN.type = "number"; agN.min = 1; agN.max = 99; agN.value = 4; agN.style.width = "4.5em";
+  agN.setAttribute("aria-label", "AGs je Dorf Angreifer " + (i + 1));
+  const agNote = el("span", "ap-note");
+  const agB = knopf("übernehmen", () => {
+    const r = K.parseKoordListe(agTa.value), n = Math.max(1, parseInt(agN.value, 10) || 4);
+    const seine = new Map((ANALYSE[i] ? ANALYSE[i].dorfer : []).map(d => [d.xy, d]));
+    let gesetzt = 0, schon = 0; const fremd = [];
+    r.keys.forEach(k => {
+      const d = seine.get(k);
+      if (!d) { fremd.push(koord(k)); return; }
+      if (d.units.snob >= n) { delete a.nobles[k]; schon++; return; }   // Übersicht hat schon so viele: die gilt
+      a.nobles[k] = n; gesetzt++;
+    });
+    agNote.textContent = (r.keys.length ? gesetzt + (gesetzt === 1 ? " Dorf" : " Dörfer") + " auf " + n + " AGs gesetzt" : "Keine Koordinaten gefunden") +
+      (schon ? ", " + schon + " haben laut Übersicht schon so viele" : "") +
+      (fremd.length ? ", nicht in seiner Truppenübersicht: " + fremd.slice(0, 8).join(", ") + (fremd.length > 8 ? " …" : "") : "");
+    if (gesetzt || schon) { agTa.value = ""; attAnalyse(i); geaendert(); }
+  }, "tw");
+  const agRow = el("div", "ap-row");
+  agRow.append(el("span", "ap-note", "AGs je Dorf (insgesamt)"), agN, agB, infoKnopf("agListe"), agNote);
+  agl.append(agTa, agRow, hilfeFeld("agListe"));
   const out = el("div");
   out.id = "att-out-" + i;
-  box.append(kopf, ta, det1, eigen, hilfeFeld("jeClean"), hilfeFeld("jeFake"), hilfeFeld("jeRammen"), hilfeFeld("jeStark"), out);
+  box.append(kopf, ta, det1, eigen, hilfeFeld("jeClean"), hilfeFeld("jeFake"), hilfeFeld("jeRammen"), hilfeFeld("jeStark"), agl, out);
   return box;
 }
 function attsBauen() {
@@ -434,6 +463,20 @@ function attAnalyse(i) {
 }
 
 /* ---------- 3. Ziele: AG-Ziele und Fakeziele (Fakeziele seit 10.11.2026, Dennis) ---------- */
+const attName = i => ANALYSE[i] && ANALYSE[i].name ? ANALYSE[i].name : "Angreifer " + (i + 1);
+/** Liste oder Spieler als AG-Ziele einem Angreifer zuordnen (Dennis 13.11.2026), auch schon vorhandene Ziele. */
+function zieleZuordnen(keys) {
+  if (S.zart === "fake" || S.zielFuer == null || S.zielFuer === "") return "";
+  const i = +S.zielFuer;
+  if (!(i >= 0 && i < S.atts.length)) return "";
+  const ks = new Set(keys);
+  let n = 0;
+  S.ziele.forEach(z => { if (ks.has(z.xy)) { z.assignee = i; n++; } });
+  if (!n) return "";
+  S.zmodus = "je";
+  geaendert();
+  return ", " + n + (n === 1 ? " Ziel" : " Ziele") + " für " + attName(i);
+}
 /** art "ag" oder "fake". Ein Dorf steht nur in einer Liste: als AG-Ziel wandert es aus den Fakezielen,
     als Fakeziel bleibt ein AG-Ziel AG-Ziel. */
 function zieleHinzu(keys, quelle, art) {
@@ -482,6 +525,12 @@ function zieleBauen() {
   $("ziel-karte").textContent = S.zart === "fake" ? "Fakeziele auf der Karte auswählen" : "AG-Ziele auf der Karte auswählen";
   $("ziel-spieler-add").textContent = S.zart === "fake" ? "alle Dörfer als Fakeziele" : "alle Dörfer als AG-Ziele";
   $("ziel-text-add").textContent = S.zart === "fake" ? "als Fakeziele hinzufügen" : "als AG-Ziele hinzufügen";
+  // AG-Ziele direkt einem Angreifer zuordnen (Dennis 13.11.2026)
+  const fuer = $("ziel-fuer");
+  fuer.replaceChildren(Object.assign(el("option", null, "automatisch"), {value: ""}));
+  S.atts.forEach((a, i) => { if (a.rollen && a.rollen.ag === false) return; fuer.append(Object.assign(el("option", null, attName(i)), {value: String(i)})); });
+  fuer.value = S.zielFuer != null && [...fuer.options].some(o => o.value === String(S.zielFuer)) ? String(S.zielFuer) : "";
+  $("ziel-fuer-l").hidden = S.zart === "fake";
   fakeZieleBauen();
   document.querySelectorAll('input[name="zmodus"]').forEach(r => { r.checked = r.value === S.zmodus; });
   // Je Angreifer eigene Ziele: ein Kartenknopf je Angreifer mit AGs
@@ -1351,14 +1400,16 @@ $("ziel-spieler-add").addEventListener("click", () => {
   if (!name || !P) return;
   const p = P.rows.findIndex(r => String(r[pIdx.name]).toLowerCase() === name);
   if (p < 0) { $("ziel-text-note").textContent = "Spieler nicht gefunden: " + $("ziel-spieler").value; return; }
-  $("ziel-text-note").textContent = zieleHinzu((dorfVon.get(p) || []).map(i => V.rows[i][0]), spielerName(p), S.zart);
+  const keys = (dorfVon.get(p) || []).map(i => V.rows[i][0]);
+  $("ziel-text-note").textContent = zieleHinzu(keys, spielerName(p), S.zart) + zieleZuordnen(keys);
   $("ziel-spieler").value = "";
 });
 $("ziel-text-add").addEventListener("click", () => {
   const r = K.parseKoordListe($("ziel-text").value);
-  $("ziel-text-note").textContent = zieleHinzu(r.keys, "Liste", S.zart);
+  $("ziel-text-note").textContent = zieleHinzu(r.keys, "Liste", S.zart) + zieleZuordnen(r.keys);
   $("ziel-text").value = "";
 });
+$("ziel-fuer").addEventListener("change", e => { S.zielFuer = e.target.value; speichern(); });
 $("ziel-leer").addEventListener("click", () => { S.ziele = []; geaendert(); });
 $("fakeziel-leer").addEventListener("click", () => { S.fakeHaupt = []; geaendert(); });
 $("ziel-karte").addEventListener("click", () => zurKarte(S.zart === "fake" ? "fakeziel" : "ag"));

@@ -29,6 +29,8 @@
   .ap-att{border:1px solid var(--edge-soft); border-radius:var(--radius); padding:9px 10px; margin-bottom:12px; display:grid; gap:8px}
   .ap-att .kopf{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center}
   .ap-att .kopf strong{font-size:13px}
+  .ap-agliste > summary{cursor:pointer; font-size:12px; color:var(--muted)}
+  .ap-agliste[open]{display:grid; gap:6px}
   .ap-row{display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center}
   .ap-row label{display:inline-flex; gap:5px; align-items:center}
   .ap-teil{border-top:1px solid var(--edge-soft); padding-top:8px}
@@ -148,7 +150,10 @@
       <div>
         <textarea class="ap-ta klein" id="ziel-text" spellcheck="false" placeholder="Dörfer einfügen: je Zeile Koordinaten, mit oder ohne Namen, z. B. 512|488 oder [Dorf (512|488) K45](…)"></textarea>
         <div class="ap-row"><button class="tw" type="button" id="ziel-text-add">Dörfer hinzufügen</button>
+          <label id="ziel-fuer-l">für <select id="ziel-fuer" aria-label="AG-Ziele zuordnen an"></select></label>
+          <button class="ap-i" type="button" data-info="zielFuer" aria-expanded="false" title="Info">i</button>
           <span class="ap-note" id="ziel-text-note"></span></div>
+        <div class="ap-help" data-help="zielFuer"></div>
       </div>
       <div class="ap-row ap-teil"><strong style="font-size:12px">AG-Ziele</strong> <span class="ap-note" id="ziel-zahl"></span>
         <button class="tw" type="button" id="ziel-leer">alle entfernen</button></div>
