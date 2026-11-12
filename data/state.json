@@ -1,61 +1,61 @@
 {
  "building_info_checked_utc": "2026-11-11T14:55:00+00:00",
- "conquer_last_ts": 1794443492,
+ "conquer_last_ts": 1794446565,
  "counts": {
   "allies": 413,
-  "conquers_total": 57023,
+  "conquers_total": 57053,
   "players": 4301,
   "villages": 48702
  },
- "data_last_modified": "Thu, 12 Nov 2026 00:32:04 GMT",
+ "data_last_modified": "Thu, 12 Nov 2026 01:32:03 GMT",
  "files": {
   "ally": {
-   "bytes": 9547,
-   "fetched_utc": "2026-11-12T00:55:00+00:00",
-   "last_modified": "Thu, 12 Nov 2026 00:23:47 GMT",
-   "sha1": "3fc93f48b3b32d6f8beb786cefd662c2c0be200c"
+   "bytes": 9548,
+   "fetched_utc": "2026-11-12T01:55:00+00:00",
+   "last_modified": "Thu, 12 Nov 2026 01:23:47 GMT",
+   "sha1": "de1dddc38d00e98cf0d69e5c773bb82401556dee"
   },
   "conquer": {
-   "bytes": 579659,
-   "fetched_utc": "2026-11-12T00:55:00+00:00",
-   "last_modified": "Thu, 12 Nov 2026 00:32:04 GMT",
-   "sha1": "4abba828e8a6cde7852fc839c871d8df8e485f75"
+   "bytes": 579981,
+   "fetched_utc": "2026-11-12T01:55:00+00:00",
+   "last_modified": "Thu, 12 Nov 2026 01:23:47 GMT",
+   "sha1": "67c5c4a2895631651ae948f633c77328ff5fb02c"
   },
   "kill_all": {
    "bytes": 35468,
-   "fetched_utc": "2026-11-12T00:55:00+00:00",
-   "last_modified": "Thu, 12 Nov 2026 00:23:48 GMT",
-   "sha1": "fc4a14bcb2f2c43b0989aa993d72671019ef17e9"
+   "fetched_utc": "2026-11-12T01:55:00+00:00",
+   "last_modified": "Thu, 12 Nov 2026 01:32:03 GMT",
+   "sha1": "96d6f7b7d5467eb88d7bc9af9b97e6bda36fbb06"
   },
   "kill_att": {
    "bytes": 24067,
-   "fetched_utc": "2026-11-12T00:55:00+00:00",
-   "last_modified": "Thu, 12 Nov 2026 00:32:27 GMT",
-   "sha1": "a0480a2d599222009c4604bb923ef1922e0c1323"
+   "fetched_utc": "2026-11-12T01:55:00+00:00",
+   "last_modified": "Thu, 12 Nov 2026 01:32:03 GMT",
+   "sha1": "bec11c2cd2000cfce34e4927f00e009e6ebfbf44"
   },
   "kill_def": {
    "bytes": 33960,
-   "fetched_utc": "2026-11-12T00:55:00+00:00",
-   "last_modified": "Thu, 12 Nov 2026 00:23:48 GMT",
-   "sha1": "e3c6db09a4760318ec5b3cce38411622aa5c6f19"
+   "fetched_utc": "2026-11-12T01:55:00+00:00",
+   "last_modified": "Thu, 12 Nov 2026 01:23:48 GMT",
+   "sha1": "0f6fb0a9f80610e4068e2a1f7138d841ad1b9b7a"
   },
   "kill_sup": {
    "bytes": 14850,
-   "fetched_utc": "2026-11-12T00:55:00+00:00",
-   "last_modified": "Thu, 12 Nov 2026 00:32:27 GMT",
-   "sha1": "b10b7f9ed1173d46cd66ae41be5b89f74c597528"
+   "fetched_utc": "2026-11-12T01:55:00+00:00",
+   "last_modified": "Thu, 12 Nov 2026 01:23:48 GMT",
+   "sha1": "fe086ce8b7515bb98160dd18e8400e27f8346a96"
   },
   "player": {
-   "bytes": 77193,
-   "fetched_utc": "2026-11-12T00:55:00+00:00",
-   "last_modified": "Thu, 12 Nov 2026 00:32:04 GMT",
-   "sha1": "9ab4f5150fb3a1c9d905d466767bd5ee759e7807"
+   "bytes": 77174,
+   "fetched_utc": "2026-11-12T01:55:00+00:00",
+   "last_modified": "Thu, 12 Nov 2026 01:32:03 GMT",
+   "sha1": "f3b59fd1d953abc17da48c1ca43852dd066c50d2"
   },
   "village": {
-   "bytes": 743390,
-   "fetched_utc": "2026-11-12T00:55:00+00:00",
-   "last_modified": "Thu, 12 Nov 2026 00:32:04 GMT",
-   "sha1": "36c973b2d66437295ee53ae8bd0194c6be021d48"
+   "bytes": 743454,
+   "fetched_utc": "2026-11-12T01:55:00+00:00",
+   "last_modified": "Thu, 12 Nov 2026 01:32:28 GMT",
+   "sha1": "d60f1ec48c1fc0b72043239aedd82201dc36493f"
   }
  },
  "history_since_utc": "2026-09-11T18:49:35+00:00",
@@ -68,7 +68,7 @@
   ],
   "last_deep_scrape_utc": "2026-11-11T23:55:00+00:00",
   "last_deep_try_utc": "2026-11-11T23:55:00+00:00",
-  "last_full_scrape_utc": "2026-11-11T23:55:00+00:00",
+  "last_full_scrape_utc": "2026-11-12T01:55:00+00:00",
   "page_param": null,
   "page_size": 25,
   "profil_probe_saved": true,
@@ -77,7 +77,7 @@
    "conquer": "091d309d3c1e44a2d09c7f12303efd58a2e80aae",
    "kill_att": "5c87b876e751be1977b566997a213cfb33488bc3",
    "kill_def": "5270a1499d424d6383d99460624705dd5881b0d1",
-   "kill_sup": "a45e4a6256b96fe0f7052816077aa949acd32981",
+   "kill_sup": "2fbbd63865771b9c4ee7902f9e90d65b3e409ab2",
    "loot_res": "832761c34c117e68d9246c8de894ce6f66b0a6b2",
    "loot_vil": "0e7919b97a6f3984989cf65e20444d540e223a3a",
    "scavenge": "26980e267a006423709d020e757106283fb2ca40"
