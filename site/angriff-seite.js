@@ -412,7 +412,7 @@ function attAnalyse(i) {
   const sc = el("div", "ap-scroll");
   const sortWahl = a.sortDorf && a.sortDorf.col >= 0 && a.sortDorf.col < 11 ? a.sortDorf : {col: 0, dir: "asc"};
   const tab = table([["Dorf", null, "text"], ["Koord.", "num", true], ["Off-BH", "num", true], ["Rammen", "num", true], ["Einordnung", null, true], ["Fehlt", null, true],
-                     ["Off", null, true], ["AGs", null, true], ["Pala", null, true], ["Fakelimit", "num", true], ["Auswahl", null, true]], rows, {sort: sortWahl.col, dir: sortWahl.dir});
+                     ["Off", null, true], ["AGs", null, true], ["AG-Pala", null, true], ["Fakelimit", "num", true], ["Auswahl", null, true]], rows, {sort: sortWahl.col, dir: sortWahl.dir});
   const merken = () => setTimeout(() => {
     const ths = [...tab.tHead.rows[tab.tHead.rows.length - 1].cells], col = ths.findIndex(c => c.hasAttribute("aria-sort"));
     if (col >= 0) { a.sortDorf = {col, dir: ths[col].getAttribute("aria-sort") === "ascending" ? "asc" : "desc"}; speichern(); }
@@ -420,7 +420,7 @@ function attAnalyse(i) {
   tab.tHead.addEventListener("click", merken);
   tab.tHead.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") merken(); });
   sc.append(tab);
-  det.append(sm, el("p", "ap-note", "„Off“: als Off einplanen (vorausgewählt: Offs und knappe Offs). „AGs“: Anzahl, die bis zum Abschicken im Dorf steht, gezielt je Dorf anpassen. „Pala“: Zustimmungs-Paladin steht in diesem Dorf (du legst fest, wo; er bleibt dort und läuft nicht mit), dann schickt das Dorf 3er-Trains, weil 3 AGs reichen. Nur bei ganzen Trains."), sc);
+  det.append(sm, el("p", "ap-note", "„Off“: als Off einplanen (vorausgewählt: Offs und knappe Offs). „AGs“: Anzahl, die bis zum Abschicken im Dorf steht, gezielt je Dorf anpassen. „AG-Pala“: Zustimmungs-Paladin steht in diesem Dorf (du legst fest, wo; er bleibt dort und läuft nicht mit), dann schickt das Dorf 3er-Trains, weil 3 AGs reichen. Nur bei ganzen Trains."), sc);
   if (A.dorfer.length <= 80) det.open = true;
   box.append(det);
   out.replaceChildren(box);
