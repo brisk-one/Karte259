@@ -90,8 +90,9 @@ const ZU_LANG = 150000;                     // Laufzeit über dem Richtwert: unt
 // Laufzeit-Richtwert (bis dahin 100000, darunter)
 const OFF_ZUERST = 1e8;
 // Spieler mit „eigene AG-Ziele stark“ (Dennis 12.11.2026 22:05): seine Offs auf seine Ziele, fremde Offs selten vor seine
-// AGs; geht sogar vor „Off vor AG“ (dann lieber seine eigene Off nach seinem AG als eine fremde davor)
-const EIGENE_STARK = 1e9;
+// AGs; über Abschickzeitraum und Laufzeit-Richtwert, aber unter „Off vor AG“ (Dennis 13.11.2026 00:16, 1b: lieber eine
+// fremde Off vor seinem AG als seine eigene danach). Je Rangfolge in R.stark, immer unter R.offZuerst.
+const EIGENE_STARK = 5e7;
 const FAKE_SITZUNG_MS = 30 * 60000;        // reine Fake-Spieler: eine Sitzung von höchstens 2 × 30 min
 const ANKER_RAND_MS = 30 * 60000;          // Zuteilung: so weit vom Ankerzeitpunkt kostet nichts
 const ANKUNFT_MAX_MS = 90 * 60000;         // Orientierungswert 1,5 h, Hinweis ab 1 h; seit 10.11.2026 keine feste Grenze (Dennis: für Fakes sinnvoll)
@@ -101,9 +102,9 @@ const ANKUNFT_RAT_MS = 60 * 60000;
    sitzungen: Sitzungen vor Clean-Off-Richtwert und Off vor AG (Off vor AG bleibt dort unter den Zeiträumen)
    nachtruhe: wie standard, aber nachts außerhalb der Zeiträume nur, wenn es nicht anders geht, sonst fällt das Ziel weg */
 const RANGFOLGE = {
-  standard:  {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: false, fuellNurAnker: false, offZuerst: OFF_ZUERST},
-  sitzungen: {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 240, minute: 3, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 4000, kopplungMax: Infinity, nachtSperre: false, fuellNurAnker: true,  offZuerst: 100000},
-  nachtruhe: {aus: 1000, ausMin: 1, nacht: 20, sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: true,  fuellNurAnker: false, offZuerst: OFF_ZUERST},
+  standard:  {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: false, fuellNurAnker: false, offZuerst: OFF_ZUERST, stark: EIGENE_STARK},
+  sitzungen: {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 240, minute: 3, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 4000, kopplungMax: Infinity, nachtSperre: false, fuellNurAnker: true,  offZuerst: 100000, stark: 30000},
+  nachtruhe: {aus: 1000, ausMin: 1, nacht: 20, sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: true,  fuellNurAnker: false, offZuerst: OFF_ZUERST, stark: EIGENE_STARK},
 };
 // Außerhalb zählt vor allem, dass es außerhalb ist; die Minuten wenig, sonst zöge jeder Befehl einzeln an den Rand des
 // Zeitraums und es entstünden viele kleine Sitzungen. kopplungMax: Bündeln bleibt unter „Off vor AG“ (100.000).
@@ -890,7 +891,7 @@ function plan(input) {
     // unter „Off vor AG“ und dem Bündeln, über den Laufzeiten)
     if (fremdAuf(o, t)) {
       c += cfg.clean_eigene === "nachrang" ? SPIELER_FREMD : SPIELER_FREMD_VORRANG;
-      if (starkBetroffen(o, t)) c += EIGENE_STARK;
+      if (starkBetroffen(o, t)) c += R.stark;
     }
     c += zeitKosten(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms);
     // Bündeln: Abstand der Abschickzeit zu den Trains desselben Spielers, egal für welches Ziel. Bis 03.11. zählte nur der
@@ -1477,20 +1478,11 @@ function plan(input) {
       const spaet = noetig.filter(o => o.sendMs + lead > ersteAG), d = Math.max(...spaet.map(o => o.sendMs)) - ersteAG;
       // Grund (Dennis 22:00, „wenn möglich immer“): gibt es überhaupt eine Off, die früh genug losgehen kann?
       const n = offs.length, basis = agSet(t, n);
-      const kand = villages.filter(o => o.offHier && !offImTrain.has(o.id) && offZuerst(o, t, 0, n) &&
+      const kann = villages.some(o => o.offHier && !offImTrain.has(o.id) && offZuerst(o, t, 0, n) &&
         ivIntersect(basis, tset(o, travelS(world, "ram", dist(o, t)) * 1000, 0)).length);
-      // „eigene AG-Ziele stark“ hält Offs fern: fremde vom Ziel eines solchen Spielers, seine eigenen von fremden Zielen
-      const starkNamen = new Set();
-      const frei = kand.filter(o => {
-        if (!fremdAuf(o, t) || !starkBetroffen(o, t)) return true;
-        if (att.get(o.att).stark) starkNamen.add(att.get(o.att).name);
-        trains.get(t.id).forEach(g => { if (att.get(g.v.att).stark) starkNamen.add(att.get(g.v.att).name); });
-        return false;
-      });
       warnings.push({art: "reihenfolge", ziel: t.id, text: "Ziel " + t.x + "|" + t.y + ": " + (d >= 0
         ? "erster AG geht " + dauerText(d) + " vor der Clean-Off los" : "Clean-Off geht nur " + dauerText(-d) + " vor dem ersten AG los (Vorlauf " + dauerText(lead) + ")") +
-        (!kand.length ? "; keine Off läuft lang genug, um vor dem AG loszugehen"
-          : !frei.length ? "; „eigene AG-Ziele stark“ bei " + [...starkNamen].join(", ") : "; die Offs, die vorher losgehen könnten, sind für andere Ziele nötig")});
+        (!kann ? "; keine Off läuft lang genug, um vor dem AG loszugehen" : "; die Offs, die vorher losgehen könnten, sind für andere Ziele nötig")});
     }
     return {id: t.id, x: t.x, y: t.y, geadelt: true, clean: offs.length, zusatz: offs.filter(o => o.zusatz).length, ags: ags.length, offZuerst: zuerst, T: b.T,
             soll: richtwert(t), offFehlt: Math.max(0, richtwert(t) - offs.filter(o => !o.zusatz).length), assignee: t.assignee != null ? t.assignee : null,

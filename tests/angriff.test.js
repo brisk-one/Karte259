@@ -860,10 +860,13 @@ test("Übrige Offs zusätzlich auf AG-Ziele, wenigste Offs zuerst, nur in Zeitr�
 
 // Kunstfall „Off vor AG“ (Dennis 12.11.2026 22:00): AG aus 10 Feldern (5:50 h), Off aus 11 Feldern (5:30 h, geht nach dem AG
 // los, im Zeitraum) und Off aus 16 Feldern (8 h, geht vorher los, aber nachts außerhalb des Zeitraums 06 bis 08 Uhr)
-function offVorAG(cfg, stark) {
+// Variante „stark“: Alpha hat für 470|500 eine eigene Off, die vor dem AG, aber außerhalb losgeht (D4); Beta eine, die vor
+// dem AG im Zeitraum losgeht (D24, 13 Felder, 6:30 h)
+function offVorAG(cfg, stark, variante) {
   const v = (id, x, y, units) => ({id, name: "D" + id, x, y, pts: 10000, units, nobles: units.snob});
   const alpha = {id: 101, name: "Alpha", points: 3e5, eigeneStark: !!stark, villages: [v(1, 480, 500, DEFF(4)), v(2, 481, 500, OFF()), v(3, 486, 540, OFF())]};
   const beta = {id: 102, name: "Beta", points: 3e5, villages: [v(21, 480, 540, DEFF(4)), v(22, 486, 500, OFF()), v(23, 481, 540, OFF())]};
+  if (variante === "stark") { alpha.villages.push(v(4, 486, 501, OFF())); beta.villages[1] = v(24, 483, 500, OFF()); }
   return {world: W, cfg: Object.assign({seed: 3, clean_per_target: 1, uebrige_auf_ag: "aus", clean_eigene: "vorrang"}, cfg), attackers: [alpha, beta],
     agTargets: [{id: 901, x: 470, y: 500, owner: 900}, {id: 902, x: 470, y: 540, owner: 900}], fakeTargets: [],
     arrival: K.parseAnkunft("03.11.2026 12:00:00:000 bis 13:00:00:000"), windows: K.parseFenster("03.11.2026 06:00 bis 08:00").fenster,
@@ -898,17 +901,22 @@ test("Off vor AG geht vor Abschickzeitraum, zusätzliche Offs dürfen nach dem A
   assert.equal(ra.freieOffs.length, 0);
 });
 
-test("Je Spieler: eigene AG-Ziele stark (Dennis 12.11.2026 22:05)", () => {
-  const input = offVorAG({}, true), r = K.plan(input);
+test("Je Spieler: eigene AG-Ziele stark (Dennis 12.11.2026 22:05, Rangfolge 13.11.2026 00:16)", () => {
+  // ohne: Betas Off im Zeitraum auf Alphas Ziel
+  const r0 = K.plan(offVorAG({}, false, "stark"));
+  assert.equal(cleanAuf(r0, 901)[0].v.id, 24);
+  assert.ok(!cleanAuf(r0, 901)[0].ausserhalb);
+  // mit: Alphas eigene Off, auch außerhalb des Zeitraums (stark geht vor Zeitraum)
+  const input = offVorAG({}, true, "stark"), r = K.plan(input);
   assert.deepEqual(K.pruefePlan(r, input), []);
   assert.equal(r.stats.geadelt, 2);
-  // Alpha (stark) bekommt seine eigene Off, seine Offs gehen nicht auf Betas Ziel, auch wenn sie dort vor dem AG lägen
-  assert.equal(cleanAuf(r, 901)[0].att, 101);
-  assert.equal(cleanAuf(r, 902)[0].att, 102);
-  assert.ok(r.warnings.some(w => w.art === "reihenfolge" && /470\|500: .*„eigene AG-Ziele stark“ bei Alpha/.test(w.text)));
-  assert.ok(r.warnings.some(w => w.art === "reihenfolge" && /470\|540: .*„eigene AG-Ziele stark“ bei Alpha/.test(w.text)));
+  assert.equal(cleanAuf(r, 901)[0].v.id, 4);
+  assert.ok(cleanAuf(r, 901)[0].ausserhalb);
+  // „Off vor AG“ geht vor stark (Dennis 1b): auf Betas Ziel geht Alphas Off, die vor dem AG losgeht, nicht Betas eigene danach
+  assert.equal(cleanAuf(r, 902)[0].v.id, 3);
+  assert.ok(!r.warnings.some(w => w.art === "reihenfolge"));
   // freie Offs eines solchen Spielers gehen zuerst auf seine eigenen Ziele
-  const ia = offVorAG({uebrige_auf_ag: "alle"}, true), ra = K.plan(ia);
+  const ia = offVorAG({uebrige_auf_ag: "alle"}, true, "stark"), ra = K.plan(ia);
   assert.deepEqual(K.pruefePlan(ra, ia), []);
   ra.items.filter(i => i.zusatz && i.att === 101).forEach(i => assert.equal(i.t.id, 901));
 });
