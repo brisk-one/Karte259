@@ -19,10 +19,11 @@
   .so-status{margin:0; font-size:12px; font-weight:700}
   .so-status.err{color:var(--bad)}
   .so-status .warn{display:block; font-weight:400; color:var(--ink-2)}
-  /* Off und Deff nebeneinander, noch nicht zugeordnet mit Grund darunter über die ganze Breite; schmal untereinander */
-  .so-listen{display:grid; gap:12px; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start}
-  .so-liste.offen{grid-column:1 / -1}
-  @media (max-width:900px){ .so-listen{grid-template-columns:minmax(0,1fr)} }
+  /* Listen untereinander über die ganze Breite, damit die Einheitenspalten Platz haben (Wunsch Dennis 18:49) */
+  .so-listen{display:grid; gap:12px; grid-template-columns:minmax(0,1fr)}
+  .so-liste th.u, .so-liste td.u{padding-left:4px; padding-right:4px}
+  .so-liste td.u.null{color:var(--muted)}
+  .so-liste td.bh{font-weight:700}
   .so-liste .body{display:grid; gap:7px}
   .so-liste h2 .n{font-size:13px; letter-spacing:.02em; text-transform:none}
   .so-liste.off h2{border-left:4px solid var(--bad)}
@@ -75,6 +76,7 @@ buildAppbar("sortieren", "Dörfer sortieren");
 const S = window.Sortieren, K = window.Angriff;
 const NAME = {spear: "Speer", sword: "Schwert", axe: "Axt", archer: "Bogen", spy: "Späher", light: "LKav", marcher: "BBogen",
               heavy: "SKav", ram: "Rammen", catapult: "Katapulte", knight: "Paladin", snob: "AG", militia: "Miliz"};
+const KURZ = {catapult: "Kata", knight: "Pala"};          // Spaltenköpfe in den Listen
 const LISTEN = [["off", "Off"], ["deff", "Deff"], ["offen", "Noch nicht zugeordnet"]];
 let SPALTEN = K.OVERVIEW_COLUMNS, POP = K.POP;
 
@@ -100,15 +102,17 @@ $("vergessen").addEventListener("click", () => {
 
 const cfg = () => Object.fromEntries(FELDER.slice(1).map(id => [id, $(id).value]));
 function regelText(c) {
-  return "Gezählt werden alle Truppen, die zum Dorf gehören (Zeile „insgesamt“: im Dorf, auswärts und unterwegs). Speer bis " + nf.format(c.raubzug) +
-    " gelten als Raubzug-Speer und zählen nicht. Off: Axt, LKav, berittene Bogen, Rammen, Katapulte. Deff: übrige Speer, " +
-    "Schwert, Bogen. Schwere Kavallerie zählt zur Seite mit mehr Infanterie; Späher, Paladin und AGs zählen nicht. " +
+  return "Gezählt werden die Truppen, die zum Dorf gehören: eigene im Dorf, auswärts und unterwegs (fremde Unterstützung im Dorf zählt nicht). " +
+    "Speer bis " + nf.format(c.raubzug) + " gelten als Raubzug-Speer und zählen nicht. Kern Off: Axt und Rammen. Kern Deff: übrige Speer, " +
+    "Schwert und Bogen. LKav, berittene Bogen, Katapulte und SKav zählen zur Seite mit dem größeren Kern, wenn der mindestens " +
+    nf.format(c.min_bh) + " BH hat, sonst LKav, berittene Bogen und Katapulte zu Off und SKav zu Deff. Späher, Paladin und AGs zählen nicht. " +
     "Unter " + nf.format(c.min_bh) + " BH oder wenn die stärkere Seite unter " + c.anteil + " % liegt: noch nicht zugeordnet.";
 }
 function einheitenText(v) {
   const t = SPALTEN.filter(u => u !== "militia" && v.units[u] > 0)
     .map(u => NAME[u] + " " + nf.format(v.units[u]) + (u === "spear" && v.e.raubzug > 0 ? " (davon " + nf.format(v.e.raubzug) + " Raubzug)" : ""));
-  return t.length ? "insgesamt: " + t.join(", ") : "keine Truppen";
+  return (t.length ? "zum Dorf: " + t.join(", ") : "keine Truppen") +
+    (v.fremd > 0 ? ". Dazu " + nf.format(v.fremd) + " fremde Einheiten als Unterstützung im Dorf, zählen nicht" : "");
 }
 
 async function kopieren(text) {
@@ -122,7 +126,7 @@ async function kopieren(text) {
   return ok;
 }
 
-function liste(art, titel, dorfer) {
+function liste(art, titel, dorfer, einheiten) {
   const sec = el("section", "panel so-liste " + art);
   sec.setAttribute("aria-labelledby", "h-" + art);
   const h = el("h2", null, titel + " ");
@@ -145,11 +149,19 @@ function liste(art, titel, dorfer) {
     body.appendChild(el("p", "empty", "keine Dörfer"));
   } else {
     body.appendChild(el("pre", null, text));
-    const cols = [["#", "rank"], ["Dorf", "l"], ["Koord.", "l"], ["Off BH", null, true], ["Deff BH", null, true]];
+    // je Einheit eine Spalte mit den Truppen, die zum Dorf gehören (Wunsch Dennis 18:49)
+    const cols = [["#", "rank"], ["Dorf", "l"], ["Koord.", "l"]]
+      .concat(einheiten.map(u => [KURZ[u] || NAME[u], "u", true]))
+      .concat([["Off BH", "bh", true], ["Deff BH", "bh", true]]);
     if (art === "offen") cols.push(["Grund", "l"]);
     const rows = dorfer.map(v => {
-      const r = [["", "rank"], [v.name, "name l", null, einheitenText(v)], [v.x + "|" + v.y, "l"],
-                 [nf.format(v.e.offBH), null, v.e.offBH], [nf.format(v.e.deffBH), null, v.e.deffBH]];
+      const r = [["", "rank"], [v.name, "name l", null, einheitenText(v)], [v.x + "|" + v.y, "l"]]
+        .concat(einheiten.map(u => {
+          const n = v.units[u] || 0;
+          const tip = u === "spear" && v.e.raubzug > 0 ? "davon " + nf.format(v.e.raubzug) + " Raubzug-Speer" : null;
+          return [nf.format(n), "u" + (n ? "" : " null"), n, tip];
+        }))
+        .concat([[nf.format(v.e.offBH), "bh", v.e.offBH], [nf.format(v.e.deffBH), "bh", v.e.deffBH]]);
       if (art === "offen") {
         const p = S.offAnteil(v.e);
         r.push([v.e.grund + (v.e.grund === "gemischt" ? " (" + p + " % Off)" : ""), "l grund"]);
@@ -171,7 +183,7 @@ function rechnen() {
   st.className = "so-status";
   if (!text.trim()) {
     st.textContent = "Noch keine Übersicht eingefügt.";
-    $("listen").replaceChildren(...LISTEN.map(([a, t]) => liste(a, t, [])));
+    $("listen").replaceChildren(...LISTEN.map(([a, t]) => liste(a, t, [], [])));
     return;
   }
   const r = S.sortieren(text, c, SPALTEN, POP);
@@ -182,7 +194,10 @@ function rechnen() {
   if (r.errors.length) st.className = "so-status err";
   r.errors.concat(r.warnings).slice(0, 6).forEach(m => st.appendChild(el("span", "warn", m)));
   if (r.errors.length + r.warnings.length > 6) st.appendChild(el("span", "warn", "… und " + (r.errors.length + r.warnings.length - 6) + " weitere Hinweise"));
-  $("listen").replaceChildren(...LISTEN.map(([a, t]) => liste(a, t, r[a])));
+  // Spalten nur für Einheiten, die in der Übersicht vorkommen; in allen drei Listen dieselben
+  const alle = r.off.concat(r.deff, r.offen);
+  const einheiten = SPALTEN.filter(u => u !== "militia" && alle.some(v => v.units[u] > 0));
+  $("listen").replaceChildren(...LISTEN.map(([a, t]) => liste(a, t, r[a], einheiten)));
 }
 
 let rechenTimer = null;
