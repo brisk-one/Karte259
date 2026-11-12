@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="de" data-theme="classic">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dörfer sortieren · Welt 259</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  .so-in{display:grid; gap:9px}
+  .so-in textarea{width:100%; min-height:150px; resize:vertical; font:12px/1.4 ui-monospace,Consolas,monospace;
+    color:var(--ink); background:var(--field); border:1px solid var(--edge); border-radius:var(--radius); padding:6px 8px;
+    box-sizing:border-box}
+  .so-regeln{display:flex; flex-wrap:wrap; gap:6px 18px; align-items:center; font-size:12px}
+  .so-regeln label{display:inline-flex; align-items:center; gap:6px}
+  .so-regeln input{width:6.5em; font:inherit; font-size:12px; padding:2px 6px; color:var(--ink); background:var(--field);
+    border:1px solid var(--edge); border-radius:var(--radius); text-align:right}
+  .so-note{margin:0; font-size:11.5px; line-height:1.5; color:var(--ink-2); max-width:110ch}
+  .so-status{margin:0; font-size:12px; font-weight:700}
+  .so-status.err{color:var(--bad)}
+  .so-status .warn{display:block; font-weight:400; color:var(--ink-2)}
+  /* Off und Deff nebeneinander, noch nicht zuordbar mit Grund darunter über die ganze Breite; schmal untereinander */
+  .so-listen{display:grid; gap:12px; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start}
+  .so-liste.offen{grid-column:1 / -1}
+  @media (max-width:900px){ .so-listen{grid-template-columns:minmax(0,1fr)} }
+  .so-liste .body{display:grid; gap:7px}
+  .so-liste h2 .n{font-size:13px; letter-spacing:.02em; text-transform:none}
+  .so-liste.off h2{border-left:4px solid var(--bad)}
+  .so-liste.deff h2{border-left:4px solid var(--good)}
+  .so-liste.offen h2{border-left:4px solid var(--edge-soft)}
+  .so-kop{display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px}
+  .so-kop .sub{font-size:11px; color:var(--muted)}
+  .so-liste pre{margin:0; padding:4px 6px; white-space:pre-wrap; overflow-wrap:normal; max-height:120px; overflow:auto; user-select:all;
+    font:12px/1.5 ui-monospace,Consolas,monospace; background:var(--panel-2); border:1px solid var(--edge); border-radius:var(--radius)}
+  .so-liste .scroll{max-height:min(520px,60vh)}
+  .so-liste td.name{max-width:13em; overflow:hidden; text-overflow:ellipsis}
+  .so-liste td.grund{white-space:normal}
+</style>
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+
+<main class="wrap">
+  <section class="panel" aria-labelledby="h-in">
+    <h2 id="h-in">Truppenübersicht einfügen
+      <span class="hint">Im Spiel Übersichten › Truppen, Ansicht „Alle“ oder „Eigene“, Strg+A, kopieren, hier einfügen. Die Eingaben bleiben nur in diesem Browser; „Eingaben löschen“ entfernt sie.</span>
+      <span class="right"><button class="tw" type="button" id="vergessen">Eingaben löschen</button></span>
+    </h2>
+    <div class="body so-in">
+      <textarea id="paste" spellcheck="false" aria-label="Truppenübersicht" aria-describedby="status"
+        placeholder="[001] Dorfname (500|500) K55   eigene   1000   0   5000   0   50   2000   0   0   250   0   0   0   0&#10;im Dorf   …"></textarea>
+      <div class="so-regeln">
+        <label>Raubzug-Speer bis <input type="number" id="raubzug" min="0" step="100" inputmode="numeric"></label>
+        <label>zuordnen ab <input type="number" id="min_bh" min="0" step="100" inputmode="numeric"> BH</label>
+        <label>stärkere Seite mindestens <input type="number" id="anteil" min="50" max="100" step="1" inputmode="numeric"> %</label>
+      </div>
+      <p class="so-note" id="regel"></p>
+      <p class="so-status" id="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <div class="so-listen" id="listen"></div>
+
+  <footer>Fan-Projekt mit öffentlichen Daten von die-staemme.de. Kein Angebot von InnoGames.
+    Die eingefügte Übersicht wird nur in diesem Browser ausgewertet und nirgends hingeschickt.
+    Quelltext auf <a href="https://github.com/brisk-one/Karte259">GitHub</a>.</footer>
+</main>
+
+<script src="app.js"></script>
+<script src="angriff-core.js"></script>
+<script src="sortieren.js"></script>
+<script>
+buildAppbar("sortieren", "Dörfer sortieren");
+
+const S = window.Sortieren, K = window.Angriff;
+const NAME = {spear: "Speer", sword: "Schwert", axe: "Axt", archer: "Bogen", spy: "Späher", light: "LKav", marcher: "BBogen",
+              heavy: "SKav", ram: "Rammen", catapult: "Katapulte", knight: "Paladin", snob: "AG", militia: "Miliz"};
+const LISTEN = [["off", "Off"], ["deff", "Deff"], ["offen", "Noch nicht zuordbar"]];
+let SPALTEN = K.OVERVIEW_COLUMNS, POP = K.POP;
+
+/* ---------- Eingaben merken (wie im Prägerechner, Dennis 3a vom 12.11.2026) ----------
+   Übersicht und Regeln bleiben in diesem Browser (localStorage), gespeichert wird nur nach eigenen Eingaben. */
+const MERK = "karte259.sortieren.eingaben.v1";
+const FELDER = ["paste", "raubzug", "min_bh", "anteil"];
+let merkTimer = null;
+function merken() {
+  try { localStorage.setItem(MERK, JSON.stringify(Object.fromEntries(FELDER.map(id => [id, $(id).value])))); }
+  catch (e) { /* ohne Speicher: nichts merken */ }
+}
+function laden() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(MERK) || "null"); } catch (e) { d = null; }
+  FELDER.forEach(id => { $(id).value = d && d[id] != null ? d[id] : (id === "paste" ? "" : S.STANDARD[id]); });
+}
+$("vergessen").addEventListener("click", () => {
+  try { localStorage.removeItem(MERK); } catch (e) { /* nichts gespeichert */ }
+  FELDER.forEach(id => { $(id).value = id === "paste" ? "" : S.STANDARD[id]; });
+  rechnen();
+});
+
+const cfg = () => Object.fromEntries(FELDER.slice(1).map(id => [id, $(id).value]));
+function regelText(c) {
+  return "Gezählt werden die eigenen Truppen, die gerade im Dorf stehen. Speer bis " + nf.format(c.raubzug) +
+    " gelten als Raubzug-Speer und zählen nicht. Off: Axt, LKav, berittene Bogen, Rammen, Katapulte. Deff: übrige Speer, " +
+    "Schwert, Bogen. Schwere Kavallerie zählt zur Seite mit mehr Infanterie; Späher, Paladin und AGs zählen nicht. " +
+    "Unter " + nf.format(c.min_bh) + " BH oder wenn die stärkere Seite unter " + c.anteil + " % liegt: noch nicht zuordbar.";
+}
+function einheitenText(v) {
+  const t = SPALTEN.filter(u => u !== "militia" && v.units[u] > 0)
+    .map(u => NAME[u] + " " + nf.format(v.units[u]) + (u === "spear" && v.e.raubzug > 0 ? " (davon " + nf.format(v.e.raubzug) + " Raubzug)" : ""));
+  return t.length ? t.join(", ") : "keine Truppen im Dorf";
+}
+
+async function kopieren(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* Rückfall unten */ }
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+function liste(art, titel, dorfer) {
+  const sec = el("section", "panel so-liste " + art);
+  sec.setAttribute("aria-labelledby", "h-" + art);
+  const h = el("h2", null, titel + " ");
+  h.id = "h-" + art;
+  h.appendChild(el("span", "n", dorfer.length === 1 ? "1 Dorf" : nf.format(dorfer.length) + " Dörfer"));
+  sec.appendChild(h);
+  const body = el("div", "body");
+  const text = S.koordText(dorfer);
+  const kop = el("div", "so-kop"), b = el("button", "tw", "Koordinaten kopieren");
+  b.type = "button";
+  b.disabled = !dorfer.length;
+  b.setAttribute("aria-label", "Koordinaten der Liste " + titel + " kopieren");
+  b.addEventListener("click", async () => {
+    b.textContent = await kopieren(text) ? "Kopiert" : "Fehler";
+    setTimeout(() => { b.textContent = "Koordinaten kopieren"; }, 1500);
+  });
+  kop.append(b, el("span", "sub", "zum Einfügen unter „Koordinaten hinzufügen“ in der Gruppenverwaltung"));
+  body.appendChild(kop);
+  if (!dorfer.length) {
+    body.appendChild(el("p", "empty", "keine Dörfer"));
+  } else {
+    body.appendChild(el("pre", null, text));
+    const cols = [["#", "rank"], ["Dorf", "l"], ["Koord.", "l"], ["Off BH", null, true], ["Deff BH", null, true]];
+    if (art === "offen") cols.push(["Grund", "l"]);
+    const rows = dorfer.map(v => {
+      const r = [["", "rank"], [v.name, "name l", null, einheitenText(v)], [v.x + "|" + v.y, "l"],
+                 [nf.format(v.e.offBH), null, v.e.offBH], [nf.format(v.e.deffBH), null, v.e.deffBH]];
+      if (art === "offen") {
+        const p = S.offAnteil(v.e);
+        r.push([v.e.grund + (v.e.grund === "gemischt" ? " (" + p + " % Off)" : ""), "l grund"]);
+      }
+      return r;
+    });
+    const box = el("div", "scroll");
+    box.appendChild(table(cols, rows, {counter: 0}));
+    body.appendChild(box);
+  }
+  sec.appendChild(body);
+  return sec;
+}
+
+function rechnen() {
+  const c = S.einstellungen(cfg());
+  $("regel").textContent = regelText(c);
+  const text = $("paste").value, st = $("status");
+  st.className = "so-status";
+  if (!text.trim()) {
+    st.textContent = "Noch keine Übersicht eingefügt.";
+    $("listen").replaceChildren(...LISTEN.map(([a, t]) => liste(a, t, [])));
+    return;
+  }
+  const r = S.sortieren(text, c, SPALTEN, POP);
+  const teile = [];
+  if (r.gelesen) teile.push(nf.format(r.gelesen) + (r.gelesen === 1 ? " Dorf" : " Dörfer") + " gelesen: " +
+    r.off.length + " Off, " + r.deff.length + " Deff, " + r.offen.length + " noch nicht zuordbar.");
+  st.replaceChildren(document.createTextNode(teile.join(" ")));
+  if (r.errors.length) st.className = "so-status err";
+  r.errors.concat(r.warnings).slice(0, 6).forEach(m => st.appendChild(el("span", "warn", m)));
+  if (r.errors.length + r.warnings.length > 6) st.appendChild(el("span", "warn", "… und " + (r.errors.length + r.warnings.length - 6) + " weitere Hinweise"));
+  $("listen").replaceChildren(...LISTEN.map(([a, t]) => liste(a, t, r[a])));
+}
+
+let rechenTimer = null;
+FELDER.forEach(id => $(id).addEventListener("input", () => {
+  clearTimeout(rechenTimer); rechenTimer = setTimeout(rechnen, 150);
+  clearTimeout(merkTimer); merkTimer = setTimeout(merken, 400);
+}));
+
+laden();
+rechnen();
+// Spalten und Bevölkerung je Einheit aus den Welteinstellungen; ohne units.json gelten die Werte des Planers (Welt 259)
+loadData("units").then(u => {
+  if (!u || !u.units || !u.units.length) return;
+  SPALTEN = u.units.map(x => x.id).concat(["militia"]);
+  POP = K.makeWorld(u).pop;
+  rechnen();
+}).catch(() => { /* Standardwerte bleiben */ });
+</script>
+</body>
+</html>

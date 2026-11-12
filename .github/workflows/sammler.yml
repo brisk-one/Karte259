@@ -106,6 +106,9 @@ jobs:
       - name: Tests Truppen-Äquivalent
         run: node --test tests/truppen.test.js
 
+      - name: Tests Dörfer sortieren
+        run: node --test tests/sortieren.test.js
+
       - name: Vorbereiten
         id: start
         run: |
@@ -183,6 +186,9 @@ jobs:
 
       - name: Tests Truppen-Äquivalent
         run: node --test tests/truppen.test.js
+
+      - name: Tests Dörfer sortieren
+        run: node --test tests/sortieren.test.js
 
       - name: Seite bauen
         run: python3 -m collector.build_site --out _site
