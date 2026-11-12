@@ -264,8 +264,8 @@ function start(src, P, sites, cnt, opt) {
   // Zustand je Dorf
   const Z = src.map((s, i) => {
     if (isSite.has(i)) return null;
-    const cap = s.cap, st0 = Math.min(cap, cap * P.startPct / 100), vb = s.vorab;
-    return {w: vb ? Math.min(cap, st0 + vb[0]) : st0, st: vb ? Math.min(cap, st0 + vb[1]) : st0, ir: vb ? Math.min(cap, st0 + vb[2]) : st0,
+    const cap = s.cap, S0 = Core.startBestand(s, P), vb = s.vorab;
+    return {w: vb ? Math.min(cap, S0[0] + vb[0]) : S0[0], st: vb ? Math.min(cap, S0[1] + vb[1]) : S0[1], ir: vb ? Math.min(cap, S0[2] + vb[2]) : S0[2],
             busy: 0, rueck: [], an: [], add1: P.pkgSize / 100 * cap, lok: P.mintLocal && s.snob,
             p: [s.prod.wood * T, s.prod.stone * T, s.prod.iron * T]};
   });

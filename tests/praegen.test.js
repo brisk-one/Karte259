@@ -846,3 +846,27 @@ test("10.17: Suche unter fremden Dörfern mit Filtern und eigenem Stamm", () => 
 require("./praegen-umwege.test.js");
 // Sitzungsanzahlplanung (site/praegen-sitzungen.js), ebenso eingebunden
 require("./praegen-sitzungen.test.js");
+
+/* ---------- Lagerstand als Startbestand je Dorf (Dennis 2a, 12.11.2026) ---------- */
+test("2a: Lagerstand gleich dem Startbestand rechnet wie der Startbestand, volles Lager läuft mehr über", () => {
+  const P30 = V5({startPct: 30}), P0 = V5({startPct: 0});
+  const R = K.plan(konto63(), P30), sites = R.configs[0].sites, cnt = K.toCnt([0, 0, 3, 3, 6, 6, 9, 9], K.lastClick(P30));
+  const a = K.lockstep(R.src, P30, sites, cnt);
+  // gleiches Lager als Lagerstand bei Startbestand 0
+  const mitLager = konto63().map(v => Object.assign({}, v));
+  const src2 = K.prepare(mitLager.map(v => { const cap = K.storageCap(v.b.storage); return Object.assign(v, {lager: [0.3 * cap, 0.3 * cap, 0.3 * cap]}); }), P0);
+  const b = K.lockstep(src2, P0, sites, cnt);
+  near(b.coins, a.coins, 1e-9 * a.coins);
+  near(b.ov, a.ov, 1e-9);
+  assert.deepEqual(K.startBestand(src2[0], P0).map(Math.round), K.startBestand(R.src[0], P30).map(Math.round));
+  // volles Lager in allen Dörfern: mehr Überlauf als leer
+  const voll = K.prepare(konto63().map(v => Object.assign({}, v, {lager: [1e9, 1e9, 1e9]})), P0);
+  assert.equal(K.startBestand(voll[0], P0)[0], voll[0].cap);                    // auf den Speicher begrenzt
+  const leer = K.prepare(konto63(), P0);
+  assert.ok(K.lockstep(voll, P0, sites, cnt).ov > K.lockstep(leer, P0, sites, cnt).ov);
+  // Dörfer ohne Lagerstand behalten den Startbestand; fremde Dörfer beginnen leer
+  const gemischt = K.prepare(konto63().map((v, i) => i % 2 ? v : Object.assign({}, v, {lager: [1000, 2000, 3000]})), P30);
+  assert.deepEqual(K.startBestand(gemischt[0], P30), [1000, 2000, 3000]);
+  near(K.startBestand(gemischt[1], P30)[1], 0.3 * gemischt[1].cap, 1e-9);
+  assert.deepEqual(K.startBestand(Object.assign({}, gemischt[1], {leer: true}), P30), [0, 0, 0]);
+});

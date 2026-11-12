@@ -346,8 +346,8 @@
   </nav>
   <section class="panel" aria-labelledby="h-in">
     <h2 id="h-in">Übersichten einfügen
-      <span class="hint">Im Spiel Übersichten › Gebäude und › Produktion öffnen, Strg+A, kopieren, hier einfügen. Die Daten bleiben in deinem Browser und werden nicht gespeichert.</span>
-      <span class="right"><button class="tw" type="button" id="example">Beispiel laden</button></span>
+      <span class="hint">Im Spiel Übersichten › Gebäude und › Produktion öffnen, Strg+A, kopieren, hier einfügen. Die Eingaben bleiben nur in diesem Browser, auch nach dem Neuladen; „Eingaben löschen“ entfernt sie.</span>
+      <span class="right"><button class="tw" type="button" id="example">Beispiel laden</button> <button class="tw" type="button" id="vergessen">Eingaben löschen</button></span>
     </h2>
     <div class="body pr-in">
       <div class="pr-ins">
@@ -358,7 +358,7 @@
         <label><span class="lab">Produktion mit Lagerstand (freiwillig)</span>
           <textarea id="lager" spellcheck="false" aria-label="Produktionsübersicht mit Lagerstand" aria-describedby="lager-status"
             placeholder="[001] Dorfname (500|500) K55   10.393   123.456 234.567 345.678   400.000   110/235   24.000/24.000&#10;…"></textarea>
-          <span class="pr-mnote" id="lager-status">Wirkt bisher nur auf den Tausch vor dem Start: getauscht wird nur das Eisen, das jetzt in den Dörfern liegt. Zeitplan, Münzen und Handelsrouten rechnen mit dem Startbestand (Erweitert).</span>
+          <span class="pr-mnote" id="lager-status">Kurz vor dem Start einfügen: Dörfer mit Lagerstand beginnen in der ganzen Rechnung mit ihrem echten Lager, die übrigen mit dem Startbestand (Erweitert).</span>
         </label>
       </div>
       <div class="pr-ctl">
@@ -442,7 +442,7 @@
           <label class="pr-check" style="display:flex"><input type="checkbox" id="prod" checked> Laufende Produktion der 48 h einrechnen</label>
           <label>Produktionsfaktor <input type="number" id="pfac" min="0.5" max="3" step="0.01" placeholder="automatisch">
             <span class="note">leer: aus der Σ-Zeile der Übersicht, sonst 1,0 (nur Minenstufen)</span></label>
-          <label>Startbestand in % des Speichers <input type="number" id="start" min="0" max="100" step="1" value="0">
+          <label>Startbestand in % des Speichers (Dörfer ohne Lagerstand) <input type="number" id="start" min="0" max="100" step="1" value="0">
             <span class="note">Rohstoffe, die beim Start schon in den Dörfern liegen</span></label>
           <label>Händler: Minuten je Feld ohne Bonus <input type="number" id="mpf" min="0.5" max="20" step="0.01">
             <span class="note" id="mpf-note"></span></label>
@@ -727,7 +727,7 @@ function setMode(m) {
 }
 ["mode-pct", "mode-max"].forEach(id => $(id).addEventListener("click", e => {
   const m = id === "mode-pct" ? "pct" : "max";
-  if (MODE !== m) { setMode(m); if (e.target.tagName === "INPUT" && e.target.type === "number") e.target.focus(); }
+  if (MODE !== m) { setMode(m); merkenSpaeter(); if (e.target.tagName === "INPUT" && e.target.type === "number") e.target.focus(); }
 }));
 [100, 200, 300, 500, 1000].forEach(v => {
   const b = el("button", "tw small", v + " %"); b.type = "button";
@@ -760,9 +760,59 @@ $("fdcount").addEventListener("change", gainZustand);
 $("vorab-kurs").addEventListener("input", () => { if (RESULT) renderVorab(); });
 $("routen-max").addEventListener("change", () => { if (RESULT) renderRouten(); });       // 10.18: nur Anzeige, keine neue Rechnung
 $("routen-abstand").addEventListener("input", () => { if (RESULT) renderRouten(); });    // fester Abstand (Wunsch Dennis 11.11.2026 19:14)
-$("lager").addEventListener("input", () => { LAGER = K.parseLager($("lager").value); if (RESULT) renderVorab(); else lagerStatus(); });
-$("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); });
-setMode("pct");
+// 2a (12.11.2026): der Lagerstand ist Startbestand je Dorf, also neu rechnen
+$("lager").addEventListener("input", () => { LAGER = K.parseLager($("lager").value); lagerStatus(); schedule(); });
+$("reset-off").addEventListener("click", () => { OFF.clear(); schedule(); merkenSpaeter(); });
+
+/* ---------- Eingaben merken (Dennis 3a, 12.11.2026) ----------
+   Übersichten, Einstellungen, Berechnung und ausgeschlossene Dörfer bleiben in diesem Browser (localStorage), auch nach
+   dem Neuladen; nichts geht an einen Server. „Eingaben löschen“ entfernt sie und setzt alles auf den Anfang. */
+const MERK = "karte259.praegen.eingaben.v1";
+const merkFelder = () => [...document.querySelectorAll("main input[id], main select[id], main textarea[id]")].filter(e => e.type !== "radio" && e.type !== "file");
+var merkTimer = null;                    // var: Klicks auf die Berechnung können schon vor dieser Zeile wirken
+// gemerkt wird nur nach eigenen Eingaben (input, change, Wahl der Berechnung, ausgeschlossene Dörfer), nicht beim Laden
+function merken() {
+  try {
+    const d = {mode: MODE, off: [...OFF]};
+    merkFelder().forEach(e => { d[e.id] = e.type === "checkbox" ? e.checked : e.value; });
+    localStorage.setItem(MERK, JSON.stringify(d));
+  } catch (e) { /* ohne Speicher: nichts merken */ }
+}
+function merkenSpaeter() { clearTimeout(merkTimer); merkTimer = setTimeout(merken, 400); }
+function eingabenLaden() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(MERK) || "null"); } catch (e) { d = null; }
+  if (!d || typeof d !== "object") return null;
+  merkFelder().forEach(e => {
+    if (!(e.id in d)) return;
+    if (e.type === "checkbox") e.checked = !!d[e.id];
+    else e.value = String(d[e.id]);
+  });
+  if (Array.isArray(d.off)) d.off.forEach(k => OFF.add(String(k)));
+  return d.mode === "max" ? "max" : "pct";
+}
+function eingabenLoeschen() {
+  try { localStorage.removeItem(MERK); } catch (e) { /* nichts gespeichert */ }
+  merkFelder().forEach(e => {
+    if (e.type === "checkbox") e.checked = e.defaultChecked;
+    else if (e.tagName === "SELECT") { const o = [...e.options].find(x => x.defaultSelected) || e.options[0]; if (o) e.value = o.value; }
+    else e.value = e.defaultValue;
+  });
+  OFF.clear();
+  LAGER = K.parseLager("");
+  lagerStatus();
+  SITZ = null; UMWEGE = null;
+  setMode("pct");
+  pctPakete();
+  gainZustand();
+  clearTimeout(merkTimer);
+  try { localStorage.removeItem(MERK); } catch (e) { /* nichts gespeichert */ }
+}
+$("vergessen").addEventListener("click", eingabenLoeschen);
+document.querySelector("main").addEventListener("input", merkenSpaeter);
+document.querySelector("main").addEventListener("change", merkenSpaeter);
+const GEMERKT = eingabenLaden();          // Lagerstand dazu am Ende des Skripts, wenn LAGER angelegt ist
+setMode(GEMERKT || "pct");
 pctPakete();
 document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } });
 let rsz = null;
@@ -805,14 +855,17 @@ function run() {
     RESULT = null;
     return;
   }
-  const villages = parsed.villages.filter(v => !OFF.has(v.x + "|" + v.y));
+  // 2a (12.11.2026): Lagerstand aus Übersichten › Produktion als Startbestand je Dorf
+  const mitLager = v => { const l = LAGER.count ? LAGER.lager[v.x + "|" + v.y] : null; return l ? Object.assign({}, v, {lager: [+l.wood || 0, +l.stone || 0, +l.iron || 0]}) : v; };
+  const villages = parsed.villages.filter(v => !OFF.has(v.x + "|" + v.y)).map(mitLager);
+  const nLager = villages.filter(v => v.lager).length;
   const inp = inputs();
   const auto = K.prodFactorFrom(parsed.villages, parsed.prodSum, WORLD.speed);
   if (inp.prodFactor == null) inp.prodFactor = auto || 1;
   const P = K.params(inp, WORLD);
   const ah = parsed.villages.filter(v => v.b.snob >= 1).length;
   st.textContent = parsed.villages.length + " Dörfer erkannt, " + ah + " mit Adelshof"
-    + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "")
+    + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "") + (nLager ? ", " + nLager + " mit Lagerstand" : "")
     + (inp.production ? " · Produktion × " + nf2.format(inp.prodFactor)
        + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
   if (!villages.length) { ["p-rec", "p-vorab", "p-routen", "p-umwege", "p-fremd", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
@@ -1410,12 +1463,12 @@ function lagerZeile(cls, wort, v, cap) {
 }
 function lagerStatus() {
   const st = $("lager-status"), txt = $("lager").value.trim();
-  if (!txt) { st.textContent = "Wirkt bisher nur auf den Tausch vor dem Start: getauscht wird nur das Eisen, das jetzt in den Dörfern liegt. Zeitplan, Münzen und Handelsrouten rechnen mit dem Startbestand (Erweitert)."; return; }
+  if (!txt) { st.textContent = "Kurz vor dem Start einfügen: Dörfer mit Lagerstand beginnen in der ganzen Rechnung mit ihrem echten Lager, die übrigen mit dem Startbestand (Erweitert)."; return; }
   if (!LAGER.count) { st.textContent = "Keine Dörfer mit Lagerstand erkannt. Bitte Übersichten › Produktion kopieren, nicht die Gebäudeübersicht."; return; }
   const src = RESULT ? RESULT.src : [], fehlt = src.filter(s => !LAGER.lager[s.x + "|" + s.y]).length;
   st.textContent = "Lagerstand für " + nf.format(src.length ? src.length - fehlt : LAGER.count) + (src.length ? " von " + nf.format(src.length) : "")
-    + " Dörfern erkannt; getauscht wird nur das Eisen, das dort jetzt liegt" + (fehlt ? ". Die übrigen beginnen mit dem eingestellten Startbestand und tauschen nicht." : ".")
-    + " Zeitplan, Münzen und Handelsrouten rechnen weiter mit dem Startbestand (Erweitert).";
+    + " Dörfern erkannt: sie beginnen in der ganzen Rechnung (Zeitplan, Münzen, Überlauf, Handelsrouten) mit ihrem Lager, getauscht wird nur das Eisen, das dort jetzt liegt"
+    + (fehlt ? ". Die übrigen beginnen mit dem Startbestand (Erweitert) und tauschen nicht." : ".");
 }
 /* Tabelle je Dorf zum Auf- und Zuklappen (Wunsch Dennis 10.11.2026: die Tabelle ist sehr groß), zu Beginn zu */
 let VORAB_OFFEN = false;
@@ -1959,7 +2012,8 @@ async function sitzRechnen() {
     const x = Math.floor(r[0] / 1000), y = r[0] % 1000;
     if (x >= x0 && x <= x1 && y >= y0 && y <= y1) barbaren.push({x, y, pts: r[2]});
   });
-  const eingabe = {villages: R.villages, P: R.Pin, welt: WORLD, vorrat: ein.vorrat, zugang: ein.zugang, tage: ein.tage, ziel: ein.ziel,
+  // künftige Sitzungen: Startbestand statt heutigem Lagerstand (2a gilt für die anstehende Flaggendopplerplanung)
+  const eingabe = {villages: R.villages.map(v => { if (!v.lager) return v; const c = Object.assign({}, v); delete c.lager; return c; }), P: R.Pin, welt: WORLD, vorrat: ein.vorrat, zugang: ein.zugang, tage: ein.tage, ziel: ein.ziel,
                    barbaren, muenzen: ein.muenzen, naechstes: ein.naechstes, mMax: 8};
   const token = RUN, schluessel = sitzSchluessel(), start = Date.now();
   st.textContent = "rechnet … 0 %";
@@ -2756,6 +2810,7 @@ function renderAssumptions() {
   $("mpf-note").textContent = nf.format(WORLD.base_min_per_field) + " ÷ Weltgeschwindigkeit " + nf1.format(WORLD.speed) + "; der Händlerbonus wird zusätzlich abgezogen";
   if ($("paste").value.trim()) run();
 })();
+if (GEMERKT) { LAGER = K.parseLager($("lager").value); lagerStatus(); }
 if (location.hash === "#sitzungsanzahl") reiter("sitzungen");
 </script>
 </body>

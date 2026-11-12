@@ -178,17 +178,27 @@ const coinPrice = (t, P) => P.unitRes * (1 - reduction(t, P));
    Mit P.minMarket rechnet jedes Dorf mindestens mit dieser Marktstufe (Ausbau vor dem Start, Wunsch Dennis
    28.10.2026). b.market ist dann die gerechnete Stufe, marketFrom die Stufe aus der Übersicht. Ebenso
    P.minStorage für den Speicher (v0.5, 29.10.2026): größerer Speicher heißt größere Pakete und mehr Platz. */
+/* Startbestand je Dorf und Rohstoff (Dennis 2a, 12.11.2026): mit eingefügtem Lagerstand (v.lager = [Holz, Lehm, Eisen]
+   aus Übersichten › Produktion) beginnt das Dorf in der ganzen Rechnung mit seinem echten Lager, auf den Speicher
+   begrenzt; sonst mit dem Startbestand in % des Speichers. Fremde Dörfer (s.leer) beginnen leer. */
+function startBestand(s, P) {
+  if (s.leer) return [0, 0, 0];
+  if (s.lager) return s.lager.map(v => Math.min(s.cap, Math.max(0, +v || 0)));
+  const z = Math.min(s.cap, s.cap * P.startPct / 100);
+  return [z, z, z];
+}
 function prepare(villages, P) {
   return villages.map((v, i) => {
     const storFrom = v.b.storage | 0, storage = Math.max(storFrom, P.minStorage || 0);
     const cap = storageCap(storage);
-    const per = cap * (P.pkgPct + P.startPct) / 100;
+    const lager = Array.isArray(v.lager) ? v.lager.map(x => Math.min(cap, Math.max(0, +x || 0))) : null;
+    const st0 = lager || [0, 1, 2].map(() => cap * P.startPct / 100), pk = cap * P.pkgPct / 100;
     const prod = {};
     RES.forEach(r => { prod[r] = P.production ? baseProd(v.b[r]) * P.speed * P.prodFactor : 0; });
     const from = v.b.market | 0, market = Math.max(from, P.minMarket || 0);
     const b = market > from || storage > storFrom ? Object.assign({}, v.b, {market, storage}) : v.b;
     return {i, name: v.name, x: v.x, y: v.y, b, marketFrom: from, storageFrom: storFrom, cap, merchants: merchantsAt(market),
-            snob: (v.b.snob || 0) >= 1, pkg: {wood: per, stone: per, iron: per}, prod};
+            snob: (v.b.snob || 0) >= 1, pkg: {wood: pk + st0[0], stone: pk + st0[1], iron: pk + st0[2]}, prod, lager};
   });
 }
 
@@ -512,11 +522,11 @@ const COIN = P => [P.coin.wood, P.coin.stone, P.coin.iron];
 const ST = new Float64Array(3), QT = [], QN = [];
 function villageRun(s, tau, P, cnt, M, sink, send, ovClick, acc) {
   const T = P.interval, C = P.carry, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
-  const add1 = P.pkgSize / 100 * cap, start = Math.min(cap, cap * P.startPct / 100);
+  const add1 = P.pkgSize / 100 * cap, S0 = startBestand(s, P);
   const p0 = s.prod.wood * T, p1 = s.prod.stone * T, p2 = s.prod.iron * T;
   // 10.16: Vorrat aus dem Tausch vor dem Start (s.vorab = [Holz, Lehm, Eisen] zusätzlich zum Startbestand)
   const vb = s.vorab;
-  let w = vb ? Math.min(cap, start + vb[0]) : start, st = vb ? Math.min(cap, start + vb[1]) : start, ir = vb ? Math.min(cap, start + vb[2]) : start;
+  let w = vb ? Math.min(cap, S0[0] + vb[0]) : S0[0], st = vb ? Math.min(cap, S0[1] + vb[1]) : S0[1], ir = vb ? Math.min(cap, S0[2] + vb[2]) : S0[2];
   let qh = 0, qn = 0, busy = 0, overflow = 0, pkgRes = 0, lokal = 0;
   const lok = P.mintLocal && s.snob && send !== false;
   for (let k = 0; k < cnt.length; k++) {
@@ -573,9 +583,9 @@ function villageRun(s, tau, P, cnt, M, sink, send, ovClick, acc) {
 function siteRun(s, P, cnt, bins, acc) {
   const T = P.interval, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
   // s.leer (10.17): fremdes Dorf nur als Empfänger, ohne eigene Pakete und ohne Startbestand
-  const add1 = s.leer ? 0 : P.pkgSize / 100 * cap, start = s.leer ? 0 : Math.min(cap, cap * P.startPct / 100);
+  const add1 = s.leer ? 0 : P.pkgSize / 100 * cap, S0 = startBestand(s, P);
   const vb = s.vorab;                                                      // 10.16, wie in villageRun
-  let w = vb ? Math.min(cap, start + vb[0]) : start, st = vb ? Math.min(cap, start + vb[1]) : start, ir = vb ? Math.min(cap, start + vb[2]) : start;
+  let w = vb ? Math.min(cap, S0[0] + vb[0]) : S0[0], st = vb ? Math.min(cap, S0[1] + vb[1]) : S0[1], ir = vb ? Math.min(cap, S0[2] + vb[2]) : S0[2];
   let coins = 0, minted = 0, pkgRes = 0;
   const mint = t => {
     const u = Math.min(w / cw, st / cs, ir / ci);
@@ -656,9 +666,9 @@ const rohstoffeAus = (units, P) => COIN(P).map(c => units * c);
 function poolWahl(src, P, sites, cnt, kand, punkte, setze, all, maxEval) {
   const {site, tau} = src._ls, c = COIN(P), pool = new Map(), kset = new Set(kand);
   for (const j of sites) {
-    const s = src[j], acc = {arr: [0, 0, 0], sov: [0, 0, 0]}, st = s.leer ? 0 : Math.min(s.cap, s.cap * P.startPct / 100), vb = s.vorab;
+    const s = src[j], acc = {arr: [0, 0, 0], sov: [0, 0, 0]}, S0 = startBestand(s, P), vb = s.vorab;
     siteRun(s, P, cnt, null, acc);
-    pool.set(j, [0, 1, 2].map(r => acc.arr[r] + (vb ? Math.min(s.cap, st + vb[r]) : st)));
+    pool.set(j, [0, 1, 2].map(r => acc.arr[r] + (vb ? Math.min(s.cap, S0[r] + vb[r]) : S0[r])));
   }
   const lauf = i => {
     const D = [0, 0, 0], s = src[i];
@@ -787,13 +797,12 @@ function vorabTausch(src, P, sites, cnt) {
 function lagerTausch(src, P, sites, cnt, lager, kurs) {
   const unit = P.carryMarkt || P.carry / (P.merchantBonus ? 1.5 : 1);
   const pro = Math.max(1, Math.round(unit * (kurs > 0 ? kurs : 1))), isSite = new Set(sites);
-  const start = s => Math.min(s.cap, s.cap * P.startPct / 100);
   const X = src.map(s => {
     const l = lager && lager[s.x + "|" + s.y];
     return l ? [Math.min(s.cap, +l.wood || 0), Math.min(s.cap, +l.stone || 0), Math.min(s.cap, +l.iron || 0)] : null;
   });
   const nach = (i, aL, aH) => { const x = X[i]; return [x[0] + aH * pro, x[1] + aL * pro, x[2] - (aL + aH) * unit]; };
-  const setze = (i, aL, aH) => { const s = src[i], z = start(s); s.vorab = nach(i, aL, aH).map(v => v - z); };
+  const setze = (i, aL, aH) => { const s = src[i], z = startBestand(s, P); s.vorab = nach(i, aL, aH).map((v, r) => v - z[r]); };
   const grenzen = i => {
     const s = src[i], x = X[i];
     return {nE: Math.floor(x[2] / unit + 1e-9), nL: Math.max(0, Math.floor((s.cap - x[1]) / pro + 1e-9)), nH: Math.max(0, Math.floor((s.cap - x[0]) / pro + 1e-9))};
@@ -884,9 +893,9 @@ function lagerTausch(src, P, sites, cnt, lager, kurs) {
    routeRun: ein Lieferdorf mit Menge a = [Holz, Lehm, Eisen] alle dt Stunden, erste Lieferung beim Start. */
 function routeRun(s, tau, P, cnt, a, dt, sink) {
   const T = P.interval, C = P.carry, cap = s.cap, M = s.merchants, K = cnt.length;
-  const add1 = P.pkgSize / 100 * cap, start = Math.min(cap, cap * P.startPct / 100);
+  const add1 = P.pkgSize / 100 * cap, S0 = startBestand(s, P);
   const pr = [s.prod.wood, s.prod.stone, s.prod.iron], vb = s.vorab;
-  const x = [0, 1, 2].map(r => vb ? Math.min(cap, start + vb[r]) : start);
+  const x = [0, 1, 2].map(r => vb ? Math.min(cap, S0[r] + vb[r]) : S0[r]);
   const need = Math.ceil((a[0] + a[1] + a[2]) / C - 1e-7);
   const qT = [], qN = [];
   let qh = 0, busy = 0, overflow = 0, pkgRes = 0, sent = 0, skipped = 0, tLast = 0, k = 0, j = 0;
@@ -1470,7 +1479,7 @@ const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packages
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,
-             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, lagerTausch, parseLager, routeRun, routeMenge, routenPlan, ROUTE_DT, fremdeSuche};
+             mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, lagerTausch, parseLager, routeRun, routeMenge, routenPlan, ROUTE_DT, fremdeSuche, startBestand};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Praegen = api;
 })(typeof window !== "undefined" ? window : globalThis);
