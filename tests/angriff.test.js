@@ -909,3 +909,12 @@ test("Zustimmungs-Paladin steht im Dorf: alle ganzen Trains von dort mit 3 AGs, 
   const ohnePala = JSON.parse(JSON.stringify(input)); ohnePala.attackers[0].villages.find(v => v.id === 2).pala = false;
   assert.ok(K.pruefePlan(r, ohnePala).some(x => /Zu wenige AGs/.test(x)));
 });
+
+test("Abschickzeitraum vor eigenen Clean-Offs: Off, die nur außerhalb zu den AGs passt, tauscht mit einem anderen Spieler (Dennis 12.11.2026)", () => {
+  // Kunstszenario mit Zeitraum 18 bis 20 Uhr und Vorrang eigener Clean-Offs: vorher 2 Clean-Offs außerhalb, jetzt 1
+  const input = szenario({clean_eigene: "vorrang", seed: 3}, {windows: K.parseFenster("02.11.2026 18:00 bis 20:00").fenster});
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  assert.equal(r.stats.geadelt, 3);
+  assert.ok(new Set(r.items.filter(i => i.ausserhalb && i.kind === "clean").map(i => i.aktion)).size <= 1);
+});

@@ -1089,8 +1089,38 @@ function bilanzBox(r) {
 function sitzungenBox(r) {
   const d = el("div");
   d.append(el("h3", null, "Abschicksitzungen"),
-    el("p", "ap-note", "Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. „Außerhalb“: außerhalb deiner Abschickzeiträume, nötig für dieses Ziel. „Lange Laufzeit“: über dem Laufzeit-Richtwert, nötig für dieses Ziel."));
+    el("p", "ap-note", "Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Rot: Die Sitzung enthält Offs oder AGs, die außerhalb der Abschickzeiträume dieses Spielers losgehen müssen. Sie sind nötig, weil das Ziel sonst nicht geadelt würde oder keine Clean-Off rechtzeitig käme (Abschickzeiträume sind Richtwert). „Hinweis“: So müsste der Spieler einen Zeitraum verlängern oder früher beginnen, damit diese Befehle hineinfallen; am Plan ändert das nichts, die Zeiten bleiben gleich. Über „i“ stehen die einzelnen Befehle. „Lange Laufzeit“: über dem Laufzeit-Richtwert, nötig für dieses Ziel."));
   const hm = ms => K.fmtZeit(ms).slice(0, 5) + ". " + K.fmtZeit(ms).slice(11, 16);
+  const dauer = ms => { const m = Math.round(ms / 60000); return m >= 60 ? Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min" : m + " min"; };
+  let nr = 0;
+  // Einzelne Befehle außerhalb (Dennis 12.11.2026): je Abschickvorgang Art, Dorf, Ziel, Abschickzeit, Abstand zum Zeitraum
+  const details = (at, von, bis) => {
+    const fen = K.ivNorm(at.windows && at.windows.length ? at.windows : (ERG.input.windows || []));
+    const akt = new Map();
+    r.items.filter(i => i.att === at.id && i.kind !== "fake" && i.ausserhalb && i.sendMs >= von && i.sendMs <= bis).forEach(i => {
+      if (!akt.has(i.aktion)) akt.set(i.aktion, []); akt.get(i.aktion).push(i); });
+    const ul = el("ul", "ap-list");
+    [...akt.values()].sort((p, q) => p[0].sendMs - q[0].sendMs).forEach(its => {
+      const i = its[0], z = dorf(i.t.x * 1000 + i.t.y);
+      const art = i.kind === "ag" ? (its.length > 1 ? "AG-Train (" + its.length + " AGs" + (its.some(x => x.units.ram > 0) ? ", mit Off" : "") + ")" : "AG" + (i.units.ram > 0 ? " mit Off" : ""))
+                : i.kind === "clean" ? (i.zusatz ? "zusätzliche Clean-Off" : "Clean-Off") : "Off";
+      let ab = "";
+      const vor = fen.find(([x]) => x > i.sendMs), nach = [...fen].reverse().find(([, y]) => y < i.sendMs);
+      const dv = vor ? vor[0] - i.sendMs : Infinity, dn = nach ? i.sendMs - nach[1] : Infinity;
+      if (dn <= dv && nach) ab = dauer(dn) + " nach Ende des Zeitraums (" + hm(nach[1]) + ")";
+      else if (vor) ab = dauer(dv) + " vor Beginn des Zeitraums (" + hm(vor[0]) + ")";
+      ul.append(el("li", null, art + " aus " + i.v.name + " (" + i.v.x + "|" + i.v.y + ") auf " + i.t.x + "|" + i.t.y + (z ? " (" + spielerName(z.p) + ")" : "") +
+        ", abschicken " + K.fmtZeit(i.sendMs).slice(0, 5) + ". " + K.fmtZeit(i.sendMs).slice(11, 19) + (ab ? ", " + ab : "") + (i.zuLang ? ", lange Laufzeit" : "")));
+    });
+    return ul;
+  };
+  const mitInfo = (li, at, von, bis) => {
+    const key = "aus-" + (++nr);
+    const b = infoKnopf(key); b.title = "Befehle außerhalb der Abschickzeiträume";
+    const h = el("div", "ap-help ap-detail"); h.dataset.help = key;
+    h.append(details(at, von, bis));
+    li.append(" ", b, h);
+  };
   ERG.input.attackers.forEach(at => {
     const sz = (r.sitzungen && r.sitzungen[at.id]) || [];
     if (!sz.length) return;
@@ -1099,9 +1129,11 @@ function sitzungenBox(r) {
       const t = hm(z.von) + " bis " + K.fmtZeit(z.bis).slice(11, 16) + " · " + (z.kern ? z.kern + (z.kern === 1 ? " Off oder AG" : " Offs und AGs") : "") +
         (z.kern && z.fakes ? ", " : "") + (z.fakes ? z.fakes + (z.fakes === 1 ? " Fake" : " Fakes") : "") +
         (z.nachts ? " · nachts" : "") + (z.ausserhalb ? " · " + z.ausserhalb + " außerhalb" : "");
-      ul.append(el("li", z.ausserhalb ? "warn" : "", t));
+      const li = el("li", z.ausserhalb ? "warn" : "", t);
+      if (z.ausserhalb) mitInfo(li, at, z.von, z.bis);
+      ul.append(li);
     });
-    (r.hinweise || []).filter(h => h.att === at.id).forEach(h => ul.append(el("li", "warn", "Hinweis: " + h.text)));
+    (r.hinweise || []).filter(h => h.att === at.id).forEach(h => { const li = el("li", "warn", "Hinweis: " + h.text); mitInfo(li, at, h.von, h.bis); ul.append(li); });
     d.append(el("div", "ap-note", at.name + " (" + sz.length + (sz.length === 1 ? " Sitzung)" : " Sitzungen)")), ul);
   });
   return d;

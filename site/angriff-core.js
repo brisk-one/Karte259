@@ -867,6 +867,13 @@ function plan(input) {
   };
   const offKosten = (o, t, pos, nClean) => {
     let c = travelS(world, "ram", dist(o, t)) + rng() * 60 + zuLangKosten(travelS(world, "ram", dist(o, t)), maxOffS);
+    // Abschickzeitraum vor eigenen Offs (Dennis 12.11.2026 20:52): passt die Off zu den AGs dieses Ziels nur außerhalb der
+    // Zeiträume ihres Spielers, zählt sie wie „außerhalb“; dann nimmt lieber ein anderer Spieler das Ziel, der es im
+    // Zeitraum schafft, und diese Off geht auf ein anderes Ziel
+    if (!streng) {
+      const w = att.get(o.att).wunsch, tr = travelS(world, "ram", dist(o, t)) * 1000;
+      if (w.length && ivAbstand(w, sendIv(tr, pos * cfg.gap_clean_ms)) === 0 && !ivIntersect(agSet(t, nClean), zeitBasis(A, w, tr, pos * cfg.gap_clean_ms)).length) c += R.ausFlow;
+    }
     if (cfg.off_first && !offZuerst(o, t, pos, nClean)) c += 100000;
     // Clean-Offs möglichst vom Spieler, der den Train schickt: dann timt er alles selbst (Dennis 15:00, niedrige Priorität:
     // unter „Off vor AG“ und dem Bündeln, über den Laufzeiten)
