@@ -43,12 +43,12 @@
 <main class="wrap">
   <section class="panel" aria-labelledby="h-in">
     <h2 id="h-in">Truppenübersicht einfügen
-      <span class="hint">Im Spiel Übersichten › Truppen, Ansicht „Alle“ oder „Eigene“, Strg+A, kopieren, hier einfügen. Die Eingaben bleiben nur in diesem Browser; „Eingaben löschen“ entfernt sie.</span>
+      <span class="hint">Im Spiel Übersichten › Truppen, Ansicht „Alle“, Strg+A, kopieren, hier einfügen. Die Eingaben bleiben nur in diesem Browser; „Eingaben löschen“ entfernt sie.</span>
       <span class="right"><button class="tw" type="button" id="vergessen">Eingaben löschen</button></span>
     </h2>
     <div class="body so-in">
       <textarea id="paste" spellcheck="false" aria-label="Truppenübersicht" aria-describedby="status"
-        placeholder="[001] Dorfname (500|500) K55   eigene   1000   0   5000   0   50   2000   0   0   250   0   0   0   0&#10;im Dorf   …"></textarea>
+        placeholder="[001] Dorfname (500|500) K55   eigene   1000   0   0   0   50   0   0   0   0   0   0   0   0&#10;im Dorf   …&#10;auswärts   …&#10;unterwegs   0   0   5000   0   0   2000   0   0   250   0   0   0   0&#10;insgesamt   1000   0   5000   0   50   2000   0   0   250   0   0   0   0"></textarea>
       <div class="so-regeln">
         <label>Raubzug-Speer bis <input type="number" id="raubzug" min="0" step="100" inputmode="numeric"></label>
         <label>zuordnen ab <input type="number" id="min_bh" min="0" step="100" inputmode="numeric"> BH</label>
@@ -100,7 +100,7 @@ $("vergessen").addEventListener("click", () => {
 
 const cfg = () => Object.fromEntries(FELDER.slice(1).map(id => [id, $(id).value]));
 function regelText(c) {
-  return "Gezählt werden die eigenen Truppen, die gerade im Dorf stehen. Speer bis " + nf.format(c.raubzug) +
+  return "Gezählt werden alle Truppen, die zum Dorf gehören (Zeile „insgesamt“: im Dorf, auswärts und unterwegs). Speer bis " + nf.format(c.raubzug) +
     " gelten als Raubzug-Speer und zählen nicht. Off: Axt, LKav, berittene Bogen, Rammen, Katapulte. Deff: übrige Speer, " +
     "Schwert, Bogen. Schwere Kavallerie zählt zur Seite mit mehr Infanterie; Späher, Paladin und AGs zählen nicht. " +
     "Unter " + nf.format(c.min_bh) + " BH oder wenn die stärkere Seite unter " + c.anteil + " % liegt: noch nicht zugeordnet.";
@@ -108,7 +108,7 @@ function regelText(c) {
 function einheitenText(v) {
   const t = SPALTEN.filter(u => u !== "militia" && v.units[u] > 0)
     .map(u => NAME[u] + " " + nf.format(v.units[u]) + (u === "spear" && v.e.raubzug > 0 ? " (davon " + nf.format(v.e.raubzug) + " Raubzug)" : ""));
-  return t.length ? t.join(", ") : "keine Truppen im Dorf";
+  return t.length ? "insgesamt: " + t.join(", ") : "keine Truppen";
 }
 
 async function kopieren(text) {

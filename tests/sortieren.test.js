@@ -5,12 +5,15 @@ const K = require("../site/angriff-core.js");
 const S = require("../site/sortieren.js");
 
 const truppen = o => Object.assign(Object.fromEntries(K.UNITS.map(u => [u, 0])), o);
-// Zeile der Truppenübersicht, Ansicht „Alle“: Kopfzeile mit „eigene“, dann vier weitere Zeilen (wie im Planer-Test)
-function block(name, x, y, k, u) {
-  const z = K.OVERVIEW_COLUMNS.map(c => u[c] || 0).join("\t");
-  const nullen = K.OVERVIEW_COLUMNS.map(() => 0).join("\t");
-  return [name + " (" + x + "|" + y + ") K" + k + "  \teigene\t" + z + "\tBefehle", "im Dorf\t" + z + "\tTruppen",
-          "auswärts\t" + nullen, "unterwegs\t" + nullen + "\tBefehle", "insgesamt\t" + z + "\tTruppen"].join("\n");
+// Dorf in der Truppenübersicht, Ansicht „Alle“: Kopfzeile mit „eigene“, dann im Dorf, auswärts, unterwegs, insgesamt.
+// u steht im Dorf, aus ist auswärts (Unterstützung), weg ist unterwegs; insgesamt ist die Summe.
+function block(name, x, y, k, u, aus, weg) {
+  aus = aus || {}; weg = weg || {};
+  const z = o => K.OVERVIEW_COLUMNS.map(c => o[c] || 0).join("\t");
+  const summe = {};
+  K.OVERVIEW_COLUMNS.forEach(c => { summe[c] = (u[c] || 0) + (aus[c] || 0) + (weg[c] || 0); });
+  return [name + " (" + x + "|" + y + ") K" + k + "  \teigene\t" + z(u) + "\tBefehle", "im Dorf\t" + z(u) + "\tTruppen",
+          "auswärts\t" + z(aus), "unterwegs\t" + z(weg) + "\tBefehle", "insgesamt\t" + z(summe) + "\tTruppen"].join("\n");
 }
 
 test("Off und Deff, Raubzug-Speer zählt nicht", () => {
@@ -80,8 +83,54 @@ test("Truppenübersicht sortieren und Koordinaten zum Kopieren", () => {
   assert.deepEqual(r.offen.map(v => [v.name, v.e.grund]), [["[001] Eins", "nur Raubzug-Speer"], ["Neu geadelt", "keine Truppen"]]);
   assert.equal(S.koordText(r.off), "502|490 510|490");
   assert.equal(S.koordText([]), "");
-  // Fehler des Lesers kommen durch
-  const falsch = S.sortieren("[001] Eins (10|20) K21\tim Dorf\t" + K.OVERVIEW_COLUMNS.map(() => 0).join("\t"));
-  assert.equal(falsch.gelesen, 0);
-  assert.match(falsch.errors[0], /Ansicht/);
+});
+
+test("Gezählt wird die Zeile „insgesamt“: Truppen, die zum Dorf gehören (Dennis 12.11.2026 18:38)", () => {
+  const text = [
+    "[007] Aktives Dorf\t(500|500) K55\t",                                   // Kopfzeile des aktiven Dorfs, wird übergangen
+    "29805\t\t65211\t\t452\t\t400000\t\t(738)19738/20476",
+    "Dorf (3)\t\t\tAktion",
+    // Off greift gerade an: im Dorf nur Raubzug-Speer, Axt, LKav und Rammen unterwegs
+    block("[001] Hammer", 501, 500, 55, truppen({spear: 1000}), {}, truppen({axe: 5000, light: 2000, ram: 250})),
+    // Deff steht als Unterstützung woanders
+    block("[002] Wall", 502, 500, 55, truppen({spear: 200}), truppen({spear: 5000, sword: 4000}), {}),
+    // fremde Unterstützung im Dorf zählt nicht (im Dorf ≠ eigene), nur eigene Raubzug-Speer
+    block("[003] Raubzug", 503, 500, 55, truppen({spear: 1000})).replace(/^im Dorf\t\d+/m, "im Dorf\t9000"),
+  ].join("\n");
+  const r = S.sortieren(text);
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.warnings, []);
+  assert.deepEqual([r.off.map(v => v.name), r.deff.map(v => v.name), r.offen.map(v => v.name)],
+                   [["[001] Hammer"], ["[002] Wall"], ["[003] Raubzug"]]);
+  assert.equal(r.off[0].units.axe, 5000);
+  assert.equal(r.deff[0].units.spear, 5200);
+  assert.equal(r.offen[0].e.grund, "nur Raubzug-Speer");
+});
+
+test("Leser: andere Ansichten, fehlende Zeile, zu wenige Zahlen, Miliz darf fehlen", () => {
+  const z = o => K.OVERVIEW_COLUMNS.map(c => o[c] || 0).join("\t");
+  const eig = S.sortieren("[001] Eins (10|20) K21\t" + z({axe: 3000}) + "\tBefehle\n[002] Zwei (11|20) K21\t" + z({sword: 3000}));
+  assert.equal(eig.gelesen, 0);
+  assert.equal(eig.errors.length, 1);
+  assert.match(eig.errors[0], /Ansicht „Eigene“ erkannt \(2 Dörfer\).*„Alle“.*„insgesamt“/);
+  const imDorf = S.sortieren("[001] Eins (10|20) K21\tim Dorf\t" + z({}));
+  assert.match(imDorf.errors[0], /^Ansicht „Im Dorf“ erkannt \(1 Dorf\)/);
+  // eine Zeile „insgesamt“ direkt am Dorf wird gelesen
+  const direkt = S.leseInsgesamt("[001] Eins (10|20) K21\tinsgesamt\t" + z({axe: 700}));
+  assert.deepEqual([direkt.errors, direkt.villages.length, direkt.villages[0].units.axe], [[], 1, 700]);
+  const abgeschnitten = S.sortieren(block("A", 1, 1, 0, truppen({axe: 3000})).split("\n").slice(0, 3).join("\n") + "\n" +
+                                    block("B", 2, 2, 0, truppen({sword: 3000})));
+  assert.equal(abgeschnitten.gelesen, 1);
+  assert.match(abgeschnitten.warnings[0], /Ohne Zeile „insgesamt“, nicht gelesen: A/);
+  const kurz = S.sortieren("[001] Eins (10|20) K21\teigene\t1\t2\ninsgesamt\t1\t2\t3");
+  assert.match(kurz.errors[0], /Zeile 2: 3 Zahlen, erwartet 12/);
+  const ohneMiliz = S.leseInsgesamt("[001] Eins (10|20) K21\teigene\t" + z({}) + "\ninsgesamt\t" + K.UNITS.map(u => u === "ram" ? 300 : 0).join("\t"));
+  assert.deepEqual(ohneMiliz.errors, []);
+  assert.equal(ohneMiliz.villages[0].units.ram, 300);
+  const doppelt = S.leseInsgesamt([block("A", 1, 1, 0, truppen({axe: 1})), block("B", 1, 1, 0, truppen({axe: 2}))].join("\n"));
+  assert.equal(doppelt.villages.length, 1);
+  assert.match(doppelt.warnings[0], /doppelt/);
+  const seiten = S.leseInsgesamt("Dorf (5)\n" + block("A", 1, 1, 0, truppen({axe: 1})));
+  assert.match(seiten.warnings[0], /nennt 5 Dörfer, gelesen 1/);
+  assert.match(S.sortieren("").errors[0], /Keine Dörfer erkannt/);
 });
