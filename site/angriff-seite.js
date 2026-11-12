@@ -11,6 +11,7 @@ const INFO = {
   split_full: "Schickt ein Off-Dorf einen Train, läuft seine Off im Train mit. Aus: komplett mit dem ersten AG. An: gleichmäßig auf alle AGs verteilt, damit jedes AG genug Truppen gegen getabbte Deff hat. Sinnvoll, wenn das Dorf genau einen Train an AGs hat.",
   split_two: "Die Off des Dorfs geht Hälfte und Hälfte mit beiden AGs. So ist der 2er-Train kaum zu tabben.",
   send_gap_target_s: "Richtwert für den Abstand zwischen zwei Abschickvorgängen innerhalb einer Sitzung. Der Planer bündelt die Befehle in möglichst wenige, kurze Sitzungen und hält dabei möglichst diesen Abstand, damit nicht alle 3 Sekunden ein Befehl raus muss. Der Mindestabstand bleibt die harte Grenze.",
+  uebrige_auf_ag: "Offs, die am Ende des Plans frei bleiben, gehen als zusätzliche Clean-Offs auf die AG-Ziele, zuerst auf die Ziele mit den wenigsten Offs (Clean-Offs und Off im Train), dann reihum. Nur in den Abschickzeiträumen des Spielers, innerhalb des Laufzeit-Richtwerts und, wenn „Off vor den AGs“ an ist, vor den AGs; im Abschickplan als „zusätzliche Off“ markiert. „Notfalls mit eigener Sitzung“ (Standard): eine zusätzliche Off darf für ihren Spieler eine weitere Abschicksitzung bedeuten. „Nur in bestehende Sitzungen“: nur, wenn der Spieler auf dasselbe Ziel ohnehin innerhalb von 15 Minuten etwas abschickt. Das Ergebnis nennt, wie viele verteilt wurden und wie viele übrig bleiben. Mit „Übrige Offs auf Nicht-AG-Dörfer“ gehen sie zuerst dorthin.",
   zeitraeume: "Richtwert (Standard): Offs und AGs gehen bevorzugt in deinen Abschickzeiträumen los. Geht ein Ziel nur mit Befehlen außerhalb, etwa ein Adelsgeschlecht, das sonst nicht ankäme, schlägt der Planer sie trotzdem vor und markiert sie im Abschickplan mit „außerhalb“. Fest: nur innerhalb der Zeiträume, ein Ziel fällt dann lieber weg.",
   max_lauf_off_h: "Richtwert für die Laufzeit von Clean-Offs und übrigen Offs. Darüber nur, wenn sonst ein Ziel weniger geadelt würde oder die Clean-Offs unter den Richtwert fielen; solche Befehle stehen im Abschickplan mit „lange Laufzeit“. Übrige Offs auf Nicht-AG-Dörfer gehen nie darüber. Eine Off, die im Train mit dem ersten AG läuft, zählt wie der AG-Train. 0: keine Grenze.",
   max_lauf_ag_h: "Richtwert für die Laufzeit der AG-Trains, auch für die Off, die im Train mit dem ersten AG läuft (sie hat AG-Tempo). Darüber nur, wenn sonst ein Ziel weniger geadelt würde; markiert mit „lange Laufzeit“. 0: keine Grenze.",
@@ -64,6 +65,7 @@ const FELDER = [
   {k: "off_min_rams", l: "Mindest-Rammen je Off", t: "num", min: 0, max: 5000},
   {k: "growth", l: "Zuwachs bis zum Abschicken je Tag", t: "pair", a: ["growth_pop_per_day", "BH"], b: ["growth_rams_per_day", "Rammen"]},
   {k: "clean_per_target", l: "Clean-Offs je AG-Ziel", t: "sel", o: [[1, "1"], [2, "2"], [3, "3"]]},
+  {k: "uebrige_auf_ag", l: "Übrige Offs zusätzlich auf AG-Ziele", t: "sel", o: [["alle", "ja, notfalls mit eigener Sitzung"], ["sitzung", "ja, nur in bestehende Sitzungen"], ["aus", "nein"]]},
   {k: "rest_offs", l: "Übrige Offs", t: "sel", o: [["frei", "nicht verplanen"], ["nicht_ag", "auf Nicht-AG-Dörfer der Zielspieler"]]},
   {k: "gap_off_ag_ms", l: "Abstand letzte Clean-Off zum ersten AG", t: "num", u: "ms", min: 0, max: 60000},
   {k: "gap_clean_ms", l: "Abstand zwischen Clean-Offs", t: "num", u: "ms", min: 0, max: 60000},
@@ -346,24 +348,36 @@ function attAnalyse(i) {
   }
   // Tabelle: Offs, knappe Offs, AG-Dörfer und alle übrigen
   const ausSet = A.aus ? new Set(A.aus.keys) : null;
-  const sortiert = A.dorfer.slice().sort((p, q) => (q.c.offPop - p.c.offPop));
-  const rows = sortiert.map(d => {
+  // Jede Spalte sortierbar, Standard Dorfname A bis Z; die gewählte Sortierung bleibt je Angreifer (Dennis 12.11.2026)
+  const sv = (el0, v) => { const td = el0.closest("td"); if (td) td.dataset.v = v; };     // Wert nach Änderung nachführen
+  const rows = A.dorfer.map(d => {
     const cOff = el("input"); cOff.type = "checkbox"; cOff.checked = offEingeplant(a, d);
     cOff.title = "als Off einplanen";
-    cOff.addEventListener("change", () => { a.useOff[d.xy] = cOff.checked; geaendert(true); });
+    cOff.addEventListener("change", () => { a.useOff[d.xy] = cOff.checked; sv(cOff, cOff.checked ? 1 : 0); geaendert(true); });
     const nAG = el("input", "ap-n"); nAG.type = "number"; nAG.min = 0; nAG.max = 99; nAG.value = agZahl(a, d);
     nAG.title = "AGs, die bis zum Abschicken im Dorf stehen";
-    nAG.addEventListener("input", () => { const v = parseInt(nAG.value, 10); a.nobles[d.xy] = isNaN(v) ? 0 : Math.max(0, v); geaendert(); });
+    nAG.addEventListener("input", () => { const v = parseInt(nAG.value, 10); a.nobles[d.xy] = isNaN(v) ? 0 : Math.max(0, v); sv(nAG, a.nobles[d.xy]); geaendert(); });
     const status = d.c.isOff ? "Off" : d.c.knapp ? "knapp" : d.c.offPop > 0 && d.c.offPop >= 3000 ? "zu klein" : "Deff";
+    const rang = {Off: 3, knapp: 2, "zu klein": 1, Deff: 0}[status];
     const fehlt = d.c.isOff ? "" : (d.c.fehltBH ? nf.format(d.c.fehltBH) + " BH" : "") + (d.c.fehltRammen ? (d.c.fehltBH ? ", " : "") + d.c.fehltRammen + " Rammen" : "");
-    return [[d.name], [koord(d.xy), "num"], [nf.format(d.c.offPop), "num", d.c.offPop], [nf.format(d.units.ram), "num", d.units.ram],
-            [status], [fehlt ? "fehlen " + fehlt : "", null], [cOff], [nAG], [d.c.fakeMin != null ? nf.format(d.c.fakeMin) : "?", "num", d.c.fakeMin],
-            [ausSet ? (ausSet.has(d.xy) ? "ja" : "nein") : "alle", null]];
+    const imAus = ausSet ? ausSet.has(d.xy) : true;
+    return [[d.name], [koord(d.xy), "num", d.xy], [nf.format(d.c.offPop), "num", d.c.offPop], [nf.format(d.units.ram), "num", d.units.ram],
+            [status, null, rang], [fehlt ? "fehlen " + fehlt : "", null, fehlt ? d.c.fehltBH + d.c.fehltRammen * 5 : null],
+            [cOff, null, cOff.checked ? 1 : 0], [nAG, null, agZahl(a, d)], [d.c.fakeMin != null ? nf.format(d.c.fakeMin) : "?", "num", d.c.fakeMin],
+            [ausSet ? (imAus ? "ja" : "nein") : "alle", null, imAus ? 1 : 0]];
   });
   const det = el("details"), sm = el("summary", null, "Dörfer (" + A.dorfer.length + "), AG-Anzahl und Offs anpassen");
   const sc = el("div", "ap-scroll");
-  sc.append(table([["Dorf"], ["Koord.", "num"], ["Off-BH", "num", true], ["Rammen", "num", true], ["Einordnung"], ["Fehlt"],
-                   ["Off"], ["AGs"], ["Fakelimit", "num", true], ["Auswahl"]], rows));
+  const sortWahl = a.sortDorf && a.sortDorf.col >= 0 && a.sortDorf.col < 10 ? a.sortDorf : {col: 0, dir: "asc"};
+  const tab = table([["Dorf", null, "text"], ["Koord.", "num", true], ["Off-BH", "num", true], ["Rammen", "num", true], ["Einordnung", null, true], ["Fehlt", null, true],
+                     ["Off", null, true], ["AGs", null, true], ["Fakelimit", "num", true], ["Auswahl", null, true]], rows, {sort: sortWahl.col, dir: sortWahl.dir});
+  const merken = () => setTimeout(() => {
+    const ths = [...tab.tHead.rows[tab.tHead.rows.length - 1].cells], col = ths.findIndex(c => c.hasAttribute("aria-sort"));
+    if (col >= 0) { a.sortDorf = {col, dir: ths[col].getAttribute("aria-sort") === "ascending" ? "asc" : "desc"}; speichern(); }
+  }, 0);
+  tab.tHead.addEventListener("click", merken);
+  tab.tHead.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") merken(); });
+  sc.append(tab);
   det.append(sm, el("p", "ap-note", "„Off“: als Off einplanen (vorausgewählt: Offs und knappe Offs). „AGs“: Anzahl, die bis zum Abschicken im Dorf steht, gezielt je Dorf anpassen."), sc);
   if (A.dorfer.length <= 80) det.open = true;
   box.append(det);
@@ -974,7 +988,7 @@ function zeigen() {
       return [[K.fmtZeit(it.sendMs, true), "num", it.sendMs], [K.fmtZeit(it.arrivalMs, true), "num", it.arrivalMs],
               [el("span", "ap-kind k-" + it.kind, K.KIND_NAME[it.kind])], [it.v.name + " (" + it.v.x + "|" + it.v.y + ")"],
               [it.t.x + "|" + it.t.y + (d ? " · " + spielerName(d.p) : ""), null], [el("span", "ap-units", einheiten(it.units))],
-              [[it.ausserhalb ? "außerhalb" + (it.nachtSenden ? ", nachts" : "") : (it.nachtSenden ? "nachts" : ""), it.zuLang ? "lange Laufzeit" : "", it.nacht ? "Ankunft im Nachtbonus" : ""].filter(Boolean).join(" · "),
+              [[it.ausserhalb ? "außerhalb" + (it.nachtSenden ? ", nachts" : "") : (it.nachtSenden ? "nachts" : ""), it.zuLang ? "lange Laufzeit" : "", it.zusatz ? "zusätzliche Off" : "", it.nacht ? "Ankunft im Nachtbonus" : ""].filter(Boolean).join(" · "),
                it.nacht || it.ausserhalb || it.zuLang ? "down" : ""]];
     });
     const sc = el("div", "ap-scroll");

@@ -212,7 +212,8 @@ function szenario(cfg, extra) {
   const z = (id, x, y) => ({id, x, y, owner: 900});
   const agTargets = [z(901, 470, 500), z(902, 471, 502), z(903, 469, 498), z(904, 472, 499)];
   const fakeTargets = [z(905, 468, 503), z(906, 473, 504), z(907, 466, 497), z(908, 474, 495)];
-  return Object.assign({world: W, cfg: Object.assign({seed: 3}, cfg), attackers: [alpha, beta], agTargets, fakeTargets,
+  // übrige Offs bleiben in den älteren Tests frei (Verhalten vor 12.11.2026); eigener Test für die Verteilung auf AG-Ziele
+  return Object.assign({world: W, cfg: Object.assign({seed: 3, uebrige_auf_ag: "aus"}, cfg), attackers: [alpha, beta], agTargets, fakeTargets,
     arrival: K.parseAnkunft("03.11.2026 08:00:00:000 bis 09:00:00:000"),
     windows: K.parseFenster("02.11.2026 16:00 bis 20:00\n02.11.2026 22:00 bis 23:30").fenster,
     now: Date.UTC(2026, 10, 2, 12, 0)}, extra);
@@ -797,4 +798,40 @@ test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Re
   const r10 = K.plan(szenario({fakes_per_village: 3, fake_vorlauf_h: 10}));
   assert.ok(r10.warnings.some(w => w.art === "vorlauf" && /so früh keine Fakes möglich/.test(w.text)));
   assert.equal(r10.items.filter(i => i.kind === "fake").length, r0.items.filter(i => i.kind === "fake").length);
+});
+
+test("Übrige Offs zusätzlich auf AG-Ziele, wenigste Offs zuerst, nur in Zeiträumen und Sitzungen (Dennis 12.11.2026)", () => {
+  const ohne = K.plan(szenario({clean_per_target: 1}));
+  assert.equal(ohne.freieOffs.length, 5);
+  assert.ok(ohne.warnings.some(w => w.art === "frei" && /5 Offs bleiben übrig/.test(w.text)));
+  const input = szenario({clean_per_target: 1, uebrige_auf_ag: "alle"});
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  assert.equal(r.stats.geadelt, ohne.stats.geadelt);
+  const zusatz = r.items.filter(i => i.zusatz);
+  assert.ok(zusatz.length > 0 && r.freieOffs.length < ohne.freieOffs.length);
+  assert.ok(r.warnings.some(w => w.art === "zusatz" && new RegExp(zusatz.length + " übrige Offs? zusätzlich").test(w.text)));
+  zusatz.forEach(i => assert.equal(i.kind, "clean"));
+  // wenigste Offs zuerst: Offs je Ziel (Clean-Offs plus Off im Train) unterscheiden sich höchstens um 1
+  const offsJe = r.ziele.filter(z => z.geadelt).map(z => r.items.filter(i => i.t.id === z.id && (i.kind === "clean" || (i.kind === "ag" && i.units.ram > 0))).length);
+  assert.ok(Math.max(...offsJe) - Math.min(...offsJe) <= 1, "gleichmäßig: " + offsJe.join("/"));
+  // nur innerhalb der Abschickzeiträume
+  zusatz.forEach(i => assert.ok(K.ivHas(input.windows, i.sendMs), "zusätzliche Off im Abschickzeitraum"));
+  // „nur in bestehende Sitzungen“: keine zusätzliche Sitzung, höchstens so viele zusätzliche Offs wie bei „alle“
+  const is = szenario({clean_per_target: 1, uebrige_auf_ag: "sitzung"}), rs = K.plan(is);
+  assert.deepEqual(K.pruefePlan(rs, is), []);
+  assert.ok(rs.items.filter(i => i.zusatz).length <= zusatz.length);
+  [101, 102].forEach(a => assert.ok((rs.sitzungen[a] || []).length <= (ohne.sitzungen[a] || []).length, "keine neue Sitzung für " + a));
+  // Standard ist „alle“
+  assert.equal(K.CFG_DEFAULT.uebrige_auf_ag, "alle");
+  // eigener Zeitraum eines Spielers gilt auch für zusätzliche Offs
+  const eigen = K.parseFenster("02.11.2026 19:00 bis 20:00").fenster;
+  const i2 = szenario({uebrige_auf_ag: "alle"}, {windows: K.parseFenster("02.11.2026 16:00 bis 20:00").fenster});
+  i2.attackers[1].windows = eigen;
+  const r2 = K.plan(i2);
+  r2.items.filter(i => i.att === 102 && i.zusatz).forEach(i => assert.ok(K.ivHas(eigen, i.sendMs), "Beta nur im eigenen Zeitraum"));
+  // Laufzeit-Richtwert: zusätzliche Offs nie darüber
+  const r3 = K.plan(szenario({clean_per_target: 1, uebrige_auf_ag: "alle", max_lauf_off_h: 1}));
+  assert.equal(r3.items.filter(i => i.zusatz).length, 0);
+  assert.ok(r3.warnings.some(w => w.art === "frei" && /passen auf kein AG-Ziel/.test(w.text)));
 });

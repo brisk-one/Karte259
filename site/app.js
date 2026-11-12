@@ -173,6 +173,7 @@ function table(cols, rows, opts) {
   const hr = el("tr");
   cols.forEach(([label, cls, sortable], i) => {
     const c = el("th", (cls || "") + (sortable ? " sortable" : ""), label);
+    if (sortable === "text") c.dataset.sort = "text";     // Text sortieren, erster Klick A bis Z (Dennis 12.11.2026)
     if (sortable) {
       c.tabIndex = 0;
       c.addEventListener("click", () => sortTable(t, i));
@@ -210,21 +211,25 @@ function renumber(t) {
 function sortTable(t, col, force) {
   const hr = t.tHead.rows[t.tHead.rows.length - 1];
   const ths = [...hr.cells];
-  const dir = force || (ths[col].getAttribute("aria-sort") === "descending" ? "asc" : "desc");
+  const text = ths[col].dataset.sort === "text";
+  const cur = ths[col].getAttribute("aria-sort");
+  const dir = force || (cur === "descending" ? "asc" : cur === "ascending" ? "desc" : text ? "asc" : "desc");
   ths.forEach(c => c.removeAttribute("aria-sort"));
   ths[col].setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
   const val = tr => {
     const td = tr.cells[col];
     const raw = td.dataset.v != null ? td.dataset.v : td.textContent;
+    if (text) { const s = String(raw).trim(); return s ? s : null; }
     const n = parseFloat(String(raw).replace(/\./g, "").replace(",", ".").replace(/[^\d,.\-]/g, ""));
     return isNaN(n) ? null : n;
   };
+  const vgl = text ? new Intl.Collator("de", {numeric: true, sensitivity: "base"}).compare : (x, y) => x - y;
   [...t.tBodies[0].rows].sort((a, b) => {
     const x = val(a), y = val(b);
     if (x == null && y == null) return 0;
     if (x == null) return 1;              // Zeilen ohne Wert immer ans Ende
     if (y == null) return -1;
-    return dir === "asc" ? x - y : y - x;
+    return dir === "asc" ? vgl(x, y) : vgl(y, x);
   }).forEach(r => t.tBodies[0].appendChild(r));
   renumber(t);
 }
