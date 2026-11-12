@@ -65,7 +65,8 @@ const CFG_DEFAULT = {
   max_lauf_off_h: 0,          // Laufzeit Clean-Offs und übrige Offs höchstens (Richtwert, 0: keine Grenze; Dennis 11.11.2026)
   max_lauf_ag_h: 7,           // Laufzeit AG-Trains höchstens, auch die Off im Train (0: keine Grenze; Standard 7 h, Dennis 12.11.2026)
   lauf_ag_art: "fest",        // "fest": AG-Trains nie länger (Dennis 12.11.2026: Obergrenze); "richtwert": nur wenn nötig (2.2a)
-  clean_eigene: "vorrang",    // Clean-Offs vom Spieler des Trains vor kurzen Sitzungen (Dennis 12.11.2026), "nachrang": danach
+  clean_eigene: "vorrang",    // Clean-Offs vom Spieler des Trains vor kurzen Sitzungen (Dennis 12.11.2026), "nachrang": danach,
+                              // "stark": sehr hoch, wie „eigene AG-Ziele stark“ für alle (Dennis 13.11.2026 00:52)
   extra_fakes: false,         // zusätzliche Fakeziele aus dem Stamm der Zielspieler
   extra_fakes_per_village: 1, // Fakes je Zieldorf für diese Stammesmitglieder, nachrangig zu den Pflicht- und weiteren Fakezielen (Dennis 10.11.2026)
   fakes_max_je_dorf: 4,       // höchstens so viele Fakes aus einem eigenen Dorf (Dennis 10.11.2026 00:52)
@@ -876,7 +877,8 @@ function plan(input) {
   };
   // Off von einem Spieler, der auf dieses Ziel keinen Train schickt; „stark“: er oder ein Spieler mit Train dort will unter sich bleiben
   const fremdAuf = (o, t) => !trains.get(t.id).some(g => g.v.att === o.att);
-  const starkBetroffen = (o, t) => att.get(o.att).stark || trains.get(t.id).some(g => att.get(g.v.att).stark);
+  // „stark“ für alle (Konfig clean_eigene, Dennis 13.11.2026) gilt für die Kosten; freie Offs zuerst aufs eigene Ziel nur mit dem Häkchen je Spieler
+  const starkBetroffen = (o, t) => cfg.clean_eigene === "stark" || att.get(o.att).stark || trains.get(t.id).some(g => att.get(g.v.att).stark);
   const offKosten = (o, t, pos, nClean) => {
     let c = travelS(world, "ram", dist(o, t)) + rng() * 60 + zuLangKosten(travelS(world, "ram", dist(o, t)), maxOffS);
     // Abschickzeitraum vor eigenen Offs (Dennis 12.11.2026 20:52): passt die Off zu den AGs dieses Ziels nur außerhalb der

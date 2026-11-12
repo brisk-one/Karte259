@@ -915,6 +915,11 @@ test("Je Spieler: eigene AG-Ziele stark (Dennis 12.11.2026 22:05, Rangfolge 13.1
   // „Off vor AG“ geht vor stark (Dennis 1b): auf Betas Ziel geht Alphas Off, die vor dem AG losgeht, nicht Betas eigene danach
   assert.equal(cleanAuf(r, 902)[0].v.id, 3);
   assert.ok(!r.warnings.some(w => w.art === "reihenfolge"));
+  // Konfig „sehr hoch“ für alle (Dennis 13.11.2026 00:52): dieselbe Wahl ohne Häkchen
+  const ig = offVorAG({clean_eigene: "stark"}, false, "stark"), rg = K.plan(ig);
+  assert.deepEqual(K.pruefePlan(rg, ig), []);
+  assert.equal(cleanAuf(rg, 901)[0].v.id, 4);
+  assert.equal(cleanAuf(rg, 902)[0].v.id, 3);
   // freie Offs eines solchen Spielers gehen zuerst auf seine eigenen Ziele
   const ia = offVorAG({uebrige_auf_ag: "alle"}, true, "stark"), ra = K.plan(ia);
   assert.deepEqual(K.pruefePlan(ra, ia), []);
