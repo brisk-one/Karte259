@@ -1001,8 +1001,9 @@ function plan(input) {
   const zusatzModus = cfg.uebrige_auf_ag === false || cfg.uebrige_auf_ag === "aus" ? "aus" : cfg.uebrige_auf_ag === "sitzung" ? "sitzung" : "alle";
   if (zusatzModus !== "aus") {
     const offsAuf = t => cleanOffs.get(t.id).length + trains.get(t.id).filter(g => g.carriesOff).length;
-    // zuerst nur auf Ziele, auf die der Spieler selbst AGs schickt (Dennis 12.11.2026), dann auf alle
-    for (const nurEigene of [true, false]) {
+    // wenigste Offs zuerst über alle Ziele (Dennis 12.11.2026 20:55: geht vor „eigene Ziele“); unter den passenden Offs für
+    // dieses Ziel bevorzugen die Kosten den Spieler des Trains (SPIELER_FREMD)
+    {
     const voll = new Set();
     for (let runde = 0; runde < 5000; runde++) {
       const pool = cleanPool();
@@ -1016,10 +1017,8 @@ function plan(input) {
       // Abschickzeiten der Befehle auf dieses Ziel relativ zum gemeinsamen Blockbeginn: für „sitzung“ genau prüfbar
       const imBlock = agAktionen(t, trains.get(t.id), pos + 1).concat(liste.map((o, i) => ({att: o.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(o, t)) * 1000})));
       let best = null, bc = Infinity;
-      const eigene = new Set(trains.get(t.id).map(g => g.v.att));
       pool.forEach(o => {
         const tr = travelS(world, "ram", dist(o, t)), a0 = att.get(o.att);
-        if (nurEigene && !eigene.has(o.att)) return;
         if (zusatzModus === "sitzung") {
           const rel = pos * cfg.gap_clean_ms - tr * 1000;
           if (!imBlock.some(x => x.att === o.att && Math.abs(x.rel - rel) <= SITZUNG_PAUSE_MS)) return;
@@ -1394,7 +1393,7 @@ function plan(input) {
     const ersteAG = Math.min(...ags.map(i => i.sendMs));
     const zuerst = offs.every(o => o.sendMs + cfg.off_first_lead_s * 1000 <= ersteAG);
     if (cfg.off_first && !zuerst) warnings.push({art: "reihenfolge", ziel: t.id, text: "Ziel " + t.x + "|" + t.y + ": AG vor der Clean-Off abgeschickt"});
-    return {id: t.id, x: t.x, y: t.y, geadelt: true, clean: offs.length, ags: ags.length, offZuerst: zuerst, T: b.T,
+    return {id: t.id, x: t.x, y: t.y, geadelt: true, clean: offs.length, zusatz: offs.filter(o => o.zusatz).length, ags: ags.length, offZuerst: zuerst, T: b.T,
             soll: richtwert(t), offFehlt: Math.max(0, richtwert(t) - offs.filter(o => !o.zusatz).length), assignee: t.assignee != null ? t.assignee : null,
             agVon: [...new Set(ags.map(i => i.att))]};
   });

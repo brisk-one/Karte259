@@ -818,11 +818,12 @@ test("Übrige Offs zusätzlich auf AG-Ziele, wenigste Offs zuerst, nur in Zeitr�
   assert.ok(zusatz.length > 0 && r.freieOffs.length < ohne.freieOffs.length);
   assert.ok(r.warnings.some(w => w.art === "zusatz" && new RegExp(zusatz.length + " übrige Offs? zusätzlich").test(w.text)));
   zusatz.forEach(i => assert.equal(i.kind, "clean"));
-  // ohne Vorrang der eigenen Ziele: wenigste Offs zuerst, Offs je Ziel (Clean-Offs plus Off im Train) höchstens 1 auseinander
+  // Offs je Ziel: Clean-Offs plus Off im Train
   const offsJe = rr => rr.ziele.filter(z => z.geadelt).map(z => rr.items.filter(i => i.t.id === z.id && (i.kind === "clean" || (i.kind === "ag" && i.units.ram > 0))).length);
-  // eigene Ziele zuerst (Dennis 12.11.2026): zusätzliche Offs gehen mindestens so oft auf Ziele des eigenen Spielers wie auf fremde
-  const aufEigenes = i => r.items.some(x => x.t.id === i.t.id && x.kind === "ag" && x.att === i.att);
-  assert.ok(zusatz.filter(aufEigenes).length >= zusatz.filter(i => !aufEigenes(i)).length, "eigene Ziele zuerst");
+  // wenigste Offs zuerst über alle Ziele (Dennis 12.11.2026 20:55, vor eigenen Zielen): Offs je Ziel höchstens 1 auseinander
+  const o2 = offsJe(r);
+  assert.ok(Math.max(...o2) - Math.min(...o2) <= 1, "gleichmäßig: " + o2.join("/"));
+  r.ziele.filter(z => z.geadelt).forEach(z => assert.equal(z.zusatz, r.items.filter(i => i.t.id === z.id && i.zusatz).length));
   const r1 = K.plan(szenario({clean_per_target: 1, uebrige_auf_ag: "alle", train_form: "ganz"}, {attackers: [input.attackers[0]]}));
   const o1 = offsJe(r1);
   assert.ok(Math.max(...o1) - Math.min(...o1) <= 1, "ein Spieler: gleichmäßig " + o1.join("/"));
