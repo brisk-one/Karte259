@@ -84,7 +84,9 @@ function parseOverview(text) {
    Händler (frei/gesamt), Bauernhof. Ein Dorf darf über mehrere Zeilen laufen; alles bis zum nächsten Dorf gehört
    dazu. Gesucht werden vier Zahlen hintereinander, deren letzte (Speicher) mindestens so groß ist wie die drei
    davor; die Gebäudeübersicht (viele kleine Stufen) wird so nicht als Lagerstand gelesen.
-   Ergebnis: {lager: {"x|y": {wood, stone, iron, storage}}, count}. */
+   Dazu Händler „frei/gesamt“ (erstes „a/b“ nach dem Dorf; danach folgt der Bauernhof): Speicher und Händler gesamt sind
+   die echten Werte mit Bonus (z. B. Bonusdorf +25 %), die Gebäudeübersicht kennt nur die Stufen (12.11.2026).
+   Ergebnis: {lager: {"x|y": {wood, stone, iron, storage, frei?, gesamt?}}, count}. */
 function parseLager(text) {
   const t = String(text || ""), re = /\((\d{1,3})\|(\d{1,3})\)\s*K\d{1,3}/g, hits = [];
   let m;
@@ -101,7 +103,11 @@ function parseLager(text) {
       if (i + 3 >= nums.length) continue;
       const [a, b, c, S] = nums.slice(i, i + 4);
       if (S >= 1000 && S <= 5e6 && a <= S && b <= S && c <= S) {
-        if (!lager[h.key]) lager[h.key] = {wood: a, stone: b, iron: c, storage: S};
+        if (!lager[h.key]) {
+          lager[h.key] = {wood: a, stone: b, iron: c, storage: S};
+          const hm = seg.match(/(?:^|\s)(\d{1,4})\s*\/\s*(\d{1,4})(?=$|\s)/);
+          if (hm && +hm[1] <= +hm[2]) { lager[h.key].frei = +hm[1]; lager[h.key].gesamt = +hm[2]; }
+        }
         break;
       }
     }
@@ -187,18 +193,27 @@ function startBestand(s, P) {
   const z = Math.min(s.cap, s.cap * P.startPct / 100);
   return [z, z, z];
 }
+/* Bonus auf Speicher und Händler (12.11.2026): Produktionsübersicht (v.lagerSpeicher, v.haendlerGesamt) geteilt durch
+   den Wert laut Stufe. Gilt auch für Mindeststufen. Nur plausible Faktoren (1 bis 2); weichen die beiden Übersichten
+   voneinander ab (z. B. zwischendurch ausgebaut), rechnet das Dorf wie bisher mit den Stufen. */
+function bonusFaktor(echt, laut) {
+  if (!(echt > 0) || !(laut > 0)) return 1;
+  const f = echt / laut;
+  return f > 1.005 && f <= 2.02 ? f : 1;
+}
 function prepare(villages, P) {
   return villages.map((v, i) => {
     const storFrom = v.b.storage | 0, storage = Math.max(storFrom, P.minStorage || 0);
-    const cap = storageCap(storage);
+    const sFaktor = bonusFaktor(v.lagerSpeicher, storageCap(storFrom)), mFaktor = bonusFaktor(v.haendlerGesamt, merchantsAt(v.b.market | 0));
+    const cap = Math.round(storageCap(storage) * sFaktor);
     const lager = Array.isArray(v.lager) ? v.lager.map(x => Math.min(cap, Math.max(0, +x || 0))) : null;
     const st0 = lager || [0, 1, 2].map(() => cap * P.startPct / 100), pk = cap * P.pkgPct / 100;
     const prod = {};
     RES.forEach(r => { prod[r] = P.production ? baseProd(v.b[r]) * P.speed * P.prodFactor : 0; });
     const from = v.b.market | 0, market = Math.max(from, P.minMarket || 0);
     const b = market > from || storage > storFrom ? Object.assign({}, v.b, {market, storage}) : v.b;
-    return {i, name: v.name, x: v.x, y: v.y, b, marketFrom: from, storageFrom: storFrom, cap, merchants: merchantsAt(market),
-            snob: (v.b.snob || 0) >= 1, pkg: {wood: pk + st0[0], stone: pk + st0[1], iron: pk + st0[2]}, prod, lager};
+    return {i, name: v.name, x: v.x, y: v.y, b, marketFrom: from, storageFrom: storFrom, cap, merchants: Math.round(merchantsAt(market) * mFaktor),
+            mFaktor, sFaktor, snob: (v.b.snob || 0) >= 1, pkg: {wood: pk + st0[0], stone: pk + st0[1], iron: pk + st0[2]}, prod, lager};
   });
 }
 
@@ -398,7 +413,7 @@ function details(src, P, sites, planner) {
     if (r.inTime < r.pkgUnits - 1e-7) {
       status = "weit";
       for (let L = s.b.market + 1; L <= 25; L++) {
-        const q = simulate(s, tau, P, P.window, merchantsAt(L));
+        const q = simulate(s, tau, P, P.window, Math.round(merchantsAt(L) * (s.mFaktor || 1)));
         if (q.inTime >= q.pkgUnits - 1e-7) { status = "markt"; need = L; break; }
       }
     }
@@ -1285,7 +1300,7 @@ function scheduleDetails(src, P, sites, pos, passive) {
     const tau = travelHours(s, src[r.site[i]], P);
     let need = null;
     for (let L = s.b.market + 1; L <= 25; L++) {
-      const q = villageRun(s, tau, P, cnt, merchantsAt(L), null);
+      const q = villageRun(s, tau, P, cnt, Math.round(merchantsAt(L) * (s.mFaktor || 1)), null);
       if (q.overflow / q.pkgRes <= 0.01) { need = L; break; }
     }
     limiting.push({i, share: r.overflow[i] / r.pkgRes[i], need});

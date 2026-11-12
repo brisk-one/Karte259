@@ -639,13 +639,43 @@ test("10.16: Lagerstand aus der Produktionsübersicht", () => {
   ].join("\n");
   const r = K.parseLager(txt);
   assert.equal(r.count, 3);
-  assert.deepEqual(r.lager["500|501"], {wood: 123456, stone: 234567, iron: 345678, storage: 400000});
-  assert.deepEqual(r.lager["502|503"], {wood: 12000, stone: 400000, iron: 99999, storage: 400000});
-  assert.deepEqual(r.lager["504|505"], {wood: 0, stone: 0, iron: 0, storage: 400000});
+  assert.deepEqual(r.lager["500|501"], {wood: 123456, stone: 234567, iron: 345678, storage: 400000, frei: 110, gesamt: 235});
+  assert.deepEqual(r.lager["502|503"], {wood: 12000, stone: 400000, iron: 99999, storage: 400000, frei: 235, gesamt: 235});
+  assert.deepEqual(r.lager["504|505"], {wood: 0, stone: 0, iron: 0, storage: 400000, frei: 0, gesamt: 235});
   // Gebäudezeilen (viele kleine Stufen) sind kein Lagerstand
   const geb = "[001] Shoppington D.C. (631|601) K66  \t10.393\t22\t25\t20\t15\t0\t1\t20\t1\t1\t23\t30\t30\t30\t30\t30\t10\t20";
   assert.equal(K.parseLager(geb).count, 0);
   assert.equal(K.parseLager("").count, 0);
+});
+
+test("Bonus auf Händler und Speicher aus der Produktionsübersicht (12.11.2026)", () => {
+  // Kunstdaten: ein Bonusdorf mit +25 % Speicher und Händlern, ein normales Dorf
+  const txt = ["[001] Kunst Bonus (500|500) K55 \t10.636\t405.429 440.081 459.134\t500000\t0/294\t26174/26400",
+               "[002] Kunst Normal (503|504) K55\t9.410\t100.000 120.000 90.000\t400000\t12/179\t23734/24000"].join("\n");
+  const L = K.parseLager(txt);
+  assert.deepEqual(L.lager["500|500"], {wood: 405429, stone: 440081, iron: 459134, storage: 500000, frei: 0, gesamt: 294});
+  assert.deepEqual(L.lager["503|504"], {wood: 100000, stone: 120000, iron: 90000, storage: 400000, frei: 12, gesamt: 179});
+  const b = (market, storage) => ({main: 22, snob: 1, smith: 20, market, wood: 30, stone: 30, iron: 30, farm: 30, storage});
+  const mit = (v, l) => Object.assign(v, {lager: [l.wood, l.stone, l.iron], lagerSpeicher: l.storage, haendlerGesamt: l.gesamt});
+  const vs = [mit({name: "Kunst Bonus", x: 500, y: 500, b: b(25, 30)}, L.lager["500|500"]),
+              mit({name: "Kunst Normal", x: 503, y: 504, b: b(23, 30)}, L.lager["503|504"])];
+  const P = K.params({mode: "pct", pkgPct: 30, merchantBonus: true, flagLevel: 9, intervalMin: 60}, WELT);
+  let s = K.prepare(vs, P);
+  assert.equal(s[0].cap, 500000); assert.equal(s[0].merchants, 294);
+  near(s[0].sFaktor, 1.25, 1e-9); near(s[0].mFaktor, 294 / 235, 1e-9);
+  assert.deepEqual(s[0].lager, [405429, 440081, 459134], "Lager über 400.000 bleibt erhalten");
+  near(s[0].pkg.wood, 0.3 * 500000 + 405429, 1e-6);                     // Paket nach dem echten Speicher
+  assert.equal(s[1].cap, 400000); assert.equal(s[1].merchants, 179); assert.equal(s[1].mFaktor, 1);
+  // Mindeststufen mit Bonus: Markt 25 beim Bonusdorf 294, Speicher bleibt 30
+  s = K.prepare(vs, Object.assign({}, P, {minMarket: 25}));
+  assert.equal(s[1].merchants, 235);
+  assert.equal(s[0].merchants, 294);
+  // unplausibel (Übersichten passen nicht zusammen): wie bisher nach Stufen
+  s = K.prepare([Object.assign({}, vs[0], {lagerSpeicher: 900000, haendlerGesamt: 600})], P);
+  assert.equal(s[0].cap, 400000); assert.equal(s[0].merchants, 235);
+  // ohne Produktionsübersicht unverändert
+  s = K.prepare([{name: "Kunst", x: 1, y: 1, b: b(25, 30)}], P);
+  assert.equal(s[0].cap, 400000); assert.equal(s[0].merchants, 235);
 });
 
 test("10.16: Vorrat vor dem Start bringt Münzen, ohne mehr Überlauf, und wird geprägt", () => {

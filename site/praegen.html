@@ -856,7 +856,9 @@ function run() {
     return;
   }
   // 2a (12.11.2026): Lagerstand aus Übersichten › Produktion als Startbestand je Dorf
-  const mitLager = v => { const l = LAGER.count ? LAGER.lager[v.x + "|" + v.y] : null; return l ? Object.assign({}, v, {lager: [+l.wood || 0, +l.stone || 0, +l.iron || 0]}) : v; };
+  // dazu Speicher und Händler gesamt aus derselben Übersicht: echte Werte mit Bonus (12.11.2026)
+  const mitLager = v => { const l = LAGER.count ? LAGER.lager[v.x + "|" + v.y] : null;
+    return l ? Object.assign({}, v, {lager: [+l.wood || 0, +l.stone || 0, +l.iron || 0], lagerSpeicher: +l.storage || 0, haendlerGesamt: +l.gesamt || 0}) : v; };
   const villages = parsed.villages.filter(v => !OFF.has(v.x + "|" + v.y)).map(mitLager);
   const nLager = villages.filter(v => v.lager).length;
   const inp = inputs();
@@ -1466,9 +1468,12 @@ function lagerStatus() {
   if (!txt) { st.textContent = "Kurz vor dem Start einfügen: Dörfer mit Lagerstand beginnen in der ganzen Rechnung mit ihrem echten Lager, die übrigen mit dem Startbestand (Erweitert)."; return; }
   if (!LAGER.count) { st.textContent = "Keine Dörfer mit Lagerstand erkannt. Bitte Übersichten › Produktion kopieren, nicht die Gebäudeübersicht."; return; }
   const src = RESULT ? RESULT.src : [], fehlt = src.filter(s => !LAGER.lager[s.x + "|" + s.y]).length;
+  const bonus = src.filter(s => (s.mFaktor || 1) > 1 || (s.sFaktor || 1) > 1).length;
   st.textContent = "Lagerstand für " + nf.format(src.length ? src.length - fehlt : LAGER.count) + (src.length ? " von " + nf.format(src.length) : "")
     + " Dörfern erkannt: sie beginnen in der ganzen Rechnung (Zeitplan, Münzen, Überlauf, Handelsrouten) mit ihrem Lager, getauscht wird nur das Eisen, das dort jetzt liegt"
-    + (fehlt ? ". Die übrigen beginnen mit dem Startbestand (Erweitert) und tauschen nicht." : ".");
+    + (fehlt ? ". Die übrigen beginnen mit dem Startbestand (Erweitert) und tauschen nicht." : ".")
+    + (bonus ? " " + nf.format(bonus) + (bonus === 1 ? " Dorf hat laut Übersicht mehr Händler oder Speicher, als seine Stufen hergeben"
+      : " Dörfer haben laut Übersicht mehr Händler oder Speicher, als ihre Stufen hergeben") + " (Bonus); gerechnet wird mit den echten Werten." : "");
 }
 /* Tabelle je Dorf zum Auf- und Zuklappen (Wunsch Dennis 10.11.2026: die Tabelle ist sehr groß), zu Beginn zu */
 let VORAB_OFFEN = false;
@@ -2589,7 +2594,8 @@ function renderVillages() {
   const sel = gewaehlt(), det = (sel.pk || sel.z || {}).detail, recView = !!det;   // Überlauf auch für die gewählte (10.12)
   const pasBy = new Map(det ? det.passive.map(x => [x.x + "|" + x.y, x]) : []);
   const ovCell = (ov, res) => res > 0 ? [ov > 0 ? pctf(ov / res) : "0 %", ov / res > 0.01 ? "down" : "", Math.round(ov / res * 10000)] : ["", "", -1];
-  const storText = s => s.b.storage > s.storageFrom ? s.storageFrom + " → " + s.b.storage : String(s.b.storage);
+  const storText = s => (s.b.storage > s.storageFrom ? s.storageFrom + " → " + s.b.storage : String(s.b.storage))
+    + ((s.sFaktor || 1) > 1 ? " (" + nf.format(s.cap) + ")" : "");
   const rows = R.allParsed.map(v => {
     const key = v.x + "|" + v.y, r = byKey.get(key), off = OFF.has(key);
     const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !off;
