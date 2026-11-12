@@ -155,9 +155,12 @@
   .pr-vin{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px 22px; align-items:start; margin-bottom:12px}
   .pr-vin>div{display:flex; align-items:center; gap:7px; flex-wrap:wrap; font-size:12px; padding-top:18px}
   .pr-vin input[type="number"]{width:72px}
-  .pr-lager{display:grid; gap:4px; font-size:12px}
-  .pr-lager textarea{min-height:44px; font-size:11.5px}
-  .pr-lager .lab{color:var(--ink-2)}
+  /* Gebäudeübersicht und Produktion nebeneinander oben (Wunsch Dennis 12.11.2026 01:19: das Lagerstandfeld war zu klein
+     und stand weit unten, nach dem Neuladen leicht vergessen) */
+  .pr-ins{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px 12px; align-content:start}
+  .pr-ins label{display:grid; gap:4px; align-content:start; font-size:12px}
+  .pr-ins .lab{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .pr-ins .pr-mnote{line-height:1.4}
   @media (max-width:760px){ .pr-vin{grid-template-columns:1fr} .pr-vin>div{padding-top:0} }
   .pr-vlead{display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 18px; margin:0 0 12px}
   .pr-vlead .t{font-size:clamp(16px,2vw,19px); font-weight:700; line-height:1.35; max-width:860px}
@@ -342,13 +345,22 @@
     <button type="button" class="tw" role="tab" id="r-sitz" aria-selected="false">Sitzungsanzahlplanung</button>
   </nav>
   <section class="panel" aria-labelledby="h-in">
-    <h2 id="h-in">Gebäudeübersicht einfügen
-      <span class="hint">Übersichten › Gebäude öffnen, Strg+A, kopieren, hier einfügen. Die Daten bleiben in deinem Browser und werden nicht gespeichert.</span>
+    <h2 id="h-in">Übersichten einfügen
+      <span class="hint">Im Spiel Übersichten › Gebäude und › Produktion öffnen, Strg+A, kopieren, hier einfügen. Die Daten bleiben in deinem Browser und werden nicht gespeichert.</span>
       <span class="right"><button class="tw" type="button" id="example">Beispiel laden</button></span>
     </h2>
     <div class="body pr-in">
-      <textarea id="paste" spellcheck="false" aria-label="Gebäudeübersicht"
-        placeholder="[001] Dorfname (500|500) K55   10.393   22   25   20   15   0   1   20   1   1   23   30   30   30   30   30   10   20&#10;…"></textarea>
+      <div class="pr-ins">
+        <label><span class="lab">Gebäude (nötig)</span>
+          <textarea id="paste" spellcheck="false" aria-label="Gebäudeübersicht"
+            placeholder="[001] Dorfname (500|500) K55   10.393   22   25   20   15   0   1   20   1   1   23   30   30   30   30   30   10   20&#10;…"></textarea>
+        </label>
+        <label><span class="lab">Produktion mit Lagerstand (freiwillig)</span>
+          <textarea id="lager" spellcheck="false" aria-label="Produktionsübersicht mit Lagerstand" aria-describedby="lager-status"
+            placeholder="[001] Dorfname (500|500) K55   10.393   123.456 234.567 345.678   400.000   110/235   24.000/24.000&#10;…"></textarea>
+          <span class="pr-mnote" id="lager-status">Wirkt bisher nur auf den Tausch vor dem Start: getauscht wird nur das Eisen, das jetzt in den Dörfern liegt. Zeitplan, Münzen und Handelsrouten rechnen mit dem Startbestand (Erweitert).</span>
+        </label>
+      </div>
       <div class="pr-ctl">
         <div>
           <span class="lab">Berechnung</span>
@@ -497,11 +509,7 @@
             aria-label="Kurs: so viel Lehm oder Holz gegen 1.000 Eisen"></label>
           <span>Lehm oder Holz</span>
         </div>
-        <label class="pr-lager"><span class="lab">Lagerstand (freiwillig): Übersichten › Produktion öffnen, Strg+A, kopieren, hier einfügen</span>
-          <textarea id="lager" rows="2" spellcheck="false" aria-describedby="lager-status"
-            placeholder="[001] Dorfname (500|500) K55   10.393   123.456 234.567 345.678   400.000   110/235   24.000/24.000&#10;…"></textarea>
-          <span class="pr-mnote" id="lager-status">Ohne Lagerstand: die Tabelle nennt, was zu Beginn im Lager liegen soll. Mit Lagerstand wird nur das Eisen getauscht, das jetzt in den Dörfern liegt.</span>
-        </label>
+        <p class="pr-mnote" style="margin:0; padding-top:18px">Mit Lagerstand (oben neben der Gebäudeübersicht, Übersichten › Produktion) wird nur das Eisen getauscht, das jetzt in den Dörfern liegt; ohne nennt die Tabelle, was zu Beginn im Lager liegen soll.</p>
       </div>
       <div id="vorab-body"></div>
     </div>
@@ -1402,11 +1410,12 @@ function lagerZeile(cls, wort, v, cap) {
 }
 function lagerStatus() {
   const st = $("lager-status"), txt = $("lager").value.trim();
-  if (!txt) { st.textContent = "Ohne Lagerstand: die Tabelle nennt, was zu Beginn im Lager liegen soll. Mit Lagerstand wird nur das Eisen getauscht, das jetzt in den Dörfern liegt."; return; }
+  if (!txt) { st.textContent = "Wirkt bisher nur auf den Tausch vor dem Start: getauscht wird nur das Eisen, das jetzt in den Dörfern liegt. Zeitplan, Münzen und Handelsrouten rechnen mit dem Startbestand (Erweitert)."; return; }
   if (!LAGER.count) { st.textContent = "Keine Dörfer mit Lagerstand erkannt. Bitte Übersichten › Produktion kopieren, nicht die Gebäudeübersicht."; return; }
   const src = RESULT ? RESULT.src : [], fehlt = src.filter(s => !LAGER.lager[s.x + "|" + s.y]).length;
   st.textContent = "Lagerstand für " + nf.format(src.length ? src.length - fehlt : LAGER.count) + (src.length ? " von " + nf.format(src.length) : "")
-    + " Dörfern erkannt; getauscht wird nur das Eisen, das dort jetzt liegt" + (fehlt ? ". Die übrigen beginnen mit dem eingestellten Startbestand und tauschen nicht." : ".");
+    + " Dörfern erkannt; getauscht wird nur das Eisen, das dort jetzt liegt" + (fehlt ? ". Die übrigen beginnen mit dem eingestellten Startbestand und tauschen nicht." : ".")
+    + " Zeitplan, Münzen und Handelsrouten rechnen weiter mit dem Startbestand (Erweitert).";
 }
 /* Tabelle je Dorf zum Auf- und Zuklappen (Wunsch Dennis 10.11.2026: die Tabelle ist sehr groß), zu Beginn zu */
 let VORAB_OFFEN = false;
