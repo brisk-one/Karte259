@@ -30,8 +30,12 @@
   .ap-row{display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center}
   .ap-row label{display:inline-flex; gap:5px; align-items:center}
   .ap-teil{border-top:1px solid var(--edge-soft); padding-top:8px}
-  td input[type="number"].ap-n.ap-hand{border-color:var(--warn, #b5532a); background:#fff3d6; font-weight:600}   /* AG-Zahl von Hand */
+  td input[type="number"].ap-n.ap-hand{border-color:var(--bad); background:var(--bad-bg); font-weight:600}   /* AG-Zahl von Hand */
   .ap-agzelle{white-space:nowrap}
+  .ap-bilanz{border:1px solid var(--edge-soft); border-radius:6px; padding:6px 10px; margin:8px 0}
+  .ap-bilanz h3{margin:2px 0 4px}
+  .ap-bilanz li{font-weight:600}
+  .ap-bilanz li.ap-gut{color:var(--good)}
   #planer .body > *{min-width:0}   /* Tabellen scrollen in .ap-scroll, statt die Rasterspalte zu verbreitern */
   .ap-note{font-size:11.5px; color:var(--muted)}
   .ap-ok{color:var(--good); font-weight:700} .ap-warn{color:var(--bad); font-weight:700}

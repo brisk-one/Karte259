@@ -948,7 +948,7 @@ function zeigen() {
    ["übrige Offs", anzahl("rest")], ["freie Offs", r.freieOffs.length]].forEach(([t, v]) => {
     const d = el("div"); d.append(el("b", null, String(v)), document.createTextNode(" " + t)); sum.append(d);
   });
-  box.append(sum);
+  box.append(sum, bilanzBox(r));
   if (b) {
     const p = el("p", "ap-note", "Variante: " + (S.wahlKnapp === "weniger_ziele" ? "weniger Ziele, alle mit vollem Richtwert. " : "weniger Clean-Offs je Ziel. "));
     const z = el("button", "tw", "andere Variante wählen"); z.type = "button";
@@ -1039,6 +1039,47 @@ function zeigen() {
   vorschlagSuchen(r);
 }
 /** Abschicksitzungen je Angreifer und Hinweise zum Erweitern der Zeiträume (v0.5). */
+/* Bilanz (Dennis 12.11.2026): schafft jeder Spieler seine AG-Ziele, wie viele AGs oder Offs fehlen. */
+function bilanzBox(r) {
+  const box = el("div", "ap-bilanz"), ul = el("ul", "ap-list");
+  const zeile = (ok, text) => ul.append(el("li", ok ? "ap-gut" : "warn", (ok ? "✓ " : "✗ ") + text));
+  const zname = z => { const d = dorf(z.x * 1000 + z.y); return koord(z.x * 1000 + z.y) + (d ? " (" + spielerName(d.p) + ")" : ""); };
+  const nicht = r.ziele.filter(z => !z.geadelt), unter = r.ziele.filter(z => z.geadelt && z.offFehlt > 0);
+  if (r.ziele.length) zeile(!nicht.length, "AG-Ziele: " + r.stats.geadelt + " von " + r.ziele.length + " geadelt");
+  nicht.forEach(z => {
+    const was = z.agFehlt ? "es fehlen " + z.agFehlt + (z.agFehlt === 1 ? " AG" : " AGs") + " in Reichweite" : z.offFehlt ? "es fehlt " + (z.offFehlt === 1 ? "eine Clean-Off" : z.offFehlt + " Clean-Offs") : "";
+    ul.append(el("li", "warn", "   " + zname(z) + ": " + (was ? was + " · " : "") + (z.grund || "")));
+  });
+  if (r.ziele.some(z => z.geadelt)) {
+    const fehlen = unter.reduce((n, z) => n + z.offFehlt, 0);
+    zeile(!unter.length, unter.length ? "Clean-Offs: " + unter.length + (unter.length === 1 ? " Ziel" : " Ziele") + " unter dem Richtwert, es fehlen " + fehlen + (fehlen === 1 ? " Off" : " Offs") +
+      " (" + unter.slice(0, 6).map(z => koord(z.x * 1000 + z.y) + ": " + (z.soll - z.offFehlt) + " statt " + z.soll).join(", ") + (unter.length > 6 ? " …" : "") + ")"
+      : "Clean-Offs: alle geadelten Ziele mit vollem Richtwert");
+  }
+  // je Spieler: eigene (zugewiesene) Ziele, AGs und Offs
+  (ERG.input.attackers || []).forEach(a => {
+    const vs = a.villages || [], rol = a.rollen || {};
+    const agDa = rol.ag === false ? 0 : vs.reduce((n, v) => n + (v.nobles || 0), 0);
+    const agEin = r.items.filter(i => i.att === a.id && i.kind === "ag").length;
+    const offEin = r.items.filter(i => i.att === a.id && (i.kind === "clean" || i.kind === "rest" || (i.kind === "ag" && i.units.ram > 0))).length;
+    const offFrei = r.freieOffs.filter(o => o.att === a.id).length;
+    const eigene = r.ziele.filter(z => z.assignee === a.id);
+    const teile = [];
+    if (eigene.length) {
+      const g = eigene.filter(z => z.geadelt).length, agF = eigene.reduce((n, z) => n + (z.geadelt ? 0 : z.agFehlt || 0), 0);
+      const offF = eigene.reduce((n, z) => n + (z.offFehlt || 0), 0);
+      teile.push("eigene AG-Ziele " + g + " von " + eigene.length + " geadelt" + (agF ? ", es fehlen " + agF + " AGs in Reichweite" : "") + (offF ? ", es fehlen " + offF + " Clean-Offs" : ""));
+    }
+    if (agDa || agEin) teile.push("AGs " + agEin + " von " + agDa + " eingeplant");
+    if (offEin || offFrei) teile.push("Offs " + offEin + " eingeplant" + (offFrei ? ", " + offFrei + " frei" : ""));
+    if (!teile.length) return;
+    const ok = !eigene.length || eigene.every(z => z.geadelt && !z.offFehlt);
+    zeile(ok, (a.name || "Angreifer") + ": " + teile.join(" · "));
+  });
+  if (!ul.children.length) return box;
+  box.append(el("h3", null, "Bilanz"), ul);
+  return box;
+}
 function sitzungenBox(r) {
   const d = el("div");
   d.append(el("h3", null, "Abschicksitzungen"),

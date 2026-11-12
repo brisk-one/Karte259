@@ -765,6 +765,7 @@ function plan(input) {
     return {aktiv, zuteilung};
   }
 
+  const agFehlt = new Map(), offFehlt = new Map();      // Ziel → fehlende AGs oder Clean-Offs (Bilanz, 12.11.2026)
   let z1 = null;
   for (let runde = 0; runde < 400; runde++) {
     z1 = agZuteilen();
@@ -772,13 +773,14 @@ function plan(input) {
     z1.aktiv.forEach(t => {
       const g = z1.zuteilung.get(t.id) || [];
       const n = g.reduce((s, x) => s + x.n, 0);
-      if (!n) ausgeschlossen.set(t.id, "kein freies AG in Reichweite und Abschickzeitraum" + (agFest ? " (AG-Laufzeit höchstens " + fmtStd(cfg.max_lauf_ag_h) + " h)" : ""));
+      if (!n) { ausgeschlossen.set(t.id, "kein freies AG in Reichweite und Abschickzeitraum" + (agFest ? " (AG-Laufzeit höchstens " + fmtStd(cfg.max_lauf_ag_h) + " h)" : "")); agFehlt.set(t.id, k); }
       else if (n < k) teil.push({t, n});
     });
     // Unvollständige Ziele einzeln streichen (das mit den wenigsten AGs), damit die übrigen ihre AGs bekommen
     if (teil.length) {
       teil.sort((a, b) => a.n - b.n || a.t.id - b.t.id);
       ausgeschlossen.set(teil[0].t.id, "zu wenige freie AGs aus " + (form === "ganz" ? "einem Dorf" : "verschiedenen Dörfern") + " in Reichweite");
+      agFehlt.set(teil[0].t.id, k - teil[0].n);
       continue;
     }
     // AGs aus verschiedenen Dörfern brauchen eine gemeinsame Ankunftszeit; sonst die Kante des Ausreißers sperren
@@ -906,6 +908,7 @@ function plan(input) {
     const mitOff = ohne.filter(t => trains.get(t.id).some(g => g.carriesOff));
     (mitOff.length ? [mitOff[mitOff.length - 1]] : ohne).forEach(t => {
       ausgeschlossen.set(t.id, agSet(t, clean).length ? "keine freie Clean-Off in Reichweite und Abschickzeitraum" : "AGs ohne gemeinsame Ankunftszeit");
+      if (agSet(t, clean).length) offFehlt.set(t.id, 1);
       trains.get(t.id).forEach(g => { if (g.carriesOff) offImTrain.delete(g.v.id); });
       trains.delete(t.id);
     });
@@ -942,6 +945,7 @@ function plan(input) {
       unter.sort((a, b) => cleanOffs.get(a.id).length - cleanOffs.get(b.id).length || a.id - b.id);
       const weg = unter[0];
       ausgeschlossen.set(weg.id, "zu wenige Offs für " + richtwert(weg) + " Clean-Offs je Ziel (Variante weniger Ziele)");
+      offFehlt.set(weg.id, richtwert(weg) - cleanOffs.get(weg.id).length);
       cleanOffs.get(weg.id).forEach(o => { o.verplant = false; });
       cleanOffs.set(weg.id, []);
       trains.get(weg.id).forEach(g => { if (g.carriesOff) offImTrain.delete(g.v.id); });
@@ -1366,12 +1370,16 @@ function plan(input) {
   // Hinweise je Ziel
   const zielInfo = ziele.map(t => {
     const b = blocks.find(x => x.art === "ag" && x.ziel.id === t.id);
-    if (!b || b.T == null) return {id: t.id, x: t.x, y: t.y, geadelt: false, grund: ausgeschlossen.get(t.id) || (b ? "keine gemeinsame Ankunftszeit" : "nicht adelbar")};
+    // Bilanz (Dennis 12.11.2026): wie viele AGs oder Clean-Offs fehlen, wem das Ziel zugewiesen ist
+    if (!b || b.T == null) return {id: t.id, x: t.x, y: t.y, geadelt: false, grund: ausgeschlossen.get(t.id) || (b ? "keine gemeinsame Ankunftszeit" : "nicht adelbar"),
+      agFehlt: agFehlt.get(t.id) || 0, offFehlt: offFehlt.get(t.id) || 0, assignee: t.assignee != null ? t.assignee : null};
     const offs = b.items.filter(i => i.kind === "clean"), ags = b.items.filter(i => i.kind === "ag");
     const ersteAG = Math.min(...ags.map(i => i.sendMs));
     const zuerst = offs.every(o => o.sendMs + cfg.off_first_lead_s * 1000 <= ersteAG);
     if (cfg.off_first && !zuerst) warnings.push({art: "reihenfolge", ziel: t.id, text: "Ziel " + t.x + "|" + t.y + ": AG vor der Clean-Off abgeschickt"});
-    return {id: t.id, x: t.x, y: t.y, geadelt: true, clean: offs.length, ags: ags.length, offZuerst: zuerst, T: b.T};
+    return {id: t.id, x: t.x, y: t.y, geadelt: true, clean: offs.length, ags: ags.length, offZuerst: zuerst, T: b.T,
+            soll: richtwert(t), offFehlt: Math.max(0, richtwert(t) - offs.filter(o => !o.zusatz).length), assignee: t.assignee != null ? t.assignee : null,
+            agVon: [...new Set(ags.map(i => i.att))]};
   });
   items.forEach(it => {
     if (istNacht(world, it.arrivalMs)) it.nacht = true;
