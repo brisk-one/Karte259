@@ -113,6 +113,23 @@
 <div class="wrap" id="zusatz-sperre"><section class="panel"><h2>Angriffsplaner</h2>
   <div class="body"><p class="empty" id="zusatz-msg">Lade …</p></div></section></div>
 <main class="wrap" id="planer" hidden>
+  <section class="panel" aria-labelledby="h-datei">
+    <h2 id="h-datei">Planung als Datei
+      <span class="hint">Zum Weiterarbeiten an einem anderen Tag oder Rechner; derselbe Browser merkt sich alles ohnehin.</span></h2>
+    <div class="body" style="display:grid; gap:6px">
+      <div class="ap-row">
+        <button class="tw" type="button" id="plan-speichern">Planung speichern</button>
+        <button class="tw" type="button" id="plan-laden">Planung laden …</button>
+        <input type="file" id="plan-datei" accept=".json,application/json" hidden>
+        <button class="ap-i" type="button" data-info="planDatei" aria-expanded="false" title="Info">i</button>
+        <span class="ap-note" id="plan-note"></span>
+      </div>
+      <div class="ap-help" data-help="planDatei"></div>
+      <div class="ap-wahl" id="plan-frage" hidden><span id="plan-frage-text"></span>
+        <div class="ap-row"><button class="tw" type="button" id="plan-ja">laden und aktuelle Planung ersetzen</button>
+          <button class="tw" type="button" id="plan-nein">abbrechen</button></div></div>
+    </div>
+  </section>
   <section class="panel" aria-labelledby="h-cfg">
     <h2 id="h-cfg">1 · Allgemeine Konfiguration
       <span class="hint">Alle Eingaben bleiben in deinem Browser, nichts wird hochgeladen.</span>

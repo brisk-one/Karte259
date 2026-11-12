@@ -45,6 +45,7 @@ const INFO = {
   fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Jeder Angreifer kann unter „Je Angreifer“ eigene Zeiträume bekommen; sie ersetzen für ihn die gemeinsamen. Die Zeiträume sind ein Wunsch: geht ein Ziel nur mit Abschicken außerhalb, plant der Planer es trotzdem, markiert diese Befehle („außerhalb“, „nachts“) und sagt nach der Berechnung, wie die Zeiträume zu erweitern wären. Fakes kommen nur in Sitzungen, in denen ohnehin abgeschickt wird.",
   jeClean: "Gilt nur für diesen Spieler, statt der Einstellung „Clean-Offs je AG-Ziel“ oben. „Höchstens N je Ziel“: von diesem Spieler kommen je AG-Ziel höchstens N Clean-Offs (0: keine), die Zahl je Ziel bleibt beim Wert oben. „N für meine AG-Ziele“: Ziele, auf die dieser Spieler den AG-Train schickt, bekommen N Clean-Offs (mindestens 1). Ohnehin gilt: Clean-Offs kommen möglichst vom Spieler, der den Train schickt, damit er sein Timing selbst in der Hand hat.",
   jeStark: "Gilt nur für diesen Spieler: seine AG-Ziele bekommen ihre Clean-Offs möglichst von ihm selbst, und seine Offs gehen möglichst auf seine eigenen AG-Ziele, auch seine freien Offs. Fremde Offs vor seinen AGs gibt es dann nur, wenn er selbst keine passende Off hat. Das geht vor Abschickzeitraum und Laufzeit-Richtwert, aber nicht vor „Off vor AG“: kann seine eigene Off nur nach seinem AG losgehen, kommt lieber eine fremde, die vorher losgeht. Das Adeln selbst geht ebenfalls vor (fehlt einem Ziel sonst eine Clean-Off, kommt sie doch von einem anderen).",
+  planDatei: "„Planung speichern“ lädt eine JSON-Datei herunter mit allem, was du im Planer eingegeben und angepasst hast: Konfiguration, Angreifer mit Truppenübersichten, Häkchen, AG-Zahlen, AG-Pala, Offs an/aus, Zeiträume, Ziele mit Zuordnung, Fakeziele und Fakelisten, gewürfelte Variante. „Planung laden …“ liest so eine Datei (sie bleibt auf deinem Rechner, nichts wird hochgeladen), zeigt, was drin ist, und ersetzt nach Bestätigung die aktuelle Planung; danach „Berechnen“. Weltdaten und die Uhrzeit kommen beim Rechnen frisch dazu, der Plan kann sich deshalb leicht ändern, etwa wenn Abschickzeiten inzwischen vorbei sind oder ein Ziel den Besitzer gewechselt hat. Die Datei enthält die Truppenübersichten der Spieler: nur an Leute geben, die sie sehen dürfen. Ohne Datei merkt sich derselbe Browser die Planung ohnehin, auch nach dem Schließen.",
   agListe: "Für Listen wie „in diesen Dörfern baue ich je 4 AGs“: Koordinaten einfügen, Zahl wählen, übernehmen. Die Zahl ist die AG-Zahl im Dorf insgesamt, wie wenn du sie in der Dorfliste von Hand einträgst; die Dorfliste zeigt dann „Übersicht N, noch M bauen“, ↺ setzt einzeln zurück. Steht in der Übersicht schon so viel oder mehr, gilt die Übersicht. Die Dörfer müssen in seiner Truppenübersicht stehen; was dort fehlt, wird mit Koordinaten genannt.",
   zielFuer: "Mit einem Angreifer gewählt gehören alle Dörfer aus der Liste (oder alle Dörfer des Spielers) ihm als AG-Ziele, auch die schon vorhandenen; die Verteilung springt auf „je Angreifer eigene Ziele“. „automatisch“: wie bisher, der Planer verteilt.",
   jeRammen: "Gilt nur für diesen Spieler: so viele Rammen darf ein Fake höchstens enthalten (leer: 1, 0: keine). Katapulte gehen immer vor: eine Ramme ist die langsamste Einheit nur, wenn im Dorf kein Katapult frei ist, und aufgefüllt wird mit Rammen erst, wenn Katapulte und Späher nicht reichen. Jeder Fake hat mindestens einen Späher.",
@@ -1123,7 +1124,10 @@ function bilanzBox(r) {
       " (" + unter.slice(0, 6).map(z => koord(z.x * 1000 + z.y) + ": " + (z.soll - z.offFehlt) + " statt " + z.soll).join(", ") + (unter.length > 6 ? " …" : "") + ")"
       : "Clean-Offs: alle geadelten Ziele mit vollem Richtwert");
   }
-  // je Spieler: eigene (zugewiesene) Ziele, AGs und Offs
+  // je Spieler: eigene (zugewiesene) Ziele, AGs und Offs; Clean-Offs auf AG-Ziele anderer Spieler (Dennis 13.11.2026 00:34):
+  // „seine“ AG-Ziele sind die, auf die er einen Train schickt
+  const trainVon = new Map(r.ziele.filter(z => z.geadelt).map(z => [z.id, new Set(z.agVon || [])]));
+  const cleanAG = r.items.filter(i => i.kind === "clean" && trainVon.has(i.t.id));
   (ERG.input.attackers || []).forEach(a => {
     const vs = a.villages || [], rol = a.rollen || {};
     const agDa = rol.ag === false ? 0 : vs.reduce((n, v) => n + (v.nobles || 0), 0);
@@ -1138,7 +1142,12 @@ function bilanzBox(r) {
       teile.push("eigene AG-Ziele " + g + " von " + eigene.length + " geadelt" + (agF ? ", es fehlen " + agF + " AGs in Reichweite" : "") + (offF ? ", es fehlen " + offF + " Clean-Offs" : ""));
     }
     if (agDa || agEin) teile.push("AGs " + agEin + " von " + agDa + " eingeplant");
-    if (offEin || offFrei) teile.push("Offs " + offEin + " eingeplant" + (offFrei ? ", " + offFrei + " frei" : ""));
+    const aufFremde = cleanAG.filter(i => i.att === a.id && !trainVon.get(i.t.id).has(a.id));
+    const vonFremden = cleanAG.filter(i => i.att !== a.id && trainVon.get(i.t.id).has(a.id));
+    const fz = aufFremde.filter(i => i.zusatz).length;
+    if (offEin || offFrei) teile.push("Offs " + offEin + " eingeplant" + (offEin ? ", davon " + aufFremde.length + " auf AG-Ziele anderer Spieler" + (fz ? " (" + fz + " zusätzlich)" : "") : "") +
+      (offFrei ? ", " + offFrei + " frei" : ""));
+    if (vonFremden.length) teile.push(vonFremden.length + (vonFremden.length === 1 ? " fremde Off" : " fremde Offs") + " auf seinen AG-Zielen");
     if (!teile.length) return;
     const ok = !eigene.length || eigene.every(z => z.geadelt && !z.offFehlt);
     zeile(ok, (a.name || "Angreifer") + ": " + teile.join(" · ") + (a.eigeneStark ? " · eigene AG-Ziele stark" : ""));
@@ -1392,6 +1401,58 @@ function auswahlUebernehmen() {
 })();
 
 $("zusatz-sperren").addEventListener("click", () => { zusatzSperren(); location.href = "./"; });
+
+/* ---------- Planung als Datei (Dennis 13.11.2026): speichern und an einem anderen Tag wieder laden ---------- */
+const DATEI_ART = "karte259-angriffsplaner";
+let PLAN_DATEI = null;
+const zweistellig = n => String(n).padStart(2, "0");
+function planInhalt(s) {
+  const n = (s.atts || []).filter(a => a && a.text && String(a.text).trim()).length, z = (s.ziele || []).length, f = (s.fakeHaupt || []).length;
+  return [n + (n === 1 ? " Angreifer mit Truppenübersicht" : " Angreifer mit Truppenübersichten"), z + (z === 1 ? " AG-Ziel" : " AG-Ziele"), f + (f === 1 ? " Fakeziel" : " Fakeziele")].join(", ");
+}
+$("plan-speichern").addEventListener("click", () => {
+  const t = new Date();
+  const name = "angriffsplan_" + WELT + "_" + t.getFullYear() + "-" + zweistellig(t.getMonth() + 1) + "-" + zweistellig(t.getDate()) + "_" + zweistellig(t.getHours()) + zweistellig(t.getMinutes()) + ".json";
+  const daten = {art: DATEI_ART, v: 1, welt: WELT, gespeichert: t.toISOString(), S};
+  const url = URL.createObjectURL(new Blob([JSON.stringify(daten)], {type: "application/json"}));
+  const a = el("a"); a.href = url; a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  $("plan-note").textContent = "Gespeichert als " + name + ": " + planInhalt(S);
+});
+$("plan-laden").addEventListener("click", () => $("plan-datei").click());
+$("plan-datei").addEventListener("change", e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  $("plan-frage").hidden = true; PLAN_DATEI = null;
+  if (f.size > 40e6) { $("plan-note").textContent = "Datei zu groß für eine Planung: " + f.name; return; }
+  const r = new FileReader();
+  r.onload = () => {
+    let d = null;
+    try { d = JSON.parse(r.result); } catch (err) { d = null; }
+    const ok = d && d.art === DATEI_ART && d.v === 1 && d.S && typeof d.S === "object" && Array.isArray(d.S.atts) &&
+      (d.S.ziele == null || Array.isArray(d.S.ziele)) && (d.S.cfg == null || typeof d.S.cfg === "object");
+    if (!ok) { $("plan-note").textContent = "Keine Planungsdatei des Angriffsplaners: " + f.name; return; }
+    PLAN_DATEI = d;
+    const wann = d.gespeichert && !isNaN(new Date(d.gespeichert)) ? new Date(d.gespeichert) : null;
+    $("plan-frage-text").textContent = "„" + f.name + "“" + (wann ? ", gespeichert am " + wann.toLocaleDateString("de-DE") + " um " + zweistellig(wann.getHours()) + ":" + zweistellig(wann.getMinutes()) + " Uhr" : "") +
+      ": " + planInhalt(d.S) + "." + (d.welt && d.welt !== WELT ? " Achtung: Die Datei ist für Welt " + d.welt + ", hier ist " + WELT + "." : "") +
+      " Laden ersetzt die aktuelle Planung; brauchst du sie noch, vorher „Planung speichern“.";
+    $("plan-frage").hidden = false;
+    $("plan-note").textContent = "";
+  };
+  r.onerror = () => { $("plan-note").textContent = "Datei nicht lesbar: " + f.name; };
+  r.readAsText(f);
+});
+$("plan-nein").addEventListener("click", () => { PLAN_DATEI = null; $("plan-frage").hidden = true; });
+$("plan-ja").addEventListener("click", () => {
+  if (!PLAN_DATEI) return;
+  clearTimeout(speicherTimer);   // kein verspätetes Speichern der alten Planung
+  try { localStorage.setItem(SPEICHER, JSON.stringify({v: 1, S: PLAN_DATEI.S})); }
+  catch (e) { $("plan-note").textContent = "Laden braucht den Browserspeicher, der ist hier gesperrt oder voll (privates Fenster?)."; return; }
+  location.reload();   // derselbe Weg wie beim normalen Öffnen, mit allen Umstellungen alter Stände
+});
 $("help-all").addEventListener("click", () => { S.hilfe = !S.hilfe; hilfeAnwenden(); speichern(); });
 $("cfg-reset").addEventListener("click", () => { S.cfg = Object.assign({}, K.CFG_DEFAULT); cfgBauen(); geaendert(); });
 $("att-add").addEventListener("click", () => { S.atts.push(neuerAngreifer()); attsBauen(); geaendert(true); });
