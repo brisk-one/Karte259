@@ -95,6 +95,7 @@ const OFF_ZUERST = 1e8;
 // fremde Off vor seinem AG als seine eigene danach). Je Rangfolge in R.stark, immer unter R.offZuerst.
 const EIGENE_STARK = 5e7;
 const FAKE_SITZUNG_MS = 30 * 60000;        // reine Fake-Spieler: eine Sitzung von höchstens 2 × 30 min
+const FAKE_EXTRA_SITZUNGEN = 2, FAKE_EXTRA_KOSTEN = 21600, FAKE_EXTRA_MIN = 10;   // zusätzliche Fake-Sitzungen je Spieler (Dennis 13.11.2026, 1a)
 const ANKER_RAND_MS = 30 * 60000;          // Zuteilung: so weit vom Ankerzeitpunkt kostet nichts
 const ANKUNFT_MAX_MS = 90 * 60000;         // Orientierungswert 1,5 h, Hinweis ab 1 h; seit 10.11.2026 keine feste Grenze (Dennis: für Fakes sinnvoll)
 const ANKUNFT_RAT_MS = 60 * 60000;
@@ -1146,7 +1147,7 @@ function plan(input) {
     restZiele.forEach(({o, t}) => out.push({art: "rest", key: "rest:" + t.id + ":" + o.id, ziel: t, items: [offIt(o, t, 0, "rest")]}));
     return out;
   };
-  const zeitCtx = {A, ANK, att, gapMs: cfg.min_send_gap_s * 1000, zielMs: (cfg.send_gap_target_s || 0) * 1000, rng, world, R, streng, anker};
+  const zeitCtx = {A, ANK, att, gapMs: cfg.min_send_gap_s * 1000, zielMs: (cfg.send_gap_target_s || 0) * 1000, rng, world, R, streng, anker, seed: cfg.seed | 0 || 1};
   let vorgabe = null, T0 = Infinity;         // T0: erster Off- oder AG-Abschick des Plans (vorläufig), Bezug des Fake-Vorlaufs
   const fakeFenster = new Map();             // Angreifer → Abschickzeiten, in denen seine Fakes liegen dürfen
   if (!streng) {
@@ -1284,10 +1285,41 @@ function plan(input) {
     }
     return ivIntersect(s, fakeFenster.get(v.att)).length > 0;
   };
-  const fakeZeitOk = (v, t) => fakeNormalOk(v, t) || (!streng && vorlaufMs > 0 && fruehMoeglich(v, t));
+  // Zusätzliche Fake-Sitzungen (Dennis 13.11.2026 10:50, 1a): reichen die Off- und AG-Sitzungen eines Spielers nicht (Zwoogel:
+  // 148 Dörfer, 91 könnten faken, aber nur 6 kurze Sitzungen und 85 Fakes), bekommt er bis zu zwei reine Fake-Sitzungen von je
+  // einer Stunde in seinen Abschickzeiträumen, dort, wo die meisten seiner möglichen Fakes liegen. Beim Verteilen kosten sie
+  // so viel wie 6 h Laufzeit mehr; genutzt werden sie, wenn seine Sitzungen nicht reichen (die Fairness nach Dorfzahl gibt den
+  // Ausschlag). Ohne Fake in der Sitzung entsteht keine.
+  const fakeExtra = new Map(), fakeExtraListe = new Map();
+  const extraFenster = a => {
+    if (!fakeExtra.has(a)) {
+      const f = [], w = att.get(a).wunsch;
+      if (!streng && w.length) {
+        if (!fakeFenster.has(a) && !fakeAnker.has(a)) fakeAnker.set(a, fakeSitzung(a));
+        const belegt = ivNorm((fakeFenster.get(a) || fakeAnker.get(a) || []).concat(vorlaufMs ? fruehFenster(a) : []));
+        let ivs = [];
+        ANK.forEach(an => fakeIvs(a, an).forEach(iv => ivIntersect([iv], w).forEach(x => { if (!ivIntersect([x], belegt).length) ivs.push(x); })));
+        for (let n = 0; n < FAKE_EXTRA_SITZUNGEN && ivs.length; n++) {
+          const pw = punktWahl(ivs, w);
+          if (pw.p == null || !(pw.n > 0)) break;
+          const s = sitzungUm(pw.p, w);
+          s.forEach(x => f.push(x));
+          fakeExtraListe.get(a) || fakeExtraListe.set(a, []);
+          fakeExtraListe.get(a).push(s);
+          ivs = ivs.filter(iv => !ivIntersect([iv], s).length);
+        }
+      }
+      fakeExtra.set(a, ivNorm(f));
+    }
+    return fakeExtra.get(a);
+  };
+  const fakeExtraOk = (v, t) => !streng && ivIntersect(sendIvFake(travelS(world, "ram", dist(v, t)) * 1000), extraFenster(v.att)).length > 0;
+  const nurExtra = (v, t) => !fakeNormalOk(v, t) && !(fruehGewuenscht(v) && fruehMoeglich(v, t)) && fakeExtraOk(v, t);
+  const extraKosten = (v, t) => nurExtra(v, t) ? FAKE_EXTRA_KOSTEN : 0;
+  const fakeZeitOk = (v, t) => fakeNormalOk(v, t) || (!streng && vorlaufMs > 0 && fruehMoeglich(v, t)) || fakeExtraOk(v, t);
   // beim Zuteilen: die frühe Sitzung nimmt nur ihren Anteil (rund ein Viertel); was nur früh ginge, bleibt danach draußen
   // (Dennis 13.11.2026: vorher landeten dort bis zu drei Viertel der Fakes eines Spielers)
-  const fakeZeitJetzt = (v, t) => fakeNormalOk(v, t) || (fruehGewuenscht(v) && fruehMoeglich(v, t));
+  const fakeZeitJetzt = (v, t) => fakeNormalOk(v, t) || (fruehGewuenscht(v) && fruehMoeglich(v, t)) || fakeExtraOk(v, t);
   // Fakes je Zieldorf (wie bisher) oder je Herkunftsdorf (Dennis 09.11.2026, Konfig); Einstellungen je Spieler gehen vor
   const herkunft = cfg.fake_modus === "herkunft";
   const sollQ = v => { const a = att.get(v.att); return Math.min(a.fakeModus === "dorf" ? a.fakeN : cfg.fakes_per_village, Math.max(1, Math.round(cfg.fakes_max_je_dorf || 4))); };
@@ -1310,10 +1342,11 @@ function plan(input) {
   const fruehGewuenscht = v => vorlaufMs > 0 && (fruehZahl.get(v.att) || 0) < FRUEH_ANTEIL * ((attFakes.get(v.att) || 0) + 1);
   const fruehBonus = (v, t) => fruehGewuenscht(v) && fruehMoeglich(v, t) ? -FRUEH_BONUS_S : 0;
   const fakeDazu = (v, t, f, ex) => {
+    const ne = nurExtra(v, t);
     const fr = fruehGewuenscht(v) && fruehMoeglich(v, t);
     if (fr) fruehZahl.set(v.att, (fruehZahl.get(v.att) || 0) + 1);
     paarPlus(v, t);
-    fakes.push({v, t, f, extra: ex, frueh: fr});
+    fakes.push({v, t, f, extra: ex, frueh: fr, nurExtra: ne});
   };
   /** grenze: höchstens so viele Fakes je Ziel in diesem Lauf (Verteilung reihum). */
   const fakeLauf = (liste, istExtra, modus, grenze) => {
@@ -1331,7 +1364,7 @@ function plan(input) {
     if (!istExtra) kand.sort((a, b) => a.q.length - b.q.length);
     kand.forEach(({t, q}) => {
       const schon = new Set(fakes.filter(f => f.t.id === t.id).map(f => f.v.id));
-      const sortiert = q.map(v => ({v, c: travelS(world, "ram", dist(v, t)) + rng() * 1800 + v.fakes * 600 + paarZahl(v, t) * PAAR_S + last(v) * FAIR_S + fruehBonus(v, t)}))
+      const sortiert = q.map(v => ({v, c: travelS(world, "ram", dist(v, t)) + rng() * 1800 + v.fakes * 600 + paarZahl(v, t) * PAAR_S + last(v) * FAIR_S + fruehBonus(v, t) + extraKosten(v, t)}))
         .sort((a, b) => a.c - b.c);
       // Topf je Fakeziel: die Spieler mit „ziel“ je eigener Topf mit ihrer Zahl, alle übrigen zusammen die Zahl der Konfig
       const topf = v => { const a = att.get(v.att); return a.fakeModus === "ziel" ? "s" + a.id : "alle"; };
@@ -1357,13 +1390,16 @@ function plan(input) {
     });
   };
   const laeufe = (liste, ex, grenze) => { if (liste.length) { fakeLauf(liste, ex, "kata", grenze); fakeLauf(liste, ex, "spaeher", grenze); } };
-  if (cfg.fake_verteilung === "haupt") { laeufe(fakeZiele, false); laeufe(extra, true); }
-  else {
-    // reihum (Dennis 10.11.2026 00:52: sonst bekam fast nur der Hauptspieler Fakes): erst jedes Pflichtziel, dann jedes
-    // Dorf der Stammesmitglieder einen Fake, danach Pflichtziele bis zur vollen Zahl, dann Mitglieder bis zu ihrer Zahl
-    laeufe(fakeZiele, false, 1); laeufe(extra, true, 1);
-    laeufe(fakeZiele, false); laeufe(extra, true);
-  }
+  const verteilen = () => {
+    if (cfg.fake_verteilung === "haupt") { laeufe(fakeZiele, false); laeufe(extra, true); }
+    else {
+      // reihum (Dennis 10.11.2026 00:52: sonst bekam fast nur der Hauptspieler Fakes): erst jedes Pflichtziel, dann jedes
+      // Dorf der Stammesmitglieder einen Fake, danach Pflichtziele bis zur vollen Zahl, dann Mitglieder bis zu ihrer Zahl
+      laeufe(fakeZiele, false, 1); laeufe(extra, true, 1);
+      laeufe(fakeZiele, false); laeufe(extra, true);
+    }
+  };
+  verteilen();
   // Je Herkunftsdorf: jedes Dorf schickt N Fakes, Ziele gleichmäßig verteilt (wenig befakte und nahe zuerst), nie zweimal
   // dasselbe Ziel aus einem Dorf; Spieler mit „N je Fakeziel“ bleiben bei ihrem eigenen Topf
   const herkunftLauf = modus => {
@@ -1381,7 +1417,7 @@ function plan(input) {
         if (schon.has(t.id)) return;
         // je Fake auf dem Ziel 8 h Aufschlag: Gleichmäßigkeit geht vor Nähe (rund 16 Felder Rammenlaufzeit)
         if (ex && (zahl.get(t.id) || 0) >= cfg.extra_fakes_per_village) return;      // Stammesmitglieder: eigene Zahl je Zieldorf
-        const tr = travelS(world, "ram", dist(v, t)), c = (zahl.get(t.id) || 0) * 28800 + tr + rng() * 1800 + (ex ? 57600 : 0) + paarZahl(v, t) * PAAR_S + fruehBonus(v, t);
+        const tr = travelS(world, "ram", dist(v, t)), c = (zahl.get(t.id) || 0) * 28800 + tr + rng() * 1800 + (ex ? 57600 : 0) + paarZahl(v, t) * PAAR_S + fruehBonus(v, t) + extraKosten(v, t);
         if (c >= bestC) return;
         if (ex && !t.manuell && moral(world.moral, a.points, t.ownerPoints || 0, t.ownerDays) < cfg.moral_threshold) return;
         if (!tsetFake(v, tr * 1000).length || !(vorlaufMs ? fakeZeitJetzt(v, t) : fakeZeitOk(v, t))) return;
@@ -1421,7 +1457,7 @@ function plan(input) {
           let best = null, bestC = Infinity;
           liste.forEach(({t, ex}) => {
             if (schon.has(t.id)) return;
-            const tr = travelS(world, "ram", dist(v, t)), c = (zahlZ.get(t.id) || 0) * 28800 + tr + rng() * 1800 + (ex ? 57600 : 0) + paarZahl(v, t) * PAAR_S;
+            const tr = travelS(world, "ram", dist(v, t)), c = (zahlZ.get(t.id) || 0) * 28800 + tr + rng() * 1800 + (ex ? 57600 : 0) + paarZahl(v, t) * PAAR_S + extraKosten(v, t);
             if (c >= bestC) return;
             if (ex && !t.manuell && moral(world.moral, a.points, t.ownerPoints || 0, t.ownerDays) < cfg.moral_threshold) return;
             if (!tsetFake(v, tr * 1000).length || !(vorlaufMs ? fakeZeitJetzt(v, t) : fakeZeitOk(v, t))) return;
@@ -1451,6 +1487,37 @@ function plan(input) {
       (ist > vorher ? " (" + (ist - vorher) + " dazu)" : "") + "; Grenze: " + [grund.truppen && grund.truppen + " Dörfer ohne Katapulte oder Rammen mit Spähern für einen weiteren Fake",
         grund.sitzungen && grund.sitzungen + " Dörfer ohne weiteres Fakeziel, das in seine Sitzungen passt", grund.ziele && grund.ziele + " Dörfer haben schon alle Fakeziele"].filter(Boolean).join(", ")});
   });
+  // Zusätzliche Fake-Sitzung nur, wenn sie sich lohnt: mindestens FAKE_EXTRA_MIN Fakes, die nur dort passen; sonst fallen
+  // diese Fakes weg (Truppen zurück) und die Sitzung entfällt (13.11.2026: im Test brachten sie sonst 1 bis 2 Fakes für eine
+  // zusätzliche Weckzeit)
+  const extraGenutzt = [];
+  let extraWeg = 0;
+  fakeExtraListe.forEach((liste, a) => {
+    // jeder Fake, der nur in einer zusätzlichen Sitzung geht, zählt bei genau einer (bei zweien: der volleren)
+    const ivF = f => sendIvFake(travelS(world, "ram", dist(f.v, f.t)) * 1000);
+    const ihre = fakes.filter(f => f.nurExtra && f.v.att === a);
+    const roh = liste.map(win => ihre.filter(f => ivIntersect(ivF(f), win).length).length);
+    const zu = new Map();
+    ihre.forEach(f => { let best = -1; liste.forEach((win, i) => { if (ivIntersect(ivF(f), win).length && (best < 0 || roh[i] > roh[best])) best = i; }); zu.set(f, best); });
+    const behalten = [];
+    liste.forEach((win, i) => {
+      const drin = ihre.filter(f => zu.get(f) === i);
+      if (drin.length >= FAKE_EXTRA_MIN) { behalten.push(win); extraGenutzt.push({a, n: drin.length, von: win[0][0]}); return; }
+      drin.forEach(f => {
+        f.weg = true; extraWeg++;
+        f.v.fakeAv.catapult += f.f.catapult; f.v.fakeAv.spy += f.f.spy; f.v.fakeAv.ram += f.f.ram; f.v.fakes--;
+        paar.set(paarK(f.v, f.t), Math.max(0, paarZahl(f.v, f.t) - 1)); attFakes.set(a, Math.max(0, (attFakes.get(a) || 0) - 1));
+      });
+    });
+    fakeExtra.set(a, ivNorm([].concat(...behalten)));
+    fakeExtraListe.set(a, behalten);
+  });
+  for (let i = fakes.length - 1; i >= 0; i--) if (fakes[i].weg) fakes.splice(i, 1);
+  // was dabei frei wurde, noch einmal verteilen (ohne die entfallenen Sitzungen)
+  if (extraWeg) { verteilen(); if (herkunft) { herkunftLauf("kata"); herkunftLauf("spaeher"); } }
+  if (extraGenutzt.length) warnings.push({art: "fakeextra", text: "Zusätzliche Fake-Sitzungen in den Abschickzeiträumen, weil die Off- und AG-Sitzungen nicht reichten: " +
+    [...new Set(extraGenutzt.map(x => x.a))].map(a => att.get(a).name + " " + extraGenutzt.filter(x => x.a === a).sort((p, q) => p.von - q.von)
+      .map(x => fmtZeit(x.von).slice(0, 5) + ". " + fmtZeit(x.von).slice(11, 16) + " (" + x.n + " Fakes)").join(", ")).join("; ")});
   // Fakes je Dorf ist Richtwert (Dennis 21:04): eine Sammelzeile statt einer Warnung je Ziel
   let fakeSoll = 0;
   if (!herkunft && fakeQuellen.some(v => att.get(v.att).fakeModus !== "ziel")) fakeSoll += cfg.fakes_per_village;
@@ -1543,7 +1610,7 @@ function plan(input) {
     blocks.push({art: "fake", key: "fake:" + t.id + ":" + v.id, ziel: t, frueh: !!frueh, items: [item("fake", v, t, u, "ram", 0, ++aktionNr)]});
   });
 
-  const zeit = zeitenPlanen(blocks, Object.assign({}, zeitCtx, {warnings, vorgabe, fakeAnker, fakeFrueh, schnell: !!input._schnell}));
+  const zeit = zeitenPlanen(blocks, Object.assign({}, zeitCtx, {warnings, vorgabe, fakeAnker, fakeFrueh, fakeExtra, schnell: !!input._schnell}));
   const items = [];
   blocks.forEach(b => {
     if (b.T == null) return;
@@ -1820,7 +1887,10 @@ function zeitenPlanen(blocks, ctx) {
     return naechster(b, w.length ? w[w.length >> 1] : (b.tset[0][0] + b.tset[b.tset.length - 1][1]) / 2);
   };
   // Reihenfolge: Blöcke mit vielen Abschickvorgängen zuerst, Gleichstand per Zufall
-  const reihe = kern.map(b => ({b, r: rng()})).sort((p, q) => q.b.aktionen.length - p.b.aktionen.length || p.r - q.r).map(x => x.b);
+  // eigener Zufall für die Reihenfolge (13.11.2026): vorläufige und endgültige Zeitplanung laufen gleich, egal wie viel
+  // Zufall die Fakeverteilung dazwischen verbraucht; sonst verschoben sich Offs und AGs und vorher passende Fakes fielen weg
+  const rngK = ctx.seed != null ? mulberry32(ctx.seed * 7919 + 17) : rng;
+  const reihe = kern.map(b => ({b, r: rngK()})).sort((p, q) => q.b.aktionen.length - p.b.aktionen.length || p.r - q.r).map(x => x.b);
   const lauf = art => {
     T.clear();
     kern.forEach(b => T.set(b, startLage(b, art)));
@@ -1860,6 +1930,7 @@ function zeitenPlanen(blocks, ctx) {
   // Fakes in die Lücken der Sitzungen (mit Rand); reine Fake-Spieler in ihre eine Fake-Sitzung
   if (!ctx.nurKern) {
     const fruehVon = a => (ctx.fakeFrueh && ctx.fakeFrueh.get(a)) || [];
+    const extraVon = a => (ctx.fakeExtra && ctx.fakeExtra.get(a)) || [];          // zusätzliche Fake-Sitzungen (13.11.2026)
     // übrige Fakes nur in den Sitzungen (mit Rand); die frühe Sitzung gehört den Vorlauf-Fakes (Dennis 13.11.2026)
     const erlaubt = a => {
       const s = sitzungen.get(a);
@@ -1876,7 +1947,8 @@ function zeitenPlanen(blocks, ctx) {
       // Vorlauf-Fakes in die frühe Sitzung, die übrigen in die Sitzungen; nur wo dort kein Platz ist, in die andere
       // (Dennis 13.11.2026: vorher durften alle Fakes in die frühe Sitzung, sie hatte dann bis zu drei Viertel)
       const tsh = ivShift(b.tset, x.rel), frueh = ivIntersect(tsh, fruehVon(x.att)), normal = ivIntersect(tsh, erlaubt(x.att));
-      const versuche = b.frueh ? [frueh, normal] : [normal, frueh];
+      const extraS = ivIntersect(tsh, extraVon(x.att));
+      const versuche = b.frueh ? [frueh, normal, extraS] : [normal, extraS, frueh];
       const wunsch = ctx.streng ? [] : att.get(x.att).wunsch;
       const spanne = arr.length ? [arr[0], arr[arr.length - 1]] : null;
       let bestS = null, bestW = -Infinity, bereich = [];

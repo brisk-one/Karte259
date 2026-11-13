@@ -34,7 +34,7 @@ const INFO = {
   fakes_per_village: "Richtwert für die Zahl der Fakes je Zieldorf oder je Herkunftsdorf, je nach Auswahl darüber. Ein Ziel bekommt nie zwei Fakes aus demselben Dorf.",
   extra_n: "Wie viele Fakes jedes Dorf eines gewählten Stammesmitglieds bekommt. Diese Ziele sind nachrangig: zuerst bekommen Pflichtziele und weitere Fakeziele ihre Zahl („Fakes je Dorf“ in der Konfig), danach die Stammesmitglieder mit dieser Zahl, soweit Truppen und Abschicksitzungen reichen. Fehlende Fakes hier lösen keinen Hinweis aus.",
   fakes_max_je_dorf: "Obergrenze für alle Fakes aus einem eigenen Dorf, auf alle Ziele zusammen. Gilt auch, wenn Fakes je Herkunftsdorf zählen.",
-  fake_verteilung: "Reihum: zuerst bekommt jedes Pflicht- und weitere Fakeziel einen Fake, dann jedes gewählte Dorf der Stammesmitglieder, danach werden die Pflichtziele bis zur vollen Zahl aufgefüllt und zuletzt die Mitglieder bis zu ihrer Zahl. Hauptziele zuerst voll: die Pflichtziele bekommen erst ihre volle Zahl, die Mitglieder nur, was übrig bleibt.",
+  fake_verteilung: "Reihum: zuerst bekommt jedes Pflicht- und weitere Fakeziel einen Fake, dann jedes gewählte Dorf der Stammesmitglieder, danach werden die Pflichtziele bis zur vollen Zahl aufgefüllt und zuletzt die Mitglieder bis zu ihrer Zahl. Hauptziele zuerst voll: die Pflichtziele bekommen erst ihre volle Zahl, die Mitglieder nur, was übrig bleibt. Wann Fakes losgehen: in den Sitzungen der Offs und AGs ihres Spielers (10 Minuten Rand); reichen die nicht (z. B. viele Dörfer, wenige Offs), bekommt ein Spieler bis zu zwei zusätzliche reine Fake-Sitzungen von je etwa einer Stunde in seinen Abschickzeiträumen, aber nur, wenn in eine mindestens 10 Fakes fallen (Dennis 13.11.2026). Im Ergebnis stehen sie bei den Sitzungen mit „nur Fakes“.",
   fake_modus: "Zieldorf: jedes Fakeziel bekommt die Zahl darunter (wie bisher). Herkunftsdorf: jedes Dorf der Angreifer schickt die Zahl darunter, verteilt auf die Fakeziele, wenig befakte und nahe zuerst; gedacht für reine Fake-Pläne. Einstellungen je Spieler gehen vor.",
   fake_extra_pop: "Ein Fake braucht mindestens 1 % der Dorfpunkte des abschickenden Dorfs in Bauernhofplätzen. Der Zuschlag fängt Punkte ab, die bis zum Abschicken dazukommen. Fakes laufen mit Katapult- oder Rammentempo und bestehen aus Katapulten und Spähern, jeder mit mindestens einem Späher (Dörfer ohne freien Späher schicken keine Fakes). Eine Ramme nur, wenn im Dorf kein Katapult frei ist; mehr Rammen nur, wenn Katapulte und Späher nicht reichen, höchstens so viele wie beim Spieler eingestellt (Standard 1).",
   extra_fakes: "Dörfer starker Stammesmitglieder der Zielspieler, gegen die der Angreifer mindestens die Moral-Schwelle hätte. Schwache Spieler sind schlechte Fakeziele: hohe Moral, kaum Truppen zum Unterstützen.",
@@ -1297,7 +1297,7 @@ function sitzungenBox(r) {
       const anz = (n, eins, mehr) => n ? n + " " + (n === 1 ? eins : mehr) : "";
       const t = hm(z.von) + " bis " + K.fmtZeit(z.bis).slice(11, 16) + " · " +
         [z.offs != null ? anz(z.offs, "Off", "Offs") : anz(z.kern, "Off oder AG", "Offs und AGs"), anz(z.ags, "AG-Train", "AG-Trains"), anz(z.fakes, "Fake", "Fakes")].filter(Boolean).join(", ") +
-        (z.nachts ? " · nachts" : "") + (z.ausserhalb ? " · " + z.ausserhalb + " außerhalb" : "");
+        (z.kern ? "" : " · nur Fakes") + (z.nachts ? " · nachts" : "") + (z.ausserhalb ? " · " + z.ausserhalb + " außerhalb" : "");
       const li = el("li", z.ausserhalb ? "warn" : "", t);
       if (z.kern) mitInfo(li, at, z.von, z.bis, false);
       ul.append(li);

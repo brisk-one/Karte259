@@ -811,6 +811,29 @@ test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Re
   assert.equal(r10.items.filter(i => i.kind === "fake").length, r10o.items.filter(i => i.kind === "fake").length);
 });
 
+test("Zusätzliche Fake-Sitzungen, wenn die Off- und AG-Sitzungen nicht reichen (Dennis 13.11.2026 10:50, 1a)", () => {
+  // Beta bekommt 40 Deff-Dörfer mit Katapulten, deren Fakes kaum in seine wenigen Sitzungen passen (wie Zwoogel)
+  const input = szenario({fakes_per_village: 3, fakes_max_je_dorf: 3}, {windows: K.parseFenster("02.11.2026 12:00 bis 23:30").fenster});
+  const beta = input.attackers[1]; let id = 60000;
+  for (let k = 0; k < 40; k++) beta.villages.push({id: id++, name: "BF" + k, x: 500 + (k % 8) * 2, y: 485 + Math.floor(k / 8) * 2, pts: 9000,
+    units: {spear: 3000, sword: 3000, axe: 0, archer: 0, spy: 120, light: 0, marcher: 0, heavy: 500, ram: 0, catapult: 300, knight: 0, snob: 0}, nobles: 0});
+  let f = 70000; input.fakeTargets = [];
+  for (let k = 0; k < 40; k++) input.fakeTargets.push({id: f++, x: 468 + (k % 8) * 2, y: 494 + Math.floor(k / 8) * 3, owner: 900, pts: 8000});
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  const w = r.warnings.find(x => x.art === "fakeextra");
+  assert.ok(w && /Beta \d\d\.\d\d\. \d\d:\d\d \(\d+ Fakes\)/.test(w.text), w && w.text);
+  // jede genutzte zusätzliche Sitzung hat mindestens 10 Fakes; Fakes außerhalb seiner Off-/AG-Sitzungen passen in höchstens zwei Stunden-Fenster
+  [...w.text.matchAll(/\((\d+) Fakes\)/g)].forEach(m => assert.ok(+m[1] >= 10));
+  const kern = K.sitzungenAus(r.items.filter(i => i.att === 102 && i.kind !== "fake").map(i => i.sendMs).sort((a, b) => a - b));
+  const aussen = r.items.filter(i => i.att === 102 && i.kind === "fake" && !kern.some(([x, y]) => i.sendMs >= x - 600000 && i.sendMs <= y + 600000)).map(i => i.sendMs).sort((a, b) => a - b);
+  assert.ok(aussen.length >= 10);
+  let fenster = 0, start = -Infinity;
+  aussen.forEach(t => { if (t > start + 3600000) { fenster++; start = t; } });
+  assert.ok(fenster <= 2, "höchstens zwei zusätzliche Fake-Sitzungen: " + fenster);
+  assert.ok(r.sitzungen[102].some(z => !z.kern && z.fakes >= 10));
+});
+
 test("Fakes je Spieler aufstocken (Dennis 13.11.2026 09:27)", () => {
   const r0 = K.plan(szenario({fakes_per_village: 2}));
   const n0 = r0.items.filter(i => i.kind === "fake" && i.att === 102).length;
