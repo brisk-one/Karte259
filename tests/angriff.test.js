@@ -1179,3 +1179,20 @@ test("Fakes aufstocken: ohne Platz in den Sitzungen zusätzliche Fake-Sitzung im
   const wenig = lauf(5, fenster);
   assert.ok(wenig.neu.length === 0 || wenig.spieler[0].extra.length === 0 || wenig.spieler[0].extra.every(e => e.n >= 10));
 });
+
+test("Exporte für DS-Ultimate und DS Workbench immer nach Abschickzeit (Dennis 13.11.2026 15:00)", () => {
+  const r = K.plan(szenario({}));
+  const gemischt = r.items.slice().reverse();                      // z. B. Fakes vor Offs zusammengesetzt
+  const sendOf = new Map(r.items.map(it => [it.v.id + ":" + it.t.id + ":" + it.arrivalMs, it.sendMs]));
+  const d = K.toDSU(gemischt).items.map(x => sendOf.get(x.source + ":" + x.destination + ":" + (x.arrival_time * 1000 + x.ms)));
+  for (let i = 1; i < d.length; i++) assert.ok(d[i] >= d[i - 1]);
+  const wb = K.toWB(gemischt).trim().split("\n").map(z => { const t = z.split("&"); return sendOf.get(t[0] + ":" + t[1] + ":" + t[3]); });
+  for (let i = 1; i < wb.length; i++) assert.ok(wb[i] >= wb[i - 1]);
+  assert.deepEqual(gemischt.map(i => i.sendMs), r.items.slice().reverse().map(i => i.sendMs), "Eingabe bleibt unverändert");
+  // eingelesener Plan: alte und neue Befehle gemischt, Export nach Abschickzeit; gleiche Abschickzeit nach Ankunft
+  const a = {source: 1, destination: 2, arrivalMs: 5000, sendMs: 3000, units: {}, roh: {source: 1, n: "a"}};
+  const b = {source: 1, destination: 3, arrivalMs: 4000, sendMs: 1000, units: {}, roh: {source: 1, n: "b"}, type: 14};
+  const c = {source: 1, destination: 4, arrivalMs: 9000, sendMs: 1000, units: {}, roh: null, slow: "ram", type: 14};
+  assert.deepEqual(K.importDSU([a, c, b]).items.map(x => x.n || x.destination), ["b", 4, "a"]);
+  assert.deepEqual(K.importWB([a, c, b]).split("\n").map(z => z.split("&")[1]), ["3", "4", "2"]);
+});

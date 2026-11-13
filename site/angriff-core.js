@@ -2212,11 +2212,17 @@ function parseKoordListe(text) {
   return {keys, doppelt};
 }
 /** Plan im Importformat von DS-Ultimate (Feldreihenfolge wie im DS-Ultimate-Export). */
+/** Exporte für DS-Ultimate und DS Workbench immer nach Abschickzeit (Dennis 13.11.2026 15:00), bei gleicher Abschickzeit nach
+    Ankunft (AGs eines Trains); Befehle ohne bekannte Abschickzeit nach ihrer Ankunft. Stabil, die Eingabe bleibt unverändert. */
+function nachAbschick(items) {
+  const k = it => it.sendMs != null && isFinite(it.sendMs) ? it.sendMs : it.arrivalMs;
+  return items.map((it, i) => ({it, i})).sort((a, b) => k(a.it) - k(b.it) || a.it.arrivalMs - b.it.arrivalMs || a.i - b.i).map(x => x.it);
+}
 function toDSU(items, meta) {
   meta = meta || {};
   return {
     title: meta.title == null ? null : meta.title, uvMode: 0, world: meta.world || "de259", twWorld: meta.twWorld || meta.world || "de259",
-    items: items.map(it => {
+    items: nachAbschick(items).map(it => {
       const o = {source: it.v.id, destination: it.t.id, slowest_unit: it.kind === "fake" ? UNITS.indexOf("ram") : UNITS.indexOf(it.slow),
                  arrival_time: Math.floor(it.arrivalMs / 1000), type: DSU_TYPE[it.kind], support_boost: 0, tribe_skill: 0,
                  ms: ((it.arrivalMs % 1000) + 1000) % 1000};
@@ -2234,7 +2240,7 @@ function toDSU(items, meta) {
  */
 const b64 = s => typeof btoa === "function" ? btoa(s) : Buffer.from(s, "utf8").toString("base64");
 function toWB(items) {
-  const zeilen = items.map(it => {
+  const zeilen = nachAbschick(items).map(it => {
     const slow = it.kind === "fake" ? "ram" : it.slow;
     const truppen = UNITS.map(u => u + "=" + b64(String(Math.max(0, Math.round(it.units[u] || 0))))).concat("militia=" + b64("0"));
     return [it.v.id, it.t.id, slow, Math.round(it.arrivalMs), DSU_TYPE[it.kind], "false", "false", truppen.join("/")].join("&");
@@ -2296,7 +2302,7 @@ function importDSU(items, meta) {
   meta = meta || {};
   return {
     title: meta.title == null ? null : meta.title, uvMode: 0, world: meta.world || "de259", twWorld: meta.twWorld || meta.world || "de259",
-    items: items.map(it => {
+    items: nachAbschick(items).map(it => {
       if (it.roh) return Object.assign({}, it.roh);
       const o = {source: it.source, destination: it.destination, slowest_unit: UNITS.indexOf(it.slow), arrival_time: Math.floor(it.arrivalMs / 1000),
                  type: it.type == null ? DSU_TYPE.fake : it.type, support_boost: 0, tribe_skill: 0, ms: ((it.arrivalMs % 1000) + 1000) % 1000};
@@ -2306,7 +2312,7 @@ function importDSU(items, meta) {
   };
 }
 function importWB(items) {
-  return items.map(it => {
+  return nachAbschick(items).map(it => {
     const truppen = UNITS.map(u => u + "=" + b64(String(Math.max(0, Math.round(it.units[u] || 0))))).concat("militia=" + b64("0"));
     return [it.source, it.destination, it.slow || "ram", Math.round(it.arrivalMs), it.type == null ? DSU_TYPE.fake : it.type, "false", "false", truppen.join("/")].join("&");
   }).join("\n");
@@ -2528,7 +2534,7 @@ const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEF
              parseOverview, offInfo, classify, fakeAus, begleitschutz, plan, pruefePlan, toDSU, toWB, exportAuswahl, parseKoordListe,
              travelS, dist, popOf, langsamste, ivAbstand, sitzungenAus, dichtesterPunkt, besser, ankunftKandidaten, bewerteAnkunft, zeitHinweise,
              RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, tagesTeile, nachtGekuerzt,
-             mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport};
+             mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport, nachAbschick};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Angriff = api;
 })(typeof window !== "undefined" ? window : globalThis);
