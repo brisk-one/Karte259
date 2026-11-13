@@ -1408,3 +1408,16 @@ test("Bilanz: Fakes, die an der Zeit scheitern, mit nächstem Ziel und späteste
   const r2 = K.plan(szenario({fakes_per_village: 3}));
   assert.ok(!r2.warnings.some(w => w.art === "fakezeit"));
 });
+
+test("Offs staffeln: eine einzelne Off direkt vor dem Train bleibt unverändert (Dennis 13.11.2026 19:20)", () => {
+  const s = staffelSzenario(), jetzt = Math.min(...s.items.map(i => i.sendMs)) - 3600000;
+  const items = [s.offs[0]].concat(s.ags);                          // nur eine Off, 600 ms vor dem ersten AG
+  const vorher = s.offs[0].arrivalMs;
+  const r = K.offsZeitenNeu(items, {art: "staffeln", now: jetzt, world: s.w, rng: K.mulberry32(1)});
+  assert.equal(s.offs[0].arrivalMs, vorher);
+  assert.equal(r.offs, 0);
+  // landet sie nach dem Train, rückt sie davor
+  s.offs[0].arrivalMs = s.ags[0].arrivalMs + 500; s.offs[0].sendMs += s.ags[0].arrivalMs + 500 - vorher;
+  K.offsZeitenNeu(items, {art: "staffeln", now: jetzt, world: s.w, rng: K.mulberry32(1)});
+  assert.equal(s.offs[0].arrivalMs, s.ags[0].arrivalMs - 200);
+});

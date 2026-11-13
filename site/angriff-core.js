@@ -2832,7 +2832,10 @@ function offsZeitenNeu(items, opt) {
     };
     // die anderen: mehr Rammen landen zuerst (wie im Planer, 12.11.2026), bei gleich vielen die früher abgeschickte
     const andere = beweglich.filter(o => o !== letzte).sort((a, b) => ((b.units && b.units.ram) || 0) - ((a.units && a.units.ram) || 0) || a.sendMs - b.sendMs);
-    if (beweglich.includes(letzte)) setze(letzte, T - gap, null);
+    // die letzte bleibt, wo sie ist, wenn sie schon höchstens eine Sekunde vor dem Train landet (Dennis 13.11.2026 19:20: sonst
+    // wurden einzelne Offs um 200 bis 400 ms verschoben und als „geändert“ markiert, ohne dass sich etwas Sichtbares ändert)
+    const vorTrain = T - letzte.arrivalMs;
+    if (beweglich.includes(letzte) && !(vorTrain > 0 && vorTrain <= 1000)) setze(letzte, T - gap, null);
     if (opt.art === "sekunde") {
       // direkt vor die letzte Off, je gapMs
       andere.forEach((o, i) => setze(o, T - gap * (andere.length - i + 1), null));
