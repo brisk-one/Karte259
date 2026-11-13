@@ -1064,15 +1064,16 @@ function zeigen() {
   // Ziele
   const zrows = r.ziele.map(z => {
     const d = dorf(z.x * 1000 + z.y);
-    return [[koord(z.x * 1000 + z.y), "num"], [d ? spielerName(d.p) : ""], [z.geadelt ? "geadelt" : "nicht", z.geadelt ? "up" : "down"],
-            [z.geadelt ? String(z.clean) + (z.zusatz ? " (davon " + z.zusatz + " zusätzlich)" : "") : "", "num", z.geadelt ? z.clean : null], [z.geadelt ? String(z.ags) : "", "num"],
+    return [[koord(z.x * 1000 + z.y), "num", z.x * 1000 + z.y], [d ? spielerName(d.p) : ""], [z.geadelt ? "geadelt" : "nicht", z.geadelt ? "up" : "down"],
+            [z.geadelt ? String(z.clean) + (z.zusatz ? " (davon " + z.zusatz + " zusätzlich)" : "") : "", "num", z.geadelt ? z.clean : -1], [z.geadelt ? String(z.ags) : "", "num", z.geadelt ? z.ags : -1],
             [z.geadelt ? K.fmtZeit(z.T, true) : "", "num", z.T || 0], [z.geadelt ? (z.offZuerst ? "ja" : "nein") : "", z.geadelt && !z.offZuerst ? "down" : ""],
             [z.grund || ""]];
   });
   const zsec = el("div"), zsc = el("div");
   zsc.style.overflowX = "auto";                     // am Handy waagrecht scrollen statt abschneiden
-  zsc.append(table([["Ziel", "num"], ["Besitzer"], ["Ergebnis"], ["Clean-Offs", "num"], ["AGs", "num"],
-    ["Erste Clean-Off kommt an", "num", true], ["Off vor AG abgeschickt"], ["Grund"]], zrows));
+  // alle Spalten sortierbar (Dennis 13.11.2026 09:13)
+  zsc.append(table([["Ziel", "num", true], ["Besitzer", null, "text"], ["Ergebnis", null, "text"], ["Clean-Offs", "num", true], ["AGs", "num", true],
+    ["Erste Clean-Off kommt an", "num", true], ["Off vor AG abgeschickt", null, "text"], ["Grund", null, "text"]], zrows));
   zsec.append(el("h3", null, "AG-Ziele"), zsc);
   box.append(zsec);
   // Export
