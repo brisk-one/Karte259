@@ -1243,35 +1243,43 @@ test("Befehlsübersicht lesen: heute, morgen, am, Serverzeit je Übersicht, Rüc
   assert.equal(K.fmtZeit(r.befehle[2].arrivalMs), "01.12.2026 23:59:59", "eigene Serverzeit je Übersicht");
 });
 
-test("AGs an abgeschickte Offs angleichen: später immer, früher nur wenn noch Zeit, Train bleibt in sich gleich", () => {
+test("AGs an die zuletzt abgeschickte Off angleichen: später immer, früher nur wenn noch Zeit, Train bleibt in sich gleich (Dennis 13.11.2026 19:56)", () => {
   const s = staffelSzenario(), jetzt = Math.min(...s.items.map(i => i.sendMs)) - 3600000;
-  // Off 2 ist unterwegs und kommt 7 Minuten später an als geplant
-  const bef = [{von: {x: 505, y: 498}, nach: {x: 520, y: 520}, arrivalMs: s.T0 + 200 + 7 * 60000, units: s.offs[1].units}];
+  // die zuletzt abgeschickte Off (kürzeste Laufzeit, Off 2) ist unterwegs und kommt 7 Minuten später an als geplant
+  const bef = [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s.T0 + 400 + 7 * 60000, units: s.offs[2].units}];
   const ab = K.befehleAbgleichen(s.items, bef);
   assert.equal(ab.zugeordnet, 1);
-  assert.equal(s.offs[1].gesendet, s.T0 + 200 + 7 * 60000);
+  assert.equal(s.offs[2].gesendet, s.T0 + 400 + 7 * 60000);
   const abst = s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs), lauf = s.ags.map(a => a.arrivalMs - a.sendMs);
   const r = K.agsAngleichen(s.items, {now: jetzt});
   assert.equal(r.length, 1);
   assert.equal(r[0].art, "spaeter");
-  assert.equal(s.ags[0].arrivalMs, s.T0 + 200 + 7 * 60000 + 200, "erstes AG 200 ms hinter der echten letzten Off");
+  assert.equal(s.ags[0].arrivalMs, s.T0 + 400 + 7 * 60000 + 200, "erstes AG 200 ms hinter der zuletzt abgeschickten Off");
   assert.deepEqual(s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs), abst);
   assert.deepEqual(s.ags.map(a => a.arrivalMs - a.sendMs), lauf);
-  // Off kommt früher als geplant: AGs rücken nach vorn, wenn sie noch rechtzeitig loskönnen
+  // eine früher abgeschickte Off (anderer Spieler) kommt später als der Train: der Train bleibt bei der letzten, Hinweis
+  const s1 = staffelSzenario();
+  K.befehleAbgleichen(s1.items, [{von: {x: 505, y: 498}, nach: {x: 520, y: 520}, arrivalMs: s1.T0 + 9 * 60000, units: s1.offs[1].units}]);
+  const vor1 = s1.ags.map(a => a.arrivalMs);
+  const r1 = K.agsAngleichen(s1.items, {now: jetzt});
+  assert.deepEqual(s1.ags.map(a => a.arrivalMs), vor1);
+  assert.deepEqual(r1.map(x => [x.art, x.n]), [["nachTrain", 1]]);
+  // die letzte Off kommt früher als geplant: AGs rücken nach vorn, wenn sie noch rechtzeitig loskönnen
   const s2 = staffelSzenario();
   K.befehleAbgleichen(s2.items, [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s2.T0 - 120000, units: s2.offs[2].units}]);
   const r2 = K.agsAngleichen(s2.items, {now: jetzt});
   assert.equal(r2[0].art, "frueher");
-  assert.equal(s2.ags[0].arrivalMs, s2.T0 + 200 + 200, "Anker ist die späteste Off (Off 2 noch geplant)");
+  assert.equal(s2.ags[0].arrivalMs, s2.T0 - 120000 + 200);
   // zu spät, um früher abzuschicken: AGs bleiben
   const s3 = staffelSzenario();
-  K.befehleAbgleichen(s3.items, [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s3.T0 - 600000, units: s3.offs[2].units},
-                                 {von: {x: 505, y: 498}, nach: {x: 520, y: 520}, arrivalMs: s3.T0 - 600000, units: s3.offs[1].units},
-                                 {von: {x: 500, y: 500}, nach: {x: 520, y: 520}, arrivalMs: s3.T0 - 600000, units: s3.offs[0].units}]);
+  K.befehleAbgleichen(s3.items, [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s3.T0 - 600000, units: s3.offs[2].units}]);
   const vorher = s3.ags.map(a => a.arrivalMs);
   const r3 = K.agsAngleichen(s3.items, {now: s3.ags[0].sendMs - 30000});
   assert.equal(r3[0].art, "frueherNichtMoeglich");
   assert.deepEqual(s3.ags.map(a => a.arrivalMs), vorher);
+  // schon in derselben Sekunde: nichts zu tun
+  const s4 = staffelSzenario();
+  assert.deepEqual(K.agsAngleichen(s4.items, {now: jetzt}), []);
 });
 
 test("Offs staffeln: zuletzt abgeschickte Off in der Sekunde des Trains, andere 5 bis 15 Minuten vorher; zurück auf die Sekunde", () => {

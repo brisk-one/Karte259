@@ -359,7 +359,7 @@ function zeigenPlan() {
 }
 /** Zeiten der Offs und AGs anpassen (Dennis 13.11.2026 15:40): AGs an abgeschickte Offs angleichen, Offs vor dem AG
     staffeln oder wieder in eine Sekunde legen, alles zurück. Änderungen bleiben im Browser (S.zeiten). */
-function zeitenAendern(was) {
+function zeitenAendern(was, auto) {
   if (!PLAN) return;
   const vorher = new Map(PLAN.items.map(it => [it, it.arrivalMs]));
   let info;
@@ -376,7 +376,7 @@ function zeitenAendern(was) {
   }
   const geaendert = PLAN.items.filter(it => it.arrivalMs !== vorher.get(it));
   PLAN.items.forEach(it => { if (it.key == null) return; if (it.arrivalMs === it.arrivalOrig) delete S.zeiten[it.key]; else S.zeiten[it.key] = it.arrivalMs; });
-  AENDERUNG = Object.assign(info, {geaendert: geaendert.map(it => ({it, alt: vorher.get(it)})), zeit: Date.now()});
+  AENDERUNG = Object.assign(info, {geaendert: geaendert.map(it => ({it, alt: vorher.get(it)})), zeit: Date.now(), auto: !!auto});
   speichern();
   if (S.aktiv) aufstocken();
   zeigen();
@@ -385,7 +385,7 @@ function zeitenBox(its) {
   const box = el("div", "au-box");
   const agZiele = new Set(its.filter(x => x.art === "ag" && x.t).map(x => x.t.id));
   box.append(el("h3", null, "Zeiten anpassen"),
-    el("p", "ap-note", "„AGs angleichen“: Jeder AG-Train landet direkt hinter der Off, die auf sein Ziel zuletzt ankommt; für schon abgeschickte Offs zählt die Ankunft laut Befehlsübersicht (Abschnitt 2). „Offs staffeln“: Auf jedes AG-Ziel landet nur die Off, die als letzte abgeschickt wird, in der Sekunde des AG-Trains, die anderen zufällig " +
+    el("p", "ap-note", "„AGs angleichen“: Jeder AG-Train landet in derselben Sekunde direkt hinter der Off, die auf sein Ziel als letzte abgeschickt wird, aus allen Plänen; für schon abgeschickte Offs zählt die Ankunft laut Befehlsübersicht (Abschnitt 2). Das passiert beim Einfügen einer Befehlsübersicht automatisch; Offs anderer Spieler, die erst nach dem Train landen, stehen unten. „Offs staffeln“: Auf jedes AG-Ziel landet nur die Off, die als letzte abgeschickt wird, in der Sekunde des AG-Trains, die anderen zufällig " +
       S.staffel.min + " bis " + S.staffel.max + " Minuten vorher (untereinander mehr Rammen zuerst), nie im Nachtbonus. „Offs auf die Sekunde“: alle Offs wieder direkt vor dem Train, je 200 ms. Unverändert bleiben Befehle, die schon unterwegs sind oder dafür vor jetzt plus einer Minute losmüssten, und der Mindestabstand zwischen den Abschickzeiten eines Spielers."));
   const zahl = (k, lab) => eingabe("n", S.staffel[k], v => { const n = parseFloat(String(v).replace(",", ".")); if (!isNaN(n)) S.staffel[k] = Math.min(60, Math.max(0, n)); if (S.staffel.max < S.staffel.min) S.staffel.max = S.staffel.min; speichern(); spaeter(zeigenKern); }, {type: "number", min: 0, max: 60, "data-k": "staffel:" + k, title: lab});
   const r1 = el("div", "ap-row");
@@ -401,17 +401,19 @@ function zeitenBox(its) {
   box.append(r1, r2);
   if (!agZiele.size) box.append(el("p", "ap-note", "Keine AGs im Plan: nichts anzugleichen oder zu staffeln."));
   if (AENDERUNG) {
-    const a = AENDERUNG, ul = el("ul", "ap-list"), um = hmf.format(new Date(a.zeit)) + " Uhr: ";
+    const a = AENDERUNG, ul = el("ul", "ap-list"), um = hmf.format(new Date(a.zeit)) + " Uhr" + (a.auto ? " (nach dem Einlesen der Befehlsübersicht)" : "") + ": ";
     const min = ms => ms >= 60000 ? (Math.round(ms / 6000) / 10).toLocaleString("de-DE") + " min" : (Math.round(ms / 100) / 10).toLocaleString("de-DE") + " s";
     if (a.art === "zurueck") ul.append(el("li", null, um + "alle Zeiten wie eingelesen."));
     else if (a.art === "angleichen") {
-      if (!a.liste.length) ul.append(el("li", null, um + "alle AG-Trains liegen schon direkt hinter ihrer letzten Off."));
+      if (!a.liste.some(x => x.art !== "nachTrain")) ul.append(el("li", null, um + "alle AG-Trains liegen schon in der Sekunde der zuletzt abgeschickten Off."));
+      const danach = x => x.nachTrain || x.n ? " " + plural(x.nachTrain || x.n, "Off landet", "Offs landen") + " erst nach dem Train." : "";
       a.liste.forEach(x => {
         const z = koord(x.t) + " (" + spielerName(x.t.owner) + "): ";
-        if (x.art === "spaeter") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " später, jetzt direkt hinter der letzten Off."));
-        else if (x.art === "frueher") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " früher, jetzt direkt hinter der letzten Off."));
-        else if (x.art === "frueherNichtMoeglich") ul.append(el("li", "warn", um + z + "AG-Train landet " + min(x.ms) + " nach der letzten Off; früher abschicken geht nicht mehr, er bleibt."));
-        else if (x.art === "zuSpaet") ul.append(el("li", "warn", um + z + "AG schon unterwegs und landet vor der letzten Off."));
+        if (x.art === "spaeter") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " später, jetzt mit der zuletzt abgeschickten Off." + danach(x)));
+        else if (x.art === "frueher") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " früher, jetzt mit der zuletzt abgeschickten Off." + danach(x)));
+        else if (x.art === "frueherNichtMoeglich") ul.append(el("li", "warn", um + z + "AG-Train landet " + min(x.ms) + " nach der zuletzt abgeschickten Off; früher abschicken geht nicht mehr, er bleibt." + danach(x)));
+        else if (x.art === "zuSpaet") ul.append(el("li", "warn", um + z + "AG schon unterwegs und landet vor der zuletzt abgeschickten Off."));
+        else if (x.art === "nachTrain") ul.append(el("li", "warn", um + z + "Train passt zur zuletzt abgeschickten Off;" + danach(x)));
       });
     } else ul.append(el("li", null, um + (a.offs ? plural(a.offs, "Off", "Offs") + " auf " + plural(a.ziele, "Ziel", "Zielen") + (a.art === "staffeln" ? " gestaffelt." : " wieder direkt vor den Train gelegt.") : "nichts zu ändern (Offs schon so, unterwegs oder zu knapp vor jetzt).")));
     box.append(ul);
@@ -679,7 +681,12 @@ $("plan-datei").addEventListener("change", e => {
   });
 });
 const bta = $("befehle-text");
-const befehleNeu = () => { if (bta.value === S.befehle) return; S.befehle = bta.value; speichern(); spaeter(() => { einlesen(); if (S.aktiv) aufstocken(); zeigen(); }); };
+// neue Befehlsübersicht: AGs gleich an die zuletzt abgeschickten Offs angleichen (Dennis 13.11.2026 19:56)
+const befehleNeu = () => {
+  if (bta.value === S.befehle) return;
+  S.befehle = bta.value; speichern();
+  spaeter(() => { einlesen(); if (BEF && BEF.zugeordnet) zeitenAendern("angleichen", true); else { if (S.aktiv) aufstocken(); zeigen(); } });
+};
 bta.addEventListener("change", befehleNeu);
 bta.addEventListener("paste", () => setTimeout(befehleNeu, 0));
 $("zusatz-sperren").addEventListener("click", () => { zusatzSperren(); location.href = "./"; });

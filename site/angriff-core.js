@@ -2755,16 +2755,22 @@ function agZiele(items) {
   return [...m.values()].filter(z => z.ags.length);
 }
 const ankunftIst = it => it.gesendet != null ? it.gesendet : it.arrivalMs;
+// Abschickzeit: abgeschickt aus der echten Ankunft und der Laufzeit, sonst geplant
+const sendIst = it => it.gesendet != null ? it.gesendet - (it.arrivalMs - it.sendMs) : it.sendMs;
+/** Die Off eines Ziels, die als letzte abgeschickt wird (Dennis 13.11.2026 19:56: sie läuft immer mit dem AG-Train). */
+const letzteOff = offs => offs.reduce((b, o) => (b == null || sendIst(o) > sendIst(b) ? o : b), null);
 /** Neue Ankunft eines Befehls setzen (Abschick verschiebt sich mit); alte Werte für die Änderungsliste. */
 function verschieben(it, ankunft) {
   const d = ankunft - it.arrivalMs;
   it.arrivalMs = ankunft; it.sendMs += d;
 }
 /**
- * AG-Trains an die tatsächlich zuletzt ankommende Off angleichen. Je Ziel mit AGs: Anker = späteste Ankunft der Offs (schon
- * abgeschickt: laut Befehlsübersicht, sonst geplant); alle noch nicht abgeschickten AGs verschieben sich gemeinsam, sodass das
- * erste gapMs nach dem Anker landet. Später geht immer; früher nur, wenn alle AGs dann noch mindestens eine Minute nach now
- * abgeschickt werden können, sonst bleiben sie (kommen eben später nach der Off). Ergebnis: Änderungen und Hinweise je Ziel.
+ * AG-Trains an die Off angleichen, die als letzte abgeschickt wird (Dennis 13.11.2026 19:56; vorher: die zuletzt ankommende).
+ * Je Ziel mit AGs: Anker = Ankunft dieser Off (schon abgeschickt: laut Befehlsübersicht, sonst geplant); alle noch nicht
+ * abgeschickten AGs verschieben sich gemeinsam, sodass das erste gapMs nach dem Anker landet. Landet es schon höchstens eine
+ * Sekunde nach ihr, bleibt alles. Später geht immer; früher nur, wenn alle AGs dann noch mindestens eine Minute nach now
+ * abgeschickt werden können, sonst bleiben sie. Offs anderer Spieler, die erst nach dem Train landen, stehen im Ergebnis
+ * (nachTrain). Ergebnis: Änderungen und Hinweise je Ziel.
  */
 function agsAngleichen(items, opt) {
   opt = opt || {};
@@ -2772,21 +2778,23 @@ function agsAngleichen(items, opt) {
   const out = [];
   agZiele(items).forEach(z => {
     if (!z.offs.length) return;
-    const anker = Math.max(...z.offs.map(ankunftIst));
+    const letzte = letzteOff(z.offs), anker = ankunftIst(letzte);
     const offen = z.ags.filter(a => a.gesendet == null).sort((a, b) => a.arrivalMs - b.arrivalMs);
     const fest = z.ags.filter(a => a.gesendet != null);
+    const nachTrain = T => z.offs.filter(o => o !== letzte && ankunftIst(o) > T).length;
     if (!offen.length) {
       if (fest.some(a => a.gesendet <= anker)) out.push({t: z.t, art: "zuSpaet", text: "AG schon unterwegs und kommt vor der letzten Off an"});
       return;
     }
-    const d = anker + gap - offen[0].arrivalMs;
-    if (!d) return;
+    const abst = offen[0].arrivalMs - anker;
+    const d = abst > 0 && abst <= 1000 ? 0 : anker + gap - offen[0].arrivalMs;
+    if (!d) { const n = nachTrain(offen[0].arrivalMs); if (n) out.push({t: z.t, art: "nachTrain", n}); return; }
     if (d < 0 && offen.some(a => a.sendMs + d < ab)) {
-      out.push({t: z.t, art: "frueherNichtMoeglich", ms: -d, ags: offen.length});
+      out.push({t: z.t, art: "frueherNichtMoeglich", ms: -d, ags: offen.length, nachTrain: nachTrain(offen[0].arrivalMs)});
       return;
     }
     offen.forEach(a => verschieben(a, a.arrivalMs + d));
-    out.push({t: z.t, art: d > 0 ? "spaeter" : "frueher", ms: Math.abs(d), ags: offen.length, erstesAG: offen[0]});
+    out.push({t: z.t, art: d > 0 ? "spaeter" : "frueher", ms: Math.abs(d), ags: offen.length, erstesAG: offen[0], nachTrain: nachTrain(offen[0].arrivalMs)});
   });
   return out;
 }
@@ -2818,7 +2826,7 @@ function offsZeitenNeu(items, opt) {
     const beweglich = z.offs.filter(o => o.gesendet == null && o.sendMs != null && o.sendMs >= ab);
     if (!beweglich.length) return;
     // zuletzt abgeschickte Off: bleibt in der Sekunde des Trains
-    const letzte = z.offs.slice().sort((a, b) => (b.gesendet != null ? -Infinity : b.sendMs) - (a.gesendet != null ? -Infinity : a.sendMs))[0];
+    const letzte = letzteOff(z.offs);
     let n = 0;
     const setze = (o, wunsch, spanne) => {
       raus(o);
