@@ -8,27 +8,55 @@
   }
  },
  "counts": {
-  "allies": 412,
-  "conquers_total": 58009,
-  "players": 4244,
-  "villages": 48799
+  "allies": 413,
+  "conquers_total": 58050,
+  "players": 4245,
+  "villages": 48806
  },
- "data_last_modified": "Thu, 12 Nov 2026 22:23:47 GMT",
- "duration_s": 119.4,
+ "data_last_modified": "Thu, 12 Nov 2026 23:32:03 GMT",
+ "duration_s": 1097.3,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
-  "changed_types": [],
-  "deep_complete": null,
-  "deep_note": null,
-  "deep_page_size": null,
-  "deep_pages": null,
-  "deep_rows": null,
-  "deep_targets": null,
-  "entries": null,
-  "events": null,
-  "full_scrape": false,
-  "members": null,
+  "changed_types": [
+   "loot_res",
+   "scavenge",
+   "kill_att",
+   "kill_def",
+   "kill_sup",
+   "conquer"
+  ],
+  "deep_complete": [
+   "loot_res",
+   "loot_vil",
+   "scavenge"
+  ],
+  "deep_note": {
+   "loot_res": {
+    "complete": true,
+    "rows": 3888
+   },
+   "loot_vil": {
+    "complete": true,
+    "rows": 3888
+   },
+   "scavenge": {
+    "complete": true,
+    "rows": 3379
+   }
+  },
+  "deep_page_size": 25,
+  "deep_pages": 448,
+  "deep_rows": 11155,
+  "deep_targets": [
+   "loot_res",
+   "scavenge",
+   "loot_vil"
+  ],
+  "entries": 166,
+  "events": 4,
+  "full_scrape": true,
+  "members": 24,
   "top_rows": {
    "conquer": 25,
    "kill_att": 25,
@@ -39,16 +67,16 @@
    "scavenge": 25
   }
  },
- "kampfverlauf_neu": 144,
- "last_deep_scrape_utc": "2026-11-11T23:55:00+00:00",
- "last_full_scrape_utc": "2026-11-12T01:55:00+00:00",
+ "kampfverlauf_neu": 0,
+ "last_deep_scrape_utc": "2026-11-12T23:55:01+00:00",
+ "last_full_scrape_utc": "2026-11-12T23:55:01+00:00",
  "requests": {
-  "guest": 67,
+  "guest": 683,
   "world": 8
  },
  "result": "neu",
- "run_local": "2026-11-12T23:55:01+01:00",
- "run_utc": "2026-11-12T22:55:01+00:00",
+ "run_local": "2026-11-13T00:55:01+01:00",
+ "run_utc": "2026-11-12T23:55:01+00:00",
  "tribe_ids": [
   456
  ],
@@ -56,63 +84,63 @@
  "world": {
   "changed": true,
   "counts": {
-   "allies": 412,
-   "conquers_total": 58009,
-   "players": 4244,
-   "villages": 48799
+   "allies": 413,
+   "conquers_total": 58050,
+   "players": 4245,
+   "villages": 48806
   },
-  "dorfverluste": 61,
+  "dorfverluste": 38,
   "downloads": [
    {
-    "bytes": 76291,
+    "bytes": 76309,
     "file": "player",
-    "last_modified": "Thu, 12 Nov 2026 22:23:47 GMT",
+    "last_modified": "Thu, 12 Nov 2026 23:32:03 GMT",
     "status": 200
    },
    {
-    "bytes": 9498,
+    "bytes": 9535,
     "file": "ally",
-    "last_modified": "Thu, 12 Nov 2026 22:23:47 GMT",
+    "last_modified": "Thu, 12 Nov 2026 23:23:47 GMT",
     "status": 200
    },
    {
-    "bytes": 743642,
+    "bytes": 743565,
     "file": "village",
-    "last_modified": "Thu, 12 Nov 2026 22:32:04 GMT",
+    "last_modified": "Thu, 12 Nov 2026 23:32:03 GMT",
     "status": 200
    },
    {
     "bytes": 23757,
     "file": "kill_att",
-    "last_modified": "Thu, 12 Nov 2026 22:23:48 GMT",
+    "last_modified": "Thu, 12 Nov 2026 23:23:47 GMT",
     "status": 200
    },
    {
     "bytes": 33482,
     "file": "kill_def",
-    "last_modified": "Thu, 12 Nov 2026 22:23:48 GMT",
+    "last_modified": "Thu, 12 Nov 2026 23:32:27 GMT",
     "status": 200
    },
    {
     "bytes": 14665,
     "file": "kill_sup",
-    "last_modified": "Thu, 12 Nov 2026 22:32:27 GMT",
+    "last_modified": "Thu, 12 Nov 2026 23:32:03 GMT",
     "status": 200
    },
    {
     "bytes": 35057,
     "file": "kill_all",
-    "last_modified": "Thu, 12 Nov 2026 22:32:27 GMT",
+    "last_modified": "Thu, 12 Nov 2026 23:23:47 GMT",
     "status": 200
    },
    {
-    "bytes": 589507,
+    "bytes": 589897,
     "file": "conquer",
-    "last_modified": "Thu, 12 Nov 2026 22:32:27 GMT",
+    "last_modified": "Thu, 12 Nov 2026 23:32:03 GMT",
     "status": 200
    }
   ],
-  "new_conquers": 62,
+  "new_conquers": 41,
   "note": null
  }
 }
