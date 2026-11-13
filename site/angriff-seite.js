@@ -48,6 +48,7 @@ const INFO = {
   jeStark: "Gilt nur für diesen Spieler: seine AG-Ziele bekommen ihre Clean-Offs möglichst von ihm selbst, und seine Offs gehen möglichst auf seine eigenen AG-Ziele, auch seine freien Offs. Fremde Offs vor seinen AGs gibt es dann nur, wenn er selbst keine passende Off hat. Das geht vor Abschickzeitraum und Laufzeit-Richtwert, aber nicht vor „Off vor AG“: kann seine eigene Off nur nach seinem AG losgehen, kommt lieber eine fremde, die vorher losgeht. Das Adeln selbst geht ebenfalls vor (fehlt einem Ziel sonst eine Clean-Off, kommt sie doch von einem anderen).",
   planDatei: "„Planung speichern“ lädt eine JSON-Datei herunter mit allem, was du im Planer eingegeben und angepasst hast: Konfiguration, Angreifer mit Truppenübersichten, Häkchen, AG-Zahlen, AG-Pala, Offs an/aus, Zeiträume, Ziele mit Zuordnung, Fakeziele und Fakelisten, gewürfelte Variante. „Planung laden …“ liest so eine Datei (sie bleibt auf deinem Rechner, nichts wird hochgeladen), zeigt, was drin ist, und ersetzt nach Bestätigung die aktuelle Planung; danach „Berechnen“. Weltdaten und die Uhrzeit kommen beim Rechnen frisch dazu, der Plan kann sich deshalb leicht ändern, etwa wenn Abschickzeiten inzwischen vorbei sind oder ein Ziel den Besitzer gewechselt hat. Die Datei enthält die Truppenübersichten der Spieler: nur an Leute geben, die sie sehen dürfen. Ohne Datei merkt sich derselbe Browser die Planung ohnehin, auch nach dem Schließen.",
   fakeSoll: "Fakes eines Spielers aufstocken: Gesamtzahl eintragen, „Fakes aufstocken“ rechnet neu. Die zusätzlichen Fakes kommen aus seinen Dörfern, reihum, auf die Fakeziele (auch Stammesmitglieder) mit den wenigsten Fakes, auch über „Fakes je Dorf“ hinaus, nie zweimal dasselbe Ziel aus einem Dorf, und nur in seinen Abschicksitzungen (mit 10 Minuten Rand) wie alle Fakes. „Fakes aus einem eigenen Dorf höchstens“ wird für ihn so weit angehoben, wie die Zahl es braucht. Grenzen: Katapulte oder Rammen und Späher in seinen Dörfern, Zahl der Fakeziele, Platz in seinen Sitzungen; reicht es nicht, steht die erreichte Zahl daneben und in den Hinweisen. ↺ rechnet wieder ohne Aufstocken. „Fakes reduzieren“ (13.11.2026) macht das Gegenteil: höchstens so viele Fakes für diesen Spieler. Zuerst fallen ganze zusätzliche Fake-Sitzungen weg (eine Weckzeit weniger), dann je ein Fake auf den Zielen mit den meisten Fakes, bei gleich vielen aus seinem Dorf mit den meisten Fakes; den letzten Fake eines Ziels nimmt der Planer erst, wenn kein Ziel mehr zwei hat. 0 heißt: keine Fakes für ihn. ↺ rechnet wieder ohne Reduzieren. Die Zahl wird mit der Planung gespeichert.",
+  offListe: "Für Spieler, von denen du keine Truppenübersicht hast: die Dörfer, aus denen er Offs schickt, als Koordinaten einfügen (eine Truppenübersicht ist dann nicht nötig, beides zusammen geht auch). Jedes Dorf schickt eine Standard-Off: alle Äxte, alle leichten Kavalleristen, alle Rammen und einen Späher. Geplant wird mit einer vollen Off (Laufzeit der Rammen), nur als Off, ohne AGs und ohne Fakes. Im Export für DS-Ultimate steht bei Axt, LKav und Rammen „all“; DS-Ultimate übernimmt den Text in den Link zum Versammlungsplatz. Ob das Spiel dort dann alle Truppen einträgt, ist nicht geprüft: bitte an einem Befehl testen. Der Export für DS Workbench enthält denselben Text; DS-Ultimate liest ihn, DS Workbench selbst erwartet Zahlen. Steht ein Dorf auch in der Truppenübersicht, gelten dort die Truppen der Übersicht.",
   agListe: "Für Listen wie „in diesen Dörfern baue ich je 4 AGs“: Koordinaten einfügen, Zahl wählen, übernehmen. Die Zahl ist die AG-Zahl im Dorf insgesamt, wie wenn du sie in der Dorfliste von Hand einträgst; die Dorfliste zeigt dann „Übersicht N, noch M bauen“, ↺ setzt einzeln zurück. Steht in der Übersicht schon so viel oder mehr, gilt die Übersicht. Die Dörfer müssen in seiner Truppenübersicht stehen; was dort fehlt, wird mit Koordinaten genannt.",
   zielFuer: "Mit einem Angreifer gewählt gehören alle Dörfer aus der Liste (oder alle Dörfer des Spielers) ihm als AG-Ziele, auch die schon vorhandenen; die Verteilung springt auf „je Angreifer eigene Ziele“. „automatisch“: wie bisher, der Planer verteilt.",
   jeRammen: "Gilt nur für diesen Spieler: so viele Rammen darf ein Fake höchstens enthalten (leer: 1, 0: keine). Katapulte gehen immer vor: eine Ramme ist die langsamste Einheit nur, wenn im Dorf kein Katapult frei ist, und aufgefüllt wird mit Rammen erst, wenn Katapulte und Späher nicht reichen. Jeder Fake hat mindestens einen Späher.",
@@ -96,7 +97,7 @@ const FELDER = [
 /* ---------- Zustand ---------- */
 const leererZeitraum = () => ({vonDatum: "", vonZeit: "", bisDatum: "", bisZeit: ""});
 const neuerAngreifer = () => ({text: "", rollen: {off: true, ag: true, fake: true}, auswahlText: "", fen: [leererZeitraum()], nobles: {}, useOff: {},
-                               cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: "", eigeneStark: false, pala: {}});
+                               cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: "", eigeneStark: false, pala: {}, offListe: ""});
 let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], fakeHaupt: [], zart: "ag", zmodus: "auto",
          ank: leererZeitraum(), ankListe: [], fen: [leererZeitraum()], fakeAus: [], fakeText: "", extraAus: [], extraEin: [], wahlKnapp: null, hilfe: false};
 /* Gespeicherte Stände aus der Zeit der Textfelder (ankunft, fenster, fensterText) in die getrennten Felder übernehmen. */
@@ -240,7 +241,7 @@ function tageBisAbschicken(own) {
 }
 function analysieren(i) {
   const a = S.atts[i];
-  const r = K.parseOverview(a.text, spalten());
+  const r = a.text.trim() ? K.parseOverview(a.text, spalten(), (x, y) => { const d = dorf(x * 1000 + y); return d ? d.pts : null; }) : {villages: [], errors: [], warnings: [], header: null};
   const fehlt = [], besitzer = new Map();
   // Eigene Zeiträume nur mit Schalter „je Angreifer“ (Dennis 09.11.2026); aus: es gelten die gemeinsamen
   const own = S.fenJe ? K.fensterAusZeilen(a.fen) : {fenster: [], fehler: []};
@@ -254,19 +255,35 @@ function analysieren(i) {
     x.c = K.classify(x, W, S.cfg, tage);
     dorfer.push(x);
   });
+  // Off-Dörfer als Liste mit Standard-Off (Dennis 14.11.2026 00:22): ohne Truppenübersicht, jedes Dorf schickt alle Äxte, alle
+  // LKav, alle Rammen und einen Späher; geplant als volle Off. Dörfer der Übersicht behalten ihre Truppen.
+  const liste = (a.offListe || "").trim() ? K.parseKoordListe(a.offListe) : null;
+  const vorlageFehlt = [], vorlageSchon = [];
+  if (liste) {
+    const vu = K.vorlageEinheiten(S.cfg, W), schon = new Set(dorfer.map(d => d.xy));
+    liste.keys.forEach(k => {
+      if (schon.has(k)) { vorlageSchon.push(koord(k)); return; }
+      const d = dorf(k);
+      if (!d) { vorlageFehlt.push(koord(k)); return; }
+      if (d.p >= 0) besitzer.set(d.p, (besitzer.get(d.p) || 0) + 1);
+      const x = {name: d.name, x: d.x, y: d.y, units: Object.assign({}, vu), id: d.id, pts: d.pts, owner: d.p, xy: d.xy, vorlage: true};
+      x.c = K.classify(x, W, S.cfg, 0);
+      dorfer.push(x);
+    });
+  }
   let pRow = -1, best = 0;
   besitzer.forEach((n, p) => { if (n > best) { best = n; pRow = p; } });
   const fremd = dorfer.filter(d => pRow >= 0 && d.owner !== pRow).map(d => koord(d.xy));
   const aus = a.auswahlText.trim() ? K.parseKoordListe(a.auswahlText) : null;
   const inUebersicht = new Set(dorfer.map(d => d.xy));
   const auswahlFehlt = aus ? aus.keys.filter(k => !inUebersicht.has(k)).map(koord) : [];
-  ANALYSE[i] = {r, dorfer, fehlt, fremd, pRow, aus, auswahlFehlt, own, tage,
+  ANALYSE[i] = {r, dorfer, fehlt, fremd, pRow, aus, auswahlFehlt, own, tage, liste, vorlageFehlt, vorlageSchon,
                 name: pRow >= 0 ? spielerName(pRow) : "Angreifer " + (i + 1),
                 points: pRow >= 0 ? P.rows[pRow][pIdx.points] : (r.header ? r.header.points : 0)};
   return ANALYSE[i];
 }
 const offEingeplant = (a, d) => a.useOff[d.xy] != null ? a.useOff[d.xy] : (d.c.isOff || d.c.knapp);
-const agZahl = (a, d) => a.nobles[d.xy] != null ? a.nobles[d.xy] : d.units.snob;
+const agZahl = (a, d) => d.vorlage ? 0 : a.nobles[d.xy] != null ? a.nobles[d.xy] : d.units.snob;   // Standard-Off: keine AGs
 
 function attBlock(i) {
   const a = S.atts[i];
@@ -364,9 +381,20 @@ function attBlock(i) {
   const agRow = el("div", "ap-row");
   agRow.append(el("span", "ap-note", "AGs je Dorf (insgesamt)"), agN, agB, infoKnopf("agListe"), agNote);
   agl.append(agTa, agRow, hilfeFeld("agListe"));
+  // Off-Dörfer als Liste mit Standard-Off (Dennis 14.11.2026 00:22)
+  const ofl = el("details", "ap-agliste");
+  ofl.append(el("summary", null, "Off-Dörfer als Liste (ohne Truppenübersicht, Standard-Off)"));
+  const ofTa = el("textarea", "ap-ta klein");
+  ofTa.spellcheck = false; ofTa.value = a.offListe || ""; ofTa.setAttribute("aria-label", "Off-Dörfer als Liste Angreifer " + (i + 1));
+  ofTa.placeholder = "Dörfer, aus denen er Offs schickt: je Zeile Koordinaten, mit oder ohne Namen, z. B. 512|488";
+  ofTa.addEventListener("input", () => { a.offListe = ofTa.value; attAnalyse(i); geaendert(); });
+  const ofRow = el("div", "ap-row");
+  ofRow.append(el("span", "ap-note", "Je Dorf: alle Äxte, alle LKav, alle Rammen, 1 Späher. Nur Offs, keine AGs, keine Fakes."), infoKnopf("offListe"));
+  ofl.append(ofTa, ofRow, hilfeFeld("offListe"));
+  if ((a.offListe || "").trim()) ofl.open = true;
   const out = el("div");
   out.id = "att-out-" + i;
-  box.append(kopf, ta, det1, eigen, hilfeFeld("jeClean"), hilfeFeld("jeFake"), hilfeFeld("jeRammen"), hilfeFeld("jeStark"), agl, out);
+  box.append(kopf, ta, det1, ofl, eigen, hilfeFeld("jeClean"), hilfeFeld("jeFake"), hilfeFeld("jeRammen"), hilfeFeld("jeStark"), agl, out);
   return box;
 }
 function attsBauen() {
@@ -382,15 +410,15 @@ function attAnalyse(i) {
   const out = $("att-out-" + i);
   if (!out) return;
   const a = S.atts[i];
-  if (!a.text.trim()) { ANALYSE[i] = null; fensterJeTitel(i); out.replaceChildren(el("p", "ap-note", "Noch keine Übersicht eingefügt.")); return; }
+  if (!a.text.trim() && !(a.offListe || "").trim()) { ANALYSE[i] = null; fensterJeTitel(i); out.replaceChildren(el("p", "ap-note", "Noch keine Übersicht und keine Off-Dorfliste eingefügt.")); return; }
   const A = analysieren(i);
   fensterJeTitel(i);
   $("att-titel-" + i).textContent = "Angreifer " + (i + 1) + ": " + A.name + (A.points ? " (" + nf.format(A.points) + " P)" : "");
   const box = el("div");
-  const offs = A.dorfer.filter(d => d.c.isOff).length, knapp = A.dorfer.filter(d => d.c.knapp).length;
+  const offs = A.dorfer.filter(d => d.c.isOff).length, knapp = A.dorfer.filter(d => d.c.knapp).length, nVorlage = A.dorfer.filter(d => d.vorlage).length;
   const ags = A.dorfer.reduce((s, d) => s + agZahl(a, d), 0), agDorf = A.dorfer.filter(d => agZahl(a, d) > 0).length;
   const sum = el("div", "ap-sum");
-  [["Dörfer", A.dorfer.length], ["Offs", offs], ["knapp", knapp], ["AGs", ags + " in " + agDorf + " Dörfern"]]
+  [["Dörfer", A.dorfer.length], ["Offs" + (nVorlage ? ", davon " + nVorlage + " aus der Liste" : ""), offs], ["knapp", knapp], ["AGs", ags + " in " + agDorf + " Dörfern"]]
     .forEach(([t, v]) => { const d = el("div"); d.append(el("b", null, String(v)), document.createTextNode(" " + t)); sum.append(d); });
   box.append(sum);
   const meld = [];
@@ -401,6 +429,13 @@ function attAnalyse(i) {
   if (A.aus) meld.push([A.auswahlFehlt.length ? "warn" : "", "Dorfauswahl: " + A.aus.keys.length + " Dörfer" +
     (A.auswahlFehlt.length ? ", nicht in der Übersicht: " + A.auswahlFehlt.slice(0, 8).join(", ") : "")]);
   if (A.own && A.own.fehler.length) A.own.fehler.forEach(f => meld.push(["warn", f]));
+  if (A.liste) {
+    if (nVorlage) meld.push(["", nVorlage + (nVorlage === 1 ? " Off-Dorf" : " Off-Dörfer") + " aus der Liste mit Standard-Off (alle Äxte, alle LKav, alle Rammen, 1 Späher). " +
+      "Im Export steht „" + K.VORLAGE_ALLE + "“; ob der Versammlungsplatz das als „alle“ übernimmt, bitte an einem Befehl prüfen."]);
+    if (!A.liste.keys.length) meld.push(["warn", "Off-Dorfliste: keine Koordinaten gefunden."]);
+    if (A.vorlageFehlt.length) meld.push(["warn", "Off-Dorfliste: " + A.vorlageFehlt.length + " Dörfer fehlen in den Weltdaten: " + A.vorlageFehlt.slice(0, 8).join(", ")]);
+    if (A.vorlageSchon.length) meld.push(["", "Off-Dorfliste: " + A.vorlageSchon.length + " Dörfer stehen auch in der Truppenübersicht, dort gelten die Truppen der Übersicht: " + A.vorlageSchon.slice(0, 8).join(", ")]);
+  }
   // AG-Zahlen von Hand (Dennis 12.11.2026): sie gelten statt der Übersicht und bleiben im Browser, auch nach neuem Einfügen;
   // deshalb sichtbar machen, mit Zurücksetzen
   const hand = A.dorfer.filter(d => a.nobles[d.xy] != null && a.nobles[d.xy] !== d.units.snob);
@@ -425,6 +460,13 @@ function attAnalyse(i) {
   const sv = (el0, v) => { const td = el0.closest("td"); if (td) td.dataset.v = v; };     // Wert nach Änderung nachführen
   const rows = A.dorfer.map(d => {
     const cOff = el("input"); cOff.type = "checkbox"; cOff.checked = offEingeplant(a, d);
+    if (d.vorlage) {
+      // Off-Dorf aus der Liste (Standard-Off): nur Off, Truppen unbekannt
+      cOff.title = "Standard-Off aus der Liste einplanen";
+      cOff.addEventListener("change", () => { a.useOff[d.xy] = cOff.checked; sv(cOff, cOff.checked ? 1 : 0); geaendert(true); });
+      return [[d.name], [koord(d.xy), "num", d.xy], ["Standard-Off", null, d.c.offPop], ["alle", null, d.units.ram], ["Off (Liste)", null, 3], ["", null, null],
+              [cOff, null, cOff.checked ? 1 : 0], ["–", null, 0], ["–", null, 0], ["–", null, null], ["immer", null, 1]];
+    }
     cOff.title = "als Off einplanen";
     cOff.addEventListener("change", () => { a.useOff[d.xy] = cOff.checked; sv(cOff, cOff.checked ? 1 : 0); geaendert(true); });
     const nAG = el("input", "ap-n"); nAG.type = "number"; nAG.min = 0; nAG.max = 99; nAG.value = agZahl(a, d);
@@ -955,13 +997,14 @@ function kernInput(cfgExtra) {
     if (A.own && A.own.fehler.length) fehler.push(A.name + ": " + A.own.fehler.join("; ") + " (eigene Abschickzeiträume).");
     const own = A.own && A.own.fenster.length ? A.own.fenster : null;
     if (!own && !fw.fenster.length) fehler.push("Kein Abschickzeitraum für " + A.name + " (Abschnitt 5).");
-    attackers.push({id: i, name: A.name, points: A.points || 0, rollen: a.rollen, auswahl: A.aus ? A.aus.keys : null, windows: own,
+    // Off-Dörfer aus der Liste gelten unabhängig von der Dorfauswahl
+    attackers.push({id: i, name: A.name, points: A.points || 0, rollen: a.rollen, auswahl: A.aus ? A.aus.keys.concat(A.dorfer.filter(d => d.vorlage).map(d => d.xy)) : null, windows: own,
       cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax, eigeneStark: !!a.eigeneStark, fakeSoll: a.fakeSoll || null,
       fakeMax: a.fakeMax != null ? a.fakeMax : null,
-      villages: A.dorfer.map(d => ({id: d.id, name: d.name, x: d.x, y: d.y, pts: d.pts, units: d.units,
-                                    nobles: agZahl(a, d), useOff: offEingeplant(a, d), pala: !!(a.pala && a.pala[d.xy])}))});
+      villages: A.dorfer.map(d => Object.assign({id: d.id, name: d.name, x: d.x, y: d.y, pts: d.pts, units: d.units,
+                                    nobles: agZahl(a, d), useOff: offEingeplant(a, d), pala: !d.vorlage && !!(a.pala && a.pala[d.xy])}, d.vorlage ? {vorlage: true} : {}))});
   });
-  if (!attackers.length) fehler.push("Kein Angreifer mit Truppenübersicht (Abschnitt 2).");
+  if (!attackers.length) fehler.push("Kein Angreifer mit Truppenübersicht oder Off-Dorfliste (Abschnitt 2).");
   if (!IDS) fehler.push("Dorf-IDs fehlen (dorf_ids.json), ohne sie gibt es keinen Export.");
   const zielDorf = xy => { const d = dorf(xy); return d ? {id: d.id, x: d.x, y: d.y, owner: d.p, name: d.name} : null; };
   const agTargets = S.ziele.map(z => Object.assign(zielDorf(z.xy) || {}, {assignee: S.zmodus === "je" ? z.assignee : null})).filter(t => t.id != null);
@@ -1008,6 +1051,10 @@ function rechnen() {
 const KURZ = {spear: "Speer", sword: "Schwert", axe: "Axt", archer: "Bogen", spy: "Späher", light: "LKav", marcher: "BBogen",
               heavy: "SKav", ram: "Ramme", catapult: "Kata", knight: "Paladin", snob: "AG"};
 const einheiten = u => K.UNITS.filter(k => u[k] > 0).map(k => nf.format(u[k]) + " " + KURZ[k]).join(" · ");
+// Standard-Off aus der Off-Dorfliste (Dennis 14.11.2026): so, wie sie exportiert wird
+const befehlTruppen = it => it.v && it.v.vorlage && it.kind !== "fake" && it.kind !== "ag"
+  ? "alle Äxte · alle LKav · alle Rammen · 1 Späher (Standard-Off)"
+  : einheiten(it.units);
 function zeigen() {
   const res = $("res");
   if (!ERG) return;
@@ -1154,7 +1201,7 @@ function zeigen() {
       const d = dorf(it.t.x * 1000 + it.t.y);
       return [[K.fmtZeit(it.sendMs, true), "num", it.sendMs], [K.fmtZeit(it.arrivalMs, true), "num", it.arrivalMs],
               [el("span", "ap-kind k-" + it.kind, K.KIND_NAME[it.kind])], [it.v.name + " (" + it.v.x + "|" + it.v.y + ")"],
-              [it.t.x + "|" + it.t.y + (d ? " · " + spielerName(d.p) : ""), null], [el("span", "ap-units", einheiten(it.units))],
+              [it.t.x + "|" + it.t.y + (d ? " · " + spielerName(d.p) : ""), null], [el("span", "ap-units", befehlTruppen(it))],
               [[it.ausserhalb ? "außerhalb" + (it.nachtSenden ? ", nachts" : "") : (it.nachtSenden ? "nachts" : ""), it.zuLang ? "lange Laufzeit" : "", it.zusatz ? "zusätzliche Off" : "", it.nacht ? "Ankunft im Nachtbonus" : ""].filter(Boolean).join(" · "),
                it.nacht || it.ausserhalb || it.zuLang ? "down" : ""]];
     });

@@ -136,10 +136,22 @@ test("Stammes-Truppenübersicht eines Spielers (Dennis 12.11.2026): Punkte vorn,
   assert.equal(r.villages[1].units.snob, 1);
   assert.equal(r.villages[1].units.spear, DEFF(1).spear);
   assert.match(r.warnings.join(" "), /Stammes-Truppenübersicht: zählt auch Truppen/);
-  // ohne Kopfzeile: Hinweis statt stiller Fehllesung
-  const ohne = K.parseOverview("0001.01 (101|102) K11\t9.866\t" + z(OFF(), [0, 3, 0]));
-  assert.equal(ohne.stamm, false);
-  assert.match(ohne.warnings.join(" "), /Kopfzeile „Dorf Punkte“/);
+  // ohne Kopfzeile (Dennis 14.11.2026 00:30: eine Zeile kopiert, Punkte als Speere gelesen, 2 SKav als Rammen): an der Zahl der
+  // Werte erkannt und, mit Weltdaten, an den Dorfpunkten; passen die Punkte nicht, Hinweis statt stiller Fehllesung
+  const zeile = "0001.01 (101|102) K11\t9.866\t" + z(OFF(), [0, 3, 0]);
+  const ohne = K.parseOverview(zeile);
+  assert.equal(ohne.stamm, true);
+  assert.deepEqual(ohne.villages[0].units, Object.assign(truppen({}), OFF()));
+  assert.match(ohne.warnings.join(" "), /ohne Kopfzeile als Stammes-Truppenübersicht gelesen/);
+  assert.deepEqual(K.parseOverview(zeile, null, () => 9800).villages[0].units, Object.assign(truppen({}), OFF()));
+  const falsch = K.parseOverview(zeile, null, () => 500);
+  assert.equal(falsch.stamm, false);
+  assert.match(falsch.warnings.join(" "), /Kopfzeile „Dorf Punkte“/);
+  // Welt mit 13 Spalten, nur zwei Zahlen hinter den Einheiten (Format der Zeile von 00:30)
+  const kurzRest = K.parseOverview("X (101|102) K11\t9.512\t" + z(OFF(), [0, 0]));
+  assert.equal(kurzRest.villages[0].units.ram, OFF().ram);
+  // Ansicht „Eigene“ ohne Bezeichnung bleibt, wie sie ist
+  assert.equal(K.parseOverview("[001] Eins (10|20) K21\t" + K.OVERVIEW_COLUMNS.map(c => OFF()[c] || 0).join("\t")).villages[0].units.ram, OFF().ram);
   // zu wenige Zahlen
   const kurz = K.parseOverview("Dorf\tPunkte\n0001.01 (101|102) K11\t9.866\t1\t2\t3");
   assert.match(kurz.errors[0], /3 Zahlen nach den Punkten, erwartet 12/);
@@ -1428,4 +1440,46 @@ test("Offs staffeln: eine einzelne Off direkt vor dem Train bleibt unverändert 
   s.offs[0].arrivalMs = s.ags[0].arrivalMs + 500; s.offs[0].sendMs += s.ags[0].arrivalMs + 500 - vorher;
   K.offsZeitenNeu(items, {art: "staffeln", now: jetzt, world: s.w, rng: K.mulberry32(1)});
   assert.equal(s.offs[0].arrivalMs, s.ags[0].arrivalMs - 200);
+});
+
+test("Off-Dörfer als Liste mit Standard-Off: nur Offs, Export alle Äxte, LKav, Rammen und 1 Späher (Dennis 14.11.2026 00:22)", () => {
+  const input = szenario({fakes_per_village: 2});
+  const vu = K.vorlageEinheiten(input.cfg, W);
+  assert.ok(K.classify({units: vu, pts: 10000}, W, input.cfg, 0).isOff, "Vorlage zählt als Off");
+  input.attackers[1].villages = input.attackers[1].villages.map(v => v.id === 22 || v.id === 23
+    ? {id: v.id, name: v.name, x: v.x, y: v.y, pts: v.pts, units: Object.assign({}, vu), nobles: 0, vorlage: true} : v);
+  const r = K.plan(input);
+  const aus = r.items.filter(i => i.v.id === 22 || i.v.id === 23);
+  assert.ok(aus.length >= 1, "Standard-Offs eingeplant");
+  assert.ok(aus.every(i => i.kind === "clean" || i.kind === "rest"), "nur Offs, keine AGs, keine Fakes");
+  const dsu = K.toDSU(aus).items[0];
+  assert.equal(dsu.axe, K.VORLAGE_ALLE); assert.equal(dsu.light, K.VORLAGE_ALLE); assert.equal(dsu.ram, K.VORLAGE_ALLE);
+  assert.equal(dsu.spy, "1"); assert.equal(dsu.catapult, "0"); assert.equal(dsu.spear, "0");
+  assert.equal(dsu.slowest_unit, K.UNITS.indexOf("ram"));
+  // übrige Befehle mit Zahlen
+  const normal = K.toDSU(r.items.filter(i => i.kind === "clean" && !i.v.vorlage)).items[0];
+  assert.match(normal.axe, /^\d+$/);
+  // DS-Workbench-Zeile mit demselben Text; eingelesen bleibt der Text erhalten
+  const zurueck = K.parsePlan(K.toWB(aus)).items[0];
+  assert.equal(zurueck.text.axe, K.VORLAGE_ALLE);
+  assert.equal(zurueck.text.ram, K.VORLAGE_ALLE);
+  assert.equal(zurueck.units.spy, 1);
+  assert.equal(zurueck.slow, "ram");
+  assert.equal(K.importArt(zurueck), "off");
+});
+
+test("Fakes aufstocken: Off mit „all“ im Plan nimmt alle Einheiten dieser Art, Text bleibt im Export (Dennis 14.11.2026)", () => {
+  const {w, ank, eigene, ziele, sendOff, dsu} = importSzenario();
+  dsu.items[0] = Object.assign({}, dsu.items[0], {axe: "all", light: "all", ram: "all", spy: "1", catapult: "0"});
+  const plan = K.parsePlan(JSON.stringify(dsu));
+  const dorf = id => eigene.find(v => v.id === id) || ziele.find(t => t.id === id);
+  plan.items.forEach(it => { it.v = dorf(it.source); it.t = dorf(it.destination); it.spieler = "A"; });
+  assert.deepEqual(plan.items[0].text, {axe: "all", light: "all", ram: "all"});
+  assert.equal(K.importDSU(plan.items.slice(0, 1), plan.meta).items[0].ram, "all");
+  assert.equal(K.parsePlan(K.importWB(plan.items.slice(0, 1))).items[0].text.light, "all");
+  const r = K.fakesNachImport({world: w, cfg: {fakes_max_je_dorf: 3}, now: sendOff - 6 * 3600000, seed: 1,
+    ankunft: {from: ank - 1800000, to: ank + 1800000}, items: plan.items, laufend: [],
+    spieler: [{key: "A", name: "A", soll: 20, rammenMax: 5, villages: eigene, fenster: []}]});
+  const ausOff = r.neu.filter(f => f.source === eigene[0].id);
+  assert.ok(ausOff.every(f => !f.units.ram), "keine Rammen mehr im Off-Dorf: " + JSON.stringify(ausOff.map(f => f.units)));
 });

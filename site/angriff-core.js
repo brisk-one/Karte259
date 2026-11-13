@@ -28,6 +28,12 @@ const KIND_NAME = {clean: "Clean-Off", rest: "Off", ag: "AG", fake: "Fake"};
 const OFF_UNITS = ["axe", "light", "marcher", "heavy", "ram", "catapult"];
 // Begleitschutz eines AG: Äxte, ohne Äxte Schwert, dann Speer, dann der Rest
 const ESCORT_ORDER = ["axe", "sword", "spear", "archer", "light", "marcher", "heavy"];
+/* Standard-Off für Off-Dörfer ohne Truppenübersicht (Dennis 14.11.2026 00:22): alle Äxte, alle leichten Kavalleristen, alle Rammen
+   und ein Späher. Im Export steht für „alle“ der Text VORLAGE_ALLE; DS-Ultimate speichert Einheiten als Text und setzt ihn
+   unverändert in den Link zum Versammlungsplatz. Ob das Spiel dort „alle“ einträgt, ist nicht geprüft. Geplant wird mit einer
+   vollen Off (vorlageEinheiten), damit Laufzeit (Rammen) und Einordnung als Off stimmen. */
+const VORLAGE_ALLE = "all";
+const VORLAGE_EXPORT = {axe: VORLAGE_ALLE, light: VORLAGE_ALLE, ram: VORLAGE_ALLE, spy: "1"};
 
 const WORLD_DEFAULT = {
   pop: POP, speed: SPEED, fake_limit: 1, snob_max_dist: 35, attack_gap_ms: 200, loss_min: 20, loss_max: 35,
@@ -388,14 +394,25 @@ function zeilenZahlen(rest) {
  * gelesen werden. Sie zählt auch Truppen, die gerade nicht im Dorf sind.
  * @returns {{villages, errors, warnings, header, stamm}}
  */
-function parseOverview(text, columns) {
+function parseOverview(text, columns, punkteVon) {
   columns = columns || OVERVIEW_COLUMNS;
   const lines = String(text || "").split(/\r?\n/);
   const villages = [], errors = [], warnings = [], seen = new Set();
-  let header = null, erwartet = null, offen = null, zuviel = null;
-  const stamm = lines.some(l => /^\s*Dorf\s+Punkte\b/.test(l) || /Truppenübersicht zeigt die Anzahl der Truppen jedes Dorfes/.test(l));
+  let header = null, erwartet = null, offen = null, zuviel = null, stammZeilen = 0;
+  const stammKopf = lines.some(l => /^\s*Dorf\s+Punkte\b/.test(l) || /Truppenübersicht zeigt die Anzahl der Truppen jedes Dorfes/.test(l));
   const einheiten = columns.filter(c => UNITS.includes(c));
-  const fertig = (v, alle, nr) => {
+  // Zeile der Stammes-Truppenübersicht ohne Kopfzeile (Dennis 14.11.2026 00:30: eine einzelne Zeile kopiert, die Dorfpunkte
+  // wurden als Speere gelesen und alles rückte eine Spalte weiter, 2 SKav als Rammen): ohne Bezeichnung wie „eigene“, mit
+  // Punkten und mindestens zwei Zahlen mehr als Spalten. Mit Weltdaten (punkteVon) muss die erste Zahl zu den Dorfpunkten passen.
+  const stammZeile = (v, alle, label) => {
+    if (stammKopf) return true;
+    if (label || alle.length < columns.length + 2 || alle.length - 1 < einheiten.length) return false;
+    const p = punkteVon ? punkteVon(v.x, v.y) : null;
+    return p == null || p <= 0 || Math.abs(alle[0] - p) <= Math.max(300, 0.25 * p);
+  };
+  const fertig = (v, alle, nr, label) => {
+    const stamm = stammZeile(v, alle, label);
+    if (stamm && !stammKopf) stammZeilen++;
     const cols = stamm ? einheiten : columns, nums = stamm ? alle.slice(1) : alle;      // Stamm: erste Zahl sind die Punkte
     if (nums.length < cols.length) {
       errors.push("Zeile " + nr + ": " + nums.length + " Zahlen" + (stamm ? " nach den Punkten" : "") + ", erwartet " + cols.length + " (" + v.name + ")");
@@ -426,13 +443,13 @@ function parseOverview(text, columns) {
         errors.push("Zeile " + nr + ": Ansicht „" + z.label + "“ wird nicht gelesen, bitte „Alle“ oder „Eigene“ (" + v.name + ")");
         return;
       }
-      if (z.nums.length) fertig(v, z.nums, nr);
+      if (z.nums.length) fertig(v, z.nums, nr, z.label);
       else offen = v;                       // Zahlen folgen in der Zeile „eigene“, sonst Kopfzeile des aktiven Dorfs
       return;
     }
     if (offen) {
       const z = zeilenZahlen(line);
-      if (z.label === "eigene") fertig(offen, z.nums, nr);
+      if (z.label === "eigene") fertig(offen, z.nums, nr, z.label);
       offen = null;
     }
   });
@@ -440,6 +457,8 @@ function parseOverview(text, columns) {
     warnings.push("Übersicht nennt " + erwartet + " Dörfer, gelesen " + villages.length +
                   (erwartet > villages.length ? " (weitere Seiten? „Dörfer pro Seite“ hochstellen)" : ""));
   }
+  const stamm = stammKopf || stammZeilen > 0;
+  if (stammZeilen) warnings.push((stammZeilen === 1 ? "1 Zeile" : stammZeilen + " Zeilen") + " ohne Kopfzeile als Stammes-Truppenübersicht gelesen: erste Zahl sind die Dorfpunkte, dann die Einheiten");
   if (stamm && villages.length) warnings.push("Stammes-Truppenübersicht: zählt auch Truppen, die gerade unterwegs sind oder in anderen Dörfern stehen");
   if (zuviel != null) warnings.push("Zeile " + zuviel + ": mehr Zahlen als Einheiten. Stammes-Truppenübersicht? Dann bitte mit der Kopfzeile „Dorf Punkte“ einfügen");
   if (!villages.length && !errors.length) errors.push("Keine Dörfer erkannt. Erwartet wird die Truppenübersicht (Ansicht „Alle“ oder „Eigene“) oder die Stammes-Truppenübersicht eines Spielers.");
@@ -474,6 +493,17 @@ function classify(v, world, cfg, tage) {
           fehltBH: Math.max(0, cfg.off_min_pop - offPop), fehltRammen: Math.max(0, cfg.off_min_rams - rams),
           fakeMin, nobles: v.units.snob};
 }
+
+/** Truppen, mit denen ein Off-Dorf aus der Liste geplant wird: eine volle Off über dem Off-Richtwert, ein Späher. */
+function vorlageEinheiten(cfg, world) {
+  cfg = Object.assign({}, CFG_DEFAULT, cfg);
+  const pop = (world && world.pop) || POP, u = emptyUnits();
+  u.ram = Math.max(250, cfg.off_min_rams); u.light = 2500; u.spy = 1;
+  u.axe = Math.max(5000, Math.ceil(cfg.off_min_pop - u.light * pop.light - u.ram * pop.ram));
+  return u;
+}
+/** Truppen eines Befehls für den Export: Zahlen, bei einer Standard-Off aus der Dorfliste die Texte der Vorlage. */
+const exportEinheit = (it, u) => it.v && it.v.vorlage && it.kind !== "fake" && it.kind !== "ag" ? (VORLAGE_EXPORT[u] || "0") : String(Math.max(0, Math.round(it.units[u] || 0)));
 
 /* ---------- Kostenfluss (Zuteilung) ---------- */
 function heapPush(h, x) {
@@ -659,9 +689,9 @@ function plan(input) {
       const pala = !!v.pala && palaGanz;
       if (v.pala && !pala) palaOhne.push(v.name || v.id);
       villages.push(Object.assign({}, v, {att: a.id, offPop: info.offPop, heavyAsOff: info.heavyAsOff, useOff, offHier, pala,
-        rolleAG: rollen.ag && inAuswahl, rolleFake: rollen.fake,
+        rolleAG: rollen.ag && inAuswahl && !v.vorlage, rolleFake: rollen.fake && !v.vorlage,   // Standard-Off aus der Liste: nur Off
         reserviert: useOff && !offHier,              // Off bleibt für etwas anderes: Fakes nehmen ihr nichts Wichtiges
-        nobles: v.nobles != null ? v.nobles : v.units.snob, avail: Object.assign(emptyUnits(), v.units)}));
+        nobles: v.vorlage ? 0 : v.nobles != null ? v.nobles : v.units.snob, avail: Object.assign(emptyUnits(), v.units)}));
     });
   });
   const vById = new Map(villages.map(v => [v.id, v]));
@@ -2358,7 +2388,7 @@ function toDSU(items, meta) {
       const o = {source: it.v.id, destination: it.t.id, slowest_unit: it.kind === "fake" ? UNITS.indexOf("ram") : UNITS.indexOf(it.slow),
                  arrival_time: Math.floor(it.arrivalMs / 1000), type: DSU_TYPE[it.kind], support_boost: 0, tribe_skill: 0,
                  ms: ((it.arrivalMs % 1000) + 1000) % 1000};
-      UNITS.forEach(u => { o[u] = String(it.units[u] || 0); });
+      UNITS.forEach(u => { o[u] = exportEinheit(it, u); });
       return o;
     }),
   };
@@ -2374,7 +2404,7 @@ const b64 = s => typeof btoa === "function" ? btoa(s) : Buffer.from(s, "utf8").t
 function toWB(items) {
   const zeilen = nachAbschick(items).map(it => {
     const slow = it.kind === "fake" ? "ram" : it.slow;
-    const truppen = UNITS.map(u => u + "=" + b64(String(Math.max(0, Math.round(it.units[u] || 0))))).concat("militia=" + b64("0"));
+    const truppen = UNITS.map(u => u + "=" + b64(exportEinheit(it, u))).concat("militia=" + b64("0"));
     return [it.v.id, it.t.id, slow, Math.round(it.arrivalMs), DSU_TYPE[it.kind], "false", "false", truppen.join("/")].join("&");
   });
   return zeilen.length ? zeilen.join("\n") + "\n" : "";
@@ -2396,10 +2426,18 @@ function parsePlan(text) {
   const s = String(text || "").trim();
   if (!s) return {items: [], fehler: [], meta: {}};
   const items = [], fehler = [];
-  const dazu = (nr, source, destination, slowIdx, slowName, arrivalMs, type, units, roh) => {
+  // Einheiten als Text (etwa „all“ aus einer Standard-Off, Dennis 14.11.2026): Zahl 0, der Text bleibt in text[Einheit]
+  const einheit = (units, text, u, wert) => {
+    const w = wert == null ? "" : String(wert).trim(), n = parseInt(w, 10);
+    if (w && isNaN(n)) text[u] = w;
+    units[u] = Math.max(0, n || 0);
+  };
+  const dazu = (nr, source, destination, slowIdx, slowName, arrivalMs, type, units, roh, text) => {
     if (!(source > 0) || !(destination > 0) || !(arrivalMs > 0)) { fehler.push("Befehl " + nr + ": Herkunft, Ziel oder Ankunft fehlt"); return; }
-    const slow = slowName && UNITS.includes(slowName) ? slowName : UNITS[slowIdx] || langsamste(units) || "ram";
-    items.push({nr, source, destination, slow, arrivalMs, type: isNaN(type) ? null : type, units, fake: type === DSU_TYPE.fake, roh});
+    const slow = slowName && UNITS.includes(slowName) ? slowName : UNITS[slowIdx] || (text.ram ? "ram" : langsamste(units)) || "ram";
+    const it = {nr, source, destination, slow, arrivalMs, type: isNaN(type) ? null : type, units, fake: type === DSU_TYPE.fake, roh};
+    if (Object.keys(text).length) it.text = text;
+    items.push(it);
   };
   if (s[0] === "{" || s[0] === "[") {
     let d;
@@ -2408,27 +2446,27 @@ function parsePlan(text) {
     if (!arr) return {items: [], fehler: ["Keine Befehlsliste (items) gefunden"], meta: {}};
     arr.forEach((x, i) => {
       if (!x || typeof x !== "object") { fehler.push("Befehl " + (i + 1) + ": kein Objekt"); return; }
-      const units = emptyUnits();
-      UNITS.forEach(u => { units[u] = Math.max(0, parseInt(x[u], 10) || 0); });
+      const units = emptyUnits(), text = {};
+      UNITS.forEach(u => einheit(units, text, u, x[u]));
       const ms = Math.max(0, Math.min(999, parseInt(x.ms, 10) || 0));
-      dazu(i + 1, +x.source, +x.destination, parseInt(x.slowest_unit, 10), null, +x.arrival_time * 1000 + ms, parseInt(x.type, 10), units, x);
+      dazu(i + 1, +x.source, +x.destination, parseInt(x.slowest_unit, 10), null, +x.arrival_time * 1000 + ms, parseInt(x.type, 10), units, x, text);
     });
     return {items, fehler, meta: Array.isArray(d) ? {} : {title: d.title == null ? null : d.title, world: d.world || null, twWorld: d.twWorld || null}};
   }
   s.split(/\r?\n/).map(z => z.trim()).filter(Boolean).forEach((z, i) => {
     const t = z.split("&");
     if (t.length < 5) { fehler.push("Zeile " + (i + 1) + ": nicht im Format von DS Workbench"); return; }
-    const units = emptyUnits();
+    const units = emptyUnits(), text = {};
     (t[7] || "").split("/").forEach(p => {
       const [u, b] = p.split("=");
-      if (u in units && b) { let n = 0; try { n = parseInt(unb64(b), 10) || 0; } catch (e) { n = 0; } units[u] = Math.max(0, n); }
+      if (u in units && b) { let w = ""; try { w = unb64(b); } catch (e) { w = ""; } einheit(units, text, u, w); }
     });
-    dazu(i + 1, +t[0], +t[1], NaN, t[2], +t[3], parseInt(t[4], 10), units, null);
+    dazu(i + 1, +t[0], +t[1], NaN, t[2], +t[3], parseInt(t[4], 10), units, null, text);
   });
   return {items, fehler, meta: {}};
 }
 /** Art eines eingelesenen Befehls: „fake“, „ag“ (Symbol AG oder ein AG dabei) oder „off“ (alles andere). */
-const importArt = it => it.fake ? "fake" : it.type === DSU_TYPE.ag || it.slow === "snob" || it.units.snob > 0 ? "ag" : "off";
+const importArt = it => it.fake ? "fake" : it.type === DSU_TYPE.ag || it.slow === "snob" || it.units.snob > 0 || !!(it.text && it.text.snob) ? "ag" : "off";
 /** Export eingelesener und neuer Befehle: Befehle aus einem DS-Ultimate-JSON unverändert, neue wie in toDSU. */
 function importDSU(items, meta) {
   meta = meta || {};
@@ -2443,14 +2481,14 @@ function importDSU(items, meta) {
       }
       const o = {source: it.source, destination: it.destination, slowest_unit: UNITS.indexOf(it.slow), arrival_time: Math.floor(it.arrivalMs / 1000),
                  type: it.type == null ? DSU_TYPE.fake : it.type, support_boost: 0, tribe_skill: 0, ms: ((it.arrivalMs % 1000) + 1000) % 1000};
-      UNITS.forEach(u => { o[u] = String(it.units[u] || 0); });
+      UNITS.forEach(u => { o[u] = it.text && it.text[u] ? it.text[u] : String(it.units[u] || 0); });
       return o;
     }),
   };
 }
 function importWB(items) {
   return nachAbschick(items).map(it => {
-    const truppen = UNITS.map(u => u + "=" + b64(String(Math.max(0, Math.round(it.units[u] || 0))))).concat("militia=" + b64("0"));
+    const truppen = UNITS.map(u => u + "=" + b64(it.text && it.text[u] ? it.text[u] : String(Math.max(0, Math.round(it.units[u] || 0))))).concat("militia=" + b64("0"));
     return [it.source, it.destination, it.slow || "ram", Math.round(it.arrivalMs), it.type == null ? DSU_TYPE.fake : it.type, "false", "false", truppen.join("/")].join("&");
   }).join("\n");
 }
@@ -2532,8 +2570,9 @@ function fakesNachImport(input) {
       const u = Object.assign(emptyUnits(), d.units), bef = jeDorf.get(d.id) || [];
       let ohneTruppen = false;
       bef.forEach(it => {
-        if (!UNITS.some(x => it.units[x] > 0)) { if (!it.fake) ohneTruppen = true; return; }
-        UNITS.forEach(x => { u[x] = Math.max(0, u[x] - (it.units[x] || 0)); });
+        if (!UNITS.some(x => it.units[x] > 0 || (it.text && it.text[x]))) { if (!it.fake) ohneTruppen = true; return; }
+        // Einheit als Text („all“ einer Standard-Off): der Befehl nimmt alle dieser Einheit
+        UNITS.forEach(x => { u[x] = it.text && it.text[x] ? 0 : Math.max(0, u[x] - (it.units[x] || 0)); });
       });
       const av = ohneTruppen
         ? {catapult: Math.min(u.catapult, Math.max(0, Math.floor((offInfo(u, pop).offPop - cfg.off_min_pop) / pop.catapult))), ram: 0,
@@ -2839,7 +2878,9 @@ function offsZeitenNeu(items, opt) {
       einsortieren(sends.get(o.spieler), o.sendMs);
     };
     // die anderen: mehr Rammen landen zuerst (wie im Planer, 12.11.2026), bei gleich vielen die früher abgeschickte
-    const andere = beweglich.filter(o => o !== letzte).sort((a, b) => ((b.units && b.units.ram) || 0) - ((a.units && a.units.ram) || 0) || a.sendMs - b.sendMs);
+    // Rammen als Text („all“ einer Standard-Off) zählen wie eine volle Off
+    const rammen = o => o.text && o.text.ram ? 1e6 : (o.units && o.units.ram) || 0;
+    const andere = beweglich.filter(o => o !== letzte).sort((a, b) => rammen(b) - rammen(a) || a.sendMs - b.sendMs);
     // die letzte bleibt, wo sie ist, wenn sie schon höchstens eine Sekunde vor dem Train landet (Dennis 13.11.2026 19:20: sonst
     // wurden einzelne Offs um 200 bis 400 ms verschoben und als „geändert“ markiert, ohne dass sich etwas Sichtbares ändert)
     const vorTrain = T - letzte.arrivalMs;
@@ -2875,7 +2916,7 @@ const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEF
              travelS, dist, popOf, langsamste, ivAbstand, sitzungenAus, dichtesterPunkt, besser, ankunftKandidaten, bewerteAnkunft, zeitHinweise,
              RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, tagesTeile, nachtGekuerzt,
              mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport, nachAbschick,
-             parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu};
+             parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu, VORLAGE_ALLE, VORLAGE_EXPORT, vorlageEinheiten};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Angriff = api;
 })(typeof window !== "undefined" ? window : globalThis);

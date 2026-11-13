@@ -51,7 +51,7 @@ function planerDaten() {
   const gemeinsam = Array.isArray(a.fen) ? K.fensterAusZeilen(a.fen).fenster : [];
   a.atts.forEach(at => {
     if (!at || typeof at.text !== "string" || !at.text.trim()) return;
-    const o = K.parseOverview(at.text, SPALTEN), n = new Map();
+    const o = K.parseOverview(at.text, SPALTEN, punkteVon), n = new Map();
     o.villages.forEach(v => { const i = byXY.get(v.x * 1000 + v.y); if (i != null && V.rows[i][1] >= 0) n.set(V.rows[i][1], (n.get(V.rows[i][1]) || 0) + 1); });
     let p = -1, best = 0;
     n.forEach((c, q) => { if (c > best) { best = c; p = q; } });
@@ -70,6 +70,8 @@ const sp = name => S.spieler[name] || (S.spieler[name] = neuerSpieler());
 /* ---------- Weltdaten ---------- */
 let P = null, pIdx = {}, V = null, IDS = null, W = null, WELT = "de259", SPALTEN = undefined;
 const byXY = new Map(), byId = new Map();
+// Dorfpunkte laut Weltdaten: erkennt Zeilen der Stammes-Truppenübersicht ohne Kopfzeile (Dennis 14.11.2026)
+const punkteVon = (x, y) => { const i = byXY.get(x * 1000 + y); return i != null && V ? V.rows[i][2] : null; };
 const spielerName = p => p >= 0 && P && P.rows[p] ? P.rows[p][pIdx.name] : "Barbaren";
 const dorf = i => { const r = V.rows[i]; return {id: IDS[i], x: Math.floor(r[0] / 1000), y: r[0] % 1000, owner: r[1], pts: r[2], name: r[4]}; };
 const koord = d => d.x + "|" + d.y;
@@ -83,7 +85,7 @@ const UEB = new Map();     // Spieler → gelesene Truppenübersicht
 function uebersichtLesen(name) {
   const text = sp(name).uebersicht;
   if (!text.trim()) return null;
-  const o = K.parseOverview(text, SPALTEN);
+  const o = K.parseOverview(text, SPALTEN, punkteVon);
   o.villages.forEach(v => {
     const i = byXY.get(v.x * 1000 + v.y);
     const d = i != null && IDS ? dorf(i) : null;
@@ -201,7 +203,9 @@ const dateiPlan = i => (i < 0 ? "neue_spieler" : "plan" + (i + 1) + (S.namen[i] 
 const KURZ = {spear: "Speer", sword: "Schwert", axe: "Axt", archer: "Bogen", spy: "Späher", light: "LKav", marcher: "BB", heavy: "SKav",
               ram: "Ramme", catapult: "Kata", knight: "Pala", snob: "AG"};
 const ART = {off: "Off", ag: "AG", fake: "Fake"};
-const einheitenText = u => K.UNITS.filter(x => u[x] > 0).map(x => nf.format(u[x]) + " " + KURZ[x]).join(", ") || "–";
+// Einheiten als Text (Standard-Off „all“, Dennis 14.11.2026) als „alle Axt“
+const einheitenText = (u, text) => K.UNITS.filter(x => u[x] > 0 || (text && text[x]))
+  .map(x => (text && text[x] ? (text[x] === K.VORLAGE_ALLE ? "alle" : text[x]) : nf.format(u[x])) + " " + KURZ[x]).join(", ") || "–";
 const zeitKurz = (ms, mitMs) => { const t = K.fmtZeit(ms, mitMs); return t.slice(0, 6) + t.slice(10); };
 const dauer = ms => { const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h + ":" + String(m).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
 function befehlsTabelle(items) {
@@ -217,7 +221,7 @@ function befehlsTabelle(items) {
     else if (it.gesendet == null && it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) ank.append(el("span", "au-alt", "eingelesen " + zeitKurz(it.arrivalOrig, true)));
     return [["", "num"], [it.spieler], [it.v ? it.v.name + " (" + koord(it.v) + ")" : "Dorf-ID " + it.source + " (unbekannt)", null, it.v ? koord(it.v) : ""],
             [it.t ? koord(it.t) : "Dorf-ID " + it.destination + " (unbekannt)"], [it.t ? spielerName(it.t.owner) : "–"],
-            [art, null, ART[it.art] + (it.neu ? " neu" : "") + (it.gesendet != null ? " unterwegs" : "")], [el("span", "ap-units", einheitenText(it.units))],
+            [art, null, ART[it.art] + (it.neu ? " neu" : "") + (it.gesendet != null ? " unterwegs" : "")], [el("span", "ap-units", einheitenText(it.units, it.text))],
             [it.sendMs != null ? zeitKurz(it.sendMs) : "–", "num", it.sendMs], [ank, "num", it.gesendet != null ? it.gesendet : it.arrivalMs],
             [it.sendMs != null ? dauer(it.arrivalMs - it.sendMs) : "–", "num", it.sendMs != null ? it.arrivalMs - it.sendMs : null]];
   });
