@@ -282,7 +282,16 @@ function attBlock(i) {
   rollen.append(infoKnopf("teilnahme"));
   const weg = el("button", "tw", "entfernen");
   weg.type = "button";
-  weg.addEventListener("click", () => { S.atts.splice(i, 1); if (!S.atts.length) S.atts.push(neuerAngreifer()); attsBauen(); geaendert(); });
+  weg.addEventListener("click", () => {
+    // seine AG-Ziele gehen mit (Dennis 13.11.2026); Zuordnungen späterer Angreifer rücken eine Stelle vor
+    const name = attName(i), vorher = S.ziele.length;
+    S.ziele = S.ziele.filter(z => z.assignee !== i);
+    S.ziele.forEach(z => { if (z.assignee != null && z.assignee > i) z.assignee--; });
+    if (S.zielFuer != null && S.zielFuer !== "") { const f = +S.zielFuer; S.zielFuer = f === i ? "" : f > i ? String(f - 1) : S.zielFuer; }
+    const mit = vorher - S.ziele.length;
+    S.atts.splice(i, 1); if (!S.atts.length) S.atts.push(neuerAngreifer()); attsBauen(); geaendert();
+    $("att-note").textContent = name + " entfernt" + (mit ? ", mit ihm " + mit + (mit === 1 ? " AG-Ziel" : " AG-Ziele") : "") + ".";
+  });
   kopf.append(titel, el("span", "ap-note", "nimmt teil mit:"), rollen, weg);
   const ta = el("textarea", "ap-ta");
   ta.spellcheck = false; ta.value = a.text;
@@ -465,6 +474,18 @@ function attAnalyse(i) {
 
 /* ---------- 3. Ziele: AG-Ziele und Fakeziele (Fakeziele seit 10.11.2026, Dennis) ---------- */
 const attName = i => ANALYSE[i] && ANALYSE[i].name ? ANALYSE[i].name : "Angreifer " + (i + 1);
+/** Zieltabelle neu aufbauen, ohne an den Anfang zu springen (Dennis 13.11.2026): Scrollstand und Sortierung bleiben. */
+function tabelleErsetzen(box, sc) {
+  const alt = box.querySelector(".ap-scroll"), oben = alt ? alt.scrollTop : 0, links = alt ? alt.scrollLeft : 0, seiteY = scrollY;
+  const ths = alt ? [...alt.querySelectorAll("thead tr:last-child th")] : [];
+  const sp = ths.findIndex(c => c.hasAttribute("aria-sort"));
+  const dir = sp >= 0 && ths[sp].getAttribute("aria-sort") === "ascending" ? "asc" : "desc";
+  box.replaceChildren(sc);
+  const t = sc.querySelector("table");
+  if (t && sp >= 0 && t.tHead && sp < t.tHead.rows[t.tHead.rows.length - 1].cells.length) sortTable(t, sp, dir);
+  sc.scrollTop = oben; sc.scrollLeft = links;
+  if (scrollY !== seiteY) scrollTo(scrollX, seiteY);
+}
 /** Liste oder Spieler als AG-Ziele einem Angreifer zuordnen (Dennis 13.11.2026), auch schon vorhandene Ziele. */
 function zieleZuordnen(keys) {
   if (S.zart === "fake" || S.zielFuer == null || S.zielFuer === "") return "";
@@ -514,7 +535,7 @@ function fakeZieleBauen() {
   });
   const sc = el("div", "ap-scroll");
   sc.append(table([["Koord.", "num"], ["Dorf"], ["Besitzer"], ["Punkte", "num", true], [""]], rows));
-  box.replaceChildren(sc);
+  tabelleErsetzen(box, sc);
 }
 function zieleBauen() {
   const box = $("ziel-tab");
@@ -566,7 +587,7 @@ function zieleBauen() {
   });
   const sc = el("div", "ap-scroll");
   sc.append(table([["Koord.", "num"], ["Dorf"], ["Besitzer"], ["Punkte", "num", true], ["Nächstes AG-Dorf (Felder)", "num", true], ["Angreifer"], [""]], rows));
-  box.replaceChildren(sc);
+  tabelleErsetzen(box, sc);
 }
 
 /* ---------- 4./5. Zeiten ---------- */
