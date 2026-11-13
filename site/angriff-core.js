@@ -102,10 +102,14 @@ const ANKUNFT_RAT_MS = 60 * 60000;
    standard:  Ziele, Off vor AG (seit 12.11.2026 22:00), innerhalb der Zeiträume, Clean-Off-Richtwert, Sitzungen, Laufzeiten, Fakes
    sitzungen: Sitzungen vor Clean-Off-Richtwert und Off vor AG (Off vor AG bleibt dort unter den Zeiträumen)
    nachtruhe: wie standard, aber nachts außerhalb der Zeiträume nur, wenn es nicht anders geht, sonst fällt das Ziel weg */
+// Kurze Laufzeit vor „Off vom Spieler des Trains“ und vor kurzen Sitzungen (Dennis 13.11.2026 09:21, 1a; Laufzeit zählt 1 je
+// Sekunde): Spieler des Trains wiegt 40 Minuten Laufzeit (vorher 60000, rund 17 h), Bündeln zu Sitzungen höchstens
+// 30 Minuten (vorher 50000, rund 14 h). „Off vor AG“ bleibt über allem (Dennis 09:22: „AGs immer erst hinter die Offs“),
+// auch über dem Laufzeit-Richtwert. „sitzungen“ bleibt bei Sitzungen zuerst.
 const RANGFOLGE = {
-  standard:  {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: false, fuellNurAnker: false, offZuerst: OFF_ZUERST, stark: EIGENE_STARK},
-  sitzungen: {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 240, minute: 3, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 4000, kopplungMax: Infinity, nachtSperre: false, fuellNurAnker: true,  offZuerst: 100000, stark: 30000},
-  nachtruhe: {aus: 1000, ausMin: 1, nacht: 20, sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 50000,    nachtSperre: true,  fuellNurAnker: false, offZuerst: OFF_ZUERST, stark: EIGENE_STARK},
+  standard:  {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 1800,     nachtSperre: false, fuellNurAnker: false, offZuerst: OFF_ZUERST, stark: EIGENE_STARK, fremdVor: 2400,  fremdNach: 600},
+  sitzungen: {aus: 1000, ausMin: 1, nacht: 3,  sitzung: 240, minute: 3, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 4000, kopplungMax: Infinity, nachtSperre: false, fuellNurAnker: true,  offZuerst: 100000, stark: 30000,     fremdVor: 60000, fremdNach: 6000},
+  nachtruhe: {aus: 1000, ausMin: 1, nacht: 20, sitzung: 60,  minute: 1, eng: 0.5, ausFlow: 300000, ausFlowMin: 200, anker: 600,  kopplungMax: 1800,     nachtSperre: true,  fuellNurAnker: false, offZuerst: OFF_ZUERST, stark: EIGENE_STARK, fremdVor: 2400,  fremdNach: 600},
 };
 // Außerhalb zählt vor allem, dass es außerhalb ist; die Minuten wenig, sonst zöge jeder Befehl einzeln an den Rand des
 // Zeitraums und es entstünden viele kleine Sitzungen. kopplungMax: Bündeln bleibt unter „Off vor AG“ (100.000).
@@ -113,7 +117,7 @@ const HART = 1e7;
 // Clean-Off nicht vom Spieler des Trains. Konfig clean_eigene (Dennis 12.11.2026: „jeder hauptsächlich seine eigenen Ziele“):
 // „vorrang“ über dem Bündeln (kopplungMax 50.000), unter „Off vor AG“ (100.000) und den Zeiträumen; „nachrang“ wie bis
 // 12.11. (6.000, rund 3,3 Felder Rammentempo, unter dem Bündeln)
-const SPIELER_FREMD = 6000, SPIELER_FREMD_VORRANG = 60000;
+// Spieler des Trains: seit 13.11.2026 je Rangfolge in R.fremdVor / R.fremdNach
 const PALA_AGS = 3;                         // ganzer Train mit Zustimmungs-Paladin: 3 AGs reichen (Dennis 12.11.2026)                          // Mindestabstand unterschritten
 
 /* ---------- Kleinigkeiten ---------- */
@@ -892,7 +896,7 @@ function plan(input) {
     // Clean-Offs möglichst vom Spieler, der den Train schickt: dann timt er alles selbst (Dennis 15:00, niedrige Priorität:
     // unter „Off vor AG“ und dem Bündeln, über den Laufzeiten)
     if (fremdAuf(o, t)) {
-      c += cfg.clean_eigene === "nachrang" ? SPIELER_FREMD : SPIELER_FREMD_VORRANG;
+      c += cfg.clean_eigene === "nachrang" ? R.fremdNach : R.fremdVor;
       if (starkBetroffen(o, t)) c += R.stark;
     }
     c += zeitKosten(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms);

@@ -499,7 +499,8 @@ test("v0.5: Sitzungen gebündelt, Fakes nur in den Sitzungen, Abstände", () => 
   [101, 102].forEach(a => {
     const kern = K.sitzungenAus(vorgaenge(r, a, true));
     const alle = vorgaenge(r, a, false);
-    assert.ok(kern.length <= 2, "höchstens zwei Sitzungen für Offs und AGs bei " + a + ": " + kern.length);
+    // seit 13.11.2026 (Dennis 1a) geht kurze Laufzeit vor kurzen Sitzungen: höchstens drei statt zwei
+    assert.ok(kern.length <= 3, "höchstens drei Sitzungen für Offs und AGs bei " + a + ": " + kern.length);
     // Fakes höchstens 10 Minuten vor oder nach einer Sitzung der Offs und AGs
     r.items.filter(i => i.att === a && i.kind === "fake").forEach(i =>
       assert.ok(kern.some(([x, y]) => i.sendMs >= x - 600000 && i.sendMs <= y + 600000), "Fake in Sitzung"));
@@ -511,6 +512,7 @@ test("v0.5: Sitzungen gebündelt, Fakes nur in den Sitzungen, Abstände", () => 
   // Rangfolge „sitzungen“: nie mehr Sitzungen als „standard“
   const s2 = K.plan(szenario({zeit_rangfolge: "sitzungen"}));
   assert.ok(s2.bewertung.sitzungen <= r.bewertung.sitzungen);
+  [101, 102].forEach(a => assert.ok(K.sitzungenAus(vorgaenge(s2, a, true)).length <= 2, "„sitzungen“: höchstens zwei bei " + a));
 });
 
 test("v0.5: nachts außerhalb, Rangfolge Nachtruhe", () => {
