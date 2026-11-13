@@ -1227,30 +1227,47 @@ function plan(input) {
   const vorSpanne = vorBis > vorVon;
   const vorlaufMs = !streng && (vorVon > 0 || vorSpanne) ? Math.max(vorVon, vorBis) * 3600000 : 0;
   const vorlaufText = vorSpanne ? fmtStd(vorVon) + " bis " + fmtStd(vorBis) + " h" : fmtStd(vorVon) + " h";
-  const fakeFrueh = new Map();
+  const fakeFrueh = new Map(), fruehGrund = new Map();
+  // Abschickzeiträume gehen vor (Dennis 13.11.2026 01:12: ein früher Zeitraum bei einem Spieler zog die Fakes der anderen
+  // morgens um 7 los): die frühe Sitzung liegt nur in den Zeiträumen des Spielers, mit einer Stunde Spiel um die Spanne,
+  // nie nach T0. Hat er dort keinen Zeitraum, gibt es für ihn keine frühe Sitzung; seine Fakes bleiben in seinen Sitzungen.
   const fruehFenster = a => {
     if (!fakeFrueh.has(a)) {
       let f = [];
       if (vorlaufMs && T0 < Infinity) {
-        const bereich = vorSpanne ? [[T0 - vorBis * 3600000, T0 - vorVon * 3600000]] : [[T0 - vorVon * 3600000 - VORLAUF_TOL_MS, T0 - vorVon * 3600000 + VORLAUF_TOL_MS]];
+        const w = att.get(a).wunsch;
+        const bereich0 = vorSpanne ? [[T0 - vorBis * 3600000, T0 - vorVon * 3600000]] : [[T0 - vorVon * 3600000 - VORLAUF_TOL_MS, T0 - vorVon * 3600000 + VORLAUF_TOL_MS]];
+        const bereich = !w.length ? bereich0
+          : ivIntersect([[bereich0[0][0] - (vorSpanne ? VORLAUF_TOL_MS : 0), Math.min(T0, bereich0[0][1] + (vorSpanne ? VORLAUF_TOL_MS : 0))]], w);
         const ivs = [];
-        ANK.forEach(an => fakeIvs(a, an).forEach(iv => ivIntersect([iv], bereich).forEach(x => ivs.push(x))));
-        const w = att.get(a).wunsch, pw = ivs.length ? punktWahl(ivs, w) : {p: null};
-        if (pw.p != null) f = sitzungUm(pw.p, w);
+        if (bereich.length) ANK.forEach(an => fakeIvs(a, an).forEach(iv => ivIntersect([iv], bereich).forEach(x => ivs.push(x))));
+        const pw = ivs.length ? punktWahl(ivs, w) : {p: null};
+        if (pw.p != null) {
+          f = sitzungUm(pw.p, w);
+          if (w.length) { const vor = ivIntersect(f, [[0, T0]]); if (vor.length) f = vor; }
+        } else {
+          // kein Zeitraum in der Spanne; liegt die Spanne vor „jetzt“, ist die Uhr schuld: „so früh keine Fakes möglich“
+          fruehGrund.set(a, bereich.length || !ivIntersect(bereich0, ab).length ? "fakes" : "zeitraum");
+        }
       }
       fakeFrueh.set(a, f);
     }
     return fakeFrueh.get(a);
   };
-  const fakeZeitOk = (v, t) => {
+  // Fake passt in die üblichen Sitzungen des Angreifers (ohne frühe Sitzung)
+  const fakeNormalOk = (v, t) => {
     if (streng) return true;
     const s = sendIvFake(travelS(world, "ram", dist(v, t)) * 1000);
     if (!fakeFenster.has(v.att)) {
       if (!fakeAnker.has(v.att)) fakeAnker.set(v.att, fakeSitzung(v.att));
-      return ivIntersect(s, ivNorm(fakeAnker.get(v.att).concat(fruehFenster(v.att)))).length > 0;
+      return ivIntersect(s, fakeAnker.get(v.att)).length > 0;
     }
-    return ivIntersect(s, ivNorm(fakeFenster.get(v.att).concat(fruehFenster(v.att)))).length > 0;
+    return ivIntersect(s, fakeFenster.get(v.att)).length > 0;
   };
+  const fakeZeitOk = (v, t) => fakeNormalOk(v, t) || (!streng && vorlaufMs > 0 && fruehMoeglich(v, t));
+  // beim Zuteilen: die frühe Sitzung nimmt nur ihren Anteil (rund ein Viertel); was nur früh ginge, bleibt danach draußen
+  // (Dennis 13.11.2026: vorher landeten dort bis zu drei Viertel der Fakes eines Spielers)
+  const fakeZeitJetzt = (v, t) => fakeNormalOk(v, t) || (fruehGewuenscht(v) && fruehMoeglich(v, t));
   // Fakes je Zieldorf (wie bisher) oder je Herkunftsdorf (Dennis 09.11.2026, Konfig); Einstellungen je Spieler gehen vor
   const herkunft = cfg.fake_modus === "herkunft";
   const sollQ = v => { const a = att.get(v.att); return Math.min(a.fakeModus === "dorf" ? a.fakeN : cfg.fakes_per_village, Math.max(1, Math.round(cfg.fakes_max_je_dorf || 4))); };
@@ -1310,6 +1327,7 @@ function plan(input) {
         if (schon.has(v.id)) continue;
         if (a.fakeModus === "dorf" && v.fakes >= a.fakeN) continue;          // Obergrenze je eigenem Dorf
         if (v.fakes >= maxQ) continue;                                          // höchstens N Fakes je eigenem Dorf
+        if (vorlaufMs && !fakeZeitJetzt(v, t)) continue;                       // nur noch früh möglich, Anteil voll
         const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus, att.get(v.att).rammenMax);
         if (!f) continue;
         v.fakeAv.catapult -= f.catapult; v.fakeAv.spy -= f.spy; v.fakeAv.ram -= f.ram;
@@ -1346,7 +1364,7 @@ function plan(input) {
         const tr = travelS(world, "ram", dist(v, t)), c = (zahl.get(t.id) || 0) * 28800 + tr + rng() * 1800 + (ex ? 57600 : 0) + paarZahl(v, t) * PAAR_S + fruehBonus(v, t);
         if (c >= bestC) return;
         if (ex && !t.manuell && moral(world.moral, a.points, t.ownerPoints || 0, t.ownerDays) < cfg.moral_threshold) return;
-        if (!tsetFake(v, tr * 1000).length || !fakeZeitOk(v, t)) return;
+        if (!tsetFake(v, tr * 1000).length || !(vorlaufMs ? fakeZeitJetzt(v, t) : fakeZeitOk(v, t))) return;
         best = {t, ex}; bestC = c;
       });
       if (!best) return;
@@ -1511,10 +1529,12 @@ function plan(input) {
     const fr = items.filter(it => it.kind === "fake"), erste = fr.length ? Math.min(...fr.map(it => it.sendMs)) : null;
     const kern1 = items.filter(it => it.kind !== "fake").map(it => it.sendMs);
     const t1 = kern1.length ? Math.min(...kern1) : T0;
-    const ohne = [...att.values()].filter(a => fakeFrueh.has(a.id) && !fakeFrueh.get(a.id).length).map(a => a.name);
+    const ohne = g => [...att.values()].filter(a => fakeFrueh.has(a.id) && !fakeFrueh.get(a.id).length && fruehGrund.get(a.id) === g).map(a => a.name);
+    const oz = ohne("zeitraum"), of = ohne("fakes");
     warnings.push({art: "vorlauf", text: "Fake-Vorlauf " + vorlaufText + ": erste Off oder AG " + fmtZeit(t1).slice(0, 16) +
       (erste != null ? ", erste Fakes " + fmtZeit(erste).slice(0, 16) + " (" + (Math.round((t1 - erste) / 360000) / 10).toLocaleString("de-DE") + " h vorher)" : ", keine Fakes") +
-      (ohne.length ? "; so früh keine Fakes möglich für " + ohne.join(", ") : "")});
+      (oz.length ? "; keine frühen Fakes bei " + oz.join(", ") + ", kein Abschickzeitraum in dieser Spanne" : "") +
+      (of.length ? "; so früh keine Fakes möglich für " + of.join(", ") : "")});
   }
   const sitzungen = sitzungsListe(items, att, world);
   const hinweise = streng ? [] : zeitHinweise(items, att, world);
@@ -1763,23 +1783,26 @@ function zeitenPlanen(blocks, ctx) {
   // Fakes in die Lücken der Sitzungen (mit Rand); reine Fake-Spieler in ihre eine Fake-Sitzung
   if (!ctx.nurKern) {
     const fruehVon = a => (ctx.fakeFrueh && ctx.fakeFrueh.get(a)) || [];
+    // übrige Fakes nur in den Sitzungen (mit Rand); die frühe Sitzung gehört den Vorlauf-Fakes (Dennis 13.11.2026)
     const erlaubt = a => {
       const s = sitzungen.get(a);
-      if (s && s.length) return ivNorm(s.map(([x, y]) => [x - FAKE_RAND_MS, y + FAKE_RAND_MS]).concat(fruehVon(a)));
+      if (s && s.length) return ivNorm(s.map(([x, y]) => [x - FAKE_RAND_MS, y + FAKE_RAND_MS]));
       if (ctx.streng) return [[0, Number.MAX_SAFE_INTEGER]];
       const fa = ctx.fakeAnker && ctx.fakeAnker.get(a);
-      return fa && fa.length ? ivNorm(fa.concat(fruehVon(a))) : [[0, Number.MAX_SAFE_INTEGER]];
+      return fa && fa.length ? ivNorm(fa) : [[0, Number.MAX_SAFE_INTEGER]];
     };
     const laenge = l => l.reduce((x, y) => x + y[1] - y[0], 0);
     fakes.map(b => ({b, r: rng(), l: laenge(b.tset)})).sort((p, q) => p.l - q.l || p.r - q.r).forEach(({b}) => {
       const x = b.aktionen[0];
       if (!sends.has(x.att)) sends.set(x.att, []);
       const arr = sends.get(x.att);
-      const nurFrueh = b.frueh ? ivIntersect(ivShift(b.tset, x.rel), fruehVon(x.att)) : [];      // Fake-Vorlauf
-      const bereich = nurFrueh.length ? nurFrueh : ivIntersect(ivShift(b.tset, x.rel), erlaubt(x.att));
+      // Vorlauf-Fakes in die frühe Sitzung, die übrigen in die Sitzungen; nur wo dort kein Platz ist, in die andere
+      // (Dennis 13.11.2026: vorher durften alle Fakes in die frühe Sitzung, sie hatte dann bis zu drei Viertel)
+      const tsh = ivShift(b.tset, x.rel), frueh = ivIntersect(tsh, fruehVon(x.att)), normal = ivIntersect(tsh, erlaubt(x.att));
+      const versuche = b.frueh ? [frueh, normal] : [normal, frueh];
       const wunsch = ctx.streng ? [] : att.get(x.att).wunsch;
       const spanne = arr.length ? [arr[0], arr[arr.length - 1]] : null;
-      let bestS = null, bestW = -Infinity;
+      let bestS = null, bestW = -Infinity, bereich = [];
       const pruef = c => {
         c = Math.round(c / 1000) * 1000;
         if (!ivHas(bereich, c) || !ivHas(b.tset, c - x.rel)) return;
@@ -1790,15 +1813,19 @@ function zeitenPlanen(blocks, ctx) {
         const w = Math.min(d, zielMs * 2) / 1000 * 10 - raus / 60000 * 2 + (ivHas(wunsch, c) ? 5 : 0);
         if (w > bestW) { bestW = w; bestS = c; }
       };
-      bereich.forEach(([l, u]) => {
-        pruef(l); pruef(u);
-        for (let i = 0; i < arr.length; i++) {
-          if (arr[i] < l - zielMs * 2 || arr[i] > u + zielMs * 2) continue;
-          pruef(arr[i] + zielMs); pruef(arr[i] - zielMs);
-          if (i + 1 < arr.length) pruef((arr[i] + arr[i + 1]) / 2);
-        }
-        if (!arr.length) pruef((l + u) / 2);
-      });
+      for (const v of versuche) {
+        bereich = v;
+        bereich.forEach(([l, u]) => {
+          pruef(l); pruef(u);
+          for (let i = 0; i < arr.length; i++) {
+            if (arr[i] < l - zielMs * 2 || arr[i] > u + zielMs * 2) continue;
+            pruef(arr[i] + zielMs); pruef(arr[i] - zielMs);
+            if (i + 1 < arr.length) pruef((arr[i] + arr[i + 1]) / 2);
+          }
+          if (!arr.length) pruef((l + u) / 2);
+        });
+        if (bestS != null) break;
+      }
       if (bestS == null) { gestrichen++; return; }
       b.T = bestS - x.rel; ok++;
       einsortieren(arr, bestS);

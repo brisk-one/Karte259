@@ -780,30 +780,49 @@ test("Laufzeit-Richtwerte für Offs und AGs: überschritten nur, wenn nötig, da
 });
 
 test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Rest in den Sitzungen (Dennis 11.11.2026, 1.1a und 1.2a)", () => {
-  const input = szenario({fakes_per_village: 3, fake_vorlauf_h: 2});
+  // Zeiträume ab 10 Uhr, damit 2 h vor der ersten Off noch im Zeitraum liegen (seit 13.11.2026 nur dort)
+  const weit = {windows: K.parseFenster("02.11.2026 10:00 bis 20:00\n02.11.2026 22:00 bis 23:30").fenster};
+  const input = szenario({fakes_per_village: 3, fake_vorlauf_h: 2}, weit);
   const r = K.plan(input);
   assert.deepEqual(K.pruefePlan(r, input), []);
   const t0 = Math.min(...r.items.filter(i => i.kind !== "fake").map(i => i.sendMs));
   const f = r.items.filter(i => i.kind === "fake"), frueh = f.filter(i => i.sendMs < t0 - 3600000);
   assert.ok(frueh.length > 0, "frühe Fakes vorhanden");
-  assert.ok(frueh.length <= Math.ceil(f.length / 2), "nicht alle Fakes früh: " + frueh.length + " von " + f.length);
+  assert.ok(frueh.length <= Math.ceil(f.length / 3), "rund ein Viertel früh: " + frueh.length + " von " + f.length);
   const erste = Math.min(...f.map(i => i.sendMs));
   assert.ok(t0 - erste >= 1.5 * 3600000 && t0 - erste <= 3 * 3600000, "erste Fakes rund 2 h vorher: " + (t0 - erste) / 3600000);
   assert.ok(r.warnings.some(w => w.art === "vorlauf" && /Fake-Vorlauf 2 h/.test(w.text)));
   // ohne Vorlauf kein Fake so früh
-  const r0 = K.plan(szenario({fakes_per_village: 3}));
+  const r0 = K.plan(szenario({fakes_per_village: 3}, weit));
   const t00 = Math.min(...r0.items.filter(i => i.kind !== "fake").map(i => i.sendMs));
   assert.equal(r0.items.filter(i => i.kind === "fake" && i.sendMs < t00 - 3600000).length, 0);
   // Spanne 1 bis 3 h (Dennis 12.11.2026): erste Fakes irgendwo dazwischen
-  const rs = K.plan(szenario({fakes_per_village: 3, fake_vorlauf_h: 1, fake_vorlauf_bis_h: 3}));
+  const rs = K.plan(szenario({fakes_per_village: 3, fake_vorlauf_h: 1, fake_vorlauf_bis_h: 3}, weit));
   const fs = rs.items.filter(i => i.kind === "fake"), t0s = Math.min(...rs.items.filter(i => i.kind !== "fake").map(i => i.sendMs));
   const vor = (t0s - Math.min(...fs.map(i => i.sendMs))) / 3600000;
   assert.ok(vor >= 0.9 && vor <= 3.6, "erste Fakes in der Spanne: " + vor);
   assert.ok(rs.warnings.some(w => w.art === "vorlauf" && /Fake-Vorlauf 1 bis 3 h/.test(w.text)));
-  // so früh nicht erreichbar: Hinweis statt Fehler
-  const r10 = K.plan(szenario({fakes_per_village: 3, fake_vorlauf_h: 10}));
-  assert.ok(r10.warnings.some(w => w.art === "vorlauf" && /so früh keine Fakes möglich/.test(w.text)));
-  assert.equal(r10.items.filter(i => i.kind === "fake").length, r0.items.filter(i => i.kind === "fake").length);
+  // so früh nicht erreichbar (Zeitraum da, aber Abschick vor jetzt): Hinweis statt Fehler
+  const ganz = {windows: K.parseFenster("02.11.2026 00:00 bis 23:30").fenster};
+  const r10 = K.plan(szenario({fakes_per_village: 3, fake_vorlauf_h: 10}, ganz)), r10o = K.plan(szenario({fakes_per_village: 3}, ganz));
+  assert.ok(r10.warnings.some(w => w.art === "vorlauf" && /so früh keine Fakes möglich/.test(w.text)), r10.warnings.map(w => w.text).join(" | "));
+  assert.equal(r10.items.filter(i => i.kind === "fake").length, r10o.items.filter(i => i.kind === "fake").length);
+});
+
+test("Fake-Vorlauf nur in den Abschickzeiträumen des Spielers (Dennis 13.11.2026 01:12)", () => {
+  // Alpha darf ab 10 Uhr, Beta erst ab 18 Uhr: 2 h vor der ersten Off des Plans hat nur Alpha einen Zeitraum
+  const input = szenario({fakes_per_village: 3, fake_vorlauf_h: 2}, {windows: K.parseFenster("02.11.2026 10:00 bis 20:00\n02.11.2026 22:00 bis 23:30").fenster});
+  input.attackers[1].windows = K.parseFenster("02.11.2026 18:00 bis 20:00\n02.11.2026 22:00 bis 23:30").fenster;
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  const t0 = Math.min(...r.items.filter(i => i.kind !== "fake").map(i => i.sendMs));
+  const von = id => r.items.filter(i => i.att === id), b = input.attackers[1].id;
+  const betaKern = Math.min(...von(b).filter(i => i.kind !== "fake").map(i => i.sendMs)), betaFakes = von(b).filter(i => i.kind === "fake");
+  assert.ok(betaFakes.length > 0);
+  // Beta: keine frühe Sitzung, seine Fakes bleiben bei seinen Offs und AGs (mit Rand); Alpha: frühe Fakes vor T0
+  assert.ok(betaFakes.every(i => i.sendMs >= betaKern - 31 * 60000), "Beta nicht früh");
+  assert.ok(von(input.attackers[0].id).some(i => i.kind === "fake" && i.sendMs < t0 - 3600000), "Alpha schickt früh");
+  assert.ok(r.warnings.some(w => w.art === "vorlauf" && /keine frühen Fakes bei Beta[^;]*kein Abschickzeitraum in dieser Spanne/.test(w.text)), r.warnings.map(w => w.text).join(" | "));
 });
 
 test("Übrige Offs zusätzlich auf AG-Ziele, wenigste Offs zuerst, nur in Zeiträumen und Sitzungen (Dennis 12.11.2026)", () => {
