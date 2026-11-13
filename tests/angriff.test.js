@@ -1196,3 +1196,119 @@ test("Exporte für DS-Ultimate und DS Workbench immer nach Abschickzeit (Dennis 
   assert.deepEqual(K.importDSU([a, c, b]).items.map(x => x.n || x.destination), ["b", 4, "a"]);
   assert.deepEqual(K.importWB([a, c, b]).split("\n").map(z => z.split("&")[1]), ["3", "4", "2"]);
 });
+
+/* ---------- Befehlsübersicht, AGs angleichen, Offs staffeln (Dennis 13.11.2026 15:40) ---------- */
+function staffelSzenario() {
+  const w = K.makeWorld(), T0 = Date.UTC(2026, 10, 14, 8, 30);            // 09:30 Berlin, kein Nachtbonus
+  const t = {id: 900, x: 520, y: 520, owner: 7};
+  const dorf = (id, x, y) => ({id, x, y, name: "D" + id});
+  const u = x => Object.assign(Object.fromEntries(K.UNITS.map(n => [n, 0])), x);
+  const mk = (v, art, ank, units, spieler) => {
+    const slow = art === "ag" ? "snob" : "ram";
+    return {source: v.id, destination: t.id, v, t, art, fake: false, type: art === "ag" ? 11 : 8, slow, units, spieler: spieler || "A",
+            arrivalMs: ank, sendMs: ank - K.travelS(w, slow, K.dist(v, t)) * 1000};
+  };
+  const offs = [dorf(1, 500, 500), dorf(2, 505, 498), dorf(3, 510, 503)].map((v, i) => mk(v, "off", T0 + i * 200, u({axe: 6000, light: 2500, ram: 250})));
+  const g = dorf(4, 512, 512);
+  const ags = [0, 1, 2, 3].map(i => mk(g, "ag", T0 + 600 + i * 200, u({axe: 100, snob: 1}), "B"));
+  return {w, T0, t, offs, ags, items: offs.concat(ags)};
+}
+
+test("Befehlsübersicht lesen: heute, morgen, am, Serverzeit je Übersicht, Rückkehr zählt nicht", () => {
+  const z = (lbl, ziel, von, wann, zahlen) => "   " + lbl + " Ziel (" + ziel + ") K55 \t[001] Dorf (" + von + ") K56\t" + wann + "\t" + zahlen.join("\t");
+  const nullen = n => Array(n).fill(0);
+  const text = [
+    z("Angriff auf", "598|568", "621|594", "morgen um 08:04:09:663", [0, 0, 0, 0, 15, 0, 0, 0, 0, 10, 0, 0]),
+    z("Rückkehr von", "605|512", "629|597", "heute um 18:02:40:000", nullen(12)),
+    z("Angriff auf", "619|604", "640|632", "am 15.11. um 08:14:16:226", [0, 0, 5552, 0, 10, 2872, 0, 2, 300, 77, 0, 1]),
+    "Serverzeit: 15:39:29 13/11/2026 | Truppenfilter",
+    z("Angriff auf", "600|600", "601|601", "heute um 23:59:59", nullen(12)),
+    "Serverzeit: 01:00:00 01/12/2026",
+  ].join("\n");
+  const r = K.parseBefehle(text, Date.UTC(2026, 0, 1));
+  assert.equal(r.befehle.length, 3);
+  assert.deepEqual(r.befehle[0].nach, {x: 598, y: 568});
+  assert.deepEqual(r.befehle[0].von, {x: 621, y: 594});
+  assert.equal(K.fmtZeit(r.befehle[0].arrivalMs, true), "14.11.2026 08:04:09:663");
+  assert.equal(r.befehle[0].units.catapult, 10);
+  assert.equal(K.fmtZeit(r.befehle[1].arrivalMs, true), "15.11.2026 08:14:16:226");
+  assert.equal(r.befehle[1].units.axe, 5552);
+  assert.equal(r.befehle[1].units.snob, 1);
+  assert.equal(K.fmtZeit(r.befehle[2].arrivalMs), "01.12.2026 23:59:59", "eigene Serverzeit je Übersicht");
+});
+
+test("AGs an abgeschickte Offs angleichen: später immer, früher nur wenn noch Zeit, Train bleibt in sich gleich", () => {
+  const s = staffelSzenario(), jetzt = Math.min(...s.items.map(i => i.sendMs)) - 3600000;
+  // Off 2 ist unterwegs und kommt 7 Minuten später an als geplant
+  const bef = [{von: {x: 505, y: 498}, nach: {x: 520, y: 520}, arrivalMs: s.T0 + 200 + 7 * 60000, units: s.offs[1].units}];
+  const ab = K.befehleAbgleichen(s.items, bef);
+  assert.equal(ab.zugeordnet, 1);
+  assert.equal(s.offs[1].gesendet, s.T0 + 200 + 7 * 60000);
+  const abst = s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs), lauf = s.ags.map(a => a.arrivalMs - a.sendMs);
+  const r = K.agsAngleichen(s.items, {now: jetzt});
+  assert.equal(r.length, 1);
+  assert.equal(r[0].art, "spaeter");
+  assert.equal(s.ags[0].arrivalMs, s.T0 + 200 + 7 * 60000 + 200, "erstes AG 200 ms hinter der echten letzten Off");
+  assert.deepEqual(s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs), abst);
+  assert.deepEqual(s.ags.map(a => a.arrivalMs - a.sendMs), lauf);
+  // Off kommt früher als geplant: AGs rücken nach vorn, wenn sie noch rechtzeitig loskönnen
+  const s2 = staffelSzenario();
+  K.befehleAbgleichen(s2.items, [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s2.T0 - 120000, units: s2.offs[2].units}]);
+  const r2 = K.agsAngleichen(s2.items, {now: jetzt});
+  assert.equal(r2[0].art, "frueher");
+  assert.equal(s2.ags[0].arrivalMs, s2.T0 + 200 + 200, "Anker ist die späteste Off (Off 2 noch geplant)");
+  // zu spät, um früher abzuschicken: AGs bleiben
+  const s3 = staffelSzenario();
+  K.befehleAbgleichen(s3.items, [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s3.T0 - 600000, units: s3.offs[2].units},
+                                 {von: {x: 505, y: 498}, nach: {x: 520, y: 520}, arrivalMs: s3.T0 - 600000, units: s3.offs[1].units},
+                                 {von: {x: 500, y: 500}, nach: {x: 520, y: 520}, arrivalMs: s3.T0 - 600000, units: s3.offs[0].units}]);
+  const vorher = s3.ags.map(a => a.arrivalMs);
+  const r3 = K.agsAngleichen(s3.items, {now: s3.ags[0].sendMs - 30000});
+  assert.equal(r3[0].art, "frueherNichtMoeglich");
+  assert.deepEqual(s3.ags.map(a => a.arrivalMs), vorher);
+});
+
+test("Offs staffeln: zuletzt abgeschickte Off in der Sekunde des Trains, andere 5 bis 15 Minuten vorher; zurück auf die Sekunde", () => {
+  const s = staffelSzenario(), jetzt = Math.min(...s.items.map(i => i.sendMs)) - 3600000;
+  const letzte = s.offs.slice().sort((a, b) => b.sendMs - a.sendMs)[0];
+  const T = s.ags[0].arrivalMs;
+  const r = K.offsZeitenNeu(s.items, {art: "staffeln", minMin: 5, maxMin: 15, now: jetzt, world: s.w, rng: K.mulberry32(3)});
+  assert.equal(r.ziele, 1);
+  assert.equal(letzte.arrivalMs, T - 200);
+  s.offs.filter(o => o !== letzte).forEach(o => {
+    assert.ok(T - o.arrivalMs >= 5 * 60000 - 30000 && T - o.arrivalMs <= 15 * 60000 + 30000, (T - o.arrivalMs) / 60000 + " min");
+    assert.ok(o.sendMs < letzte.sendMs, "die anderen gehen vorher los");
+  });
+  s.items.forEach(i => assert.equal(i.arrivalMs - i.sendMs, K.travelS(s.w, i.slow, K.dist(i.v, i.t)) * 1000));
+  assert.deepEqual(s.ags.map(a => a.arrivalMs), [0, 1, 2, 3].map(i => s.T0 + 600 + i * 200), "AGs unverändert");
+  // Mindestabstand der Abschickzeiten bleibt
+  const sends = s.offs.map(o => o.sendMs).sort((a, b) => a - b);
+  for (let i = 1; i < sends.length; i++) assert.ok(sends[i] - sends[i - 1] >= 3000);
+  // zurück in eine Sekunde: in Abschickreihenfolge je 200 ms vor dem Train
+  K.offsZeitenNeu(s.items, {art: "sekunde", now: jetzt, world: s.w});
+  const nachSend = s.offs.slice().sort((a, b) => a.sendMs - b.sendMs).map(o => T - o.arrivalMs);
+  assert.deepEqual(nachSend, [600, 400, 200]);
+  // unterwegs oder zu knapp: bleibt
+  const s2 = staffelSzenario();
+  s2.offs[0].gesendet = s2.offs[0].arrivalMs;
+  const fest = s2.offs[0].arrivalMs;
+  K.offsZeitenNeu(s2.items, {art: "staffeln", now: Math.min(...s2.items.map(i => i.sendMs)) - 3600000, world: s2.w, rng: K.mulberry32(1)});
+  assert.equal(s2.offs[0].arrivalMs, fest);
+  // Nachtbonus: AG kurz nach Ende des Nachtbonus, Offs dürfen nicht hinein
+  const s3 = staffelSzenario();
+  const nachtEnde = Date.UTC(2026, 10, 14, 7, 0);   // 08:00 Berlin
+  const d = nachtEnde + 4 * 60000 - s3.ags[0].arrivalMs;
+  s3.items.forEach(i => { i.arrivalMs += d; i.sendMs += d; });
+  K.offsZeitenNeu(s3.items, {art: "staffeln", minMin: 5, maxMin: 15, now: Math.min(...s3.items.map(i => i.sendMs)) - 3600000, world: s3.w, rng: K.mulberry32(2)});
+  s3.offs.forEach(o => assert.ok(!K.istNacht(s3.w, o.arrivalMs), K.fmtZeit(o.arrivalMs, true)));
+});
+
+test("Export eines eingelesenen Befehls mit geänderter Ankunft: neue Ankunft im DS-Ultimate-JSON", () => {
+  const roh = {source: 1, destination: 2, slowest_unit: 8, arrival_time: 1793600000, type: 8, support_boost: 0, tribe_skill: 0, ms: 250};
+  const it = {source: 1, destination: 2, arrivalMs: 1793600000250, sendMs: 1793590000250, units: {}, roh};
+  assert.deepEqual(K.importDSU([it]).items[0], roh, "unverändert durchgereicht");
+  it.arrivalMs += 300000 + 500;
+  const o = K.importDSU([it]).items[0];
+  assert.equal(o.arrival_time, 1793600300);
+  assert.equal(o.ms, 750);
+});

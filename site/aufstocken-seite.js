@@ -6,8 +6,10 @@ const SPEICHER = "k259-aufstocken";
 
 /* ---------- Zustand ---------- */
 const neuerSpieler = () => ({uebersicht: "", fenster: "", soll: "", rammenMax: ""});
-let S = {text: "", spieler: {}, dazu: [], ank: "", ankPlan: "", arten: {ag: true, off: true, fake: true},
-         cfg: {fakes_max_je_dorf: 4, fake_extra_pop: 5, min_send_gap_s: 3}, expFmt: "dsu", seed: 1, aktiv: false};
+// texte: eingefügte Pläne (Dennis 13.11.2026 15:40: mehrere); befehle: Befehlsübersichten; zeiten: angeglichene oder
+// gestaffelte Ankünfte je Befehl (Schlüssel aus Herkunft, Ziel, eingelesener Ankunft und Symbol)
+let S = {texte: [""], befehle: "", zeiten: {}, staffel: {min: 5, max: 15}, spieler: {}, dazu: [], ank: "", ankPlan: "",
+         arten: {ag: true, off: true, fake: true}, cfg: {fakes_max_je_dorf: 4, fake_extra_pop: 5, min_send_gap_s: 3}, expFmt: "dsu", seed: 1, aktiv: false};
 /** Gespeicherter Stand des Angriffsplaners in diesem Browser ({v: 1, S}), sonst null. */
 function planerStand() {
   try {
@@ -20,6 +22,11 @@ function laden() {
     const d = JSON.parse(localStorage.getItem(SPEICHER) || "null");
     if (d && typeof d === "object") S = Object.assign(S, d, {cfg: Object.assign({}, S.cfg, d.cfg), arten: Object.assign({}, S.arten, d.arten)});
   } catch (e) { /* Speicher gesperrt oder kaputt: Standard */ }
+  if (typeof S.text === "string") { if (S.text.trim()) S.texte = [S.text]; delete S.text; }   // Stand vor mehreren Plänen
+  if (!Array.isArray(S.texte) || !S.texte.length) S.texte = [""];
+  if (!S.zeiten || typeof S.zeiten !== "object") S.zeiten = {};
+  S.staffel = Object.assign({min: 5, max: 15}, S.staffel);
+  if (typeof S.befehle !== "string") S.befehle = "";
   // einmal: Fake-Einstellungen aus dem Angriffsplaner dieses Browsers übernehmen (Dennis 13.11.2026 14:36: stand auf 4 statt 3)
   if (!S.cfgAusPlaner) {
     const a = planerStand();
@@ -59,7 +66,9 @@ const dorf = i => { const r = V.rows[i]; return {id: IDS[i], x: Math.floor(r[0] 
 const koord = d => d.x + "|" + d.y;
 
 /* ---------- Plan einlesen ---------- */
-let PLAN = null;           // {items, fehler, meta}
+let PLAN = null;           // {items, fehler, meta, je: [{n, fehler}] je eingefügtem Plan}
+let BEF = null;            // gelesene Befehlsübersichten und Abgleich
+let AENDERUNG = null;      // letzte Zeitänderung (Knöpfe in Abschnitt 3)
 let NEU = null;            // Ergebnis von fakesNachImport
 const UEB = new Map();     // Spieler → gelesene Truppenübersicht
 function uebersichtLesen(name) {
@@ -74,8 +83,16 @@ function uebersichtLesen(name) {
   return o;
 }
 function einlesen() {
-  NEU = null;
-  PLAN = S.text.trim() ? K.parsePlan(S.text) : null;
+  NEU = null; BEF = null;
+  // alle eingefügten Pläne zusammen; Fehler mit der Nummer des Plans
+  const teile = S.texte.map(t => t.trim() ? K.parsePlan(t) : null);
+  PLAN = teile.some(Boolean) ? {items: [], fehler: [], meta: {}, je: teile.map(p => p ? {n: p.items.length, fehler: p.fehler} : null)} : null;
+  teile.forEach((p, i) => {
+    if (!p) return;
+    p.items.forEach(it => { it.plan = i; PLAN.items.push(it); });
+    p.fehler.forEach(f => PLAN.fehler.push((teile.filter(Boolean).length > 1 ? "Plan " + (i + 1) + ": " : "") + f));
+    if (!PLAN.meta.world && p.meta && p.meta.world) PLAN.meta = p.meta;
+  });
   if (!PLAN || !IDS) return;
   // Spieler des Plans ohne eigene Übersicht: Übersicht und Abschickzeiträume aus dem Angriffsplaner dieses Browsers
   // (Dennis 13.11.2026 14:36: Aufstocken ohne Übersicht brachte nichts, ohne Hinweis)
@@ -107,9 +124,19 @@ function einlesen() {
     it.spieler = ovVon.get(it.source) || (it.v ? spielerName(it.v.owner) : "Dorf " + it.source);
     it.art = K.importArt(it);
     it.sendMs = it.v && it.t ? it.arrivalMs - K.travelS(W, it.slow || "ram", K.dist(it.v, it.t)) * 1000 : null;
+    // angeglichene oder gestaffelte Ankunft (Abschnitt 3) wieder anwenden
+    it.arrivalOrig = it.arrivalMs;
+    it.key = it.source + ">" + it.destination + "@" + it.arrivalMs + "#" + it.type;
+    const z = S.zeiten[it.key];
+    if (z != null && it.sendMs != null) { it.sendMs += z - it.arrivalMs; it.arrivalMs = z; }
   });
+  // Befehlsübersichten: was schon unterwegs ist (fest, mit echter Ankunft)
+  if (S.befehle.trim()) {
+    const b = K.parseBefehle(S.befehle, Date.now(), SPALTEN);
+    BEF = Object.assign(b, K.befehleAbgleichen(PLAN.items, b.befehle));
+  }
   // Ankunft der neuen Fakes: Standard der Zeitraum des Plans; neuer Plan, neuer Standard
-  const arr = PLAN.items.map(it => it.arrivalMs);
+  const arr = PLAN.items.map(it => it.arrivalOrig);
   if (arr.length) {
     const sig = Math.min(...arr) + ":" + Math.max(...arr);
     if (S.ankPlan !== sig || !S.ank.trim()) { S.ankPlan = sig; S.ank = K.fmtZeit(Math.min(...arr)) + " bis " + K.fmtZeit(Math.max(...arr)); }
@@ -150,14 +177,23 @@ function befehlsTabelle(items) {
   const rows = items.map(it => {
     const art = el("span", "ap-kind k-" + it.art, ART[it.art]);
     if (it.neu) art.append(el("span", "au-neu", "neu"));
+    if (it.gesendet != null) art.append(el("span", "au-weg", "unterwegs"));
+    else if (it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) art.append(el("span", "au-geaendert", "geändert"));
+    const ank = el("span", null, zeitKurz(it.gesendet != null ? it.gesendet : it.arrivalMs, true));
+    if (it.gesendet != null && Math.abs(it.gesendet - it.arrivalMs) >= 1000) ank.append(el("span", "au-alt", "geplant " + zeitKurz(it.arrivalMs, true)));
+    else if (it.gesendet == null && it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) ank.append(el("span", "au-alt", "eingelesen " + zeitKurz(it.arrivalOrig, true)));
     return [["", "num"], [it.spieler], [it.v ? it.v.name + " (" + koord(it.v) + ")" : "Dorf-ID " + it.source + " (unbekannt)", null, it.v ? koord(it.v) : ""],
             [it.t ? koord(it.t) : "Dorf-ID " + it.destination + " (unbekannt)"], [it.t ? spielerName(it.t.owner) : "–"],
-            [art, null, ART[it.art] + (it.neu ? " neu" : "")], [el("span", "ap-units", einheitenText(it.units))],
-            [it.sendMs != null ? zeitKurz(it.sendMs) : "–", "num", it.sendMs], [zeitKurz(it.arrivalMs, true), "num", it.arrivalMs],
+            [art, null, ART[it.art] + (it.neu ? " neu" : "") + (it.gesendet != null ? " unterwegs" : "")], [el("span", "ap-units", einheitenText(it.units))],
+            [it.sendMs != null ? zeitKurz(it.sendMs) : "–", "num", it.sendMs], [ank, "num", it.gesendet != null ? it.gesendet : it.arrivalMs],
             [it.sendMs != null ? dauer(it.arrivalMs - it.sendMs) : "–", "num", it.sendMs != null ? it.arrivalMs - it.sendMs : null]];
   });
   const t = table(cols, rows, {counter: 0, sort: 7, dir: "asc"});
-  [...t.tBodies[0].rows].forEach((tr, i) => { if (items[i] && items[i].neu) tr.classList.add("neu"); });
+  [...t.tBodies[0].rows].forEach((tr, i) => {
+    const it = items[i];
+    if (it && it.neu) tr.classList.add("neu");
+    else if (it && it.gesendet == null && it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) tr.classList.add("geaendert");
+  });
   const box = el("div", "ap-scroll"); box.append(t);
   return box;
 }
@@ -236,8 +272,40 @@ function pruefListe(its, mitFakes) {
   return ul.childElementCount ? ul : null;
 }
 
+/** Eingabefelder für die Pläne; neu gebaut nur beim Hinzufügen und Entfernen, sonst bleibt der Fokus. */
+function planFelder() {
+  const box = $("plaene");
+  box.replaceChildren(...S.texte.map((t, i) => {
+    const d = el("div", "au-plan"), kopf = el("div", "kopf");
+    kopf.append(el("strong", null, "Plan " + (i + 1)), el("span", "ap-note", ""));
+    if (S.texte.length > 1) {
+      const x = el("button", "tw", "entfernen"); x.type = "button";
+      x.addEventListener("click", () => { S.texte.splice(i, 1); planGeaendert(); planFelder(); });
+      kopf.append(x);
+    }
+    const ta = el("textarea", "ap-ta" + (S.texte.length > 1 ? " klein" : "")); ta.spellcheck = false; ta.value = t;
+    ta.placeholder = '{"title":null,"uvMode":0,"world":"de259","items":[…]}';
+    const neu = () => { if (S.texte[i] === ta.value) return; S.texte[i] = ta.value; planGeaendert(); };
+    ta.addEventListener("change", neu);
+    ta.addEventListener("paste", () => setTimeout(neu, 0));
+    d.append(kopf, ta);
+    return d;
+  }));
+}
+function planGeaendert() { S.aktiv = false; AENDERUNG = null; speichern(); spaeter(() => { einlesen(); zeigen(); }); }
 function zeigenPlan() {
   const note = $("plan-note");
+  [...$("plaene").querySelectorAll(".au-plan")].forEach((d, i) => {
+    const j = PLAN && PLAN.je ? PLAN.je[i] : null, n = d.querySelector(".kopf .ap-note");
+    if (n) { n.textContent = j ? plural(j.n, "Befehl", "Befehle") + (j.fehler.length ? ", " + j.fehler.length + " nicht gelesen" : "") : ""; n.className = j && j.fehler.length ? "ap-warn" : "ap-note"; }
+  });
+  const bn = $("befehle-note");
+  if (BEF) {
+    bn.className = BEF.fehler.length ? "ap-warn" : "ap-note";
+    bn.textContent = plural(BEF.befehle.length, "Angriff", "Angriffe") + " gelesen, " + BEF.zugeordnet + " davon im Plan gefunden (unterwegs, bleiben fest)" +
+      (BEF.ohnePlan.length ? ", " + BEF.ohnePlan.length + " ohne passenden Befehl im Plan" : "") + (BEF.fehler.length ? "; " + BEF.fehler.slice(0, 2).join("; ") : "") +
+      (BEF.befehle.length && !S.befehle.includes("Serverzeit") ? ". Ohne Zeile „Serverzeit“ gelten „heute“ und „morgen“ ab dem heutigen Tag." : "");
+  } else bn.textContent = S.befehle.trim() ? "Noch kein Plan eingelesen." : "";
   if (!IDS) { note.textContent = "Dorf-IDs fehlen in den Weltdaten, Einlesen nicht möglich."; note.className = "ap-warn"; return; }
   if (!PLAN) { note.textContent = ""; return; }
   const it = PLAN.items, n = a => it.filter(x => x.art === a).length, unb = it.filter(x => !x.v || !x.t).length;
@@ -249,11 +317,82 @@ function zeigenPlan() {
       (unb ? "; " + unb + " mit Dorf, das nicht in den Weltdaten steht (Laufzeit unbekannt, für das Aufstocken ohne Wirkung)" : "") +
       (PLAN.fehler.length ? "; " + PLAN.fehler.length + " nicht gelesen: " + PLAN.fehler.slice(0, 3).join("; ") : "");
 }
+/** Zeiten der Offs und AGs anpassen (Dennis 13.11.2026 15:40): AGs an abgeschickte Offs angleichen, Offs vor dem AG
+    staffeln oder wieder in eine Sekunde legen, alles zurück. Änderungen bleiben im Browser (S.zeiten). */
+function zeitenAendern(was) {
+  if (!PLAN) return;
+  const vorher = new Map(PLAN.items.map(it => [it, it.arrivalMs]));
+  let info;
+  if (was === "zurueck") {
+    S.zeiten = {};
+    PLAN.items.forEach(it => { if (it.arrivalOrig != null && it.sendMs != null) { it.sendMs += it.arrivalOrig - it.arrivalMs; it.arrivalMs = it.arrivalOrig; } });
+    info = {art: "zurueck"};
+  } else if (was === "angleichen") {
+    info = {art: "angleichen", liste: K.agsAngleichen(PLAN.items, {now: Date.now()})};
+  } else {
+    const rng = K.mulberry32((Date.now() & 0x7fffffff) || 1);
+    info = Object.assign({art: was}, K.offsZeitenNeu(PLAN.items, {art: was, minMin: S.staffel.min, maxMin: S.staffel.max, now: Date.now(), world: W,
+      minGapMs: (S.cfg.min_send_gap_s || 0) * 1000, rng}));
+  }
+  const geaendert = PLAN.items.filter(it => it.arrivalMs !== vorher.get(it));
+  PLAN.items.forEach(it => { if (it.key == null) return; if (it.arrivalMs === it.arrivalOrig) delete S.zeiten[it.key]; else S.zeiten[it.key] = it.arrivalMs; });
+  AENDERUNG = Object.assign(info, {geaendert: geaendert.map(it => ({it, alt: vorher.get(it)})), zeit: Date.now()});
+  speichern();
+  if (S.aktiv) aufstocken();
+  zeigen();
+}
+function zeitenBox(its) {
+  const box = el("div", "au-box");
+  const agZiele = new Set(its.filter(x => x.art === "ag" && x.t).map(x => x.t.id));
+  box.append(el("h3", null, "Zeiten anpassen"),
+    el("p", "ap-note", "„AGs angleichen“: Jeder AG-Train landet direkt hinter der Off, die auf sein Ziel zuletzt ankommt; für schon abgeschickte Offs zählt die Ankunft laut Befehlsübersicht (Abschnitt 2). „Offs staffeln“: Auf jedes AG-Ziel landet nur die Off, die als letzte abgeschickt wird, in der Sekunde des AG-Trains, die anderen zufällig " +
+      S.staffel.min + " bis " + S.staffel.max + " Minuten vorher, nie im Nachtbonus. „Offs auf die Sekunde“: alle Offs wieder direkt vor dem Train, je 200 ms. Unverändert bleiben Befehle, die schon unterwegs sind oder dafür vor jetzt plus einer Minute losmüssten, und der Mindestabstand zwischen den Abschickzeiten eines Spielers."));
+  const zahl = (k, lab) => eingabe("n", S.staffel[k], v => { const n = parseFloat(String(v).replace(",", ".")); if (!isNaN(n)) S.staffel[k] = Math.min(60, Math.max(0, n)); if (S.staffel.max < S.staffel.min) S.staffel.max = S.staffel.min; speichern(); spaeter(zeigenKern); }, {type: "number", min: 0, max: 60, "data-k": "staffel:" + k, title: lab});
+  const r1 = el("div", "ap-row");
+  r1.append(el("span", "ap-note", "Offs staffeln von"), zahl("min", "Minuten vorher, mindestens"), el("span", "ap-note", "bis"), zahl("max", "Minuten vorher, höchstens"), el("span", "ap-note", "Minuten vor dem AG"));
+  const r2 = el("div", "ap-row");
+  [["angleichen", "AGs an abgeschickte Offs angleichen"], ["staffeln", "Offs staffeln"], ["sekunde", "Offs auf die Sekunde"], ["zurueck", "↺ Zeiten wie eingelesen"]].forEach(([w, t]) => {
+    const b = el("button", "tw", t); b.type = "button";
+    if (w === "zurueck") b.disabled = !Object.keys(S.zeiten).length;
+    if (w !== "zurueck") b.disabled = !agZiele.size;
+    b.addEventListener("click", () => zeitenAendern(w));
+    r2.append(b);
+  });
+  box.append(r1, r2);
+  if (!agZiele.size) box.append(el("p", "ap-note", "Keine AGs im Plan: nichts anzugleichen oder zu staffeln."));
+  if (AENDERUNG) {
+    const a = AENDERUNG, ul = el("ul", "ap-list"), um = hmf.format(new Date(a.zeit)) + " Uhr: ";
+    const min = ms => ms >= 60000 ? (Math.round(ms / 6000) / 10).toLocaleString("de-DE") + " min" : (Math.round(ms / 100) / 10).toLocaleString("de-DE") + " s";
+    if (a.art === "zurueck") ul.append(el("li", null, um + "alle Zeiten wie eingelesen."));
+    else if (a.art === "angleichen") {
+      if (!a.liste.length) ul.append(el("li", null, um + "alle AG-Trains liegen schon direkt hinter ihrer letzten Off."));
+      a.liste.forEach(x => {
+        const z = koord(x.t) + " (" + spielerName(x.t.owner) + "): ";
+        if (x.art === "spaeter") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " später, jetzt direkt hinter der letzten Off."));
+        else if (x.art === "frueher") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " früher, jetzt direkt hinter der letzten Off."));
+        else if (x.art === "frueherNichtMoeglich") ul.append(el("li", "warn", um + z + "AG-Train landet " + min(x.ms) + " nach der letzten Off; früher abschicken geht nicht mehr, er bleibt."));
+        else if (x.art === "zuSpaet") ul.append(el("li", "warn", um + z + "AG schon unterwegs und landet vor der letzten Off."));
+      });
+    } else ul.append(el("li", null, um + (a.offs ? plural(a.offs, "Off", "Offs") + " auf " + plural(a.ziele, "Ziel", "Zielen") + (a.art === "staffeln" ? " gestaffelt." : " wieder direkt vor den Train gelegt.") : "nichts zu ändern (Offs schon so, unterwegs oder zu knapp vor jetzt).")));
+    box.append(ul);
+    if (a.geaendert.length) {
+      const d = el("details", "au-det");
+      d.append(el("summary", null, plural(a.geaendert.length, "Befehl", "Befehle") + " geändert"));
+      const ul2 = el("ul", "au-sitz");
+      a.geaendert.slice().sort((p, q) => p.it.sendMs - q.it.sendMs).forEach(({it, alt}) => ul2.append(el("li", null, it.spieler + ": " + ART[it.art] + " " + (it.v ? koord(it.v) : it.source) + " → " + (it.t ? koord(it.t) : it.destination) +
+        ", Abschick " + zeitKurz(it.sendMs - (it.arrivalMs - alt)) + " → " + zeitKurz(it.sendMs) + ", Ankunft " + zeitKurz(alt, true) + " → " + zeitKurz(it.arrivalMs, true))));
+      d.append(ul2);
+      box.append(d);
+    }
+  }
+  return box;
+}
 function zeigenKern() {
   const box = $("kern");
   if (!PLAN || !PLAN.items.length) { box.replaceChildren(el("p", "empty", "Noch kein Plan eingelesen.")); $("kern-hint").textContent = ""; return; }
   const its = PLAN.items.filter(x => x.art !== "fake");
-  $("kern-hint").textContent = its.length + " Befehle, unverändert aus dem eingelesenen Plan.";
+  const nG = its.filter(x => x.gesendet == null && x.arrivalOrig != null && x.arrivalMs !== x.arrivalOrig).length, nW = its.filter(x => x.gesendet != null).length;
+  $("kern-hint").textContent = its.length + " Befehle" + (nW ? ", " + nW + " davon unterwegs" : "") + (nG ? ", " + nG + " mit geänderter Zeit" : ", Zeiten wie eingelesen") + ".";
   if (!its.length) { box.replaceChildren(el("p", "empty", "Keine Offs oder AGs im Plan.")); return; }
   const namen = spielerListe().filter(n => its.some(x => x.spieler === n));
   const sum = el("div", "ap-sum");
@@ -262,9 +401,13 @@ function zeigenKern() {
     d.append(el("b", null, n), document.createTextNode(" " + e.filter(x => x.art === "off").length + " Offs, " + e.filter(x => x.art === "ag").length + " AGs"));
     sum.append(d);
   });
-  const ausw = [["Alle", [["Offs und AGs", its, "offs_ags"]]]];
-  if (namen.length > 1) namen.forEach(n => ausw.push([n, [["Offs und AGs", its.filter(x => x.spieler === n), "offs_ags_" + dateiTeil(n)]]]));
-  box.replaceChildren(...[sum, pruefListe(its, false), exportBox(ausw, "kern"), befehlsTabelle(its)].filter(Boolean));
+  const offen = x => x.gesendet == null, geaendert = x => offen(x) && x.arrivalOrig != null && x.arrivalMs !== x.arrivalOrig;
+  const knoepfe = (a, name) => [["Offs und AGs", a, name], ["noch nicht abgeschickt", a.filter(offen), name + "_offen"], ["nur geänderte", a.filter(geaendert), name + "_geaendert"]];
+  const ausw = [["Alle", knoepfe(its, "offs_ags")]];
+  if (namen.length > 1) namen.forEach(n => ausw.push([n, knoepfe(its.filter(x => x.spieler === n), "offs_ags_" + dateiTeil(n))]));
+  const ex = exportBox(ausw, "kern");
+  if (its.some(geaendert)) ex.append(el("p", "ap-warn", "Geänderte Zeiten: Die betroffenen Spieler brauchen den neuen Plan. In DS-Ultimate einen neuen Plan anlegen (oder die alten Befehle löschen) und „noch nicht abgeschickt“ importieren; nur die geänderten Befehle tauschen geht mit „nur geänderte“."));
+  box.replaceChildren(...[sum, pruefListe(its, false), zeitenBox(its), ex, befehlsTabelle(its)].filter(Boolean));
 }
 function feld(lab, ctl, extra) {
   const f = el("label", "au-f");
@@ -461,26 +604,30 @@ function rechnen() {
 }
 
 /* ---------- Bedienung ---------- */
-const ta = $("plan-text");
-const planNeu = () => { if (ta.value === S.text) return; S.text = ta.value; S.aktiv = false; speichern(); spaeter(() => { einlesen(); zeigen(); }); };
-ta.addEventListener("change", planNeu);
-ta.addEventListener("paste", () => setTimeout(planNeu, 0));
-$("plan-leeren").addEventListener("click", () => { ta.value = ""; S.text = ""; S.aktiv = false; speichern(); einlesen(); zeigen(); });
+$("plan-dazu").addEventListener("click", () => { S.texte.push(""); speichern(); planFelder(); zeigenPlan(); const t = $("plaene").querySelectorAll("textarea"); t[t.length - 1].focus(); });
+$("plan-leeren").addEventListener("click", () => { S.texte = [""]; S.zeiten = {}; planGeaendert(); planFelder(); });
 $("plan-datei-knopf").addEventListener("click", () => $("plan-datei").click());
 $("plan-datei").addEventListener("change", e => {
-  const f = e.target.files && e.target.files[0];
-  if (!f) return;
-  const r = new FileReader();
-  r.onload = () => { ta.value = String(r.result || ""); S.text = ta.value; S.aktiv = false; speichern(); einlesen(); zeigen(); };
-  r.readAsText(f);
+  const files = [...(e.target.files || [])];
   e.target.value = "";
+  if (!files.length) return;
+  Promise.all(files.map(f => f.text())).then(texte => {
+    // leere Felder zuerst füllen, dann anhängen
+    texte.forEach(t => { const i = S.texte.findIndex(x => !x.trim()); if (i >= 0) S.texte[i] = String(t || ""); else S.texte.push(String(t || "")); });
+    planGeaendert(); planFelder();
+  });
 });
+const bta = $("befehle-text");
+const befehleNeu = () => { if (bta.value === S.befehle) return; S.befehle = bta.value; speichern(); spaeter(() => { einlesen(); if (S.aktiv) aufstocken(); zeigen(); }); };
+bta.addEventListener("change", befehleNeu);
+bta.addEventListener("paste", () => setTimeout(befehleNeu, 0));
 $("zusatz-sperren").addEventListener("click", () => { zusatzSperren(); location.href = "./"; });
 
 /* ---------- Start ---------- */
 (async function () {
   laden();
-  ta.value = S.text;
+  planFelder();
+  bta.value = S.befehle;
   $("kern").replaceChildren(el("p", "empty", "Lade Weltdaten …"));
   const lade = n => loadData(n).catch(() => null);
   const [players, villages, ids, units, angriff] = await Promise.all(["players", "villages", "dorf_ids", "units", "angriff"].map(lade));

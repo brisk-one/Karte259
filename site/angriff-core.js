@@ -2303,7 +2303,12 @@ function importDSU(items, meta) {
   return {
     title: meta.title == null ? null : meta.title, uvMode: 0, world: meta.world || "de259", twWorld: meta.twWorld || meta.world || "de259",
     items: nachAbschick(items).map(it => {
-      if (it.roh) return Object.assign({}, it.roh);
+      if (it.roh) {
+        // eingelesen: unverändert, außer die Ankunft wurde angeglichen oder gestaffelt
+        const o = Object.assign({}, it.roh), sek = Math.floor(it.arrivalMs / 1000), ms = ((it.arrivalMs % 1000) + 1000) % 1000;
+        if (+o.arrival_time !== sek || (+o.ms || 0) !== ms) { o.arrival_time = sek; o.ms = ms; }
+        return o;
+      }
       const o = {source: it.source, destination: it.destination, slowest_unit: UNITS.indexOf(it.slow), arrival_time: Math.floor(it.arrivalMs / 1000),
                  type: it.type == null ? DSU_TYPE.fake : it.type, support_boost: 0, tribe_skill: 0, ms: ((it.arrivalMs % 1000) + 1000) % 1000};
       UNITS.forEach(u => { o[u] = String(it.units[u] || 0); });
@@ -2528,13 +2533,195 @@ function fakesNachImport(input) {
   return {neu, spieler: ergebnis, warnings, ziele: [...ziele.values()].map(z => ({t: z.t, art: zielArt(z), fakesVorher: z.fakes, fakes: zahlZ.get(z.t.id) || 0}))};
 }
 
+/* ---------- Befehlsübersicht, AGs angleichen, Offs staffeln (Dennis 13.11.2026 15:40) ----------
+   Spieler schicken Offs nicht immer zur geplanten Zeit. Die Befehlsübersicht (Übersichten › Befehle) zeigt, was schon
+   unterwegs ist und wann es wirklich ankommt; die AG-Trains, die meist deutlich später losgehen, lassen sich daran
+   angleichen. Außerdem: Offs vor einem AG nicht alle in derselben Sekunde (zu auffällig), nur die zuletzt abgeschickte
+   Off landet in der Sekunde des Trains, die anderen zufällig 5 bis 15 Minuten vorher. */
+const BEFEHL_ZEIT = /(heute|morgen|am\s+(\d{1,2})\.(\d{1,2})\.(\d{2,4})?)\s+um\s+(\d{1,2}):(\d{2}):(\d{2})(?::(\d{1,3}))?/i;
+const SERVERZEIT = /Serverzeit:\s*(\d{1,2}):(\d{2}):(\d{2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i;
+/**
+ * Liest eine oder mehrere kopierte Befehlsübersichten. Befehle sind Zeilen mit Ziel- und Herkunftskoordinaten, Ankunft
+ * („heute um“, „morgen um“, „am 15.11. um“) und Truppenzahlen am Ende; Rückkehr und Unterstützung zählen nicht.
+ * Der Tag gilt relativ zur Zeile „Serverzeit: 15:39:29 13/11/2026“ unter der jeweiligen Übersicht, ohne sie relativ zu now.
+ * spalten: Einheiten der Welt in der Reihenfolge der Spalten (ohne Miliz). Ergebnis {befehle:[{nach, von, arrivalMs, units,
+ * zeile}], fehler:[]}; nach und von sind {x, y}.
+ */
+function parseBefehle(text, now, spalten) {
+  const cols = (spalten && spalten.length ? spalten : UNITS).filter(u => u !== "militia");
+  const zeilen = String(text || "").split(/\r?\n/);
+  const befehle = [], fehler = [];
+  let offen = [];
+  const heute = ms => { const p = berlinParts(ms); return {y: p.y, mo: p.mo, d: p.d}; };
+  const aufloesen = basis => {
+    offen.forEach(({z, m, nr, nach, von, units}) => {
+      let y = basis.y, mo = basis.mo, d = basis.d;
+      const w = m[1].toLowerCase();
+      if (w === "morgen") d += 1;
+      else if (w !== "heute") {
+        d = +m[2]; mo = +m[3];
+        y = m[4] ? (m[4].length === 2 ? 2000 + +m[4] : +m[4]) : basis.y + (+m[3] < basis.mo - 6 ? 1 : 0);   // Jahreswechsel
+      }
+      const ms = m[8] ? +(m[8] + "00").slice(0, 3) : 0;
+      befehle.push({nach, von, arrivalMs: berlinToUtc(y, mo, d, +m[5], +m[6], +m[7], ms), units, zeile: nr});
+    });
+    offen = [];
+  };
+  zeilen.forEach((z, i) => {
+    const sz = SERVERZEIT.exec(z);
+    if (sz) { aufloesen({y: +sz[6], mo: +sz[5], d: +sz[4]}); return; }
+    const m = BEFEHL_ZEIT.exec(z);
+    if (!m) return;
+    const vorne = z.slice(0, m.index);
+    if (/^\s*(Rückkehr|Unterstützung|Abgebrochen|Zurückgeschickt)/i.test(vorne)) return;
+    const k = [...vorne.matchAll(/\((\d{1,3})\|(\d{1,3})\)/g)].map(x => ({x: +x[1], y: +x[2]}));
+    if (k.length < 2) { fehler.push("Zeile " + (i + 1) + ": Ziel oder Herkunft nicht erkannt"); return; }
+    const zahlen = (z.slice(m.index + m[0].length).match(/\d+/g) || []).map(Number);
+    const units = emptyUnits();
+    if (zahlen.length >= cols.length) cols.forEach((u, j) => { if (u in units) units[u] = zahlen[zahlen.length - cols.length + j]; });
+    offen.push({z, m, nr: i + 1, nach: k[0], von: k[k.length - 1], units});
+  });
+  aufloesen(heute(now != null ? now : Date.now()));
+  return {befehle, fehler};
+}
+const istAG = it => it.art === "ag" || (it.units && it.units.snob > 0);
+/**
+ * Ordnet Befehle aus Befehlsübersichten den Befehlen eines eingelesenen Plans zu (gleiche Herkunft, gleiches Ziel, AG zu AG,
+ * sonst nach der nächstliegenden geplanten Ankunft). Setzt it.gesendet = tatsächliche Ankunft. Ergebnis {zugeordnet,
+ * ohnePlan: Befehle der Übersicht ohne passenden Plan-Befehl}.
+ */
+function befehleAbgleichen(items, befehle) {
+  const key = (a, b) => a.x + "|" + a.y + ">" + b.x + "|" + b.y;
+  const nachPaar = new Map();
+  items.forEach(it => { delete it.gesendet; if (!it.v || !it.t) return; const k = key(it.v, it.t); if (!nachPaar.has(k)) nachPaar.set(k, []); nachPaar.get(k).push(it); });
+  let zugeordnet = 0;
+  const ohnePlan = [];
+  befehle.slice().sort((a, b) => a.arrivalMs - b.arrivalMs).forEach(b => {
+    const ag = b.units.snob > 0;
+    const kand = (nachPaar.get(key(b.von, b.nach)) || []).filter(it => it.gesendet == null && istAG(it) === ag);
+    if (!kand.length) { ohnePlan.push(b); return; }
+    kand.sort((p, q) => Math.abs(p.arrivalMs - b.arrivalMs) - Math.abs(q.arrivalMs - b.arrivalMs));
+    kand[0].gesendet = b.arrivalMs;
+    zugeordnet++;
+  });
+  return {zugeordnet, ohnePlan};
+}
+/** Ziele mit AG-Train eines eingelesenen Plans: {t, offs, ags} (Offs ohne Fakes). */
+function agZiele(items) {
+  const m = new Map();
+  items.forEach(it => {
+    if (!it.t || !it.v || it.fake) return;
+    let z = m.get(it.t.id);
+    if (!z) m.set(it.t.id, z = {t: it.t, offs: [], ags: []});
+    (istAG(it) ? z.ags : z.offs).push(it);
+  });
+  return [...m.values()].filter(z => z.ags.length);
+}
+const ankunftIst = it => it.gesendet != null ? it.gesendet : it.arrivalMs;
+/** Neue Ankunft eines Befehls setzen (Abschick verschiebt sich mit); alte Werte für die Änderungsliste. */
+function verschieben(it, ankunft) {
+  const d = ankunft - it.arrivalMs;
+  it.arrivalMs = ankunft; it.sendMs += d;
+}
+/**
+ * AG-Trains an die tatsächlich zuletzt ankommende Off angleichen. Je Ziel mit AGs: Anker = späteste Ankunft der Offs (schon
+ * abgeschickt: laut Befehlsübersicht, sonst geplant); alle noch nicht abgeschickten AGs verschieben sich gemeinsam, sodass das
+ * erste gapMs nach dem Anker landet. Später geht immer; früher nur, wenn alle AGs dann noch mindestens eine Minute nach now
+ * abgeschickt werden können, sonst bleiben sie (kommen eben später nach der Off). Ergebnis: Änderungen und Hinweise je Ziel.
+ */
+function agsAngleichen(items, opt) {
+  opt = opt || {};
+  const gap = opt.gapMs != null ? opt.gapMs : 200, ab = (opt.now != null ? opt.now : Date.now()) + 60000;
+  const out = [];
+  agZiele(items).forEach(z => {
+    if (!z.offs.length) return;
+    const anker = Math.max(...z.offs.map(ankunftIst));
+    const offen = z.ags.filter(a => a.gesendet == null).sort((a, b) => a.arrivalMs - b.arrivalMs);
+    const fest = z.ags.filter(a => a.gesendet != null);
+    if (!offen.length) {
+      if (fest.some(a => a.gesendet <= anker)) out.push({t: z.t, art: "zuSpaet", text: "AG schon unterwegs und kommt vor der letzten Off an"});
+      return;
+    }
+    const d = anker + gap - offen[0].arrivalMs;
+    if (!d) return;
+    if (d < 0 && offen.some(a => a.sendMs + d < ab)) {
+      out.push({t: z.t, art: "frueherNichtMoeglich", ms: -d, ags: offen.length});
+      return;
+    }
+    offen.forEach(a => verschieben(a, a.arrivalMs + d));
+    out.push({t: z.t, art: d > 0 ? "spaeter" : "frueher", ms: Math.abs(d), ags: offen.length, erstesAG: offen[0]});
+  });
+  return out;
+}
+/**
+ * Offs vor einem AG staffeln oder wieder in eine Sekunde legen. Je Ziel mit AG-Train: die Off, die als letzte abgeschickt
+ * wird, landet gapMs vor dem ersten AG; die anderen (staffeln) zufällig minMin bis maxMin Minuten vorher, nie im Nachtbonus,
+ * oder (Sekunde) je gapMs davor. Unverändert bleiben schon abgeschickte Befehle und solche, die dafür vor now + 1 min
+ * losmüssten; der Mindestabstand zu den anderen Abschickzeiten desselben Spielers bleibt gewahrt (sonst bis zu 30 s
+ * verschoben). opt {art: "staffeln" | "sekunde", minMin, maxMin, gapMs, minGapMs, now, world, rng}. Ergebnis: Zahl der
+ * verschobenen Offs und Ziele.
+ */
+function offsZeitenNeu(items, opt) {
+  const world = opt.world || WORLD_DEFAULT, rng = opt.rng || Math.random;
+  const gap = opt.gapMs != null ? opt.gapMs : 200, minGap = opt.minGapMs != null ? opt.minGapMs : 3000;
+  const ab = (opt.now != null ? opt.now : Date.now()) + 60000;
+  const minMs = Math.max(0, (opt.minMin != null ? opt.minMin : 5) * 60000), maxMs = Math.max(minMs, (opt.maxMin != null ? opt.maxMin : 15) * 60000);
+  const sends = new Map();
+  items.forEach(it => { if (it.sendMs == null) return; if (!sends.has(it.spieler)) sends.set(it.spieler, []); einsortieren(sends.get(it.spieler), it.sendMs); });
+  const raus = (it) => { const a = sends.get(it.spieler); a.splice(a.indexOf(it.sendMs), 1); };
+  const passt = (it, ank) => {
+    const s = ank - (it.arrivalMs - it.sendMs);
+    return s >= ab && !istNacht(world, ank) && nachbarAbstand(sends.get(it.spieler), s) >= minGap;
+  };
+  let offs = 0, ziele = 0;
+  agZiele(items).forEach(z => {
+    const ags = z.ags.slice().sort((a, b) => ankunftIst(a) - ankunftIst(b));
+    const T = ankunftIst(ags[0]);
+    const beweglich = z.offs.filter(o => o.gesendet == null && o.sendMs != null && o.sendMs >= ab);
+    if (!beweglich.length) return;
+    // zuletzt abgeschickte Off: bleibt in der Sekunde des Trains
+    const letzte = z.offs.slice().sort((a, b) => (b.gesendet != null ? -Infinity : b.sendMs) - (a.gesendet != null ? -Infinity : a.sendMs))[0];
+    let n = 0;
+    const setze = (o, wunsch, spanne) => {
+      raus(o);
+      let ziel = null;
+      for (const k of [0, 1, -1, 2, -2, 3, -3, 5, -5, 8, -8, 13, -13, 21, -21, 30, -30]) {
+        const ank = wunsch + k * 1000;
+        if ((!spanne || (T - ank >= spanne[0] && T - ank <= spanne[1])) && ank < T && passt(o, ank)) { ziel = ank; break; }
+      }
+      if (ziel != null && ziel !== o.arrivalMs) { verschieben(o, ziel); n++; }
+      einsortieren(sends.get(o.spieler), o.sendMs);
+    };
+    const andere = beweglich.filter(o => o !== letzte).sort((a, b) => a.sendMs - b.sendMs);
+    if (beweglich.includes(letzte)) setze(letzte, T - gap, null);
+    if (opt.art === "sekunde") {
+      // in der Reihenfolge ihrer Abschickzeit direkt vor die letzte Off, je gapMs
+      andere.forEach((o, i) => setze(o, T - gap * (andere.length - i + 1), null));
+    } else {
+      andere.forEach(o => {
+        // Spanne vor dem Train, ohne Nachtbonus; wenn nötig enger (frühestens Ende des Nachtbonus)
+        let lo = minMs, hi = maxMs;
+        let frei = hi;
+        while (frei > 0 && istNacht(world, T - frei)) frei -= 60000;
+        if (frei < hi) { hi = Math.max(0, frei); lo = Math.min(lo, hi); }
+        if (hi <= gap) { setze(o, T - gap * 2, null); return; }
+        const w = T - Math.round(lo + rng() * (hi - lo));
+        setze(o, w - (((w % 1000) + 1000) % 1000) + Math.floor(rng() * 1000), [Math.max(gap, lo - 30000), hi + 30000]);
+      });
+    }
+    if (n) { offs += n; ziele++; }
+  });
+  return {offs, ziele};
+}
+
 const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEFAULT, CFG_DEFAULT, makeWorld, erfolgsChance, moral,
              berlinToUtc, berlinParts, fmtZeit, parseAnkunft, parseFenster, parseDatum, parseUhrzeit, fmtDatum, fmtUhrzeit,
              zeitraumAusFeldern, fensterAusZeilen, istNacht, ivNorm, ivIntersect, ivShift, ivHas,
              parseOverview, offInfo, classify, fakeAus, begleitschutz, plan, pruefePlan, toDSU, toWB, exportAuswahl, parseKoordListe,
              travelS, dist, popOf, langsamste, ivAbstand, sitzungenAus, dichtesterPunkt, besser, ankunftKandidaten, bewerteAnkunft, zeitHinweise,
              RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, tagesTeile, nachtGekuerzt,
-             mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport, nachAbschick};
+             mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport, nachAbschick,
+             parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Angriff = api;
 })(typeof window !== "undefined" ? window : globalThis);

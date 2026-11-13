@@ -35,6 +35,14 @@
   .au-neu{display:inline-block; margin-left:5px; padding:0 5px; border-radius:var(--radius); background:var(--accent-soft);
     color:var(--accent); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase}
   tr.neu td{background:var(--accent-soft)}
+  .au-weg{display:inline-block; margin-left:5px; padding:0 5px; border-radius:var(--radius); background:var(--good-bg); color:var(--good); border:1px solid var(--good);
+    font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase}
+  .au-geaendert{display:inline-block; margin-left:5px; padding:0 5px; border-radius:var(--radius); border:1px solid var(--accent);
+    color:var(--accent); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase}
+  tr.geaendert td{background:color-mix(in srgb, var(--accent-soft) 60%, transparent)}
+  .au-plan{display:grid; gap:4px}
+  .au-plan .kopf{display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center}
+  .au-alt{font-size:10.5px; color:var(--muted); display:block}
   .ap-units{font-size:11px; color:var(--ink-2)}
   .au-sp{border:1px solid var(--edge-soft); border-radius:var(--radius); padding:9px 10px; display:grid; gap:8px}
   .au-sp .kopf{display:flex; flex-wrap:wrap; gap:6px 14px; align-items:baseline}
@@ -57,26 +65,36 @@
   <div class="body"><p class="empty" id="zusatz-msg">Lade …</p></div></section></div>
 <main class="wrap" id="seite" hidden>
   <section class="panel" aria-labelledby="h-plan">
-    <h2 id="h-plan">1 · Angriffsplan einlesen
-      <span class="hint">In DS-Ultimate im Angriffsplaner „Export“, den Text für den Import (JSON) kopieren und hier einfügen. Zeilen aus DS Workbench gehen auch. Alles bleibt in deinem Browser.</span></h2>
+    <h2 id="h-plan">1 · Angriffspläne einlesen
+      <span class="hint">In DS-Ultimate im Angriffsplaner „Export“, den Text für den Import (JSON) kopieren und hier einfügen; mehrere Pläne (etwa je Spieler) gehen zusammen. Zeilen aus DS Workbench gehen auch. Alles bleibt in deinem Browser.</span></h2>
     <div class="body" style="display:grid; gap:6px">
-      <textarea class="ap-ta" id="plan-text" spellcheck="false" placeholder='{"title":null,"uvMode":0,"world":"de259","items":[…]}'></textarea>
+      <div id="plaene" style="display:grid; gap:8px"></div>
       <div class="ap-row">
-        <button class="tw" type="button" id="plan-datei-knopf">Datei laden …</button>
-        <input type="file" id="plan-datei" accept=".json,.txt,application/json,text/plain" hidden>
-        <button class="tw" type="button" id="plan-leeren">Leeren</button>
+        <button class="tw" type="button" id="plan-dazu">+ weiterer Plan</button>
+        <button class="tw" type="button" id="plan-datei-knopf">Dateien laden …</button>
+        <input type="file" id="plan-datei" accept=".json,.txt,application/json,text/plain" multiple hidden>
+        <button class="tw" type="button" id="plan-leeren">Alle leeren</button>
         <span class="ap-note" id="plan-note"></span>
       </div>
     </div>
   </section>
 
+  <section class="panel" aria-labelledby="h-bef">
+    <h2 id="h-bef">2 · Befehlsübersicht (schon abgeschickt)
+      <span class="hint">Übersichten › Befehle, alles markieren und hier einfügen; mehrere Spieler einfach untereinander. Abgeschickte Befehle werden im Plan erkannt und bleiben fest; ihre echte Ankunft zählt beim Angleichen der AGs.</span></h2>
+    <div class="body" style="display:grid; gap:6px">
+      <textarea class="ap-ta klein" id="befehle-text" spellcheck="false" placeholder="Angriff auf … (598|568) K55	[007] … (621|594) K56	morgen um 08:04:09:663	0	0	…"></textarea>
+      <span class="ap-note" id="befehle-note"></span>
+    </div>
+  </section>
+
   <section class="panel" aria-labelledby="h-kern">
-    <h2 id="h-kern">2 · Off- und AG-Plan <span class="hint" id="kern-hint"></span></h2>
+    <h2 id="h-kern">3 · Off- und AG-Plan <span class="hint" id="kern-hint"></span></h2>
     <div class="body" id="kern" style="display:grid; gap:8px"><p class="empty">Noch kein Plan eingelesen.</p></div>
   </section>
 
   <section class="panel" aria-labelledby="h-fake">
-    <h2 id="h-fake">3 · Fake-Plan <span class="hint" id="fake-hint"></span></h2>
+    <h2 id="h-fake">4 · Fake-Plan <span class="hint" id="fake-hint"></span></h2>
     <div class="body" id="fake" style="display:grid; gap:10px"><p class="empty">Noch kein Plan eingelesen.</p></div>
   </section>
 
