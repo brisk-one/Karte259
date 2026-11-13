@@ -22,8 +22,8 @@ const POP = {spear: 1, sword: 1, axe: 1, archer: 1, spy: 2, light: 4, marcher: 5
              knight: 10, snob: 100, militia: 0};
 const SPEED = {spear: 18, sword: 22, axe: 18, archer: 18, spy: 9, light: 10, marcher: 10, heavy: 11, ram: 30,
                catapult: 30, knight: 10, snob: 35};
-const DSU_TYPE = {clean: 8, rest: 8, ag: 11, fake: 14};
-const KIND_NAME = {clean: "Clean-Off", rest: "Off", ag: "AG", fake: "Fake"};
+const DSU_TYPE = {clean: 8, rest: 8, offziel: 8, ag: 11, fake: 14};
+const KIND_NAME = {clean: "Clean-Off", rest: "Off", offziel: "Off", ag: "AG", fake: "Fake"};
 // Einheiten einer Off; Schwere Kavallerie nur in Dörfern mit überwiegend Off-Einheiten
 const OFF_UNITS = ["axe", "light", "marcher", "heavy", "ram", "catapult"];
 // Begleitschutz eines AG: Äxte, ohne Äxte Schwert, dann Speer, dann der Rest
@@ -626,7 +626,7 @@ function nachtGekuerzt(a, teile) {
 /**
  * Plant Clean-Offs, AG-Trains und Fakes.
  * input = {world, cfg, attackers:[{id, name, points, windows, villages:[{id, name, x, y, pts, units, nobles, useOff}]}],
- *          agTargets:[{id, x, y, owner, name, assignee}], fakeTargets:[{id, x, y, owner}],
+ *          agTargets:[{id, x, y, owner, name, assignee}], offTargets:[{id, x, y, owner, name, n, assignee}], fakeTargets:[{id, x, y, owner}],
  *          extraFakeTargets:[{id, x, y, owner, ownerPoints, ownerDays}], arrival:{from, to}, windows:[[from, to]], now}
  * Zeiten in Unix-Millisekunden. useOff: Dorf als Off verplanen (Standard: Off nach Richtwert).
  */
@@ -717,7 +717,8 @@ function plan(input) {
   })();
   const rngS = mulberry32(((cfg.seed | 0) || 1) * 104729 + 7), staffelU = new Map();
   const STAFFEL_ABSTAND_MS = 30000;   // gestaffelte Offs untereinander mindestens 30 s auseinander, sonst wirken sie abgestimmt
-  const cleanOffsets = (t, offs) => {
+  // basis: Ankunftszeiten, zu denen der Block passen muss (AG-Ziel: die AGs; Off-Ziel: der Ankunftszeitraum)
+  const cleanOffsets = (t, offs, zielSet) => {
     const basis = offs.map((o, i) => i * cfg.gap_clean_ms), n = offs.length;
     if (!staffelSpanne || n < 2) return basis;
     const [lo, hi] = staffelSpanne;
@@ -734,7 +735,7 @@ function plan(input) {
     const out = basis.slice();
     out[letzte] = (n - 1) * cfg.gap_clean_ms;
     andere.forEach((i, j) => { out[i] = j * cfg.gap_clean_ms; });
-    let s = ivIntersect(agSet(t, n), setFuer(offs[letzte], out[letzte]));
+    let s = ivIntersect(zielSet || agSet(t, n), setFuer(offs[letzte], out[letzte]));
     let vorher = Infinity, aus = false;
     andere.forEach((i, j) => {
       if (!aus && s.length) {
@@ -1084,8 +1085,67 @@ function plan(input) {
     if (n < k) warnings.push({art: "richtwert", ziel: t.id, text: "Ziel " + t.x + "|" + t.y + ": " + n + " statt " + k + " Clean-Offs"});
   });
 
+  /* ---- 3b. Off-Ziele (Dennis 14.11.2026 00:33, Antworten 00:40): Ziele nur für Offs, meist reine Off-Pläne. Zahl je Ziel
+     (1b), nach den Clean-Offs der AG-Ziele und vor den übrigen Offs (2a), mehrere Offs gestaffelt wie vor einem AG (3a), das
+     Off-Ziel selbst ohne Fakes (4b; der Besitzer wird Zielspieler, das regelt die Seite). Zugeordnet: nur Offs dieses Spielers. */
+  const agIds = new Set(ziele.map(t => t.id)), offZielListe = [];
+  (input.offTargets || []).forEach(t => {
+    if (!t || t.id == null || agIds.has(t.id) || offZielListe.some(x => x.id === t.id)) return;
+    offZielListe.push(Object.assign({}, t, {soll: Math.max(1, Math.min(20, Math.round(+t.n || 1))),
+      assignee: t.assignee != null && att.has(t.assignee) ? t.assignee : null}));
+  });
+  const offZielIds = new Set(offZielListe.map(t => t.id));
+  const offZielOffs = new Map(offZielListe.map(t => [t.id, []]));
+  const offZielPasst = (o, t, pos, basis) => {
+    if (t.assignee != null && o.att !== t.assignee) return false;
+    const tr = travelS(world, "ram", dist(o, t)) * 1000;
+    if (gesperrt(o, tr, pos * cfg.gap_clean_ms)) return false;
+    const vorhanden = offZielOffs.get(t.id).map((x, i) => ({att: x.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(x, t)) * 1000}));
+    if (kollidiert({att: o.att, rel: pos * cfg.gap_clean_ms - tr}, vorhanden)) return false;
+    return ivIntersect(basis, tset(o, tr, pos * cfg.gap_clean_ms)).length > 0;
+  };
+  const offZielKosten = (o, t, pos) => {
+    const trS = travelS(world, "ram", dist(o, t));
+    return Math.round(trS + rng() * 60 + zuLangKosten(trS, maxOffS) + zeitKosten(o, trS * 1000, pos * cfg.gap_clean_ms));
+  };
+  const offZielBasis = t => offZielOffs.get(t.id).reduce((b, o, i) => ivIntersect(b, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms)), ankunft);
+  if (offZielListe.length) {
+    // erste Off je Ziel: so viele Ziele wie möglich (Fluss), dann reihum bis zur Zahl je Ziel
+    const pool = cleanPool();
+    const Q = 0, Z = 1, oBase = 2, tBase = 2 + pool.length, fl = new Fluss(tBase + offZielListe.length), kanten = [];
+    pool.forEach((o, i) => fl.add(Q, oBase + i, 1, 0));
+    offZielListe.forEach((t, j) => {
+      fl.add(tBase + j, Z, 1, 0);
+      pool.forEach((o, i) => { if (offZielPasst(o, t, 0, ankunft)) kanten.push({e: fl.add(oBase + i, tBase + j, 1, offZielKosten(o, t, 0)), o, t}); });
+    });
+    fl.run(Q, Z);
+    kanten.forEach(({e, o, t}) => { if (e.flow > 0) { offZielOffs.get(t.id).push(o); o.verplant = true; } });
+    for (let pos = 1; pos < 20; pos++) {
+      let neu = 0;
+      offZielListe.map(t => ({t, r: rng()})).sort((a, b) => a.r - b.r).map(x => x.t).forEach(t => {
+        const liste = offZielOffs.get(t.id);
+        if (liste.length !== pos || pos >= t.soll) return;
+        const basis = offZielBasis(t);
+        let best = null, bc = Infinity;
+        cleanPool().forEach(o => { if (!offZielPasst(o, t, pos, basis)) return; const c = offZielKosten(o, t, pos); if (c < bc) { bc = c; best = o; } });
+        if (best) { liste.push(best); best.verplant = true; neu++; }
+      });
+      if (!neu) break;
+    }
+    // mehr Rammen zuerst (wie bei den Clean-Offs), wenn die Reihe zeitlich passt
+    offZielListe.forEach(t => {
+      const liste = offZielOffs.get(t.id);
+      const neu = liste.slice().sort((p, q) => ((q.units && q.units.ram) || 0) - ((p.units && p.units.ram) || 0));
+      if (neu.some((o, i) => o !== liste[i]) && neu.reduce((b, o, i) => ivIntersect(b, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms)), ankunft).length)
+        offZielOffs.set(t.id, neu);
+      const n = offZielOffs.get(t.id).length;
+      if (n < t.soll) warnings.push({art: "offziel", ziel: t.id, text: "Off-Ziel " + t.x + "|" + t.y + ": " + n + " statt " + t.soll + (t.soll === 1 ? " Off" : " Offs") +
+        (t.assignee != null ? " (nur von " + att.get(t.assignee).name + ")" : "") + ", keine weitere freie Off, die zu Abschickzeitraum und Ankunft passt"});
+    });
+  }
+
   /* ---- 4. Übrige Offs ---- */
-  const fakeZiele = (input.fakeTargets || []).map(t => Object.assign({}, t, {pflicht: true}));
+  const fakeZiele = (input.fakeTargets || []).filter(t => !offZielIds.has(t.id)).map(t => Object.assign({}, t, {pflicht: true}));
   ziele.forEach(t => { if (!trains.has(t.id) && !fakeZiele.some(f => f.id === t.id)) fakeZiele.push(Object.assign({}, t, {pflicht: true, warAG: true})); });
   const restZiele = [];
   if (cfg.rest_offs === "nicht_ag") {
@@ -1230,6 +1290,12 @@ function plan(input) {
       out.push({art: "ag", key: "ag:" + t.id, ziel: t, items: its});
     });
     restZiele.forEach(({o, t}) => out.push({art: "rest", key: "rest:" + t.id + ":" + o.id, ziel: t, items: [offIt(o, t, 0, "rest")]}));
+    offZielListe.forEach(t => {
+      const liste = offZielOffs.get(t.id);
+      if (!liste.length) return;
+      const offsets = cleanOffsets(t, liste, ankunft);
+      out.push({art: "offziel", key: "offziel:" + t.id, ziel: t, items: liste.map((o, i) => offIt(o, t, offsets[i], "offziel"))});
+    });
     return out;
   };
   const zeitCtx = {A, ANK, att, gapMs: cfg.min_send_gap_s * 1000, zielMs: (cfg.send_gap_target_s || 0) * 1000, rng, world, R, streng, anker, seed: cfg.seed | 0 || 1};
@@ -1719,6 +1785,16 @@ function plan(input) {
     const u = offEinheiten(o);
     blocks.push({art: "rest", key: "rest:" + t.id + ":" + o.id, ziel: t, items: [item("rest", o, t, u, langsamste(u, world), 0, ++aktionNr)]});
   });
+  // Off-Ziele: gestaffelt wie die Clean-Offs vor einem AG, die Off mit der kürzesten Laufzeit zuletzt
+  offZielListe.forEach(t => {
+    const liste = offZielOffs.get(t.id);
+    if (!liste.length) return;
+    const offsets = cleanOffsets(t, liste, ankunft);
+    blocks.push({art: "offziel", key: "offziel:" + t.id, ziel: t, items: liste.map((o, i) => {
+      const u = offEinheiten(o);
+      return item("offziel", o, t, u, langsamste(u, world), offsets[i], ++aktionNr);
+    })});
+  });
   fakes.forEach(({v, t, f, frueh}) => {
     const u = emptyUnits(); u.catapult = f.catapult; u.spy = f.spy; u.ram = f.ram;
     blocks.push({art: "fake", key: "fake:" + t.id + ":" + v.id, ziel: t, frueh: !!frueh, items: [item("fake", v, t, u, "ram", 0, ++aktionNr)]});
@@ -1846,7 +1922,9 @@ function plan(input) {
   if (items.some(it => it.nacht)) warnings.push({art: "nacht", text: "Ankünfte im Nachtbonus (" + world.night.start_hour + " bis " + world.night.end_hour + " Uhr)"});
   if (input.now != null && items.some(it => it.sendMs < input.now)) warnings.push({art: "vergangen", text: "Abschickzeiten in der Vergangenheit"});
 
-  return {items, ziele: zielInfo, freieOffs: freieOffs.map(v => ({id: v.id, x: v.x, y: v.y, name: v.name, att: v.att, offPop: v.offPop, grund: freiGrund.get(v.id) || null})),
+  const offZielInfo = offZielListe.map(t => ({id: t.id, x: t.x, y: t.y, owner: t.owner, soll: t.soll, assignee: t.assignee,
+    ist: items.filter(it => it.kind === "offziel" && it.t.id === t.id).length}));
+  return {items, ziele: zielInfo, offZiele: offZielInfo, freieOffs: freieOffs.map(v => ({id: v.id, x: v.x, y: v.y, name: v.name, att: v.att, offPop: v.offPop, grund: freiGrund.get(v.id) || null})),
           freieAGs: agVillages.map(v => ({id: v.id, x: v.x, y: v.y, att: v.att, frei: v.nobles - verplanteAGs(v, trains)})).filter(x => x.frei > 0),
           warnings, stats: statistik(items, zielInfo, att), cfg, k, form, zeit, knapp, sitzungen, hinweise,
           fakeAufstocken: fakeAufstocken.map(x => ({att: x.a.id, soll: x.soll, ist: x.ist, vorher: x.vorher, grund: x.grund})),
@@ -2278,7 +2356,7 @@ function pruefePlan(res, input) {
   const verbrauch = new Map();
   res.items.forEach(it => {
     // fester Zeitpunkt: gestaffelte Clean-Offs landen vorher (off_staffel_max)
-    const vorFest = it.kind === "clean" && A.from === A.to && it.arrivalMs <= A.to && it.arrivalMs >= A.from - ((+cfg.off_staffel_max || 0) + 1) * 60000;
+    const vorFest = (it.kind === "clean" || it.kind === "offziel") && A.from === A.to && it.arrivalMs <= A.to && it.arrivalMs >= A.from - ((+cfg.off_staffel_max || 0) + 1) * 60000;
     if (it.kind === "fake" ? !ANK.some(a => drin(a, it.arrivalMs)) : !drin(A, it.arrivalMs) && !vorFest) v.push("Ankunft außerhalb des Zeitraums: " + it.v.id + " → " + it.t.id);
     if (istNacht(world, it.arrivalMs)) v.push("Ankunft im Nachtbonus: " + it.v.id + " → " + it.t.id);
     // v0.5: Zeiträume sind Wunsch, Befehle außerhalb müssen markiert sein; „streng“: nie außerhalb

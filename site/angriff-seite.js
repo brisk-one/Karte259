@@ -39,7 +39,8 @@ const INFO = {
   fake_modus: "Zieldorf: jedes Fakeziel bekommt die Zahl darunter (wie bisher). Herkunftsdorf: jedes Dorf der Angreifer schickt die Zahl darunter, verteilt auf die Fakeziele, wenig befakte und nahe zuerst; gedacht für reine Fake-Pläne. Einstellungen je Spieler gehen vor.",
   fake_extra_pop: "Ein Fake braucht mindestens 1 % der Dorfpunkte des abschickenden Dorfs in Bauernhofplätzen. Der Zuschlag fängt Punkte ab, die bis zum Abschicken dazukommen. Fakes laufen mit Katapult- oder Rammentempo und bestehen aus Katapulten und Spähern, jeder mit mindestens einem Späher (Dörfer ohne freien Späher schicken keine Fakes). Eine Ramme nur, wenn im Dorf kein Katapult frei ist; mehr Rammen nur, wenn Katapulte und Späher nicht reichen, höchstens so viele wie beim Spieler eingestellt (Standard 1).",
   extra_fakes: "Dörfer starker Stammesmitglieder der Zielspieler, gegen die der Angreifer mindestens die Moral-Schwelle hätte. Schwache Spieler sind schlechte Fakeziele: hohe Moral, kaum Truppen zum Unterstützen.",
-  zart: "AG-Ziele bekommen AGs, Clean-Offs und Fakes. Fakeziele bekommen nur Fakes, gleichrangig mit den Pflichtzielen; ein reiner Fake-Plan braucht nur Fakeziele. Bei beiden zählen die Besitzer als Zielspieler: ihre übrigen Dörfer werden Pflicht-Fakeziele, ihre Stammesmitglieder stehen in Abschnitt 6 zur Wahl. Ein Dorf steht nur in einer der beiden Listen.",
+  zart: "AG-Ziele bekommen AGs, Clean-Offs und Fakes. Off-Ziele bekommen nur Offs, so viele wie in ihrer Zeile steht (Standard 1), mehrere gestaffelt wie die Clean-Offs vor einem AG (zufällig in der Staffelspanne, die letzte mit der kürzesten Laufzeit), selbst keine Fakes; sie sind für reine Off-Pläne gedacht, mit AG-Zielen bekommen erst die AG-Ziele ihre Clean-Offs. Fakeziele bekommen nur Fakes, gleichrangig mit den Pflichtzielen; ein reiner Fake-Plan braucht nur Fakeziele. Bei allen drei zählen die Besitzer als Zielspieler: ihre übrigen Dörfer werden Pflicht-Fakeziele, ihre Stammesmitglieder stehen in Abschnitt 6 zur Wahl. Ein Dorf steht nur in einer der Listen.",
+  offZielN: "Offs auf dieses Off-Ziel (1 bis 20). Mehrere landen gestaffelt: die mit der kürzesten Laufzeit zuletzt, die anderen zufällig in der Staffelspanne aus Abschnitt 1 davor, mindestens 30 s auseinander, alle im Ankunftszeitraum. „Angreifer“: nur Offs dieses Spielers, „automatisch“: der Planer wählt die nächsten freien Offs.",
   zmodus: "Automatisch: so viele Ziele wie möglich adeln (AGs plus mindestens eine Clean-Off), dann Clean-Offs bis zum Richtwert, dann Off vor AG möglichst oft, dann kürzeste Laufzeiten; gleichwertige Lösungen per Zufall. Je Angreifer: jedes Ziel bekommt in der Tabelle einen Angreifer, der es adelt; Clean-Offs dürfen von allen kommen.",
   ankunft: "Ein Zeitpunkt (alle Ziele zur selben Zeit, die erste Clean-Off genau darauf) oder ein Zeitraum, über den sich die Angriffe verteilen. Für einen Zeitpunkt nur den Start ausfüllen. Ende ohne Tag: gleicher Tag wie der Start, liegt die Uhrzeit davor, der nächste Tag. Tag und Uhrzeit lassen sich eintippen oder über die Knöpfe neben den Feldern wählen. Für Offs und AGs ist höchstens 1 Stunde zu empfehlen, 1,5 Stunden sind ein Orientierungswert; für Fakes dürfen Zeiträume länger sein, auch über die Nacht (geplant wird nur der Tagesteil). Ankünfte im Nachtbonus werden gemeldet. Nach der Berechnung sucht der Planer gleich lange Zeiträume bis 12 Stunden davor und danach, die besser zu den Abschickzeiträumen passen, nie im Nachtbonus. Angriffe kommen nie im Nachtbonus an: ein Ende um 23:00:00 heißt höchstens 22:59:59, ein Zeitraum, der in die Nacht ragt, wird gekürzt, einer ganz in der Nacht wird abgelehnt. Weitere Zeiträume per Knopf (v0.6): Offs und AGs kommen im ersten an, Fakes verteilt der Planer auf alle, je Spieler in den Zeitraum, der zu seinen Abschickzeiten passt. Für einen reinen Fake-Plan keine AG-Ziele eintragen, nur Fakeziele. Andere Ankunftszeiten schlägt der Planer nur bei einem Zeitraum mit AG-Zielen vor.",
   fen_je: "An: jeder Angreifer kann eigene Abschickzeiträume bekommen, ohne eigene gelten die gemeinsamen. Aus: für alle gelten die gemeinsamen Zeiträume; eigene bleiben gespeichert und gelten wieder, sobald der Schalter an ist. „Zurücksetzen“ löscht die eigenen Zeiträume eines Angreifers.",
@@ -50,7 +51,7 @@ const INFO = {
   fakeSoll: "Fakes eines Spielers aufstocken: Gesamtzahl eintragen, „Fakes aufstocken“ rechnet neu. Die zusätzlichen Fakes kommen aus seinen Dörfern, reihum, auf die Fakeziele (auch Stammesmitglieder) mit den wenigsten Fakes, auch über „Fakes je Dorf“ hinaus, nie zweimal dasselbe Ziel aus einem Dorf, und nur in seinen Abschicksitzungen (mit 10 Minuten Rand) wie alle Fakes. „Fakes aus einem eigenen Dorf höchstens“ wird für ihn so weit angehoben, wie die Zahl es braucht. Grenzen: Katapulte oder Rammen und Späher in seinen Dörfern, Zahl der Fakeziele, Platz in seinen Sitzungen; reicht es nicht, steht die erreichte Zahl daneben und in den Hinweisen. ↺ rechnet wieder ohne Aufstocken. „Fakes reduzieren“ (13.11.2026) macht das Gegenteil: höchstens so viele Fakes für diesen Spieler. Zuerst fallen ganze zusätzliche Fake-Sitzungen weg (eine Weckzeit weniger), dann je ein Fake auf den Zielen mit den meisten Fakes, bei gleich vielen aus seinem Dorf mit den meisten Fakes; den letzten Fake eines Ziels nimmt der Planer erst, wenn kein Ziel mehr zwei hat. 0 heißt: keine Fakes für ihn. ↺ rechnet wieder ohne Reduzieren. Die Zahl wird mit der Planung gespeichert.",
   offListe: "Für Spieler, von denen du keine Truppenübersicht hast: die Dörfer, aus denen er Offs schickt, als Koordinaten einfügen (eine Truppenübersicht ist dann nicht nötig, beides zusammen geht auch). Jedes Dorf schickt eine Standard-Off: alle Äxte, alle leichten Kavalleristen, alle Rammen und einen Späher. Geplant wird mit einer vollen Off (Laufzeit der Rammen), nur als Off, ohne AGs und ohne Fakes. Im Export für DS-Ultimate steht bei Axt, LKav und Rammen „all“; DS-Ultimate übernimmt den Text in den Link zum Versammlungsplatz. Ob das Spiel dort dann alle Truppen einträgt, ist nicht geprüft: bitte an einem Befehl testen. Der Export für DS Workbench enthält denselben Text; DS-Ultimate liest ihn, DS Workbench selbst erwartet Zahlen. Steht ein Dorf auch in der Truppenübersicht, gelten dort die Truppen der Übersicht.",
   agListe: "Für Listen wie „in diesen Dörfern baue ich je 4 AGs“: Koordinaten einfügen, Zahl wählen, übernehmen. Die Zahl ist die AG-Zahl im Dorf insgesamt, wie wenn du sie in der Dorfliste von Hand einträgst; die Dorfliste zeigt dann „Übersicht N, noch M bauen“, ↺ setzt einzeln zurück. Steht in der Übersicht schon so viel oder mehr, gilt die Übersicht. Die Dörfer müssen in seiner Truppenübersicht stehen; was dort fehlt, wird mit Koordinaten genannt.",
-  zielFuer: "Mit einem Angreifer gewählt gehören alle Dörfer aus der Liste (oder alle Dörfer des Spielers) ihm als AG-Ziele, auch die schon vorhandenen; die Verteilung springt auf „je Angreifer eigene Ziele“. „automatisch“: wie bisher, der Planer verteilt.",
+  zielFuer: "Mit einem Angreifer gewählt gehören alle Dörfer aus der Liste (oder alle Dörfer des Spielers) ihm als AG-Ziele, auch die schon vorhandenen; die Verteilung springt auf „je Angreifer eigene Ziele“. Bei Off-Zielen bekommen sie nur Offs dieses Spielers. „automatisch“: wie bisher, der Planer verteilt.",
   jeRammen: "Gilt nur für diesen Spieler: so viele Rammen darf ein Fake höchstens enthalten (leer: 1, 0: keine). Katapulte gehen immer vor: eine Ramme ist die langsamste Einheit nur, wenn im Dorf kein Katapult frei ist, und aufgefüllt wird mit Rammen erst, wenn Katapulte und Späher nicht reichen. Jeder Fake hat mindestens einen Späher.",
   jeFake: "Gilt nur für diesen Spieler. „Höchstens N je eigenem Dorf“: jedes seiner Dörfer schickt höchstens N Fakes, etwa bei wenig Katapulten (bei „Fakes zählen je Herkunftsdorf“ genau N, soweit Truppen reichen). „N je Fakeziel“: dieser Spieler schickt N Fakes auf jedes Fakeziel, zusätzlich zu den Fakes der übrigen Spieler nach „Fakes je Dorf“ oben. Fakes bleiben Richtwert: was in keine Abschicksitzung passt, entfällt.",
   teilnahme: "Offs: Clean-Offs und übrige Offs. AGs: Trains; eine Off läuft nur im Train mit, wenn der Spieler auch mit Offs teilnimmt. Fakes: aus allen Dörfern der Übersicht.",
@@ -98,7 +99,7 @@ const FELDER = [
 const leererZeitraum = () => ({vonDatum: "", vonZeit: "", bisDatum: "", bisZeit: ""});
 const neuerAngreifer = () => ({text: "", rollen: {off: true, ag: true, fake: true}, auswahlText: "", fen: [leererZeitraum()], nobles: {}, useOff: {},
                                cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: "", eigeneStark: false, pala: {}, offListe: ""});
-let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], fakeHaupt: [], zart: "ag", zmodus: "auto",
+let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], offZiele: [], fakeHaupt: [], zart: "ag", zmodus: "auto",
          ank: leererZeitraum(), ankListe: [], fen: [leererZeitraum()], fakeAus: [], fakeText: "", extraAus: [], extraEin: [], wahlKnapp: null, hilfe: false};
 /* Gespeicherte Stände aus der Zeit der Textfelder (ankunft, fenster, fensterText) in die getrennten Felder übernehmen. */
 function zeilenAusFenster(text) {
@@ -137,6 +138,7 @@ function laden() {
       S = Object.assign(S, s.S);
       S.cfg = Object.assign({}, K.CFG_DEFAULT, s.S.cfg);
       if (!S.atts.length) S.atts = [neuerAngreifer()];
+      if (!Array.isArray(S.offZiele)) S.offZiele = [];
       zeitenUebernehmen();
     }
   } catch (e) { /* ohne Speicher nur für diesen Besuch */ }
@@ -304,13 +306,15 @@ function attBlock(i) {
   weg.type = "button";
   weg.addEventListener("click", () => {
     // seine AG-Ziele gehen mit (Dennis 13.11.2026); Zuordnungen späterer Angreifer rücken eine Stelle vor
-    const name = attName(i), vorher = S.ziele.length;
+    const name = attName(i), vorher = S.ziele.length + S.offZiele.length;
     S.ziele = S.ziele.filter(z => z.assignee !== i);
     S.ziele.forEach(z => { if (z.assignee != null && z.assignee > i) z.assignee--; });
+    S.offZiele = S.offZiele.filter(z => z.assignee !== i);
+    S.offZiele.forEach(z => { if (z.assignee != null && z.assignee > i) z.assignee--; });
     if (S.zielFuer != null && S.zielFuer !== "") { const f = +S.zielFuer; S.zielFuer = f === i ? "" : f > i ? String(f - 1) : S.zielFuer; }
-    const mit = vorher - S.ziele.length;
+    const mit = vorher - S.ziele.length - S.offZiele.length;
     S.atts.splice(i, 1); if (!S.atts.length) S.atts.push(neuerAngreifer()); attsBauen(); geaendert();
-    $("att-note").textContent = name + " entfernt" + (mit ? ", mit ihm " + mit + (mit === 1 ? " AG-Ziel" : " AG-Ziele") : "") + ".";
+    $("att-note").textContent = name + " entfernt" + (mit ? ", mit ihm " + mit + (mit === 1 ? " Ziel" : " Ziele") : "") + ".";
   });
   kopf.append(titel, el("span", "ap-note", "nimmt teil mit:"), rollen, weg);
   const ta = el("textarea", "ap-ta");
@@ -541,33 +545,70 @@ function zieleZuordnen(keys) {
   if (!(i >= 0 && i < S.atts.length)) return "";
   const ks = new Set(keys);
   let n = 0;
-  S.ziele.forEach(z => { if (ks.has(z.xy)) { z.assignee = i; n++; } });
+  (S.zart === "off" ? S.offZiele : S.ziele).forEach(z => { if (ks.has(z.xy)) { z.assignee = i; n++; } });
   if (!n) return "";
-  S.zmodus = "je";
+  if (S.zart !== "off") S.zmodus = "je";
   geaendert();
   return ", " + n + (n === 1 ? " Ziel" : " Ziele") + " für " + attName(i);
 }
-/** art "ag" oder "fake". Ein Dorf steht nur in einer Liste: als AG-Ziel wandert es aus den Fakezielen,
-    als Fakeziel bleibt ein AG-Ziel AG-Ziel. */
+/** art "ag", "off" oder "fake". Ein Dorf steht nur in einer Liste: als AG-Ziel wandert es aus den Off- und Fakezielen,
+    als Off-Ziel aus den Fakezielen (ein AG-Ziel bleibt AG-Ziel), als Fakeziel bleiben AG- und Off-Ziele, was sie sind
+    (Off-Ziele bekommen keine Fakes, Dennis 14.11.2026 4b). */
 function zieleHinzu(keys, quelle, art) {
-  const ag = new Set(S.ziele.map(z => z.xy)), fk = new Set(S.fakeHaupt);
-  let neu = 0, unbekannt = 0, verschoben = 0, schonAg = 0;
+  const ag = new Set(S.ziele.map(z => z.xy)), oz = new Set(S.offZiele.map(z => z.xy)), fk = new Set(S.fakeHaupt);
+  let neu = 0, unbekannt = 0, verschoben = 0, schonAg = 0, schonOff = 0;
   keys.forEach(k => {
-    if (art === "fake" ? fk.has(k) : ag.has(k)) return;
+    if (art === "fake" ? fk.has(k) : art === "off" ? oz.has(k) : ag.has(k)) return;
     if (!dorf(k)) { unbekannt++; return; }
     if (art === "fake") {
       if (ag.has(k)) { schonAg++; return; }
+      if (oz.has(k)) { schonOff++; return; }
       S.fakeHaupt.push(k); fk.add(k); neu++;
+    } else if (art === "off") {
+      if (ag.has(k)) { schonAg++; return; }
+      if (fk.has(k)) { fk.delete(k); verschoben++; }
+      S.offZiele.push({xy: k, n: 1, assignee: null}); oz.add(k); neu++;
     } else {
       if (fk.has(k)) { fk.delete(k); verschoben++; }
+      if (oz.has(k)) { oz.delete(k); verschoben++; }
       S.ziele.push({xy: k, assignee: null}); ag.add(k); neu++;
     }
   });
-  if (verschoben) S.fakeHaupt = S.fakeHaupt.filter(k => fk.has(k));
+  if (verschoben) { S.fakeHaupt = S.fakeHaupt.filter(k => fk.has(k)); S.offZiele = S.offZiele.filter(z => oz.has(z.xy)); }
   geaendert();
-  return quelle + ": " + neu + (art === "fake" ? (neu === 1 ? " neues Fakeziel" : " neue Fakeziele") : (neu === 1 ? " neues AG-Ziel" : " neue AG-Ziele")) +
-    (verschoben ? ", davon " + verschoben + " aus den Fakezielen" : "") + (schonAg ? ", " + schonAg + " schon AG-Ziel" : "") +
-    (unbekannt ? ", " + unbekannt + " nicht in den Weltdaten" : "");
+  const was = {fake: ["neues Fakeziel", "neue Fakeziele"], off: ["neues Off-Ziel", "neue Off-Ziele"], ag: ["neues AG-Ziel", "neue AG-Ziele"]}[art] || ["neues AG-Ziel", "neue AG-Ziele"];
+  return quelle + ": " + neu + " " + (neu === 1 ? was[0] : was[1]) +
+    (verschoben ? ", davon " + verschoben + " aus " + (art === "off" ? "den Fakezielen" : "den Off- und Fakezielen") : "") + (schonAg ? ", " + schonAg + " schon AG-Ziel" : "") +
+    (schonOff ? ", " + schonOff + " schon Off-Ziel" : "") + (unbekannt ? ", " + unbekannt + " nicht in den Weltdaten" : "");
+}
+/** Off-Ziele (Dennis 14.11.2026 00:33): Zahl der Offs je Ziel (1b) und Zuordnung zu einem Angreifer. */
+function offZieleBauen() {
+  const box = $("offziel-tab");
+  $("offziel-zahl").textContent = S.offZiele.length ? S.offZiele.length + " Dörfer, " + S.offZiele.reduce((n, z) => n + (z.n || 1), 0) + " Offs" : "";
+  $("offziel-leer").hidden = !S.offZiele.length;
+  if (!S.offZiele.length) { box.replaceChildren(el("p", "ap-note", "Keine Off-Ziele. Oben „Off-Ziele“ wählen und Dörfer hinzufügen.")); return; }
+  const offDorfer = [];
+  ANALYSE.forEach((A, i) => { if (A && S.atts[i] && S.atts[i].rollen.off !== false) A.dorfer.forEach(d => { if (offEingeplant(S.atts[i], d)) offDorfer.push(d); }); });
+  const rows = S.offZiele.map((z, n) => {
+    const d = dorf(z.xy);
+    const nah = d && offDorfer.length ? Math.min(...offDorfer.map(a => Math.hypot(a.x - d.x, a.y - d.y))) : null;
+    const zahl = el("input", "ap-n"); zahl.type = "number"; zahl.min = 1; zahl.max = 20; zahl.value = z.n || 1;
+    zahl.setAttribute("aria-label", "Offs auf " + koord(z.xy));
+    zahl.addEventListener("input", () => { const v = parseInt(zahl.value, 10); z.n = isNaN(v) ? 1 : Math.max(1, Math.min(20, v)); $("offziel-zahl").textContent = S.offZiele.length + " Dörfer, " + S.offZiele.reduce((s0, x) => s0 + (x.n || 1), 0) + " Offs"; geaendert(true); });
+    const sel = el("select");
+    const o0 = el("option", null, "automatisch"); o0.value = ""; sel.append(o0);
+    S.atts.forEach((a, i) => { if (a.rollen && a.rollen.off === false) return; const o = el("option", null, attName(i)); o.value = i; sel.append(o); });
+    sel.value = z.assignee == null || ![...sel.options].some(o => o.value === String(z.assignee)) ? "" : String(z.assignee);
+    sel.addEventListener("change", () => { z.assignee = sel.value === "" ? null : +sel.value; geaendert(true); });
+    const x = el("button", "tw", "×"); x.type = "button"; x.title = "entfernen";
+    x.addEventListener("click", () => { S.offZiele.splice(n, 1); geaendert(); });
+    if (!d) return [[koord(z.xy), "num"], ["nicht in den Weltdaten"], [""], ["–", "num", 0], ["–", "num", null], [zahl, null, z.n || 1], [sel], [x]];
+    return [[koord(z.xy), "num"], [d.name], [spielerName(d.p)], [nf.format(d.pts), "num", d.pts], [nah == null ? "–" : nf1.format(nah), "num", nah],
+            [zahl, null, z.n || 1], [sel], [x]];
+  });
+  const sc = el("div", "ap-scroll");
+  sc.append(table([["Koord.", "num"], ["Dorf"], ["Besitzer"], ["Punkte", "num", true], ["Nächstes Off-Dorf (Felder)", "num", true], ["Offs", null, true], ["Angreifer"], [""]], rows));
+  tabelleErsetzen(box, sc);
 }
 function fakeZieleBauen() {
   const box = $("fakeziel-tab");
@@ -588,20 +629,23 @@ function fakeZieleBauen() {
 function zieleBauen() {
   const box = $("ziel-tab");
   const anz = (n, eins, mehr) => n ? n + " " + (n === 1 ? eins : mehr) : "";
-  $("ziel-hint").textContent = [anz(S.ziele.length, "AG-Ziel", "AG-Ziele"), anz(S.fakeHaupt.length, "Fakeziel", "Fakeziele")].filter(Boolean).join(" · ");
+  $("ziel-hint").textContent = [anz(S.ziele.length, "AG-Ziel", "AG-Ziele"), anz(S.offZiele.length, "Off-Ziel", "Off-Ziele"), anz(S.fakeHaupt.length, "Fakeziel", "Fakeziele")].filter(Boolean).join(" · ");
   $("ziel-zahl").textContent = S.ziele.length ? S.ziele.length + " Dörfer" : "";
   $("ziel-leer").hidden = !S.ziele.length;
   document.querySelectorAll('input[name="zart"]').forEach(r => { r.checked = r.value === S.zart; });
-  $("ziel-karte").textContent = S.zart === "fake" ? "Fakeziele auf der Karte auswählen" : "AG-Ziele auf der Karte auswählen";
-  $("ziel-spieler-add").textContent = S.zart === "fake" ? "alle Dörfer als Fakeziele" : "alle Dörfer als AG-Ziele";
-  $("ziel-text-add").textContent = S.zart === "fake" ? "als Fakeziele hinzufügen" : "als AG-Ziele hinzufügen";
+  const artName = S.zart === "fake" ? "Fakeziele" : S.zart === "off" ? "Off-Ziele" : "AG-Ziele";
+  $("ziel-karte").textContent = artName + " auf der Karte auswählen";
+  $("ziel-spieler-add").textContent = "alle Dörfer als " + artName;
+  $("ziel-text-add").textContent = "als " + artName + " hinzufügen";
   // AG-Ziele direkt einem Angreifer zuordnen (Dennis 13.11.2026)
   const fuer = $("ziel-fuer");
   fuer.replaceChildren(Object.assign(el("option", null, "automatisch"), {value: ""}));
-  S.atts.forEach((a, i) => { if (a.rollen && a.rollen.ag === false) return; fuer.append(Object.assign(el("option", null, attName(i)), {value: String(i)})); });
+  const rolle = S.zart === "off" ? "off" : "ag";
+  S.atts.forEach((a, i) => { if (a.rollen && a.rollen[rolle] === false) return; fuer.append(Object.assign(el("option", null, attName(i)), {value: String(i)})); });
   fuer.value = S.zielFuer != null && [...fuer.options].some(o => o.value === String(S.zielFuer)) ? String(S.zielFuer) : "";
   $("ziel-fuer-l").hidden = S.zart === "fake";
   fakeZieleBauen();
+  offZieleBauen();
   document.querySelectorAll('input[name="zmodus"]').forEach(r => { r.checked = r.value === S.zmodus; });
   // Je Angreifer eigene Ziele: ein Kartenknopf je Angreifer mit AGs
   const je = $("ziel-karte-je");
@@ -896,11 +940,12 @@ function zeitenBauen() {
 /** Besitzer der AG-Ziele und der Fakeziele aus Abschnitt 3 (Barbaren nicht). */
 function zielSpieler() {
   const s = new Set(), add = xy => { const d = dorf(xy); if (d && d.p >= 0) s.add(d.p); };
-  S.ziele.forEach(z => add(z.xy)); S.fakeHaupt.forEach(add);
+  S.ziele.forEach(z => add(z.xy)); S.offZiele.forEach(z => add(z.xy)); S.fakeHaupt.forEach(add);
   return s;
 }
 function pflichtZiele() {
-  const drin = new Set(S.ziele.map(z => z.xy).concat(S.fakeHaupt)), aus = new Set(S.fakeAus), out = [];
+  // Off-Ziele bekommen selbst keine Fakes (Dennis 14.11.2026 4b), ihr Besitzer ist Zielspieler
+  const drin = new Set(S.ziele.map(z => z.xy).concat(S.offZiele.map(z => z.xy), S.fakeHaupt)), aus = new Set(S.fakeAus), out = [];
   zielSpieler().forEach(p => (dorfVon.get(p) || []).forEach(i => {
     const xy = V.rows[i][0];
     if (!drin.has(xy)) out.push({xy, aus: aus.has(xy)});
@@ -1008,7 +1053,10 @@ function kernInput(cfgExtra) {
   if (!IDS) fehler.push("Dorf-IDs fehlen (dorf_ids.json), ohne sie gibt es keinen Export.");
   const zielDorf = xy => { const d = dorf(xy); return d ? {id: d.id, x: d.x, y: d.y, owner: d.p, name: d.name} : null; };
   const agTargets = S.ziele.map(z => Object.assign(zielDorf(z.xy) || {}, {assignee: S.zmodus === "je" ? z.assignee : null})).filter(t => t.id != null);
-  const agSet = new Set(S.ziele.map(z => z.xy));
+  const offTargets = S.offZiele.filter(z => dorf(z.xy) && !S.ziele.some(a => a.xy === z.xy))
+    .map(z => Object.assign(zielDorf(z.xy), {n: z.n || 1, assignee: z.assignee != null && z.assignee < S.atts.length ? z.assignee : null}));
+  // AG- und Off-Ziele bekommen keine Fakes aus den Listen
+  const agSet = new Set(S.ziele.map(z => z.xy).concat(S.offZiele.map(z => z.xy)));
   const fakeTargets = S.fakeHaupt.filter(k => !agSet.has(k) && dorf(k)).map(zielDorf)
     .concat(pflichtZiele().filter(x => !x.aus).map(x => zielDorf(x.xy)));
   const schon = new Set(fakeTargets.map(t => t.x * 1000 + t.y));
@@ -1027,8 +1075,8 @@ function kernInput(cfgExtra) {
     });
   }
   // reiner Fake-Plan (v0.6): ohne AG-Ziele reicht ein Fakeziel
-  if (!S.ziele.length && !fakeTargets.length && !extraFakeTargets.length) fehler.push("Keine AG-Ziele und keine Fakeziele (Abschnitt 3).");
-  return {fehler, input: {world: W, cfg: Object.assign({}, S.cfg, {seed: S.seed}, cfgExtra || {}), attackers, agTargets, fakeTargets,
+  if (!S.ziele.length && !offTargets.length && !fakeTargets.length && !extraFakeTargets.length) fehler.push("Keine AG-, Off- oder Fakeziele (Abschnitt 3).");
+  return {fehler, input: {world: W, cfg: Object.assign({}, S.cfg, {seed: S.seed}, cfgExtra || {}), attackers, agTargets, offTargets, fakeTargets,
           extraFakeTargets, arrival: ank, arrivals: ankGut, windows: fw.fenster, now: Date.now()}};
 }
 function rechnen() {
@@ -1087,6 +1135,7 @@ function zeigen() {
   const zus = r.items.filter(i => i.zusatz).length;
   [["geadelt", r.stats.geadelt + " / " + r.stats.ziele], ["Clean-Offs" + (zus ? ", davon " + zus + " zusätzlich" : ""), anzahl("clean")], ["AGs", anzahl("ag")], ["Fakes", anzahl("fake")]]
     .concat(anzahl("rest") || ERG.input.cfg.rest_offs === "nicht_ag" ? [["Offs auf Nicht-AG-Ziele", anzahl("rest")]] : [])
+    .concat(r.offZiele && r.offZiele.length ? [["Offs auf Off-Ziele (" + r.offZiele.filter(z => z.ist >= z.soll).length + " von " + r.offZiele.length + " Zielen voll)", anzahl("offziel") + " / " + r.offZiele.reduce((n, z) => n + z.soll, 0)]] : [])
     .concat([["freie Offs", r.freieOffs.length]]).forEach(([t, v]) => {
     const d = el("div"); d.append(el("b", null, String(v)), document.createTextNode(" " + t)); sum.append(d);
   });
@@ -1239,7 +1288,7 @@ function bilanzBox(r) {
     const vs = a.villages || [], rol = a.rollen || {};
     const agDa = rol.ag === false ? 0 : vs.reduce((n, v) => n + (v.nobles || 0), 0);
     const agEin = r.items.filter(i => i.att === a.id && i.kind === "ag").length;
-    const offEin = r.items.filter(i => i.att === a.id && (i.kind === "clean" || i.kind === "rest" || (i.kind === "ag" && i.units.ram > 0))).length;
+    const offEin = r.items.filter(i => i.att === a.id && (i.kind === "clean" || i.kind === "rest" || i.kind === "offziel" || (i.kind === "ag" && i.units.ram > 0))).length;
     const offFrei = r.freieOffs.filter(o => o.att === a.id).length;
     const eigene = r.ziele.filter(z => z.assignee === a.id);
     const teile = [];
@@ -1248,6 +1297,8 @@ function bilanzBox(r) {
       const offF = eigene.reduce((n, z) => n + (z.offFehlt || 0), 0);
       teile.push("eigene AG-Ziele " + g + " von " + eigene.length + " geadelt" + (agF ? ", es fehlen " + agF + " AGs in Reichweite" : "") + (offF ? ", es fehlen " + offF + " Clean-Offs" : ""));
     }
+    const eigeneOz = (r.offZiele || []).filter(z => z.assignee === a.id);
+    if (eigeneOz.length) teile.push("eigene Off-Ziele " + eigeneOz.length + ", " + eigeneOz.reduce((n, z) => n + Math.min(z.ist, z.soll), 0) + " von " + eigeneOz.reduce((n, z) => n + z.soll, 0) + " Offs eingeplant");
     if (agDa || agEin) teile.push("AGs " + agEin + " von " + agDa + " eingeplant");
     const aufFremde = cleanAG.filter(i => i.att === a.id && !trainVon.get(i.t.id).has(a.id));
     const vonFremden = cleanAG.filter(i => i.att !== a.id && trainVon.get(i.t.id).has(a.id));
@@ -1324,7 +1375,7 @@ function sitzungenBox(r) {
     [...akt.values()].map(its => its.slice().sort((p, q) => p.sendMs - q.sendMs)).sort((p, q) => p[0].sendMs - q[0].sendMs).forEach(its => {
       const i = its[0], z = dorf(i.t.x * 1000 + i.t.y);
       const art = i.kind === "ag" ? (its.length > 1 ? "AG-Train (" + its.length + " AGs" + (its.some(x => x.units.ram > 0) ? ", mit Off" : "") + ")" : "AG" + (i.units.ram > 0 ? " mit Off" : ""))
-                : i.kind === "clean" ? (i.zusatz ? "zusätzliche Clean-Off" : "Clean-Off") : i.kind === "rest" ? "Off auf Nicht-AG-Ziel" : "Off";
+                : i.kind === "clean" ? (i.zusatz ? "zusätzliche Clean-Off" : "Clean-Off") : i.kind === "rest" ? "Off auf Nicht-AG-Ziel" : i.kind === "offziel" ? "Off auf Off-Ziel" : "Off";
       const an1 = Math.min(...its.map(x => x.arrivalMs)), an2 = Math.max(...its.map(x => x.arrivalMs));
       let ab = "";
       if (i.ausserhalb) {
@@ -1454,8 +1505,9 @@ function kartenBlick(ziel) {
   const m = String(ziel).match(/^ag:(\d+)$/), nur = m ? +m[1] : null;
   let pts = ziel === "fake" ? K.parseKoordListe(S.fakeText || "").keys.map(xy)
           : ziel === "fakeziel" ? S.fakeHaupt.map(xy)
+          : ziel === "offziel" ? S.offZiele.map(z => xy(z.xy))
           : S.ziele.filter(z => nur == null || z.assignee === nur).map(z => xy(z.xy));
-  if (!pts.length && (ziel === "fake" || ziel === "fakeziel")) pts = S.ziele.map(z => xy(z.xy)).concat(S.fakeHaupt.map(xy));
+  if (!pts.length && (ziel === "fake" || ziel === "fakeziel" || ziel === "offziel")) pts = S.ziele.map(z => xy(z.xy)).concat(S.offZiele.map(z => xy(z.xy)), S.fakeHaupt.map(xy));
   let rand = 12;
   const angreifer = alle => ANALYSE.forEach((A, i) => { if (A && (alle || nur == null || i === nur)) A.dorfer.forEach(d => pts.push([d.x, d.y])); });
   if (!pts.length) { rand = W && W.snob_max_dist ? W.snob_max_dist : 35; angreifer(false); }
@@ -1483,6 +1535,9 @@ function auswahlUebernehmen() {
     $("h-fake").scrollIntoView();
   } else if (a.ziel === "fakeziel") {
     $("ziel-text-note").textContent = zieleHinzu(a.keys, "Von der Karte", "fake");
+    $("h-ziel").scrollIntoView();
+  } else if (a.ziel === "offziel") {
+    $("ziel-text-note").textContent = zieleHinzu(a.keys, "Von der Karte", "off");
     $("h-ziel").scrollIntoView();
   } else {
     const m = String(a.ziel).match(/^ag(?::(\d+))?$/);
@@ -1538,8 +1593,9 @@ const DATEI_ART = "karte259-angriffsplaner";
 let PLAN_DATEI = null;
 const zweistellig = n => String(n).padStart(2, "0");
 function planInhalt(s) {
-  const n = (s.atts || []).filter(a => a && a.text && String(a.text).trim()).length, z = (s.ziele || []).length, f = (s.fakeHaupt || []).length;
-  return [n + (n === 1 ? " Angreifer mit Truppenübersicht" : " Angreifer mit Truppenübersichten"), z + (z === 1 ? " AG-Ziel" : " AG-Ziele"), f + (f === 1 ? " Fakeziel" : " Fakeziele")].join(", ");
+  const n = (s.atts || []).filter(a => a && a.text && String(a.text).trim()).length, z = (s.ziele || []).length, f = (s.fakeHaupt || []).length, o = (s.offZiele || []).length;
+  return [n + (n === 1 ? " Angreifer mit Truppenübersicht" : " Angreifer mit Truppenübersichten"), z + (z === 1 ? " AG-Ziel" : " AG-Ziele")]
+    .concat(o ? [o + (o === 1 ? " Off-Ziel" : " Off-Ziele")] : [], [f + (f === 1 ? " Fakeziel" : " Fakeziele")]).join(", ");
 }
 $("plan-speichern").addEventListener("click", () => {
   const t = new Date();
@@ -1604,7 +1660,8 @@ $("ziel-text-add").addEventListener("click", () => {
 $("ziel-fuer").addEventListener("change", e => { S.zielFuer = e.target.value; speichern(); });
 $("ziel-leer").addEventListener("click", () => { S.ziele = []; geaendert(); });
 $("fakeziel-leer").addEventListener("click", () => { S.fakeHaupt = []; geaendert(); });
-$("ziel-karte").addEventListener("click", () => zurKarte(S.zart === "fake" ? "fakeziel" : "ag"));
+$("offziel-leer").addEventListener("click", () => { S.offZiele = []; geaendert(); });
+$("ziel-karte").addEventListener("click", () => zurKarte(S.zart === "fake" ? "fakeziel" : S.zart === "off" ? "offziel" : "ag"));
 document.querySelectorAll('input[name="zart"]').forEach(r => r.addEventListener("change", () => { S.zart = r.value; geaendert(); }));
 $("fake-karte").addEventListener("click", () => zurKarte("fake"));
 document.querySelectorAll('input[name="zmodus"]').forEach(r => r.addEventListener("change", () => { S.zmodus = r.value; geaendert(); }));

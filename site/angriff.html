@@ -65,7 +65,7 @@
   .ap-aufstock .warn{color:var(--bad)}
   .ap-done{font-size:11.5px; color:var(--good); font-weight:700}
   .ap-kind{font-weight:700; white-space:nowrap}
-  .k-clean{color:var(--accent)} .k-ag{color:var(--good)} .k-fake{color:var(--muted)} .k-rest{color:var(--ink-2)}
+  .k-clean{color:var(--accent)} .k-ag{color:var(--good)} .k-fake{color:var(--muted)} .k-rest{color:var(--ink-2)} .k-offziel{color:var(--accent)}
   .ap-units{font-size:11px; color:var(--ink-2)}
   .ap-sum{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px}
   .ap-sum>div{border:1px solid var(--edge-soft); border-radius:var(--radius); padding:4px 9px; font-size:12px}
@@ -159,6 +159,7 @@
       <div class="ap-row">
         <span class="ap-note">Hinzufügen als:</span>
         <label><input type="radio" name="zart" value="ag" checked> AG-Ziele</label>
+        <label><input type="radio" name="zart" value="off"> Off-Ziele</label>
         <label><input type="radio" name="zart" value="fake"> Fakeziele</label>
         <button class="ap-i" type="button" data-info="zart" aria-expanded="false" title="Info">i</button>
       </div>
@@ -187,6 +188,11 @@
       <div class="ap-help" data-help="zmodus"></div>
       <div class="ap-row" id="ziel-karte-je" hidden></div>
       <div id="ziel-tab"></div>
+      <div class="ap-row ap-teil"><strong style="font-size:12px">Off-Ziele</strong> <span class="ap-note" id="offziel-zahl"></span>
+        <button class="tw" type="button" id="offziel-leer">alle entfernen</button>
+        <button class="ap-i" type="button" data-info="offZielN" aria-expanded="false" title="Info">i</button></div>
+      <div class="ap-help" data-help="offZielN"></div>
+      <div id="offziel-tab"></div>
       <div class="ap-row ap-teil"><strong style="font-size:12px">Fakeziele</strong> <span class="ap-note" id="fakeziel-zahl"></span>
         <button class="tw" type="button" id="fakeziel-leer">alle entfernen</button></div>
       <div id="fakeziel-tab"></div>

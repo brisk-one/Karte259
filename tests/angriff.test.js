@@ -1483,3 +1483,40 @@ test("Fakes aufstocken: Off mit „all“ im Plan nimmt alle Einheiten dieser Ar
   const ausOff = r.neu.filter(f => f.source === eigene[0].id);
   assert.ok(ausOff.every(f => !f.units.ram), "keine Rammen mehr im Off-Dorf: " + JSON.stringify(ausOff.map(f => f.units)));
 });
+
+test("Off-Ziele: Zahl je Ziel, Zuordnung, gestaffelt, erst Clean-Offs, selbst ohne Fakes (Dennis 14.11.2026, 1b 2a 3a 4b)", () => {
+  const v = (id, x, y, units) => ({id, name: "D" + id, x, y, pts: 10000, units, nobles: units.snob || 0});
+  const alpha = {id: 101, name: "Alpha", points: 300000, villages: [v(3, 499, 500, OFF()), v(4, 499, 502, OFF()), v(5, 499, 498, OFF()), v(6, 500, 501, OFF())]};
+  const beta = {id: 102, name: "Beta", points: 250000, villages: [v(22, 499, 504, OFF()), v(23, 499, 496, OFF())]};
+  const z = (id, x, y, n, assignee) => ({id, x, y, owner: 900, n, assignee});
+  const basis = extra => Object.assign({world: W, cfg: {seed: 3}, attackers: [alpha, beta], agTargets: [], fakeTargets: [],
+    arrival: K.parseAnkunft("03.11.2026 08:00:00:000 bis 09:00:00:000"),
+    windows: K.parseFenster("02.11.2026 16:00 bis 20:00\n02.11.2026 22:00 bis 23:30").fenster, now: Date.UTC(2026, 10, 2, 12, 0)}, extra);
+  const input = basis({offTargets: [z(901, 470, 500, 3), z(902, 471, 502, 1), z(903, 469, 498, 2, 102)], fakeTargets: [{id: 902, x: 471, y: 502, owner: 900}, {id: 905, x: 468, y: 503, owner: 900}]});
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  const auf = id => r.items.filter(i => i.kind === "offziel" && i.t.id === id).sort((a, b) => a.arrivalMs - b.arrivalMs);
+  assert.deepEqual([901, 902, 903].map(id => auf(id).length), [3, 1, 2]);
+  assert.ok(auf(903).every(i => i.att === 102), "zugeordnet: nur Offs von Beta");
+  assert.deepEqual(r.offZiele.map(o => [o.id, o.soll, o.ist]), [[901, 3, 3], [902, 1, 1], [903, 2, 2]]);
+  // gestaffelt: die letzte ist die mit der kürzesten Laufzeit, die anderen mindestens 30 s und höchstens 15 min davor
+  const drei = auf(901), letzte = drei[2];
+  assert.ok(drei.every(i => K.dist(i.v, i.t) >= K.dist(letzte.v, letzte.t) - 1e-9), "kürzeste Laufzeit zuletzt");
+  assert.ok(drei[1].arrivalMs - drei[0].arrivalMs >= 30000 && letzte.arrivalMs - drei[1].arrivalMs >= 60000, "auseinander");
+  assert.ok(letzte.arrivalMs - drei[0].arrivalMs <= 15 * 60000 + 1000, "in der Staffelspanne");
+  assert.ok(r.items.filter(i => i.kind === "offziel").every(i => i.arrivalMs >= input.arrival.from && i.arrivalMs <= input.arrival.to), "im Ankunftszeitraum");
+  // keine Fakes aufs Off-Ziel, auch wenn es als Fakeziel mitkommt (4b); das andere Fakeziel bekommt Fakes
+  assert.ok(!r.items.some(i => i.kind === "fake" && i.t.id === 902), "Off-Ziel ohne Fakes");
+  assert.ok(r.items.some(i => i.kind === "fake" && i.t.id === 905), "Fakeziel mit Fakes");
+  assert.equal(K.toDSU(auf(902)).items[0].type, 8, "Symbol Off");
+  // 2a: mit AG-Ziel bekommt erst das AG-Ziel seine Clean-Off; Off-Ziel mit Hinweis, wenn die Offs nicht reichen
+  const knapp = basis({
+    attackers: [{id: 101, name: "Alpha", points: 300000, villages: [v(1, 492, 500, DEFF(4)), v(3, 499, 500, OFF()), v(4, 499, 502, OFF())]}],
+    agTargets: [{id: 911, x: 480, y: 500, owner: 900}], offTargets: [z(901, 470, 500, 3)], cfg: {seed: 3, clean_per_target: 1, uebrige_auf_ag: "aus"}});
+  const rk = K.plan(knapp);
+  assert.equal(rk.items.filter(i => i.kind === "clean" && i.t.id === 911).length, 1, "Clean-Off fürs AG-Ziel");
+  assert.equal(rk.items.filter(i => i.kind === "offziel").length, 1);
+  assert.ok(rk.warnings.some(w => w.art === "offziel" && /1 statt 3 Offs/.test(w.text)));
+  // ein Dorf, das AG-Ziel ist, wird kein Off-Ziel
+  assert.equal(K.plan(basis({agTargets: [{id: 901, x: 470, y: 500, owner: 900}], offTargets: [z(901, 470, 500, 2)]})).offZiele.length, 0);
+});
