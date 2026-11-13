@@ -46,6 +46,7 @@ const INFO = {
   jeClean: "Gilt nur für diesen Spieler, statt der Einstellung „Clean-Offs je AG-Ziel“ oben. „Höchstens N je Ziel“: von diesem Spieler kommen je AG-Ziel höchstens N Clean-Offs (0: keine), die Zahl je Ziel bleibt beim Wert oben. „N für meine AG-Ziele“: Ziele, auf die dieser Spieler den AG-Train schickt, bekommen N Clean-Offs (mindestens 1). Ohnehin gilt: Clean-Offs kommen möglichst vom Spieler, der den Train schickt, damit er sein Timing selbst in der Hand hat.",
   jeStark: "Gilt nur für diesen Spieler: seine AG-Ziele bekommen ihre Clean-Offs möglichst von ihm selbst, und seine Offs gehen möglichst auf seine eigenen AG-Ziele, auch seine freien Offs. Fremde Offs vor seinen AGs gibt es dann nur, wenn er selbst keine passende Off hat. Das geht vor Abschickzeitraum und Laufzeit-Richtwert, aber nicht vor „Off vor AG“: kann seine eigene Off nur nach seinem AG losgehen, kommt lieber eine fremde, die vorher losgeht. Das Adeln selbst geht ebenfalls vor (fehlt einem Ziel sonst eine Clean-Off, kommt sie doch von einem anderen).",
   planDatei: "„Planung speichern“ lädt eine JSON-Datei herunter mit allem, was du im Planer eingegeben und angepasst hast: Konfiguration, Angreifer mit Truppenübersichten, Häkchen, AG-Zahlen, AG-Pala, Offs an/aus, Zeiträume, Ziele mit Zuordnung, Fakeziele und Fakelisten, gewürfelte Variante. „Planung laden …“ liest so eine Datei (sie bleibt auf deinem Rechner, nichts wird hochgeladen), zeigt, was drin ist, und ersetzt nach Bestätigung die aktuelle Planung; danach „Berechnen“. Weltdaten und die Uhrzeit kommen beim Rechnen frisch dazu, der Plan kann sich deshalb leicht ändern, etwa wenn Abschickzeiten inzwischen vorbei sind oder ein Ziel den Besitzer gewechselt hat. Die Datei enthält die Truppenübersichten der Spieler: nur an Leute geben, die sie sehen dürfen. Ohne Datei merkt sich derselbe Browser die Planung ohnehin, auch nach dem Schließen.",
+  fakeSoll: "Fakes eines Spielers aufstocken: Gesamtzahl eintragen, „Fakes aufstocken“ rechnet neu. Die zusätzlichen Fakes kommen aus seinen Dörfern, reihum, auf die Fakeziele (auch Stammesmitglieder) mit den wenigsten Fakes, auch über „Fakes je Dorf“ hinaus, nie zweimal dasselbe Ziel aus einem Dorf, und nur in seinen Abschicksitzungen (mit 10 Minuten Rand) wie alle Fakes. „Fakes aus einem eigenen Dorf höchstens“ wird für ihn so weit angehoben, wie die Zahl es braucht. Grenzen: Katapulte oder Rammen und Späher in seinen Dörfern, Zahl der Fakeziele, Platz in seinen Sitzungen; reicht es nicht, steht die erreichte Zahl daneben und in den Hinweisen. ↺ rechnet wieder ohne Aufstocken. Die Zahl wird mit der Planung gespeichert.",
   agListe: "Für Listen wie „in diesen Dörfern baue ich je 4 AGs“: Koordinaten einfügen, Zahl wählen, übernehmen. Die Zahl ist die AG-Zahl im Dorf insgesamt, wie wenn du sie in der Dorfliste von Hand einträgst; die Dorfliste zeigt dann „Übersicht N, noch M bauen“, ↺ setzt einzeln zurück. Steht in der Übersicht schon so viel oder mehr, gilt die Übersicht. Die Dörfer müssen in seiner Truppenübersicht stehen; was dort fehlt, wird mit Koordinaten genannt.",
   zielFuer: "Mit einem Angreifer gewählt gehören alle Dörfer aus der Liste (oder alle Dörfer des Spielers) ihm als AG-Ziele, auch die schon vorhandenen; die Verteilung springt auf „je Angreifer eigene Ziele“. „automatisch“: wie bisher, der Planer verteilt.",
   jeRammen: "Gilt nur für diesen Spieler: so viele Rammen darf ein Fake höchstens enthalten (leer: 1, 0: keine). Katapulte gehen immer vor: eine Ramme ist die langsamste Einheit nur, wenn im Dorf kein Katapult frei ist, und aufgefüllt wird mit Rammen erst, wenn Katapulte und Späher nicht reichen. Jeder Fake hat mindestens einen Späher.",
@@ -953,7 +954,7 @@ function kernInput(cfgExtra) {
     const own = A.own && A.own.fenster.length ? A.own.fenster : null;
     if (!own && !fw.fenster.length) fehler.push("Kein Abschickzeitraum für " + A.name + " (Abschnitt 5).");
     attackers.push({id: i, name: A.name, points: A.points || 0, rollen: a.rollen, auswahl: A.aus ? A.aus.keys : null, windows: own,
-      cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax, eigeneStark: !!a.eigeneStark,
+      cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax, eigeneStark: !!a.eigeneStark, fakeSoll: a.fakeSoll || null,
       villages: A.dorfer.map(d => ({id: d.id, name: d.name, x: d.x, y: d.y, pts: d.pts, units: d.units,
                                     nobles: agZahl(a, d), useOff: offEingeplant(a, d), pala: !!(a.pala && a.pala[d.xy])}))});
   });
@@ -1102,10 +1103,31 @@ function zeigen() {
       btn.addEventListener("click", () => kopieren(fmt() === "wb" ? K.toWB(its) : K.toDSU(its, {world: WELT, twWorld: WELT}), btn, its.length));
       z.append(btn);
     });
+    // Fakes je Spieler aufstocken (Dennis 13.11.2026 09:27): Gesamtzahl eintragen, neu rechnen
+    const a = attId != null && ANALYSE[attId] && ANALYSE[attId].name === wer ? S.atts[attId] : null;
+    if (a) {
+      const nF = K.exportAuswahl(r.items, "fake", attId).length, info = (r.fakeAufstocken || []).find(f => f.att === attId);
+      const box = el("span", "ap-aufstock");
+      const inp = el("input"); inp.type = "number"; inp.min = 0; inp.max = 100000; inp.style.width = "5.5em";
+      inp.value = a.fakeSoll || ""; inp.placeholder = String(nF); inp.setAttribute("aria-label", "Fakes insgesamt für " + wer);
+      const b = el("button", "tw", "Fakes aufstocken"); b.type = "button";
+      b.addEventListener("click", () => { const n = parseInt(inp.value, 10); a.fakeSoll = n > 0 ? n : null; speichern(); rechnen(); });
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") b.click(); });
+      box.append(el("span", "ap-note", "auf"), inp, b, infoKnopf("fakeSoll"));
+      if (a.fakeSoll) {
+        const x = el("button", "tw", "↺"); x.type = "button"; x.title = "ohne Aufstocken rechnen";
+        x.addEventListener("click", () => { a.fakeSoll = null; speichern(); rechnen(); });
+        const g = info && info.grund, gt = g ? [g.truppen && "Truppen in " + g.truppen, g.sitzungen && "Sitzungen in " + g.sitzungen, g.ziele && "alle Ziele schon in " + g.ziele].filter(Boolean) : [];
+        box.append(x, el("span", nF >= a.fakeSoll ? "ap-note" : "ap-note warn", "gewünscht " + a.fakeSoll + ", im Plan " + nF + (info && info.vorher < nF ? " (vorher " + info.vorher + ")" : "") +
+          (nF < a.fakeSoll && gt.length ? "; Grenze: " + gt.join(", ") + " Dörfern" : "")));
+      }
+      z.append(box);
+    }
     return z;
   };
   exp.append(zeile("Alle Angreifer", null));
   ERG.input.attackers.forEach(at => { if (r.items.some(i => i.att === at.id)) exp.append(zeile(at.name, at.id)); });
+  exp.append(hilfeFeld("fakeSoll"));
   box.append(exp);
   // Befehle je Angreifer
   ERG.input.attackers.forEach(at => {

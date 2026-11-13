@@ -811,6 +811,31 @@ test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Re
   assert.equal(r10.items.filter(i => i.kind === "fake").length, r10o.items.filter(i => i.kind === "fake").length);
 });
 
+test("Fakes je Spieler aufstocken (Dennis 13.11.2026 09:27)", () => {
+  const r0 = K.plan(szenario({fakes_per_village: 2}));
+  const n0 = r0.items.filter(i => i.kind === "fake" && i.att === 102).length;
+  const input = szenario({fakes_per_village: 2});
+  input.attackers[1].fakeSoll = n0 + 6;
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  const beta = r.items.filter(i => i.kind === "fake" && i.att === 102);
+  assert.ok(beta.length >= n0 + 4, "aufgestockt: " + n0 + " → " + beta.length);
+  // Alpha unverändert, Betas Fakes in seinen Sitzungen (mit 10 Minuten Rand), nie zweimal dasselbe Ziel aus einem Dorf
+  assert.equal(r.items.filter(i => i.kind === "fake" && i.att === 101).length, r0.items.filter(i => i.kind === "fake" && i.att === 101).length);
+  const kern = K.sitzungenAus(r.items.filter(i => i.att === 102 && i.kind !== "fake").map(i => i.sendMs).sort((a, b) => a - b));
+  beta.forEach(i => assert.ok(kern.some(([x, y]) => i.sendMs >= x - 600000 && i.sendMs <= y + 600000), "Fake in Sitzung"));
+  const paare = beta.map(i => i.v.id + ">" + i.t.id);
+  assert.equal(new Set(paare).size, paare.length);
+  assert.ok(r.fakeAufstocken.some(x => x.att === 102 && x.soll === n0 + 6 && x.ist >= n0 + 4 && x.vorher === n0));
+  // unerreichbar viel: Hinweis mit Zahl
+  const i2 = szenario({fakes_per_village: 2}); i2.attackers[1].fakeSoll = 5000;
+  const r2 = K.plan(i2);
+  assert.deepEqual(K.pruefePlan(r2, i2), []);
+  assert.ok(r2.warnings.some(w => w.art === "fakesoll" && /^Beta: \d+ von 5000 gewünschten Fakes.*; Grenze: \d+ Dörfer/.test(w.text)), r2.warnings.map(w => w.text).join(" | "));
+  const g = r2.fakeAufstocken.find(x => x.att === 102).grund;
+  assert.ok(g && g.truppen + g.sitzungen + g.ziele > 0);
+});
+
 test("Fake-Vorlauf nur in den Abschickzeiträumen des Spielers (Dennis 13.11.2026 01:12)", () => {
   // Alpha darf ab 10 Uhr, Beta erst ab 18 Uhr: 2 h vor der ersten Off des Plans hat nur Alpha einen Zeitraum
   const input = szenario({fakes_per_village: 3, fake_vorlauf_h: 2}, {windows: K.parseFenster("02.11.2026 10:00 bis 20:00\n02.11.2026 22:00 bis 23:30").fenster});

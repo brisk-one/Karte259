@@ -639,7 +639,8 @@ function plan(input) {
       cleanModus: cleanModus && zahl(a.cleanN, 3) != null ? cleanModus : null, cleanN: zahl(a.cleanN, 3),
       fakeModus: fakeModus && zahl(a.fakeN, 20) != null ? fakeModus : null, fakeN: zahl(a.fakeN, 20),
       rammenMax: zahl(a.rammenMax, 1000) != null ? zahl(a.rammenMax, 1000) : 1,       // Rammen je Fake höchstens (Dennis 10.11.2026)
-      stark: !!a.eigeneStark});                                                         // eigene AG-Ziele stark (Dennis 12.11.2026 22:05)
+      stark: !!a.eigeneStark,                                                           // eigene AG-Ziele stark (Dennis 12.11.2026 22:05)
+      fakeSoll: zahl(a.fakeSoll, 100000)});                                            // Fakes insgesamt aufstocken (Dennis 13.11.2026 09:27)
     if (!wunsch.length) warnings.push({art: "fenster", text: "Kein Abschickzeitraum für " + (a.name || a.id) + (streng ? "" : ", Abschickzeiten frei gewählt")});
     // Teilnahme je Spieler (Offs, AGs, Fakes) und Dorfauswahl für Offs und AGs (Dennis 16:57)
     const rollen = Object.assign({off: true, ag: true, fake: true}, a.rollen);
@@ -1380,6 +1381,61 @@ function plan(input) {
     });
   };
   if (herkunft) { herkunftLauf("kata"); herkunftLauf("spaeher"); }
+  // Fakes je Spieler aufstocken (Dennis 13.11.2026 09:27: Zwoogel bekam nur wenige): bis zur gewünschten Gesamtzahl aus seinen
+  // Dörfern, reihum, auf die Ziele mit den wenigsten Fakes (auch über „Fakes je Zieldorf“ hinaus), nie zweimal dasselbe Ziel aus
+  // einem Dorf, in seinen Sitzungen wie alle Fakes. „Fakes aus einem Dorf höchstens“ wird für ihn so weit wie nötig angehoben.
+  const fakeAufstocken = [];
+  att.forEach(a => {
+    if (!(a.fakeSoll > 0)) return;
+    const quellen = fakeQuellen.filter(v => v.att === a.id);
+    let ist = fakes.filter(f => f.v.att === a.id).length;
+    const vorher = ist;
+    if (ist >= a.fakeSoll || !quellen.length) { fakeAufstocken.push({a, soll: a.fakeSoll, ist, vorher, grund: null}); return; }
+    const capV = Math.max(maxQ, Math.ceil(a.fakeSoll / quellen.length));
+    const liste = fakeZiele.map(t => ({t, ex: false})).concat(extra.map(t => ({t, ex: true})));
+    const zahlZ = new Map();
+    fakes.forEach(f => zahlZ.set(f.t.id, (zahlZ.get(f.t.id) || 0) + 1));
+    ["kata", "spaeher"].forEach(modus => {
+      let weiter = true;
+      while (ist < a.fakeSoll && weiter) {
+        weiter = false;
+        for (const v of quellen) {
+          if (ist >= a.fakeSoll) break;
+          if (v.fakes >= capV) continue;
+          const schon = new Set(fakes.filter(f => f.v.id === v.id).map(f => f.t.id));
+          let best = null, bestC = Infinity;
+          liste.forEach(({t, ex}) => {
+            if (schon.has(t.id)) return;
+            const tr = travelS(world, "ram", dist(v, t)), c = (zahlZ.get(t.id) || 0) * 28800 + tr + rng() * 1800 + (ex ? 57600 : 0) + paarZahl(v, t) * PAAR_S;
+            if (c >= bestC) return;
+            if (ex && !t.manuell && moral(world.moral, a.points, t.ownerPoints || 0, t.ownerDays) < cfg.moral_threshold) return;
+            if (!tsetFake(v, tr * 1000).length || !(vorlaufMs ? fakeZeitJetzt(v, t) : fakeZeitOk(v, t))) return;
+            best = {t, ex}; bestC = c;
+          });
+          if (!best) continue;
+          const f = fakeAus(v.fakeAv, v.fakeMin, pop, modus, a.rammenMax);
+          if (!f) continue;
+          v.fakeAv.catapult -= f.catapult; v.fakeAv.spy -= f.spy; v.fakeAv.ram -= f.ram;
+          v.fakes++; zahlZ.set(best.t.id, (zahlZ.get(best.t.id) || 0) + 1); ist++;
+          fakeDazu(v, best.t, f, best.ex);
+          weiter = true;
+        }
+      }
+    });
+    // woran es hängt, je Dorf ohne weiteren Fake: Truppen, Zeit (kein Ziel in seinen Sitzungen) oder alle Ziele schon belegt
+    const grund = {truppen: 0, sitzungen: 0, ziele: 0};
+    if (ist < a.fakeSoll) quellen.forEach(v => {
+      if (v.fakes >= capV) return;
+      const geht = m => !!fakeAus(Object.assign({}, v.fakeAv), v.fakeMin, pop, m, a.rammenMax);
+      if (!geht("kata") && !geht("spaeher")) { grund.truppen++; return; }
+      const schon = new Set(fakes.filter(f => f.v.id === v.id).map(f => f.t.id));
+      if (!liste.some(({t}) => !schon.has(t.id))) grund.ziele++; else grund.sitzungen++;
+    });
+    fakeAufstocken.push({a, soll: a.fakeSoll, ist, vorher, grund});
+    if (ist < a.fakeSoll) warnings.push({art: "fakesoll", text: a.name + ": " + ist + " von " + a.fakeSoll + " gewünschten Fakes" +
+      (ist > vorher ? " (" + (ist - vorher) + " dazu)" : "") + "; Grenze: " + [grund.truppen && grund.truppen + " Dörfer ohne Katapulte oder Rammen mit Spähern für einen weiteren Fake",
+        grund.sitzungen && grund.sitzungen + " Dörfer ohne weiteres Fakeziel, das in seine Sitzungen passt", grund.ziele && grund.ziele + " Dörfer haben schon alle Fakeziele"].filter(Boolean).join(", ")});
+  });
   // Fakes je Dorf ist Richtwert (Dennis 21:04): eine Sammelzeile statt einer Warnung je Ziel
   let fakeSoll = 0;
   if (!herkunft && fakeQuellen.some(v => att.get(v.att).fakeModus !== "ziel")) fakeSoll += cfg.fakes_per_village;
@@ -1552,6 +1608,7 @@ function plan(input) {
   return {items, ziele: zielInfo, freieOffs: freieOffs.map(v => ({id: v.id, x: v.x, y: v.y, name: v.name, att: v.att, offPop: v.offPop, grund: freiGrund.get(v.id) || null})),
           freieAGs: agVillages.map(v => ({id: v.id, x: v.x, y: v.y, att: v.att, frei: v.nobles - verplanteAGs(v, trains)})).filter(x => x.frei > 0),
           warnings, stats: statistik(items, zielInfo, att), cfg, k, form, zeit, knapp, sitzungen, hinweise,
+          fakeAufstocken: fakeAufstocken.map(x => ({att: x.a.id, soll: x.soll, ist: x.ist, vorher: x.vorher, grund: x.grund})),
           bewertung: bewertung(items, zielInfo, att, world)};
 }
 
