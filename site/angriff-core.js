@@ -1853,10 +1853,11 @@ function sitzungsListe(items, att, world) {
     const liste = [];
     its.forEach(it => {
       const l = liste[liste.length - 1];
-      if (!l || it.sendMs - l.bis > SITZUNG_PAUSE_MS) liste.push({von: it.sendMs, bis: it.sendMs, n: 0, kern: 0, fakes: 0, nachts: false, ausserhalb: 0});
+      if (!l || it.sendMs - l.bis > SITZUNG_PAUSE_MS) liste.push({von: it.sendMs, bis: it.sendMs, n: 0, kern: 0, offs: 0, ags: 0, fakes: 0, nachts: false, ausserhalb: 0});
       const z = liste[liste.length - 1];
       z.bis = it.sendMs; z.n++;
-      if (it.kind === "fake") z.fakes++; else z.kern++;
+      // Offs und AGs getrennt (Dennis 13.11.2026 09:09: „3 Offs und AGs“ um 22 Uhr sah nach AGs über der Laufzeit-Grenze aus)
+      if (it.kind === "fake") z.fakes++; else { z.kern++; if (it.kind === "ag") z.ags++; else z.offs++; }
       if (it.nachtSenden) z.nachts = true;
       if (it.ausserhalb && it.kind !== "fake") z.ausserhalb++;
     });
@@ -1973,6 +1974,9 @@ function pruefePlan(res, input) {
     if (!ivHas(fenster.get(it.att) || [], it.sendMs) && (cfg.zeitraeume === "streng" || !it.ausserhalb) && (fenster.get(it.att) || []).length)
       v.push("Abschickzeit außerhalb der Fenster ohne Markierung: " + it.v.id + " → " + it.t.id);
     if (input.now != null && it.sendMs < input.now) v.push("Abschickzeit vor der Berechnung: " + it.v.id);
+    // feste AG-Laufzeit-Grenze (Dennis 12.11.2026, 7 h): nie länger
+    if (it.kind === "ag" && cfg.lauf_ag_art !== "richtwert" && cfg.max_lauf_ag_h > 0 && it.travelMs > cfg.max_lauf_ag_h * 3600000 + 1000)
+      v.push("AG über der Laufzeit-Grenze von " + cfg.max_lauf_ag_h + " h: " + it.v.id + " → " + it.t.id);
     if (it.sendMs !== it.arrivalMs - travelS(world, it.slow, dist(it.v, it.t)) * 1000) v.push("Laufzeit weicht von DS-Ultimate ab");
     if (it.kind === "ag" && dist(it.v, it.t) > world.snob_max_dist + 1e-9) v.push("AG außerhalb der Reichweite: " + it.v.id);
     if (it.kind === "fake") {

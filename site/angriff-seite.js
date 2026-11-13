@@ -1214,36 +1214,48 @@ function bilanzBox(r) {
 function sitzungenBox(r) {
   const d = el("div");
   d.append(el("h3", null, "Abschicksitzungen"),
-    el("p", "ap-note", "Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Rot: Die Sitzung enthält Offs oder AGs, die außerhalb der Abschickzeiträume dieses Spielers losgehen müssen. Sie sind nötig, weil das Ziel sonst nicht geadelt würde, keine Clean-Off rechtzeitig käme oder sonst ein AG vor der Clean-Off losginge (Abschickzeiträume sind Richtwert), oder es sind zusätzliche Offs nach „Freie Offs trotzdem verteilen“. „Hinweis“: So müsste der Spieler einen Zeitraum verlängern oder früher beginnen, damit diese Befehle hineinfallen; am Plan ändert das nichts, die Zeiten bleiben gleich. Über „i“ stehen die einzelnen Befehle. „Lange Laufzeit“: über dem Laufzeit-Richtwert, nötig für dieses Ziel oder eine zusätzliche Off."));
+    el("p", "ap-note", "Eine Sitzung sind Befehle mit höchstens 15 Minuten Pause dazwischen. Rot: Die Sitzung enthält Offs oder AGs, die außerhalb der Abschickzeiträume dieses Spielers losgehen müssen. Sie sind nötig, weil das Ziel sonst nicht geadelt würde, keine Clean-Off rechtzeitig käme oder sonst ein AG vor der Clean-Off losginge (Abschickzeiträume sind Richtwert), oder es sind zusätzliche Offs nach „Freie Offs trotzdem verteilen“. „Hinweis“: So müsste der Spieler einen Zeitraum verlängern oder früher beginnen, damit diese Befehle hineinfallen; am Plan ändert das nichts, die Zeiten bleiben gleich. Über „i“ an jeder Sitzung stehen ihre Offs und AGs mit Dorf, Ziel, Abschick- und Ankunftszeit und Laufzeit, die außerhalb rot. „Lange Laufzeit“: über dem Laufzeit-Richtwert, nötig für dieses Ziel oder eine zusätzliche Off."));
   const hm = ms => K.fmtZeit(ms).slice(0, 5) + ". " + K.fmtZeit(ms).slice(11, 16);
   const dauer = ms => { const m = Math.round(ms / 60000); return m >= 60 ? Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min" : m + " min"; };
   let nr = 0;
-  // Einzelne Befehle außerhalb (Dennis 12.11.2026): je Abschickvorgang Art, Dorf, Ziel, Abschickzeit, Abstand zum Zeitraum
-  const details = (at, von, bis) => {
+  // Befehle einer Sitzung (Dennis 13.11.2026 09:08, vorher nur die außerhalb, 12.11.2026): je Off und AG Art, Dorf, Ziel,
+  // Abschick- und Ankunftszeit, Laufzeit; außerhalb rot mit Abstand zum Zeitraum; Fakes zusammengezählt
+  const tagZeit = (ms, mitMs) => { const f = K.fmtZeit(ms, !!mitMs); return f.slice(0, 5) + ". " + f.slice(11); };
+  const lauf = ms => { const m = Math.round(ms / 60000); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0") + " h"; };
+  const details = (at, von, bis, nurAussen) => {
     const fen = K.ivNorm(at.windows && at.windows.length ? at.windows : (ERG.input.windows || []));
     const akt = new Map();
-    r.items.filter(i => i.att === at.id && i.kind !== "fake" && i.ausserhalb && i.sendMs >= von && i.sendMs <= bis).forEach(i => {
+    r.items.filter(i => i.att === at.id && i.kind !== "fake" && (!nurAussen || i.ausserhalb) && i.sendMs >= von && i.sendMs <= bis).forEach(i => {
       if (!akt.has(i.aktion)) akt.set(i.aktion, []); akt.get(i.aktion).push(i); });
     const ul = el("ul", "ap-list");
-    [...akt.values()].sort((p, q) => p[0].sendMs - q[0].sendMs).forEach(its => {
+    [...akt.values()].map(its => its.slice().sort((p, q) => p.sendMs - q.sendMs)).sort((p, q) => p[0].sendMs - q[0].sendMs).forEach(its => {
       const i = its[0], z = dorf(i.t.x * 1000 + i.t.y);
       const art = i.kind === "ag" ? (its.length > 1 ? "AG-Train (" + its.length + " AGs" + (its.some(x => x.units.ram > 0) ? ", mit Off" : "") + ")" : "AG" + (i.units.ram > 0 ? " mit Off" : ""))
-                : i.kind === "clean" ? (i.zusatz ? "zusätzliche Clean-Off" : "Clean-Off") : "Off";
+                : i.kind === "clean" ? (i.zusatz ? "zusätzliche Clean-Off" : "Clean-Off") : i.kind === "rest" ? "Off auf Nicht-AG-Ziel" : "Off";
+      const an1 = Math.min(...its.map(x => x.arrivalMs)), an2 = Math.max(...its.map(x => x.arrivalMs));
       let ab = "";
-      const vor = fen.find(([x]) => x > i.sendMs), nach = [...fen].reverse().find(([, y]) => y < i.sendMs);
-      const dv = vor ? vor[0] - i.sendMs : Infinity, dn = nach ? i.sendMs - nach[1] : Infinity;
-      if (dn <= dv && nach) ab = dauer(dn) + " nach Ende des Zeitraums (" + hm(nach[1]) + ")";
-      else if (vor) ab = dauer(dv) + " vor Beginn des Zeitraums (" + hm(vor[0]) + ")";
-      ul.append(el("li", null, art + " aus " + i.v.name + " (" + i.v.x + "|" + i.v.y + ") auf " + i.t.x + "|" + i.t.y + (z ? " (" + spielerName(z.p) + ")" : "") +
-        ", abschicken " + K.fmtZeit(i.sendMs).slice(0, 5) + ". " + K.fmtZeit(i.sendMs).slice(11, 19) + (ab ? ", " + ab : "") + (i.zuLang ? ", lange Laufzeit" : "")));
+      if (i.ausserhalb) {
+        const vor = fen.find(([x]) => x > i.sendMs), nach = [...fen].reverse().find(([, y]) => y < i.sendMs);
+        const dv = vor ? vor[0] - i.sendMs : Infinity, dn = nach ? i.sendMs - nach[1] : Infinity;
+        if (dn <= dv && nach) ab = "außerhalb, " + dauer(dn) + " nach Ende des Zeitraums (" + hm(nach[1]) + ")";
+        else if (vor) ab = "außerhalb, " + dauer(dv) + " vor Beginn des Zeitraums (" + hm(vor[0]) + ")";
+        else ab = "außerhalb";
+      }
+      ul.append(el("li", i.ausserhalb && !nurAussen ? "warn" : null, art + " aus " + i.v.name + " (" + i.v.x + "|" + i.v.y + ") auf " + i.t.x + "|" + i.t.y +
+        (z ? " (" + spielerName(z.p) + ")" : "") + ": ab " + tagZeit(i.sendMs) + ", an " + tagZeit(an1, true) + (an2 > an1 ? " bis " + K.fmtZeit(an2, true).slice(11) : "") +
+        ", Laufzeit " + lauf(Math.max(...its.map(x => x.travelMs))) + (ab ? ", " + ab : "") + (i.zuLang ? ", über dem Laufzeit-Richtwert" : "")));
     });
+    if (!nurAussen) {
+      const nf = r.items.filter(i => i.att === at.id && i.kind === "fake" && i.sendMs >= von && i.sendMs <= bis).length;
+      if (nf) ul.append(el("li", "ap-note", "dazu " + nf + (nf === 1 ? " Fake" : " Fakes") + ", einzeln im Abschickplan"));
+    }
     return ul;
   };
-  const mitInfo = (li, at, von, bis) => {
-    const key = "aus-" + (++nr);
-    const b = infoKnopf(key); b.title = "Befehle außerhalb der Abschickzeiträume";
+  const mitInfo = (li, at, von, bis, nurAussen) => {
+    const key = "sitz-" + (++nr);
+    const b = infoKnopf(key); b.title = nurAussen ? "Befehle außerhalb der Abschickzeiträume" : "Offs und AGs dieser Sitzung mit Abschick- und Ankunftszeit";
     const h = el("div", "ap-help ap-detail"); h.dataset.help = key;
-    h.append(details(at, von, bis));
+    h.append(details(at, von, bis, nurAussen));
     li.append(" ", b, h);
   };
   ERG.input.attackers.forEach(at => {
@@ -1251,14 +1263,15 @@ function sitzungenBox(r) {
     if (!sz.length) return;
     const ul = el("ul", "ap-list");
     sz.forEach(z => {
-      const t = hm(z.von) + " bis " + K.fmtZeit(z.bis).slice(11, 16) + " · " + (z.kern ? z.kern + (z.kern === 1 ? " Off oder AG" : " Offs und AGs") : "") +
-        (z.kern && z.fakes ? ", " : "") + (z.fakes ? z.fakes + (z.fakes === 1 ? " Fake" : " Fakes") : "") +
+      const anz = (n, eins, mehr) => n ? n + " " + (n === 1 ? eins : mehr) : "";
+      const t = hm(z.von) + " bis " + K.fmtZeit(z.bis).slice(11, 16) + " · " +
+        [z.offs != null ? anz(z.offs, "Off", "Offs") : anz(z.kern, "Off oder AG", "Offs und AGs"), anz(z.ags, "AG-Train", "AG-Trains"), anz(z.fakes, "Fake", "Fakes")].filter(Boolean).join(", ") +
         (z.nachts ? " · nachts" : "") + (z.ausserhalb ? " · " + z.ausserhalb + " außerhalb" : "");
       const li = el("li", z.ausserhalb ? "warn" : "", t);
-      if (z.ausserhalb) mitInfo(li, at, z.von, z.bis);
+      if (z.kern) mitInfo(li, at, z.von, z.bis, false);
       ul.append(li);
     });
-    (r.hinweise || []).filter(h => h.att === at.id).forEach(h => { const li = el("li", "warn", "Hinweis: " + h.text); mitInfo(li, at, h.von, h.bis); ul.append(li); });
+    (r.hinweise || []).filter(h => h.att === at.id).forEach(h => { const li = el("li", "warn", "Hinweis: " + h.text); mitInfo(li, at, h.von, h.bis, true); ul.append(li); });
     d.append(el("div", "ap-note", at.name + " (" + sz.length + (sz.length === 1 ? " Sitzung)" : " Sitzungen)")), ul);
   });
   return d;
