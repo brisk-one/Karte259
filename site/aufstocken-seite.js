@@ -33,6 +33,12 @@ function laden() {
     if (a && a.cfg) ["fakes_max_je_dorf", "fake_extra_pop", "min_send_gap_s"].forEach(k => { if (a.cfg[k] != null && a.cfg[k] !== "" && !isNaN(+a.cfg[k])) S.cfg[k] = +a.cfg[k]; });
     S.cfgAusPlaner = true;
   }
+  // einmal: Spanne „Offs vor dem AG staffeln“ aus dem Angriffsplaner
+  if (!S.staffelAusPlaner) {
+    const a = planerStand();
+    if (a && a.cfg && a.cfg.off_staffel_max != null && !isNaN(+a.cfg.off_staffel_max)) S.staffel = {min: +a.cfg.off_staffel_min || 0, max: +a.cfg.off_staffel_max};
+    S.staffelAusPlaner = true;
+  }
 }
 /** Truppenübersichten und Abschickzeiträume aus dem Angriffsplaner dieses Browsers, je Spieler (Besitzer der meisten Dörfer
     der Übersicht laut Weltdaten). Zeiträume: die eigenen des Angreifers, wenn „je Angreifer“ an ist, sonst die gemeinsamen. */
@@ -346,7 +352,7 @@ function zeitenBox(its) {
   const agZiele = new Set(its.filter(x => x.art === "ag" && x.t).map(x => x.t.id));
   box.append(el("h3", null, "Zeiten anpassen"),
     el("p", "ap-note", "„AGs angleichen“: Jeder AG-Train landet direkt hinter der Off, die auf sein Ziel zuletzt ankommt; für schon abgeschickte Offs zählt die Ankunft laut Befehlsübersicht (Abschnitt 2). „Offs staffeln“: Auf jedes AG-Ziel landet nur die Off, die als letzte abgeschickt wird, in der Sekunde des AG-Trains, die anderen zufällig " +
-      S.staffel.min + " bis " + S.staffel.max + " Minuten vorher, nie im Nachtbonus. „Offs auf die Sekunde“: alle Offs wieder direkt vor dem Train, je 200 ms. Unverändert bleiben Befehle, die schon unterwegs sind oder dafür vor jetzt plus einer Minute losmüssten, und der Mindestabstand zwischen den Abschickzeiten eines Spielers."));
+      S.staffel.min + " bis " + S.staffel.max + " Minuten vorher (untereinander mehr Rammen zuerst), nie im Nachtbonus. „Offs auf die Sekunde“: alle Offs wieder direkt vor dem Train, je 200 ms. Unverändert bleiben Befehle, die schon unterwegs sind oder dafür vor jetzt plus einer Minute losmüssten, und der Mindestabstand zwischen den Abschickzeiten eines Spielers."));
   const zahl = (k, lab) => eingabe("n", S.staffel[k], v => { const n = parseFloat(String(v).replace(",", ".")); if (!isNaN(n)) S.staffel[k] = Math.min(60, Math.max(0, n)); if (S.staffel.max < S.staffel.min) S.staffel.max = S.staffel.min; speichern(); spaeter(zeigenKern); }, {type: "number", min: 0, max: 60, "data-k": "staffel:" + k, title: lab});
   const r1 = el("div", "ap-row");
   r1.append(el("span", "ap-note", "Offs staffeln von"), zahl("min", "Minuten vorher, mindestens"), el("span", "ap-note", "bis"), zahl("max", "Minuten vorher, höchstens"), el("span", "ap-note", "Minuten vor dem AG"));

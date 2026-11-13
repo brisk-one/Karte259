@@ -326,7 +326,11 @@ test("Plan: fester Zeitpunkt, zugewiesene Ziele, übrige Offs auf Nicht-AG-Dörf
   const fest = szenario({}, {arrival: K.parseAnkunft("03.11.2026 08:30:00:000")});
   const rf = K.plan(fest);
   assert.deepEqual(K.pruefePlan(rf, fest).filter(x => !/Mindestabstand/.test(x)), []);
-  rf.ziele.filter(z => z.geadelt).forEach(z => assert.equal(ofZiel(rf, z.id)[0].arrivalMs, fest.arrival.from));
+  // Blockbeginn auf dem festen Zeitpunkt; gestaffelte Clean-Offs landen vorher, nie im Nachtbonus (13.11.2026)
+  rf.ziele.filter(z => z.geadelt).forEach(z => ofZiel(rf, z.id).forEach(i => {
+    assert.equal(i.arrivalMs - i.offset, fest.arrival.from);
+    assert.ok(i.arrivalMs >= fest.arrival.from - 15 * 60000 - 1000 && !K.istNacht(K.makeWorld(), i.arrivalMs));
+  }));
 
   const zu = szenario({});
   zu.agTargets.forEach(t => { t.assignee = 102; });
@@ -792,7 +796,8 @@ test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Re
   assert.ok(frueh.length > 0, "frühe Fakes vorhanden");
   assert.ok(frueh.length <= Math.ceil(f.length / 3), "rund ein Viertel früh: " + frueh.length + " von " + f.length);
   const erste = Math.min(...f.map(i => i.sendMs));
-  assert.ok(t0 - erste >= 1.5 * 3600000 && t0 - erste <= 3 * 3600000, "erste Fakes rund 2 h vorher: " + (t0 - erste) / 3600000);
+  // Toleranz 1,25 h: gestaffelte Offs (seit 13.11.2026) ziehen die erste Off bis zu 15 Minuten vor
+  assert.ok(t0 - erste >= 1.25 * 3600000 && t0 - erste <= 3 * 3600000, "erste Fakes rund 2 h vorher: " + (t0 - erste) / 3600000);
   assert.ok(r.warnings.some(w => w.art === "vorlauf" && /Fake-Vorlauf 2 h/.test(w.text)));
   // ohne Vorlauf kein Fake so früh
   const r0 = K.plan(szenario({fakes_per_village: 3}, weit));
@@ -1068,7 +1073,8 @@ test("Abschickzeitraum vor eigenen Clean-Offs: Off, die nur außerhalb zu den AG
 });
 
 test("Clean-Offs mit mehr Rammen kommen zuerst an (Dennis 12.11.2026)", () => {
-  const input = szenario({clean_per_target: 3});
+  // ohne Staffeln (seit 13.11.2026 gilt die Regel unter den gestaffelten Offs, die letzte hat die kürzeste Laufzeit)
+  const input = szenario({clean_per_target: 3, off_staffel_min: 0, off_staffel_max: 0});
   // Rammen unterschiedlich: 3, 4, 5 = 300, 260, 220 … (alle über dem Richtwert)
   input.attackers[0].villages.forEach((v, i) => { if (v.units.axe >= 6000) v.units = Object.assign({}, v.units, {ram: 200 + 20 * i}); });
   const r = K.plan(input);
@@ -1311,4 +1317,38 @@ test("Export eines eingelesenen Befehls mit geänderter Ankunft: neue Ankunft im
   const o = K.importDSU([it]).items[0];
   assert.equal(o.arrival_time, 1793600300);
   assert.equal(o.ms, 750);
+});
+
+test("Planer: Offs vor dem AG gestaffelt, nur die letzte in der Sekunde des Trains (Dennis 13.11.2026 15:40, 1b)", () => {
+  const input = szenario({clean_per_target: 3});
+  const r = K.plan(input);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  let gestaffelt = 0;
+  r.ziele.filter(z => z.geadelt).forEach(z => {
+    const its = r.items.filter(i => i.t.id === z.id);
+    const offs = its.filter(i => i.kind === "clean").sort((a, b) => a.arrivalMs - b.arrivalMs), ag = Math.min(...its.filter(i => i.kind === "ag").map(i => i.arrivalMs));
+    if (offs.length < 2) return;
+    const letzte = offs[offs.length - 1];
+    assert.ok(ag - letzte.arrivalMs > 0 && ag - letzte.arrivalMs < 1000, "letzte Off direkt vor dem Train");
+    offs.slice(0, -1).forEach(o => {
+      const vor = ag - o.arrivalMs;
+      assert.ok(vor === 200 * (offs.length - offs.indexOf(o)) || (vor >= 60000 && vor <= 15 * 60000 + 2000), "Vorlauf " + vor);
+      if (vor >= 60000) gestaffelt++;
+      offs.slice(0, -1).forEach(p => { if (p !== o && ag - p.arrivalMs >= 60000 && vor >= 60000) assert.ok(Math.abs(p.arrivalMs - o.arrivalMs) >= 29000, "gestaffelte Offs mindestens 30 s auseinander"); });
+      assert.ok(o.sendMs < letzte.sendMs, "die gestaffelten gehen vor der letzten los");
+    });
+    // Ankunft im Zeitraum, die gestaffelten untereinander mehr Rammen zuerst, die letzte mit der kürzesten Laufzeit
+    offs.forEach(o => assert.ok(o.arrivalMs >= input.arrival.from && !K.istNacht(K.makeWorld(), o.arrivalMs)));
+    for (let i = 1; i < offs.length - 1; i++) assert.ok(offs[i - 1].units.ram >= offs[i].units.ram);
+    assert.ok(offs.every(o => K.dist(o.v, z) >= K.dist(letzte.v, z) - 1e-9));
+  });
+  assert.ok(gestaffelt > 0, "mindestens eine Off gestaffelt");
+  // 0 bis 0: alle in einer Sekunde wie bisher
+  const r0 = K.plan(szenario({clean_per_target: 3, off_staffel_min: 0, off_staffel_max: 0}));
+  r0.ziele.filter(z => z.geadelt).forEach(z => {
+    const its = r0.items.filter(i => i.t.id === z.id), ag = Math.min(...its.filter(i => i.kind === "ag").map(i => i.arrivalMs));
+    its.filter(i => i.kind === "clean").forEach(o => assert.ok(ag - o.arrivalMs > 0 && ag - o.arrivalMs < 1000));
+  });
+  // gleicher Würfel, gleicher Plan
+  assert.deepEqual(K.plan(szenario({clean_per_target: 3})).items.map(i => i.arrivalMs), r.items.map(i => i.arrivalMs));
 });

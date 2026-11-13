@@ -50,6 +50,8 @@ const CFG_DEFAULT = {
   gap_off_ag_ms: 200,         // letzte Clean-Off zum ersten AG
   gap_clean_ms: 200,          // zwischen Clean-Offs
   gap_ag_ms: 200,             // zwischen AGs aus verschiedenen Dörfern
+  off_staffel_min: 5,         // Offs vor dem AG staffeln (Dennis 13.11.2026 15:40): nur die zuletzt abgeschickte Clean-Off landet in
+  off_staffel_max: 15,        // der Sekunde des Trains, die anderen zufällig so viele Minuten vorher; 0 bis 0: alle in einer Sekunde
   off_first: true,            // Clean-Off vor den AGs abschicken
   off_first_lead_s: 120,      // Abschick-Vorlauf der Clean-Off vor dem ersten AG
   spies_per_off: 10,
@@ -667,6 +669,57 @@ function plan(input) {
   // Fenster und Ankunft im Zeitraum; bei einem festen Zeitpunkt liegt nur der Blockbeginn darauf (zeitBasis).
   const tset = (v, travelMs, offset) => zeitBasis(A, att.get(v.att).fenster, travelMs, offset || 0);
   const offsetErstesAG = (nClean) => (nClean - 1) * cfg.gap_clean_ms + cfg.gap_off_ag_ms;
+  // Offs vor dem AG staffeln (Dennis 13.11.2026 15:40, Frage 1b): drei Clean-Offs in derselben Sekunde sind zu auffällig. Die
+  // Clean-Off, die als letzte abgeschickt wird (kürzeste Laufzeit), bleibt direkt vor dem Train; die anderen landen zufällig
+  // off_staffel_min bis off_staffel_max Minuten vorher, untereinander mehr Rammen zuerst (12.11.2026) und mindestens 30 s
+  // auseinander. Alle Ankünfte bleiben im Ankunftszeitraum (zeitBasis), bei einem festen Zeitpunkt nicht im Nachtbonus davor;
+  // ist der Zeitraum kurz, wird die Spanne enger (höchstens 60 % des Zeitraums). Passt eine Off so nicht mehr in die
+  // Abschickzeiträume ihres Spielers, rückt sie näher (60 %, 30 %), sonst bleibt sie mit allen folgenden in der Sekunde des
+  // Trains. Eigener Zufall je Ziel und Off, die übrige Planung bleibt gleich.
+  const staffelSpanne = (() => {
+    let lo = Math.max(0, +cfg.off_staffel_min || 0) * 60000, hi = Math.max(0, +cfg.off_staffel_max || 0) * 60000;
+    if (hi < lo) hi = lo;
+    if (A && A.from === A.to) { let frei = 0; while (frei < hi && !istNacht(world, A.from - frei - 60000)) frei += 60000; hi = Math.min(hi, frei); }
+    else if (A) hi = Math.min(hi, 0.6 * (A.to - A.from));
+    lo = Math.min(lo, hi / 2);
+    return hi >= 60000 ? [lo, hi] : null;
+  })();
+  const rngS = mulberry32(((cfg.seed | 0) || 1) * 104729 + 7), staffelU = new Map();
+  const STAFFEL_ABSTAND_MS = 30000;   // gestaffelte Offs untereinander mindestens 30 s auseinander, sonst wirken sie abgestimmt
+  const cleanOffsets = (t, offs) => {
+    const basis = offs.map((o, i) => i * cfg.gap_clean_ms), n = offs.length;
+    if (!staffelSpanne || n < 2) return basis;
+    const [lo, hi] = staffelSpanne;
+    const zufall = offs.slice(0, n - 1).map(o => { const k = t.id + ":" + o.id; if (!staffelU.has(k)) staffelU.set(k, [rngS(), rngS()]); return staffelU.get(k); });
+    const vorlauf = zufall.map(z => lo + z[0] * (hi - lo)).sort((a, b) => b - a);   // erste Off (meiste Rammen) am weitesten vor
+    const setFuer = (o, off) => {
+      const trMs = travelS(world, "ram", dist(o, t)) * 1000, a0 = att.get(o.att);
+      return o.zusatz && o.zusatzStreng ? zeitBasis(A, a0.wunsch.length ? a0.wunsch : a0.fenster, trMs, off) : tset(o, trMs, off);
+    };
+    // Off der Train-Sekunde: kürzeste Laufzeit; die übrigen in ihrer Reihenfolge davor, in der Sekunde je gap_clean_ms
+    let letzte = n - 1;
+    offs.forEach((o, i) => { if (dist(o, t) < dist(offs[letzte], t) - 1e-9) letzte = i; });
+    const andere = offs.map((o, i) => i).filter(i => i !== letzte);
+    const out = basis.slice();
+    out[letzte] = (n - 1) * cfg.gap_clean_ms;
+    andere.forEach((i, j) => { out[i] = j * cfg.gap_clean_ms; });
+    let s = ivIntersect(agSet(t, n), setFuer(offs[letzte], out[letzte]));
+    let vorher = Infinity, aus = false;
+    andere.forEach((i, j) => {
+      if (!aus && s.length) {
+        for (const f of [1, 0.6, 0.3]) {
+          const v = Math.min(f * vorlauf[j], vorher - STAFFEL_ABSTAND_MS);
+          if (v < 60000) break;
+          const off = -(Math.round(v / 1000) * 1000 + Math.floor(zufall[j][1] * 1000));
+          const s2 = ivIntersect(s, setFuer(offs[i], off));
+          if (s2.length) { out[i] = off; s = s2; vorher = -off; return; }
+        }
+        aus = true;
+      }
+      s = ivIntersect(s, setFuer(offs[i], out[i]));
+    });
+    return out;
+  };
 
   /* ---- 1. AGs auf Ziele ---- */
   const form = cfg.train_form === "zwei" ? "zwei" : cfg.train_form === "einzeln" ? "einzeln" : "ganz";
@@ -1133,7 +1186,8 @@ function plan(input) {
     let nr = 0;
     const offIt = (o, t, offset, kind) => ({kind, att: o.att, v: o, t, travelMs: travelS(world, "ram", dist(o, t)) * 1000, offset, aktion: ++nr, streng: !!(o.zusatz && o.zusatzStreng)});
     geadelt.forEach(t => {
-      const its = cleanOffs.get(t.id).map((o, i) => offIt(o, t, i * cfg.gap_clean_ms, "clean"));
+      const offsets = cleanOffsets(t, cleanOffs.get(t.id));
+      const its = cleanOffs.get(t.id).map((o, i) => offIt(o, t, offsets[i], "clean"));
       let off = offsetErstesAG(cleanOffs.get(t.id).length);
       trains.get(t.id).forEach(g => {
         const a = ++nr;
@@ -1588,7 +1642,8 @@ function plan(input) {
   geadelt.forEach(t => {
     const its = [];
     const offs = cleanOffs.get(t.id);
-    offs.forEach((o, i) => its.push(Object.assign(item("clean", o, t, offEinheiten(o), langsamste(null), i * cfg.gap_clean_ms, ++aktionNr), o.zusatz ? {zusatz: true, streng: !!o.zusatzStreng} : {})));
+    const offsets = cleanOffsets(t, offs);
+    offs.forEach((o, i) => its.push(Object.assign(item("clean", o, t, offEinheiten(o), langsamste(null), offsets[i], ++aktionNr), o.zusatz ? {zusatz: true, streng: !!o.zusatzStreng} : {})));
     let off = offsetErstesAG(offs.length);
     agBefehle.get(t.id).forEach(({g, ags}) => {
       const a = ++aktionNr;
@@ -2117,7 +2172,9 @@ function pruefePlan(res, input) {
   // Einheiten je Dorf
   const verbrauch = new Map();
   res.items.forEach(it => {
-    if (it.kind === "fake" ? !ANK.some(a => drin(a, it.arrivalMs)) : !drin(A, it.arrivalMs)) v.push("Ankunft außerhalb des Zeitraums: " + it.v.id + " → " + it.t.id);
+    // fester Zeitpunkt: gestaffelte Clean-Offs landen vorher (off_staffel_max)
+    const vorFest = it.kind === "clean" && A.from === A.to && it.arrivalMs <= A.to && it.arrivalMs >= A.from - ((+cfg.off_staffel_max || 0) + 1) * 60000;
+    if (it.kind === "fake" ? !ANK.some(a => drin(a, it.arrivalMs)) : !drin(A, it.arrivalMs) && !vorFest) v.push("Ankunft außerhalb des Zeitraums: " + it.v.id + " → " + it.t.id);
     if (istNacht(world, it.arrivalMs)) v.push("Ankunft im Nachtbonus: " + it.v.id + " → " + it.t.id);
     // v0.5: Zeiträume sind Wunsch, Befehle außerhalb müssen markiert sein; „streng“: nie außerhalb
     if (!ivHas(fenster.get(it.att) || [], it.sendMs) && (cfg.zeitraeume === "streng" || !it.ausserhalb) && (fenster.get(it.att) || []).length)
@@ -2656,7 +2713,8 @@ function agsAngleichen(items, opt) {
 /**
  * Offs vor einem AG staffeln oder wieder in eine Sekunde legen. Je Ziel mit AG-Train: die Off, die als letzte abgeschickt
  * wird, landet gapMs vor dem ersten AG; die anderen (staffeln) zufällig minMin bis maxMin Minuten vorher, nie im Nachtbonus,
- * oder (Sekunde) je gapMs davor. Unverändert bleiben schon abgeschickte Befehle und solche, die dafür vor now + 1 min
+ * oder (Sekunde) je gapMs davor; untereinander mehr Rammen zuerst, gestaffelt mindestens 30 s auseinander. Unverändert
+ * bleiben schon abgeschickte Befehle und solche, die dafür vor now + 1 min
  * losmüssten; der Mindestabstand zu den anderen Abschickzeiten desselben Spielers bleibt gewahrt (sonst bis zu 30 s
  * verschoben). opt {art: "staffeln" | "sekunde", minMin, maxMin, gapMs, minGapMs, now, world, rng}. Ergebnis: Zahl der
  * verschobenen Offs und Ziele.
@@ -2692,21 +2750,26 @@ function offsZeitenNeu(items, opt) {
       if (ziel != null && ziel !== o.arrivalMs) { verschieben(o, ziel); n++; }
       einsortieren(sends.get(o.spieler), o.sendMs);
     };
-    const andere = beweglich.filter(o => o !== letzte).sort((a, b) => a.sendMs - b.sendMs);
+    // die anderen: mehr Rammen landen zuerst (wie im Planer, 12.11.2026), bei gleich vielen die früher abgeschickte
+    const andere = beweglich.filter(o => o !== letzte).sort((a, b) => ((b.units && b.units.ram) || 0) - ((a.units && a.units.ram) || 0) || a.sendMs - b.sendMs);
     if (beweglich.includes(letzte)) setze(letzte, T - gap, null);
     if (opt.art === "sekunde") {
-      // in der Reihenfolge ihrer Abschickzeit direkt vor die letzte Off, je gapMs
+      // direkt vor die letzte Off, je gapMs
       andere.forEach((o, i) => setze(o, T - gap * (andere.length - i + 1), null));
     } else {
-      andere.forEach(o => {
+      const leads = andere.map(() => rng()).sort((a, b) => b - a);
+      let vorher = Infinity;   // gestaffelte Offs untereinander mindestens 30 s auseinander
+      andere.forEach((o, j) => {
         // Spanne vor dem Train, ohne Nachtbonus; wenn nötig enger (frühestens Ende des Nachtbonus)
         let lo = minMs, hi = maxMs;
         let frei = hi;
         while (frei > 0 && istNacht(world, T - frei)) frei -= 60000;
         if (frei < hi) { hi = Math.max(0, frei); lo = Math.min(lo, hi); }
         if (hi <= gap) { setze(o, T - gap * 2, null); return; }
-        const w = T - Math.round(lo + rng() * (hi - lo));
+        const lead = Math.min(Math.round(lo + leads[j] * (hi - lo)), vorher - 30000);
+        const w = T - lead;
         setze(o, w - (((w % 1000) + 1000) % 1000) + Math.floor(rng() * 1000), [Math.max(gap, lo - 30000), hi + 30000]);
+        if (o.arrivalMs < T - gap * 3) vorher = T - o.arrivalMs;
       });
     }
     if (n) { offs += n; ziele++; }
