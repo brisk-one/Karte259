@@ -2403,6 +2403,7 @@ function planPruefen(items, maxJeDorf) {
  * Fakes zu einem eingelesenen Plan dazu.
  * input = {world, cfg, now, seed, ankunft:{from, to} (Ankunft der neuen Fakes), zielArten:{ag, off, fake},
  *          items: parsePlan-Befehle mit v:{id, x, y} (Herkunft), t:{id, x, y, owner} (Ziel) und spieler (Schlüssel),
+ *          laufend:[{source, destination}] (Angriffe aus Befehlsübersichten ohne Plan: zählen je Ziel mit, sperren das Paar),
  *          spieler:[{key, name, soll (Fakes insgesamt), rammenMax, fenster:[[from, to]] (Abschickzeiträume),
  *                    villages:[{id, x, y, name, pts, units}] (Truppenübersicht, id null: nicht in den Weltdaten)}]}
  * Ergebnis {neu: [Befehle wie parsePlan, neu: true], spieler:[{key, name, vorher, ist, soll, grund, doerfer, extra, sitzungen}], warnings}.
@@ -2428,6 +2429,9 @@ function fakesNachImport(input) {
   const arten = Object.assign({ag: true, off: true, fake: true}, input.zielArten);
   const liste = [...ziele.values()].filter(z => arten[zielArt(z)]);
   const zahlZ = new Map([...ziele.values()].map(z => [z.t.id, z.fakes]));
+  // laufende Angriffe aus Befehlsübersichten, die in keinem Plan stehen (Dennis 13.11.2026 17:20): zählen auf ihrem Ziel mit
+  const laufend = (input.laufend || []).filter(b => b && b.source != null && b.destination != null);
+  laufend.forEach(b => { if (zahlZ.has(b.destination)) zahlZ.set(b.destination, zahlZ.get(b.destination) + 1); });
   const ANK = tagesTeile(world, input.ankunft);
   if (!ANK.length) warnings.push({art: "ankunft", text: "Ankunft der neuen Fakes liegt ganz im Nachtbonus oder fehlt"});
   const sendIv = (v, t) => { const tr = travelS(world, "ram", dist(v, t)) * 1000; return ivIntersect(ivNorm(ANK.map(a => [a.from - tr, a.to - tr])), ab); };
@@ -2463,6 +2467,7 @@ function fakesNachImport(input) {
       const fakeMin = d.pts > 0 ? Math.ceil(d.pts * world.fake_limit / 100) + cfg.fake_extra_pop : null;
       if (!fakeMin) { doerfer.punkte++; return; }
       const q = {id: d.id, x: d.x, y: d.y, name: d.name, av, fakeMin, fakes: bef.filter(it => it.fake).length, schon: new Set(bef.map(it => it.t.id))};
+      laufend.forEach(b => { if (b.source === d.id) q.schon.add(b.destination); });
       quellen.push(q);
       if (av.catapult < 1 && !(av.ram >= 1 && rMax >= 1)) doerfer.belagerung++;
       else if (av.spy < 1) doerfer.spaeher++;

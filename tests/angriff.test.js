@@ -1352,3 +1352,18 @@ test("Planer: Offs vor dem AG gestaffelt, nur die letzte in der Sekunde des Trai
   // gleicher Würfel, gleicher Plan
   assert.deepEqual(K.plan(szenario({clean_per_target: 3})).items.map(i => i.arrivalMs), r.items.map(i => i.arrivalMs));
 });
+
+test("Fakes aufstocken: laufende Angriffe ohne Plan zählen je Ziel mit und sperren das Paar (Dennis 13.11.2026 17:20)", () => {
+  const {w, ank, plan, eigene, ziele, sendOff} = importSzenario();
+  plan.items.splice(2, 1);
+  const lauf = laufend => K.fakesNachImport({world: w, cfg: {fakes_max_je_dorf: 3}, now: sendOff - 6 * 3600000, seed: 1,
+    ankunft: {from: ank - 1800000, to: ank + 1800000}, items: plan.items.map(i => Object.assign({}, i)), laufend,
+    spieler: [{key: "A", name: "A", soll: 6, villages: eigene, fenster: []}]});
+  const ohne = lauf([]), auf = ziel => r => r.neu.filter(f => f.destination === ziel).length;
+  // auf das erste Ziel laufen schon viele Angriffe aus der Übersicht: bekommt weniger neue Fakes
+  const viele = Array.from({length: 8}, (_, i) => ({source: 700 + i, destination: ziele[0].id}));
+  const mit = lauf(viele.concat([{source: eigene[2].id, destination: ziele[1].id}]));
+  assert.ok(auf(ziele[0].id)(mit) < auf(ziele[0].id)(ohne) || auf(ziele[0].id)(ohne) === 0, auf(ziele[0].id)(ohne) + " → " + auf(ziele[0].id)(mit));
+  assert.ok(!mit.neu.some(f => f.source === eigene[2].id && f.destination === ziele[1].id), "Paar aus der Übersicht gesperrt");
+  assert.equal(mit.ziele.find(z => z.t.id === ziele[0].id).fakes - auf(ziele[0].id)(mit), 8);
+});

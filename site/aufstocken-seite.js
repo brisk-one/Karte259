@@ -8,7 +8,7 @@ const SPEICHER = "k259-aufstocken";
 const neuerSpieler = () => ({uebersicht: "", fenster: "", soll: "", rammenMax: ""});
 // texte: eingefügte Pläne (Dennis 13.11.2026 15:40: mehrere); befehle: Befehlsübersichten; zeiten: angeglichene oder
 // gestaffelte Ankünfte je Befehl (Schlüssel aus Herkunft, Ziel, eingelesener Ankunft und Symbol)
-let S = {texte: [""], befehle: "", zeiten: {}, staffel: {min: 5, max: 15}, spieler: {}, dazu: [], ank: "", ankPlan: "",
+let S = {texte: [""], namen: [""], befehle: "", zeiten: {}, staffel: {min: 5, max: 15}, spieler: {}, dazu: [], ank: "", ankPlan: "",
          arten: {ag: true, off: true, fake: true}, cfg: {fakes_max_je_dorf: 4, fake_extra_pop: 5, min_send_gap_s: 3}, expFmt: "dsu", seed: 1, aktiv: false};
 /** Gespeicherter Stand des Angriffsplaners in diesem Browser ({v: 1, S}), sonst null. */
 function planerStand() {
@@ -24,6 +24,9 @@ function laden() {
   } catch (e) { /* Speicher gesperrt oder kaputt: Standard */ }
   if (typeof S.text === "string") { if (S.text.trim()) S.texte = [S.text]; delete S.text; }   // Stand vor mehreren Plänen
   if (!Array.isArray(S.texte) || !S.texte.length) S.texte = [""];
+  if (!Array.isArray(S.namen)) S.namen = [];
+  while (S.namen.length < S.texte.length) S.namen.push("");
+  S.namen.length = S.texte.length;
   if (!S.zeiten || typeof S.zeiten !== "object") S.zeiten = {};
   S.staffel = Object.assign({min: 5, max: 15}, S.staffel);
   if (typeof S.befehle !== "string") S.befehle = "";
@@ -92,7 +95,9 @@ function einlesen() {
   NEU = null; BEF = null;
   // alle eingefügten Pläne zusammen; Fehler mit der Nummer des Plans
   const teile = S.texte.map(t => t.trim() ? K.parsePlan(t) : null);
-  PLAN = teile.some(Boolean) ? {items: [], fehler: [], meta: {}, je: teile.map(p => p ? {n: p.items.length, fehler: p.fehler} : null)} : null;
+  // Pläne bleiben getrennt (Dennis 13.11.2026 17:20): jeder Befehl merkt sich seinen Plan; nur Angleichen, Staffeln und
+  // die Fakezahl je Ziel schauen über alle Pläne
+  PLAN = teile.some(Boolean) ? {items: [], fehler: [], meta: {}, je: teile.map(p => p ? {n: p.items.length, fehler: p.fehler, meta: p.meta || {}} : null)} : null;
   teile.forEach((p, i) => {
     if (!p) return;
     p.items.forEach(it => { it.plan = i; PLAN.items.push(it); });
@@ -166,9 +171,31 @@ function aufstocken() {
     return {key: name, name, soll: parseInt(s.soll, 10) || 0, rammenMax: s.rammenMax === "" ? null : Math.max(0, parseInt(s.rammenMax, 10) || 0),
             fenster: K.parseFenster(s.fenster).fenster, villages: o ? o.villages : []};
   });
+  // laufende Angriffe aus den Befehlsübersichten, die in keinem Plan stehen: zählen auf ihrem Ziel mit (Dennis 13.11.2026
+  // 17:20: ein Dorf, auf das schon 5 Fakes laufen, nicht weiter auffüllen) und sperren das Paar Herkunft und Ziel
+  const id = k => { const i = byXY.get(k.x * 1000 + k.y); return i != null && IDS ? IDS[i] : null; };
+  const laufend = BEF ? BEF.ohnePlan.map(b => ({source: id(b.von), destination: id(b.nach)})).filter(b => b.source != null && b.destination != null) : [];
   NEU = ank.fehler ? {fehler: ank.fehler} : K.fakesNachImport({world: W, cfg: S.cfg, now: Date.now(), seed: S.seed, ankunft: ank,
-    zielArten: S.arten, items: PLAN.items, spieler});
+    zielArten: S.arten, items: PLAN.items, spieler, laufend});
+  // neue Fakes gehören in den Plan, in dem der Spieler die meisten Befehle hat; ohne Befehle: eigene Gruppe (-1)
+  if (NEU.neu) NEU.neu.forEach(f => { f.plan = hauptPlan(f.spieler); f.art = "fake"; });
 }
+function hauptPlan(name) {
+  const n = new Map();
+  PLAN.items.forEach(it => { if (it.spieler === name) n.set(it.plan, (n.get(it.plan) || 0) + 1); });
+  let best = -1, c = 0;
+  n.forEach((v, k) => { if (v > c) { c = v; best = k; } });
+  return best;
+}
+/** Überschrift eines Plans: Nummer, Name (Feld oder Titel aus DS-Ultimate) und seine Spieler. */
+function planLabel(i) {
+  if (i < 0) return "Neue Fakes von Spielern ohne Befehle in den Plänen";
+  const meta = PLAN.je[i] && PLAN.je[i].meta || {}, name = S.namen[i] || meta.title || "";
+  const sp = [...new Set(PLAN.items.filter(x => x.plan === i).map(x => x.spieler))];
+  return "Plan " + (i + 1) + (name ? ": " + name : "") + (sp.length ? " (" + (sp.length > 3 ? sp.slice(0, 3).join(", ") + " …" : sp.join(", ")) + ")" : "");
+}
+const planMeta = i => i >= 0 && PLAN.je[i] ? PLAN.je[i].meta : {};
+const dateiPlan = i => (i < 0 ? "neue_spieler" : "plan" + (i + 1) + (S.namen[i] ? "_" + dateiTeil(S.namen[i]) : ""));
 
 /* ---------- Anzeige ---------- */
 const KURZ = {spear: "Speer", sword: "Schwert", axe: "Axt", archer: "Bogen", spy: "Späher", light: "LKav", marcher: "BB", heavy: "SKav",
@@ -225,19 +252,24 @@ function herunterladen(text, name, typ) {
 const HINW = {dsu: "In DS-Ultimate einen Angriffsplan für Welt 259 öffnen (für den getrennten Fake-Plan am besten einen neuen), „Import DS-Ultimate“, einfügen. Große Pläne teilt DS-Ultimate selbst in Blöcke zu 200 Befehlen.",
               wb: "In DS Workbench im Angriffsplaner die Tabelle des Plans öffnen, Rechtsklick „Aus Zwischenablage einfügen“ (Strg+V). DS-Ultimate liest dasselbe als WB-Import."};
 /** Exportzeilen: je Auswahl ein Knopf zum Kopieren und einer für die Datei; bei mehreren Spielern auch je Spieler. */
-function exportBox(auswahl, dateiName) {
-  const box = el("div", "au-teil");
-  const text = its => S.expFmt === "wb" ? K.importWB(its) : JSON.stringify(K.importDSU(its, Object.assign({world: WELT, twWorld: WELT}, PLAN.meta, {title: null})));
-  const wahl = el("div", "ap-row"), hinweis = el("p", "ap-note", HINW[S.expFmt === "wb" ? "wb" : "dsu"]);
-  wahl.append(el("span", "ap-note", "Format:"));
+/** Exportformat (DS-Ultimate oder DS Workbench), einmal je Abschnitt; gilt für alle Exportknöpfe. */
+function formatZeile(name) {
+  const box = el("div", "au-teil"), wahl = el("div", "ap-row");
+  wahl.append(el("span", "ap-note", "Exportformat:"));
   [["dsu", "DS-Ultimate"], ["wb", "DS Workbench"]].forEach(([w, t]) => {
     const l = el("label"), r0 = document.createElement("input");
-    r0.type = "radio"; r0.name = "fmt-" + dateiName; r0.value = w; r0.checked = (S.expFmt === "wb" ? "wb" : "dsu") === w;
+    r0.type = "radio"; r0.name = "fmt-" + name; r0.value = w; r0.checked = (S.expFmt === "wb" ? "wb" : "dsu") === w;
     r0.addEventListener("change", () => { S.expFmt = w; speichern(); zeigen(); });
     l.append(r0, document.createTextNode(" " + t));
     wahl.append(l);
   });
-  box.append(wahl, hinweis);
+  box.append(wahl, el("p", "ap-note", HINW[S.expFmt === "wb" ? "wb" : "dsu"]));
+  return box;
+}
+/** Exportknöpfe: je Zeile ein Knopf zum Kopieren und einer für die Datei. meta: Kopf des eingelesenen Plans. */
+function exportBox(auswahl, meta) {
+  const box = el("div", "au-teil");
+  const text = its => S.expFmt === "wb" ? K.importWB(its) : JSON.stringify(K.importDSU(its, Object.assign({world: WELT, twWorld: WELT}, meta || {})));
   auswahl.forEach(([wer, knoepfe]) => {
     const z = el("div", "ap-exp");
     z.append(el("span", "wer", wer));
@@ -283,10 +315,12 @@ function planFelder() {
   const box = $("plaene");
   box.replaceChildren(...S.texte.map((t, i) => {
     const d = el("div", "au-plan"), kopf = el("div", "kopf");
-    kopf.append(el("strong", null, "Plan " + (i + 1)), el("span", "ap-note", ""));
+    const name = eingabe("", S.namen[i] || "", v => { S.namen[i] = v.trim(); speichern(); spaeter(zeigen); }, {placeholder: "Name, z. B. Spieler oder Op", "data-k": "pname:" + i});
+    name.style.width = "18em";
+    kopf.append(el("strong", null, "Plan " + (i + 1)), name, el("span", "ap-note", ""));
     if (S.texte.length > 1) {
       const x = el("button", "tw", "entfernen"); x.type = "button";
-      x.addEventListener("click", () => { S.texte.splice(i, 1); planGeaendert(); planFelder(); });
+      x.addEventListener("click", () => { S.texte.splice(i, 1); S.namen.splice(i, 1); S.zeiten = {}; planGeaendert(); planFelder(); });
       kopf.append(x);
     }
     const ta = el("textarea", "ap-ta" + (S.texte.length > 1 ? " klein" : "")); ta.spellcheck = false; ta.value = t;
@@ -399,21 +433,26 @@ function zeigenKern() {
   const its = PLAN.items.filter(x => x.art !== "fake");
   const nG = its.filter(x => x.gesendet == null && x.arrivalOrig != null && x.arrivalMs !== x.arrivalOrig).length, nW = its.filter(x => x.gesendet != null).length;
   $("kern-hint").textContent = its.length + " Befehle" + (nW ? ", " + nW + " davon unterwegs" : "") + (nG ? ", " + nG + " mit geänderter Zeit" : ", Zeiten wie eingelesen") + ".";
-  if (!its.length) { box.replaceChildren(el("p", "empty", "Keine Offs oder AGs im Plan.")); return; }
-  const namen = spielerListe().filter(n => its.some(x => x.spieler === n));
-  const sum = el("div", "ap-sum");
-  namen.forEach(n => {
-    const e = its.filter(x => x.spieler === n), d = el("div");
-    d.append(el("b", null, n), document.createTextNode(" " + e.filter(x => x.art === "off").length + " Offs, " + e.filter(x => x.art === "ag").length + " AGs"));
-    sum.append(d);
-  });
+  if (!its.length) { box.replaceChildren(el("p", "empty", "Keine Offs oder AGs in den Plänen.")); return; }
   const offen = x => x.gesendet == null, geaendert = x => offen(x) && x.arrivalOrig != null && x.arrivalMs !== x.arrivalOrig;
   const knoepfe = (a, name) => [["Offs und AGs", a, name], ["noch nicht abgeschickt", a.filter(offen), name + "_offen"], ["nur geänderte", a.filter(geaendert), name + "_geaendert"]];
-  const ausw = [["Alle", knoepfe(its, "offs_ags")]];
-  if (namen.length > 1) namen.forEach(n => ausw.push([n, knoepfe(its.filter(x => x.spieler === n), "offs_ags_" + dateiTeil(n))]));
-  const ex = exportBox(ausw, "kern");
-  if (its.some(geaendert)) ex.append(el("p", "ap-warn", "Geänderte Zeiten: Die betroffenen Spieler brauchen den neuen Plan. In DS-Ultimate einen neuen Plan anlegen (oder die alten Befehle löschen) und „noch nicht abgeschickt“ importieren; nur die geänderten Befehle tauschen geht mit „nur geänderte“."));
-  box.replaceChildren(...[sum, pruefListe(its, false), zeitenBox(its), ex, befehlsTabelle(its)].filter(Boolean));
+  const teile = [zeitenBox(its), formatZeile("kern")];
+  if (its.some(geaendert)) teile.push(el("p", "ap-warn", "Geänderte Zeiten: Die betroffenen Spieler brauchen ihren Plan neu. In DS-Ultimate einen neuen Plan anlegen (oder die alten Befehle löschen) und „noch nicht abgeschickt“ importieren; nur die geänderten Befehle tauschen geht mit „nur geänderte“."));
+  // je eingelesenem Plan getrennt (Dennis 13.11.2026 17:20)
+  PLAN.je.forEach((j, i) => {
+    const a = its.filter(x => x.plan === i);
+    if (!j || !a.length) return;
+    const namen = spielerListe().filter(n => a.some(x => x.spieler === n));
+    const d = el("details", "au-det au-planblock"); d.open = true;
+    const nW = a.filter(x => x.gesendet != null).length, nG = a.filter(geaendert).length;
+    d.append(el("summary", null, planLabel(i) + ": " + a.filter(x => x.art === "off").length + " Offs, " + a.filter(x => x.art === "ag").length + " AGs" +
+      (nW ? ", " + nW + " unterwegs" : "") + (nG ? ", " + nG + " geändert" : "")));
+    const ausw = [[namen.length > 1 ? "Ganzer Plan" : (namen[0] || "Plan"), knoepfe(a, dateiPlan(i) + "_offs_ags")]];
+    if (namen.length > 1) namen.forEach(n => ausw.push([n, knoepfe(a.filter(x => x.spieler === n), dateiPlan(i) + "_offs_ags_" + dateiTeil(n))]));
+    d.append(...[pruefListe(a, false), exportBox(ausw, planMeta(i)), befehlsTabelle(a)].filter(Boolean));
+    teile.push(d);
+  });
+  box.replaceChildren(...teile.filter(Boolean));
 }
 function feld(lab, ctl, extra) {
   const f = el("label", "au-f");
@@ -452,15 +491,15 @@ function eingabe(cls, wert, beiAenderung, attrs) {
 function zeigenFake() {
   const box = $("fake");
   if (!PLAN || !PLAN.items.length) { box.replaceChildren(el("p", "empty", "Noch kein Plan eingelesen.")); $("fake-hint").textContent = ""; return; }
-  const alt = PLAN.items.filter(x => x.art === "fake"), neu = NEU && NEU.neu ? NEU.neu.map(f => Object.assign(f, {art: "fake"})) : [];
+  const alt = PLAN.items.filter(x => x.art === "fake"), neu = NEU && NEU.neu ? NEU.neu : [];
   const alle = alt.concat(neu);
-  $("fake-hint").textContent = alt.length + " Fakes aus dem Plan" + (neu.length ? ", " + neu.length + " neu" : "") + ".";
+  $("fake-hint").textContent = alt.length + " Fakes aus " + plural(PLAN.je.filter(Boolean).length, "Plan", "Plänen") + (neu.length ? ", " + neu.length + " neu" : "") + "; die Zahl der Fakes je Ziel zählt über alle Pläne und laufende Angriffe aus den Befehlsübersichten.";
   const namen = spielerListe();
 
   /* Aufstocken */
   const au = el("div", "au-box");
   au.append(el("h3", null, "Fakes aufstocken"),
-    el("p", "ap-note", "Je Spieler die gewünschte Gesamtzahl eintragen und seine Truppenübersicht einfügen (wie im Angriffsplaner). Die neuen Fakes gehen aus seinen Dörfern, deren Truppen nach Abzug seiner Befehle im Plan reichen (Katapulte oder eine Ramme, mindestens ein Späher, Fakelimit), auf die Ziele des Plans, die mit den wenigsten Fakes zuerst, nie zweimal dasselbe Ziel aus einem Dorf. Abgeschickt werden sie in seinen Abschicksitzungen aus dem Plan (10 Minuten Rand); reichen die nicht, bis zu zwei zusätzliche reine Fake-Sitzungen von je einer Stunde in seinen Abschickzeiträumen, jede nur mit mindestens 10 Fakes. Die Befehle des Plans bleiben unverändert."));
+    el("p", "ap-note", "Je Spieler die gewünschte Gesamtzahl eintragen und seine Truppenübersicht einfügen (wie im Angriffsplaner). Die neuen Fakes gehen aus seinen Dörfern, deren Truppen nach Abzug seiner Befehle im Plan reichen (Katapulte oder eine Ramme, mindestens ein Späher, Fakelimit), auf die Ziele der Pläne, die mit den wenigsten Fakes zuerst (gezählt über alle Pläne und laufende Angriffe aus den Befehlsübersichten), nie zweimal dasselbe Ziel aus einem Dorf. Die neuen Fakes kommen in den Plan, in dem der Spieler die meisten Befehle hat. Abgeschickt werden sie in seinen Abschicksitzungen aus dem Plan (10 Minuten Rand); reichen die nicht, bis zu zwei zusätzliche reine Fake-Sitzungen von je einer Stunde in seinen Abschickzeiträumen, jede nur mit mindestens 10 Fakes. Die Befehle des Plans bleiben unverändert."));
   // gemeinsame Einstellungen
   const ank = K.parseAnkunft(S.ank);
   const ankIn = eingabe("zr", S.ank, v => { S.ank = v; speichern(); spaeter(zeigenFake); }, {spellcheck: false});
@@ -597,10 +636,22 @@ function zeigenFake() {
     sitz.append(el("strong", null, n), ul);
   });
 
-  /* Export und Tabelle */
-  const ausw = [["Alle", [["Alle Fakes", alle, "fakes"], ["nur neue", neu, "fakes_neu"]]]];
-  if (namen.length > 1) namen.forEach(n => { const a = alle.filter(x => x.spieler === n); if (a.length) ausw.push([n, [["Fakes", a, "fakes_" + dateiTeil(n)], ["nur neue", neu.filter(x => x.spieler === n), "fakes_neu_" + dateiTeil(n)]]]); });
-  box.replaceChildren(...[pruefListe(alle, true), au, sitz, exportBox(ausw, "fake"), alle.length ? befehlsTabelle(alle) : el("p", "empty", "Keine Fakes im Plan.")].filter(Boolean));
+  /* je Plan getrennt: Export und Tabelle (Dennis 13.11.2026 17:20); neue Fakes im Plan ihres Spielers */
+  const bloecke = [];
+  PLAN.je.map((j, i) => i).concat(neu.some(f => f.plan < 0) ? [-1] : []).forEach(i => {
+    if (i >= 0 && !PLAN.je[i]) return;
+    const a = alle.filter(x => x.plan === i), n = neu.filter(x => x.plan === i);
+    if (!a.length) return;
+    const pn = [...new Set(a.map(x => x.spieler))];
+    const d = el("details", "au-det au-planblock"); d.open = true;
+    d.append(el("summary", null, planLabel(i) + ": " + (a.length - n.length) + " Fakes" + (n.length ? ", " + n.length + " neu" : "")));
+    const ausw = [[pn.length > 1 ? "Ganzer Plan" : (pn[0] || "Plan"), [["Alle Fakes", a, dateiPlan(i) + "_fakes"], ["nur neue", n, dateiPlan(i) + "_fakes_neu"]]]];
+    if (pn.length > 1) pn.forEach(s0 => ausw.push([s0, [["Fakes", a.filter(x => x.spieler === s0), dateiPlan(i) + "_fakes_" + dateiTeil(s0)], ["nur neue", n.filter(x => x.spieler === s0), dateiPlan(i) + "_fakes_neu_" + dateiTeil(s0)]]]));
+    d.append(exportBox(ausw, planMeta(i)), befehlsTabelle(a));
+    bloecke.push(d);
+  });
+  if (!bloecke.length) bloecke.push(el("p", "empty", "Keine Fakes in den Plänen."));
+  box.replaceChildren(...[pruefListe(alle, true), au, sitz, formatZeile("fake")].concat(bloecke).filter(Boolean));
 }
 function zeigen() { zeigenPlan(); zeigenKern(); zeigenFake(); }
 function rechnen() {
@@ -610,16 +661,20 @@ function rechnen() {
 }
 
 /* ---------- Bedienung ---------- */
-$("plan-dazu").addEventListener("click", () => { S.texte.push(""); speichern(); planFelder(); zeigenPlan(); const t = $("plaene").querySelectorAll("textarea"); t[t.length - 1].focus(); });
-$("plan-leeren").addEventListener("click", () => { S.texte = [""]; S.zeiten = {}; planGeaendert(); planFelder(); });
+$("plan-dazu").addEventListener("click", () => { S.texte.push(""); S.namen.push(""); speichern(); planFelder(); zeigenPlan(); const t = $("plaene").querySelectorAll("textarea"); t[t.length - 1].focus(); });
+$("plan-leeren").addEventListener("click", () => { S.texte = [""]; S.namen = [""]; S.zeiten = {}; planGeaendert(); planFelder(); });
 $("plan-datei-knopf").addEventListener("click", () => $("plan-datei").click());
 $("plan-datei").addEventListener("change", e => {
   const files = [...(e.target.files || [])];
   e.target.value = "";
   if (!files.length) return;
   Promise.all(files.map(f => f.text())).then(texte => {
-    // leere Felder zuerst füllen, dann anhängen
-    texte.forEach(t => { const i = S.texte.findIndex(x => !x.trim()); if (i >= 0) S.texte[i] = String(t || ""); else S.texte.push(String(t || "")); });
+    // leere Felder zuerst füllen, dann anhängen; Dateiname als Name des Plans
+    texte.forEach((t, j) => {
+      let i = S.texte.findIndex(x => !x.trim());
+      if (i < 0) { S.texte.push(""); S.namen.push(""); i = S.texte.length - 1; }
+      S.texte[i] = String(t || ""); if (!S.namen[i]) S.namen[i] = files[j].name.replace(/\.(json|txt)$/i, "");
+    });
     planGeaendert(); planFelder();
   });
 });
