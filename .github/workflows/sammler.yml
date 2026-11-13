@@ -91,23 +91,10 @@ jobs:
           key: rohdaten-${{ github.run_id }}
           restore-keys: rohdaten-
 
+      # Nur die Tests des Sammlers (Python); die Tests der Seiten laufen beim Seiten-Bau, damit ein Fehler dort
+      # keinen Datenlauf aufhält (Dennis 14.11.2026: Bereiche sollen sich nicht stören)
       - name: Tests
         run: python3 -m unittest discover -s tests -v
-
-      - name: Tests Prägerechner
-        run: node --test tests/praegen.test.js
-
-      - name: Tests Zusatzfunktionen
-        run: node --test tests/zusatz.test.js
-
-      - name: Tests Angriffsplaner
-        run: node --test tests/angriff.test.js
-
-      - name: Tests Truppen-Äquivalent
-        run: node --test tests/truppen.test.js
-
-      - name: Tests Dörfer sortieren
-        run: node --test tests/sortieren.test.js
 
       - name: Vorbereiten
         id: start
@@ -175,19 +162,36 @@ jobs:
       - name: Tests
         run: python3 -m unittest discover -s tests -v
 
+      # Nur die Tests der Bereiche, die sich seit dem letzten erfolgreichen Seiten-Bau geändert haben (Dennis
+      # 14.11.2026); reine Datenstände ohne Code-Änderung brauchen keine; Workflow oder gemeinsame Dateien: alle
+      - name: Welche Tests
+        id: welche
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/sammler.yml/runs?status=success&per_page=50" > runs.json \
+            || echo '{}' > runs.json
+          python3 .github/tests_auswahl.py runs.json "${{ github.run_id }}"
+
       - name: Tests Prägerechner
+        if: steps.welche.outputs.praegen != 'false'
         run: node --test tests/praegen.test.js
 
       - name: Tests Zusatzfunktionen
+        if: steps.welche.outputs.zusatz != 'false'
         run: node --test tests/zusatz.test.js
 
       - name: Tests Angriffsplaner
+        if: steps.welche.outputs.angriff != 'false'
         run: node --test tests/angriff.test.js
 
       - name: Tests Truppen-Äquivalent
+        if: steps.welche.outputs.truppen != 'false'
         run: node --test tests/truppen.test.js
 
       - name: Tests Dörfer sortieren
+        if: steps.welche.outputs.sortieren != 'false'
         run: node --test tests/sortieren.test.js
 
       - name: Seite bauen
