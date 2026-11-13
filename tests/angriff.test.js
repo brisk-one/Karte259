@@ -1392,3 +1392,19 @@ test("Fakes je Spieler reduzieren: höchstens N, zuerst von den Zielen mit den m
   a.fakeMax = 0;
   assert.equal(K.plan(input).items.filter(i => i.kind === "fake" && i.att === a.id).length, 0);
 });
+
+test("Bilanz: Fakes, die an der Zeit scheitern, mit nächstem Ziel und spätester Abschickzeit (Dennis 13.11.2026 18:53)", () => {
+  // Abschickzeitraum so spät, dass kein Fakeziel mehr rechtzeitig ankommt
+  const input = szenario({fakes_per_village: 3, zeitraeume: "streng"}, {windows: K.parseFenster("03.11.2026 06:00 bis 06:20").fenster});
+  input.agTargets = [];
+  const r = K.plan(input);
+  assert.equal(r.items.filter(i => i.kind === "fake").length, 0);
+  Object.values(r.fakeDoerfer).forEach(fd => {
+    assert.equal(fd.zeit, fd.faehig);
+    assert.ok(fd.naechst.felder > 0 && fd.naechst.spaetestens < Date.UTC(2026, 10, 3, 5, 0), K.fmtZeit(fd.naechst.spaetestens));
+  });
+  assert.ok(r.warnings.some(w => w.art === "fakezeit" && /kein Fakeziel passt zeitlich/.test(w.text)));
+  // mit passendem Zeitraum: keine Meldung
+  const r2 = K.plan(szenario({fakes_per_village: 3}));
+  assert.ok(!r2.warnings.some(w => w.art === "fakezeit"));
+});

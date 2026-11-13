@@ -1215,7 +1215,10 @@ function bilanzBox(r) {
       const genutzt = new Set(nFakes.map(i => i.v.id)).size;
       const ohne = [fd.belagerung && fd.belagerung + " ohne Katapult oder Ramme", fd.spaeher && fd.spaeher + " ohne Späher",
         fd.limit && fd.limit + " mit zu wenig Katapulten und Spähern fürs Fakelimit", fd.rolle && fd.rolle + " ohne Fake-Rolle", fd.punkte && fd.punkte + " ohne Dorfpunkte"].filter(Boolean);
-      teile.push("Fakes " + nFakes.length + " aus " + genutzt + " Dörfern, faken können " + fd.faehig + " von " + fd.gesamt + (ohne.length ? " (" + ohne.join(", ") + ")" : ""));
+      // ohne zeitlich passendes Ziel (13.11.2026 18:53): sonst wirkt „faken können 198“ wie ein Widerspruch zu 0 Fakes
+      const zeitT = fd.zeit ? "; " + (fd.zeit === fd.faehig ? "keins davon" : fd.zeit + " davon ohne") + " Fakeziel, das zeitlich passt" +
+        (fd.zeit === fd.faehig && fd.naechst ? " (nächstes " + String(fd.naechst.felder).replace(".", ",") + " Felder, Abschick spätestens " + K.fmtZeit(fd.naechst.spaetestens).slice(0, 16) + ")" : "") : "";
+      teile.push("Fakes " + nFakes.length + " aus " + genutzt + " Dörfern, faken können " + fd.faehig + " von " + fd.gesamt + (ohne.length ? " (" + ohne.join(", ") + ")" : "") + zeitT);
     }
     const ok = !eigene.length || eigene.every(z => z.geadelt && !z.offFehlt);
     zeile(ok, (a.name || "Angreifer") + ": " + teile.join(" · ") + (a.eigeneStark ? " · eigene AG-Ziele stark" : ""));

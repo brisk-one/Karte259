@@ -1240,7 +1240,7 @@ function plan(input) {
     if (av.catapult < 1 && !(av.ram >= 1 && rMax >= 1)) { z.belagerung++; return; }
     if (av.spy < 1) { z.spaeher++; return; }
     if (!fakeAus(Object.assign({}, av), v.fakeMin, pop, "kata", rMax) && !fakeAus(Object.assign({}, av), v.fakeMin, pop, "spaeher", rMax)) { z.limit++; return; }
-    z.faehig++;
+    z.faehig++; v.fakeFaehig = true;
   });
   const ohneSpaeherListe = fakeQuellen.filter(v => v.fakeAv.spy < 1 && v.fakeAv.catapult + v.fakeAv.ram >= 1), ohneSpaeher = ohneSpaeherListe.length;
   if (villages.some(v => !v.fakeMin)) warnings.push({art: "punkte", text: "Dörfer ohne Dorfpunkte in den Weltdaten schicken keine Fakes"});
@@ -1574,6 +1574,33 @@ function plan(input) {
   // was dabei frei wurde, noch einmal verteilen (ohne die entfallenen Sitzungen)
   if (extraWeg) { verteilen(); if (herkunft) { herkunftLauf("kata"); herkunftLauf("spaeher"); } }
   if (extraGenutzt.length) warnings.push({art: "fakeextra", text: fakeExtraText(extraGenutzt)});
+  // Warum ein Spieler kaum Fakes bekommt (Dennis 13.11.2026 18:53: „198 von 231 können faken, aber 0 Fakes“): Dörfer mit Truppen
+  // für einen Fake, aber ohne Fakeziel, das zeitlich in seine Abschickzeiträume passt; dazu das nächste Ziel und wann man dafür
+  // spätestens losmüsste
+  const zielAlle = fakeZiele.concat(extra), ankEnde = Math.max(...ANK.map(a => a.to));
+  att.forEach(a => {
+    const z = fakeDoerfer.get(a.id);
+    if (!z || !z.faehig || !zielAlle.length) return;
+    const qs = villages.filter(v => v.att === a.id && v.fakeFaehig);
+    let nah = null;
+    z.zeit = qs.filter(v => {
+      let passt = false;
+      zielAlle.forEach(t => {
+        const d = dist(v, t);
+        if (!nah || d < nah.d) nah = {d, v, t};
+        if (!passt && tsetFake(v, travelS(world, "ram", d) * 1000).length && fakeZeitOk(v, t)) passt = true;
+      });
+      return !passt;
+    }).length;
+    if (nah) z.naechst = {felder: Math.round(nah.d * 10) / 10, laufzeitMs: travelS(world, "ram", nah.d) * 1000, spaetestens: ankEnde - travelS(world, "ram", nah.d) * 1000};
+    if (z.zeit && z.zeit === z.faehig) {
+      const w = a.wunsch.length ? a.wunsch : a.fenster;
+      warnings.push({art: "fakezeit", att: a.id, text: a.name + ": kein Fakeziel passt zeitlich. Das nächste ist " + String(z.naechst.felder).replace(".", ",") + " Felder entfernt (" +
+        (Math.round(z.naechst.laufzeitMs / 360000) / 10).toLocaleString("de-DE") + " h mit Rammen), Abschick dafür spätestens " + fmtZeit(z.naechst.spaetestens).slice(0, 16) +
+        (w.length ? "; Abschickzeitraum " + w.map(([x, y]) => fmtZeit(x).slice(0, 16) + " bis " + fmtZeit(y).slice(11, 16)).join(", ") : "") +
+        ". Früher abschicken (Zeitraum), später ankommen (Ankunftszeitraum) oder nähere Fakeziele wählen."});
+    }
+  });
   // Fakes je Dorf ist Richtwert (Dennis 21:04): eine Sammelzeile statt einer Warnung je Ziel
   let fakeSoll = 0;
   if (!herkunft && fakeQuellen.some(v => att.get(v.att).fakeModus !== "ziel")) fakeSoll += cfg.fakes_per_village;
