@@ -812,7 +812,7 @@ test("Fake-Vorlauf: erste Fakes etwa so viele Stunden vor der ersten Off, der Re
 });
 
 test("Zusätzliche Fake-Sitzungen, wenn die Off- und AG-Sitzungen nicht reichen (Dennis 13.11.2026 10:50, 1a)", () => {
-  // Beta bekommt 40 Deff-Dörfer mit Katapulten, deren Fakes kaum in seine wenigen Sitzungen passen (wie Zwoogel)
+  // Beta bekommt 40 Deff-Dörfer mit Katapulten, deren Fakes kaum in seine wenigen Sitzungen passen (wie bei einem echten Plan)
   const input = szenario({fakes_per_village: 3, fakes_max_je_dorf: 3}, {windows: K.parseFenster("02.11.2026 12:00 bis 23:30").fenster});
   const beta = input.attackers[1]; let id = 60000;
   for (let k = 0; k < 40; k++) beta.villages.push({id: id++, name: "BF" + k, x: 500 + (k % 8) * 2, y: 485 + Math.floor(k / 8) * 2, pts: 9000,
@@ -1077,4 +1077,105 @@ test("Clean-Offs mit mehr Rammen kommen zuerst an (Dennis 12.11.2026)", () => {
     const offs = r.items.filter(i => i.t.id === z.id && i.kind === "clean").sort((a, b) => a.arrivalMs - b.arrivalMs);
     for (let i = 1; i < offs.length; i++) assert.ok(offs[i - 1].units.ram >= offs[i].units.ram, "Rammen absteigend: " + offs.map(o => o.units.ram).join("/"));
   });
+});
+
+/* ---------- Reiter „Fakes aufstocken“: eingelesener Plan (Dennis 13.11.2026 12:26) ---------- */
+// Kunstplan: ein Spieler mit einer Off und zwei Fakes, drei Zieldörfer, fünf eigene Dörfer
+function importSzenario() {
+  const ziele = [{id: 901, x: 520, y: 520, owner: 7}, {id: 902, x: 522, y: 518, owner: 7}, {id: 903, x: 525, y: 523, owner: 8}];
+  const eigene = [1, 2, 3, 4, 5].map(i => ({id: 100 + i, x: 500 + i, y: 500 + (i % 2), name: "Dorf " + i, pts: 9000,
+    units: Object.assign(Object.fromEntries(K.UNITS.map(u => [u, 0])), i === 1 ? {axe: 6000, light: 3000, ram: 300, spy: 50, catapult: 60} : {spear: 4000, catapult: 40, spy: 20})}));
+  const ank = Date.UTC(2026, 10, 14, 8, 30), w = K.makeWorld();
+  const tr = (v, t) => K.travelS(w, "ram", K.dist(v, t)) * 1000;
+  const dsu = {title: null, uvMode: 0, world: "de259", twWorld: "de259", items: [
+    {source: 101, destination: 901, slowest_unit: 8, arrival_time: ank / 1000, type: 8, support_boost: 0, tribe_skill: 0, ms: 0, axe: "6000", light: "3000", ram: "300", spy: "10", catapult: "0"},
+    {source: 102, destination: 902, slowest_unit: 8, arrival_time: ank / 1000 + 60, type: 14, ms: 0, catapult: "11", spy: "1"},
+    {source: 102, destination: 902, slowest_unit: 8, arrival_time: ank / 1000 + 60, type: 14, ms: 0, catapult: "11", spy: "1"},    // doppelt
+    {source: 103, destination: 903, slowest_unit: 8, arrival_time: ank / 1000 + 120, type: 14, ms: 0, catapult: "11", spy: "1"},
+  ]};
+  const plan = K.parsePlan(JSON.stringify(dsu));
+  const dorf = id => eigene.find(v => v.id === id) || ziele.find(t => t.id === id);
+  plan.items.forEach(it => { it.v = dorf(it.source); it.t = dorf(it.destination); it.spieler = "A"; });
+  const sendOff = ank - tr(eigene[0], ziele[0]);
+  return {w, ank, plan, eigene, ziele, sendOff, dsu};
+}
+
+test("Plan einlesen: DS-Ultimate-JSON und DS-Workbench-Zeilen, Art, Prüfung auf Doppelte und Grenze je Dorf", () => {
+  const {plan, dsu} = importSzenario();
+  assert.equal(plan.items.length, 4);
+  assert.deepEqual(plan.items.map(K.importArt), ["off", "fake", "fake", "fake"]);
+  assert.equal(plan.items[0].slow, "ram");
+  assert.equal(plan.items[0].units.axe, 6000);
+  // Export: Befehle aus dem JSON unverändert
+  assert.deepEqual(K.importDSU(plan.items.slice(0, 1), plan.meta).items[0], dsu.items[0]);
+  // WB hin und zurück
+  const wb = K.importWB(plan.items);
+  const zurueck = K.parsePlan(wb).items;
+  assert.equal(zurueck.length, 4);
+  assert.deepEqual(zurueck.map(i => [i.source, i.destination, i.arrivalMs, i.type, i.units.catapult]), plan.items.map(i => [i.source, i.destination, i.arrivalMs, i.type, i.units.catapult]));
+  const p = K.planPruefen(plan.items, 1);
+  assert.equal(p.doppelt, 1);
+  assert.equal(p.zielDoppelt, 1);
+  assert.deepEqual(p.ueber, [{source: 102, n: 2}]);
+  assert.ok(K.parsePlan("kein plan").fehler.length);
+  assert.ok(K.parsePlan("{kaputt").fehler[0].startsWith("Kein gültiges JSON"));
+});
+
+test("Fakes aufstocken im eingelesenen Plan: Sitzung aus dem Plan, Truppen abzüglich Plan, nie zweimal dasselbe Ziel, Grenze je Dorf", () => {
+  const {w, ank, plan, eigene, sendOff} = importSzenario();
+  plan.items.splice(2, 1);                                           // ohne den doppelten Fake
+  const r = K.fakesNachImport({world: w, cfg: {fakes_max_je_dorf: 2, min_send_gap_s: 3}, now: sendOff - 6 * 3600000, seed: 1,
+    ankunft: {from: ank - 1800000, to: ank + 1800000}, items: plan.items,
+    spieler: [{key: "A", name: "A", soll: 8, villages: eigene, fenster: []}]});
+  const s = r.spieler[0];
+  assert.equal(s.vorher, 2);
+  assert.equal(s.ist, 2 + r.neu.length);
+  assert.ok(r.neu.length >= 4, "neue Fakes: " + r.neu.length);
+  const alle = plan.items.concat(r.neu);
+  // nie zweimal dasselbe Ziel aus einem Dorf, höchstens capV = max(2, ceil(8 / 5)) Fakes je Dorf
+  const paare = new Set(alle.map(i => i.source + ":" + i.destination));
+  assert.equal(paare.size, alle.length);
+  const je = new Map(); alle.filter(i => i.fake).forEach(i => je.set(i.source, (je.get(i.source) || 0) + 1));
+  assert.ok(Math.max(...je.values()) <= 2);
+  assert.ok(s.kern.some(([a, b]) => a <= sendOff && sendOff <= b));
+  r.neu.forEach(f => {
+    // in den Sitzungen aus dem Plan (Off und Fakes) mit 10 Minuten Rand, Ankunft im Zeitraum, Laufzeit mit Rammentempo
+    assert.ok(s.kern.some(([a, b]) => f.sendMs >= a - 600000 && f.sendMs <= b + 600000), K.fmtZeit(f.sendMs));
+    assert.ok(f.arrivalMs >= ank - 1800000 && f.arrivalMs <= ank + 1800000);
+    assert.equal(f.arrivalMs - f.sendMs, K.travelS(w, "ram", K.dist(f.v, f.t)) * 1000);
+    assert.ok(f.units.spy >= 1 && f.units.catapult + f.units.ram >= 1);
+    assert.ok(f.units.catapult * 8 + f.units.spy * 2 + f.units.ram * 5 >= 90 + 5, "Fakelimit");
+  });
+  // Mindestabstand zwischen allen Abschickzeiten des Spielers
+  const sends = alle.map(i => i.sendMs).sort((a, b) => a - b);
+  for (let i = 1; i < sends.length; i++) assert.ok(sends[i] - sends[i - 1] >= 3000);
+  // Dorf 1 schickt die Off: seine Rammen und Katapulte sind verplant (Off ohne Katapulte, 60 Katapulte bleiben)
+  r.neu.filter(f => f.source === 101).forEach(f => assert.equal(f.units.ram, 0));
+  // Export der Fakes: alte unverändert, neue mit Symbol Fake und Ramme als langsamster Einheit
+  const ex = K.importDSU(plan.items.filter(i => i.fake).concat(r.neu));
+  assert.equal(ex.items.length, 2 + r.neu.length);
+  assert.ok(ex.items.slice(2).every(o => o.type === 14 && o.slowest_unit === 8 && o.ms === 0));
+});
+
+test("Fakes aufstocken: ohne Platz in den Sitzungen zusätzliche Fake-Sitzung im Abschickzeitraum nur mit mindestens 10 Fakes", () => {
+  const {w, ank, plan, ziele, sendOff} = importSzenario();
+  plan.items.splice(1, 3);                                           // nur die Off bleibt
+  // viele Dörfer weit weg: ihre Fakes passen nicht in die Sitzung der Off
+  const fern = Array.from({length: 14}, (_, i) => ({id: 200 + i, x: 470 + (i % 4), y: 470 + Math.floor(i / 4), name: "Fern " + i, pts: 9000,
+    units: Object.assign(Object.fromEntries(K.UNITS.map(u => [u, 0])), {catapult: 60, spy: 20})}));
+  const eigene = [{id: 101, x: 501, y: 501, name: "Dorf 1", pts: 9000, units: Object.assign(Object.fromEntries(K.UNITS.map(u => [u, 0])), {axe: 6000, light: 3000, ram: 300, spy: 50})}].concat(fern);
+  const tr = K.travelS(w, "ram", K.dist(fern[0], ziele[0])) * 1000;
+  const fenster = [[ank - tr - 3 * 3600000, ank - tr + 3 * 3600000]];
+  const lauf = (soll, fen) => K.fakesNachImport({world: w, cfg: {fakes_max_je_dorf: 3}, now: sendOff - 30 * 3600000, seed: 1,
+    ankunft: {from: ank - 1800000, to: ank + 1800000}, items: plan.items.map(i => Object.assign({}, i)), spieler: [{key: "A", name: "A", soll, villages: eigene, fenster: fen}]});
+  const ohne = lauf(30, []);
+  assert.equal(ohne.neu.length, 0, "ohne Zeiträume keine zusätzliche Sitzung");
+  assert.ok(ohne.spieler[0].grund.sitzungen > 0);
+  const mit = lauf(30, fenster);
+  assert.ok(mit.neu.length >= 10, "Fakes in der zusätzlichen Sitzung: " + mit.neu.length);
+  assert.ok(mit.spieler[0].extra.length >= 1 && mit.spieler[0].extra.every(e => e.n >= 10));
+  mit.neu.forEach(f => assert.ok(f.sendMs >= fenster[0][0] && f.sendMs <= fenster[0][1]));
+  // zu wenige mögliche Fakes für eine zusätzliche Sitzung: keine
+  const wenig = lauf(5, fenster);
+  assert.ok(wenig.neu.length === 0 || wenig.spieler[0].extra.length === 0 || wenig.spieler[0].extra.every(e => e.n >= 10));
 });

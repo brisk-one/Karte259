@@ -1173,7 +1173,7 @@ function plan(input) {
   const fakes = [];
   const fakeQuellen = villages.filter(v => v.fakeMin && v.rolleFake);
   // Welche Dörfer überhaupt faken können (Dennis 13.11.2026 10:40: „aus allen Dörfern, auch Deff?“ und „warum so wenige bei
-  // Zwoogel?“): je Spieler gezählt, vor dem Verteilen; Grund für die übrigen
+  // einem Spieler?“): je Spieler gezählt, vor dem Verteilen; Grund für die übrigen
   const fakeDoerfer = new Map();
   villages.forEach(v => {
     if (!fakeDoerfer.has(v.att)) fakeDoerfer.set(v.att, {gesamt: 0, faehig: 0, rolle: 0, belagerung: 0, spaeher: 0, limit: 0, punkte: 0});
@@ -1285,8 +1285,8 @@ function plan(input) {
     }
     return ivIntersect(s, fakeFenster.get(v.att)).length > 0;
   };
-  // Zusätzliche Fake-Sitzungen (Dennis 13.11.2026 10:50, 1a): reichen die Off- und AG-Sitzungen eines Spielers nicht (Zwoogel:
-  // 148 Dörfer, 91 könnten faken, aber nur 6 kurze Sitzungen und 85 Fakes), bekommt er bis zu zwei reine Fake-Sitzungen von je
+  // Zusätzliche Fake-Sitzungen (Dennis 13.11.2026 10:50, 1a): reichen die Off- und AG-Sitzungen eines Spielers nicht (viele
+  // Dörfer, die faken könnten, aber nur wenige kurze Sitzungen), bekommt er bis zu zwei reine Fake-Sitzungen von je
   // einer Stunde in seinen Abschickzeiträumen, dort, wo die meisten seiner möglichen Fakes liegen. Beim Verteilen kosten sie
   // so viel wie 6 h Laufzeit mehr; genutzt werden sie, wenn seine Sitzungen nicht reichen (die Fairness nach Dorfzahl gibt den
   // Ausschlag). Ohne Fake in der Sitzung entsteht keine.
@@ -1432,7 +1432,7 @@ function plan(input) {
     });
   };
   if (herkunft) { herkunftLauf("kata"); herkunftLauf("spaeher"); }
-  // Fakes je Spieler aufstocken (Dennis 13.11.2026 09:27: Zwoogel bekam nur wenige): bis zur gewünschten Gesamtzahl aus seinen
+  // Fakes je Spieler aufstocken (Dennis 13.11.2026 09:27: ein Spieler bekam nur wenige): bis zur gewünschten Gesamtzahl aus seinen
   // Dörfern, reihum, auf die Ziele mit den wenigsten Fakes (auch über „Fakes je Zieldorf“ hinaus), nie zweimal dasselbe Ziel aus
   // einem Dorf, in seinen Sitzungen wie alle Fakes. „Fakes aus einem Dorf höchstens“ wird für ihn so weit wie nötig angehoben.
   const fakeAufstocken = [];
@@ -2242,13 +2242,292 @@ function toWB(items) {
   return zeilen.length ? zeilen.join("\n") + "\n" : "";
 }
 
+/* ---------- Eingelesener Plan: Fakes aufstocken (Reiter „Fakes aufstocken“, Dennis 13.11.2026 12:26, 1a und 2b) ----------
+   Gespeicherte Pläne liegen am Ende meist in DS-Ultimate. Der Reiter liest so einen Plan ein (JSON wie toDSU, oder Zeilen
+   wie toWB), trennt ihn in den Off- und AG-Plan und den Fake-Plan und stockt die Fakes je Spieler auf: aus seinen Dörfern
+   laut Truppenübersicht (abzüglich der Truppen seiner Befehle im Plan), auf die Ziele des Plans, in seinen Abschicksitzungen
+   aus dem Plan und notfalls in bis zu zwei zusätzlichen Fake-Sitzungen in seinen Abschickzeiträumen. Die Befehle des Plans
+   bleiben unverändert; exportiert wird getrennt: Offs und AGs, alle Fakes (alte und neue). */
+const unb64 = s => typeof atob === "function" ? atob(s) : Buffer.from(s, "base64").toString("utf8");
+/**
+ * Liest einen Angriffsplan aus DS-Ultimate (JSON mit items, wie toDSU) oder DS Workbench (eine Zeile je Befehl, wie toWB).
+ * Ergebnis {items:[{nr, source, destination, slow, arrivalMs, type, units, fake, roh}], fehler:[], meta:{title, world, twWorld}}
+ * oder {fehler:[…], items:[]} ohne erkennbaren Plan. fake: Symbol Fake (14).
+ */
+function parsePlan(text) {
+  const s = String(text || "").trim();
+  if (!s) return {items: [], fehler: [], meta: {}};
+  const items = [], fehler = [];
+  const dazu = (nr, source, destination, slowIdx, slowName, arrivalMs, type, units, roh) => {
+    if (!(source > 0) || !(destination > 0) || !(arrivalMs > 0)) { fehler.push("Befehl " + nr + ": Herkunft, Ziel oder Ankunft fehlt"); return; }
+    const slow = slowName && UNITS.includes(slowName) ? slowName : UNITS[slowIdx] || langsamste(units) || "ram";
+    items.push({nr, source, destination, slow, arrivalMs, type: isNaN(type) ? null : type, units, fake: type === DSU_TYPE.fake, roh});
+  };
+  if (s[0] === "{" || s[0] === "[") {
+    let d;
+    try { d = JSON.parse(s); } catch (e) { return {items: [], fehler: ["Kein gültiges JSON (" + e.message + ")"], meta: {}}; }
+    const arr = Array.isArray(d) ? d : d && Array.isArray(d.items) ? d.items : null;
+    if (!arr) return {items: [], fehler: ["Keine Befehlsliste (items) gefunden"], meta: {}};
+    arr.forEach((x, i) => {
+      if (!x || typeof x !== "object") { fehler.push("Befehl " + (i + 1) + ": kein Objekt"); return; }
+      const units = emptyUnits();
+      UNITS.forEach(u => { units[u] = Math.max(0, parseInt(x[u], 10) || 0); });
+      const ms = Math.max(0, Math.min(999, parseInt(x.ms, 10) || 0));
+      dazu(i + 1, +x.source, +x.destination, parseInt(x.slowest_unit, 10), null, +x.arrival_time * 1000 + ms, parseInt(x.type, 10), units, x);
+    });
+    return {items, fehler, meta: Array.isArray(d) ? {} : {title: d.title == null ? null : d.title, world: d.world || null, twWorld: d.twWorld || null}};
+  }
+  s.split(/\r?\n/).map(z => z.trim()).filter(Boolean).forEach((z, i) => {
+    const t = z.split("&");
+    if (t.length < 5) { fehler.push("Zeile " + (i + 1) + ": nicht im Format von DS Workbench"); return; }
+    const units = emptyUnits();
+    (t[7] || "").split("/").forEach(p => {
+      const [u, b] = p.split("=");
+      if (u in units && b) { let n = 0; try { n = parseInt(unb64(b), 10) || 0; } catch (e) { n = 0; } units[u] = Math.max(0, n); }
+    });
+    dazu(i + 1, +t[0], +t[1], NaN, t[2], +t[3], parseInt(t[4], 10), units, null);
+  });
+  return {items, fehler, meta: {}};
+}
+/** Art eines eingelesenen Befehls: „fake“, „ag“ (Symbol AG oder ein AG dabei) oder „off“ (alles andere). */
+const importArt = it => it.fake ? "fake" : it.type === DSU_TYPE.ag || it.slow === "snob" || it.units.snob > 0 ? "ag" : "off";
+/** Export eingelesener und neuer Befehle: Befehle aus einem DS-Ultimate-JSON unverändert, neue wie in toDSU. */
+function importDSU(items, meta) {
+  meta = meta || {};
+  return {
+    title: meta.title == null ? null : meta.title, uvMode: 0, world: meta.world || "de259", twWorld: meta.twWorld || meta.world || "de259",
+    items: items.map(it => {
+      if (it.roh) return Object.assign({}, it.roh);
+      const o = {source: it.source, destination: it.destination, slowest_unit: UNITS.indexOf(it.slow), arrival_time: Math.floor(it.arrivalMs / 1000),
+                 type: it.type == null ? DSU_TYPE.fake : it.type, support_boost: 0, tribe_skill: 0, ms: ((it.arrivalMs % 1000) + 1000) % 1000};
+      UNITS.forEach(u => { o[u] = String(it.units[u] || 0); });
+      return o;
+    }),
+  };
+}
+function importWB(items) {
+  return items.map(it => {
+    const truppen = UNITS.map(u => u + "=" + b64(String(Math.max(0, Math.round(it.units[u] || 0))))).concat("militia=" + b64("0"));
+    return [it.source, it.destination, it.slow || "ram", Math.round(it.arrivalMs), it.type == null ? DSU_TYPE.fake : it.type, "false", "false", truppen.join("/")].join("&");
+  }).join("\n");
+}
+
+/** Auffälligkeiten eines eingelesenen Plans (Dennis 13.11.2026 12:38: ein Dorf sollte 6 statt höchstens 3 Fakes schicken):
+    doppelte Befehle (gleiche Herkunft, gleiches Ziel, Ankunft auf die Millisekunde, gleiche Art; AGs eines Trains liegen 200 ms
+    auseinander), wohl zweimal importiert; Fakes
+    auf dasselbe Ziel aus einem Dorf; Dörfer mit mehr Fakes als maxJeDorf. */
+function planPruefen(items, maxJeDorf) {
+  const gesehen = new Set(), paar = new Map(), jeDorf = new Map();
+  let doppelt = 0;
+  items.forEach(it => {
+    const k = it.source + ":" + it.destination + ":" + it.arrivalMs + ":" + importArt(it);
+    if (gesehen.has(k)) doppelt++; else gesehen.add(k);
+    if (!it.fake) return;
+    const p = it.source + ":" + it.destination;
+    paar.set(p, (paar.get(p) || 0) + 1);
+    jeDorf.set(it.source, (jeDorf.get(it.source) || 0) + 1);
+  });
+  return {doppelt, zielDoppelt: [...paar.values()].filter(n => n > 1).length,
+          ueber: [...jeDorf.entries()].filter(([, n]) => n > maxJeDorf).map(([source, n]) => ({source, n})).sort((a, b) => b.n - a.n)};
+}
+
+/**
+ * Fakes zu einem eingelesenen Plan dazu.
+ * input = {world, cfg, now, seed, ankunft:{from, to} (Ankunft der neuen Fakes), zielArten:{ag, off, fake},
+ *          items: parsePlan-Befehle mit v:{id, x, y} (Herkunft), t:{id, x, y, owner} (Ziel) und spieler (Schlüssel),
+ *          spieler:[{key, name, soll (Fakes insgesamt), rammenMax, fenster:[[from, to]] (Abschickzeiträume),
+ *                    villages:[{id, x, y, name, pts, units}] (Truppenübersicht, id null: nicht in den Weltdaten)}]}
+ * Ergebnis {neu: [Befehle wie parsePlan, neu: true], spieler:[{key, name, vorher, ist, soll, grund, doerfer, extra, sitzungen}], warnings}.
+ * Zeiten in Unix-Millisekunden; Befehle bekommen sendMs.
+ */
+function fakesNachImport(input) {
+  const world = input.world || WORLD_DEFAULT, pop = world.pop, cfg = Object.assign({}, CFG_DEFAULT, input.cfg);
+  const rng = mulberry32((input.seed | 0) || 1);
+  const ab = [[(input.now != null ? input.now : Date.now()) + 60000, Number.MAX_SAFE_INTEGER]];
+  const gapMs = Math.max(0, +cfg.min_send_gap_s || 0) * 1000, maxQ = Math.max(1, Math.round(cfg.fakes_max_je_dorf || 4));
+  const items = (input.items || []).filter(it => it.v && it.t);
+  items.forEach(it => { it.sendMs = it.arrivalMs - travelS(world, it.slow || "ram", dist(it.v, it.t)) * 1000; });
+  const warnings = [];
+  // Ziele: alle Zieldörfer des Plans, wahlweise nur AG-, Off- oder Fakeziele (Art nach dem stärksten Befehl darauf)
+  const ziele = new Map();
+  items.forEach(it => {
+    let z = ziele.get(it.t.id);
+    if (!z) ziele.set(it.t.id, z = {t: it.t, fakes: 0, offs: 0, ags: 0});
+    const a = importArt(it);
+    if (a === "fake") z.fakes++; else if (a === "ag") z.ags++; else z.offs++;
+  });
+  const zielArt = z => z.ags ? "ag" : z.offs ? "off" : "fake";
+  const arten = Object.assign({ag: true, off: true, fake: true}, input.zielArten);
+  const liste = [...ziele.values()].filter(z => arten[zielArt(z)]);
+  const zahlZ = new Map([...ziele.values()].map(z => [z.t.id, z.fakes]));
+  const ANK = tagesTeile(world, input.ankunft);
+  if (!ANK.length) warnings.push({art: "ankunft", text: "Ankunft der neuen Fakes liegt ganz im Nachtbonus oder fehlt"});
+  const sendIv = (v, t) => { const tr = travelS(world, "ram", dist(v, t)) * 1000; return ivIntersect(ivNorm(ANK.map(a => [a.from - tr, a.to - tr])), ab); };
+  const neu = [], ergebnis = [];
+  (input.spieler || []).forEach(sp => {
+    const eigene = items.filter(it => it.spieler === sp.key);
+    const sends = eigene.map(it => it.sendMs).sort((p, q) => p - q);
+    const kern = sitzungenAus(sends);                       // Abschicksitzungen aus dem Plan (alle Befehle des Spielers)
+    const normal = ivIntersect(ivNorm(kern.map(([x, y]) => [x - FAKE_RAND_MS, y + FAKE_RAND_MS])), ab);
+    const wunsch = ivIntersect(ivNorm(sp.fenster || []), ab);
+    const rMax = sp.rammenMax == null ? 1 : Math.max(0, sp.rammenMax);
+    const vorher = eigene.filter(it => it.fake).length, soll = Math.max(0, Math.round(+sp.soll || 0));
+    let ist = vorher;
+    // Dörfer: Truppen der Übersicht minus Truppen der Befehle im Plan; Offs und AGs ohne Truppenangabe wie im Planer
+    // (Rammen bleiben bei der Off, Katapulte nur über dem Off-Richtwert, Späher abzüglich der Späher je Off)
+    const jeDorf = new Map();
+    eigene.forEach(it => { if (!jeDorf.has(it.v.id)) jeDorf.set(it.v.id, []); jeDorf.get(it.v.id).push(it); });
+    const doerfer = {gesamt: 0, faehig: 0, belagerung: 0, spaeher: 0, limit: 0, punkte: 0, unbekannt: 0};
+    const quellen = [];
+    (sp.villages || []).forEach(d => {
+      doerfer.gesamt++;
+      if (d.id == null) { doerfer.unbekannt++; return; }
+      const u = Object.assign(emptyUnits(), d.units), bef = jeDorf.get(d.id) || [];
+      let ohneTruppen = false;
+      bef.forEach(it => {
+        if (!UNITS.some(x => it.units[x] > 0)) { if (!it.fake) ohneTruppen = true; return; }
+        UNITS.forEach(x => { u[x] = Math.max(0, u[x] - (it.units[x] || 0)); });
+      });
+      const av = ohneTruppen
+        ? {catapult: Math.min(u.catapult, Math.max(0, Math.floor((offInfo(u, pop).offPop - cfg.off_min_pop) / pop.catapult))), ram: 0,
+           spy: Math.max(0, u.spy - Math.min(cfg.spies_per_off, u.spy))}
+        : {catapult: u.catapult, ram: u.ram, spy: u.spy};
+      const fakeMin = d.pts > 0 ? Math.ceil(d.pts * world.fake_limit / 100) + cfg.fake_extra_pop : null;
+      if (!fakeMin) { doerfer.punkte++; return; }
+      const q = {id: d.id, x: d.x, y: d.y, name: d.name, av, fakeMin, fakes: bef.filter(it => it.fake).length, schon: new Set(bef.map(it => it.t.id))};
+      quellen.push(q);
+      if (av.catapult < 1 && !(av.ram >= 1 && rMax >= 1)) doerfer.belagerung++;
+      else if (av.spy < 1) doerfer.spaeher++;
+      else if (!fakeAus(Object.assign({}, av), fakeMin, pop, "kata", rMax) && !fakeAus(Object.assign({}, av), fakeMin, pop, "spaeher", rMax)) doerfer.limit++;
+      else doerfer.faehig++;
+    });
+    const res = {key: sp.key, name: sp.name, vorher, ist, soll, grund: null, doerfer, extra: [], kern};
+    ergebnis.push(res);
+    if (!soll || ist >= soll || !quellen.length) return;
+    // Streuung über die Zielspieler wie im Planer: je Fake dieses Spielers auf denselben Besitzer zwei Felder Rammenlaufzeit mehr
+    const paar = new Map(), paarK = t => t.owner != null ? "p" + t.owner : "t" + t.id;
+    eigene.forEach(it => { if (it.fake) paar.set(paarK(it.t), (paar.get(paarK(it.t)) || 0) + 1); });
+    const capV = Math.max(maxQ, Math.ceil(soll / quellen.length));
+    const alle = sends.slice();                              // alle Abschickzeiten des Spielers, für den Mindestabstand
+    // Zusätzliche Fake-Sitzungen (wie im Planer): bis zu zwei Stunden in seinen Abschickzeiträumen, wo die meisten
+    // möglichen Fakes liegen, außerhalb seiner Sitzungen; bleiben nur mit mindestens FAKE_EXTRA_MIN Fakes
+    const geht = q => !!(fakeAus(Object.assign({}, q.av), q.fakeMin, pop, "kata", rMax) || fakeAus(Object.assign({}, q.av), q.fakeMin, pop, "spaeher", rMax));
+    let extra = [];
+    if (wunsch.length) {
+      let ivs = [];
+      quellen.forEach(q => { if (q.fakes < capV && geht(q)) liste.forEach(z => { if (!q.schon.has(z.t.id)) ivIntersect(sendIv(q, z.t), wunsch).forEach(x => { if (!ivIntersect([x], normal).length) ivs.push(x); }); }); });
+      for (let n = 0; n < FAKE_EXTRA_SITZUNGEN && ivs.length; n++) {
+        const p = dichtesterPunkt(ivs, wunsch);
+        if (p == null) break;
+        const wi = wunsch.find(([x, y]) => x <= p && p <= y), lang = 2 * FAKE_SITZUNG_MS;
+        let lo = p - FAKE_SITZUNG_MS;
+        if (wi && wi[1] - wi[0] >= lang) lo = Math.min(Math.max(lo, wi[0]), wi[1] - lang);
+        const win = wi ? ivIntersect([[lo, lo + lang]], [wi]) : [[lo, lo + lang]];
+        extra.push({win, p});
+        ivs = ivs.filter(iv => !ivIntersect([iv], win).length);
+      }
+    }
+    // Abschickzeit mit Mindestabstand zu allen anderen Befehlen des Spielers, möglichst in seinen Sitzungen (kurz halten)
+    const slot = (ivs, mitte) => {
+      let best = null, bestC = Infinity;
+      ivs.forEach(([lo, hi]) => {
+        const a = Math.ceil(lo / 1000) * 1000, b = Math.floor(hi / 1000) * 1000;
+        if (a > b) return;
+        const kand = [a, b];
+        mitte.forEach(([x, y]) => [x, y].forEach(m => { const r = Math.round(m / 1000) * 1000; if (r >= a && r <= b) kand.push(r); }));
+        // Nachbarn im Bereich: je Befehl die Zeitpunkte genau einen Mindestabstand davor und danach
+        let i = 0, j = alle.length;
+        while (i < j) { const m = (i + j) >> 1; if (alle[m] < a - gapMs) i = m + 1; else j = m; }
+        for (; i < alle.length && alle[i] <= b + gapMs; i++) [alle[i] - gapMs, alle[i] + gapMs].forEach(k => { const r = Math.ceil(k / 1000) * 1000; if (r >= a && r <= b) kand.push(r); });
+        kand.forEach(s => {
+          if (gapMs && nachbarAbstand(alle, s) < gapMs) return;
+          const c = ivAbstand(mitte, s) + rng() * 1000;
+          if (c < bestC) { bestC = c; best = s; }
+        });
+      });
+      return best;
+    };
+    const lauf = (extraAn) => {
+      const extraIv = ivNorm([].concat(...extraAn.map(e => e.win)));
+      const mitte = kern.concat(extraAn.map(e => [e.p, e.p]));
+      ["kata", "spaeher"].forEach(modus => {
+        let weiter = true;
+        while (ist < soll && weiter) {
+          weiter = false;
+          for (const q of quellen) {
+            if (ist >= soll) break;
+            if (q.fakes >= capV) continue;
+            const kand = [];
+            liste.forEach(z => {
+              if (q.schon.has(z.t.id)) return;
+              const s = sendIv(q, z.t), n = ivIntersect(s, normal), x = extraIv.length ? ivIntersect(s, extraIv) : [];
+              if (!n.length && !x.length) return;
+              const tr = travelS(world, "ram", dist(q, z.t));
+              kand.push({z, ivs: n.length ? n : x, c: (zahlZ.get(z.t.id) || 0) * 28800 + tr + rng() * 1800 + (paar.get(paarK(z.t)) || 0) * PAAR_S + (n.length ? 0 : FAKE_EXTRA_KOSTEN)});
+            });
+            if (!kand.length) continue;
+            kand.sort((p, r) => p.c - r.c);
+            let wahl = null, s = null;
+            for (const k of kand) { s = slot(k.ivs, mitte); if (s != null) { wahl = k; break; } }
+            if (!wahl) continue;
+            const f = fakeAus(q.av, q.fakeMin, pop, modus, rMax);
+            if (!f) continue;
+            q.av.catapult -= f.catapult; q.av.spy -= f.spy; q.av.ram -= f.ram;
+            q.fakes++; q.schon.add(wahl.z.t.id); ist++;
+            zahlZ.set(wahl.z.t.id, (zahlZ.get(wahl.z.t.id) || 0) + 1);
+            paar.set(paarK(wahl.z.t), (paar.get(paarK(wahl.z.t)) || 0) + 1);
+            einsortieren(alle, s);
+            const units = Object.assign(emptyUnits(), f), tr = travelS(world, "ram", dist(q, wahl.z.t)) * 1000;
+            neu.push({nr: null, neu: true, spieler: sp.key, source: q.id, destination: wahl.z.t.id, v: q, t: wahl.z.t, slow: "ram",
+                      arrivalMs: s + tr, sendMs: s, type: DSU_TYPE.fake, units, fake: true, roh: null, nurExtra: !ivIntersect([[s, s]], normal).length});
+            weiter = true;
+          }
+        }
+      });
+    };
+    const start = neu.length;
+    lauf(extra);
+    // zusätzliche Sitzungen mit zu wenigen Fakes: Fakes zurück, ohne die Sitzung noch einmal verteilen
+    for (let runde = 0; runde < FAKE_EXTRA_SITZUNGEN && extra.length; runde++) {
+      const ihre = neu.slice(start).filter(f => f.nurExtra);
+      const zuWenig = extra.filter(e => ihre.filter(f => ivHas(e.win, f.sendMs)).length < FAKE_EXTRA_MIN);
+      if (!zuWenig.length) break;
+      ihre.filter(f => zuWenig.some(e => ivHas(e.win, f.sendMs))).forEach(f => {
+        const q = f.v;
+        q.av.catapult += f.units.catapult; q.av.spy += f.units.spy; q.av.ram += f.units.ram;
+        q.fakes--; q.schon.delete(f.t.id); ist--;
+        zahlZ.set(f.t.id, zahlZ.get(f.t.id) - 1);
+        paar.set(paarK(f.t), paar.get(paarK(f.t)) - 1);
+        alle.splice(alle.indexOf(f.sendMs), 1);
+        neu.splice(neu.indexOf(f), 1);
+      });
+      extra = extra.filter(e => !zuWenig.includes(e));
+      lauf(extra);
+    }
+    res.extra = extra.map(e => ({von: e.win[0][0], bis: e.win[e.win.length - 1][1], n: neu.slice(start).filter(f => f.nurExtra && ivHas(e.win, f.sendMs)).length}));
+    res.ist = ist;
+    if (ist < soll) {
+      // woran es hängt, je Dorf unter der Obergrenze: Truppen, alle Ziele schon belegt oder keine passende Zeit
+      const grund = {truppen: 0, sitzungen: 0, ziele: 0};
+      quellen.forEach(q => {
+        if (q.fakes >= capV) return;
+        if (!geht(q)) grund.truppen++;
+        else if (!liste.some(z => !q.schon.has(z.t.id))) grund.ziele++;
+        else grund.sitzungen++;
+      });
+      res.grund = grund;
+    }
+  });
+  return {neu, spieler: ergebnis, warnings, ziele: [...ziele.values()].map(z => ({t: z.t, art: zielArt(z), fakesVorher: z.fakes, fakes: zahlZ.get(z.t.id) || 0}))};
+}
+
 const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEFAULT, CFG_DEFAULT, makeWorld, erfolgsChance, moral,
              berlinToUtc, berlinParts, fmtZeit, parseAnkunft, parseFenster, parseDatum, parseUhrzeit, fmtDatum, fmtUhrzeit,
              zeitraumAusFeldern, fensterAusZeilen, istNacht, ivNorm, ivIntersect, ivShift, ivHas,
              parseOverview, offInfo, classify, fakeAus, begleitschutz, plan, pruefePlan, toDSU, toWB, exportAuswahl, parseKoordListe,
              travelS, dist, popOf, langsamste, ivAbstand, sitzungenAus, dichtesterPunkt, besser, ankunftKandidaten, bewerteAnkunft, zeitHinweise,
              RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, tagesTeile, nachtGekuerzt,
-             mulberry32, Fluss};
+             mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Angriff = api;
 })(typeof window !== "undefined" ? window : globalThis);

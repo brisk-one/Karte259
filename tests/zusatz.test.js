@@ -41,3 +41,14 @@ test("angriff.html: Planer gesperrt, Skripte erst nach dem Freischalten", () => 
   assert.match(h, /zusatzEntschluesseln\(z\.k, d\.pruef\) === ZUSATZ_PRUEF/);
   for (const f of ["angriff-core.js", "angriff-seite.js"]) assert.ok(fs.existsSync(path.join(SITE, f)), f);
 });
+
+test("aufstocken.html: Reiter „Fakes aufstocken“ gesperrt wie der Planer, Skripte erst nach dem Freischalten", () => {
+  const h = fs.readFileSync(path.join(SITE, "aufstocken.html"), "utf8");
+  assert.match(h, /id="zusatz-sperre"/);
+  assert.match(h, /<main class="wrap" id="seite" hidden>/);
+  assert.ok(!/<script src="(angriff-core|aufstocken-seite)\.js">/.test(h), "kein direktes Laden vor der Prüfung");
+  assert.match(h, /\["angriff-core\.js", "aufstocken-seite\.js"\]/);
+  assert.match(h, /zusatzEntschluesseln\(z\.k, d\.pruef\) === ZUSATZ_PRUEF/);
+  assert.ok(fs.existsSync(path.join(SITE, "aufstocken-seite.js")));
+  assert.match(fs.readFileSync(path.join(SITE, "app.js"), "utf8"), /\["aufstocken\.html", "Fakes aufstocken", "aufstocken", true\]/);
+});

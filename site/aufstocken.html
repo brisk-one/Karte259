@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="de" data-theme="classic">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fakes aufstocken · Welt 259</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  #seite .body > *, .au-sp > *{min-width:0}
+  .ap-row{display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center}
+  .ap-row label{display:inline-flex; gap:5px; align-items:center}
+  .ap-row input[type="checkbox"]{accent-color:var(--accent); cursor:pointer}
+  .ap-note{font-size:11.5px; color:var(--muted)}
+  .ap-ok{color:var(--good); font-weight:700} .ap-warn{color:var(--bad); font-weight:700}
+  .ap-done{font-size:11.5px; color:var(--good); font-weight:700}
+  .ap-list{margin:4px 0 0; padding-left:18px; font-size:12px; line-height:1.5}
+  .ap-list li.warn{color:var(--bad)}
+  textarea.ap-ta{width:100%; min-height:110px; resize:vertical; font:12px/1.4 ui-monospace,Consolas,monospace; color:var(--ink);
+    background:var(--field); border:1px solid var(--edge); border-radius:var(--radius); padding:6px 8px; box-sizing:border-box}
+  textarea.ap-ta.klein{min-height:56px}
+  .au-in{font:12px/1.4 ui-monospace,Consolas,monospace; color:var(--ink); background:var(--field); border:1px solid var(--edge);
+    border-radius:var(--radius); padding:4px 6px; max-width:100%; box-sizing:border-box}
+  .au-in.zr{width:44ch} .au-in.n{width:6em}
+  .au-in.falsch{border-color:var(--bad); color:var(--bad)}
+  .ap-scroll{max-height:460px; overflow:auto; border:1px solid var(--edge-line); border-radius:var(--radius)}
+  .ap-scroll table{margin:0}
+  .ap-sum{display:flex; flex-wrap:wrap; gap:8px; margin:0}
+  .ap-sum>div{border:1px solid var(--edge-soft); border-radius:var(--radius); padding:4px 9px; font-size:12px}
+  .ap-sum b{font-size:14px}
+  .ap-exp{display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+  .ap-exp .wer{font-weight:700; min-width:10ch}
+  .ap-kind{font-weight:700; white-space:nowrap}
+  .k-off{color:var(--accent)} .k-ag{color:var(--good)} .k-fake{color:var(--muted)}
+  .au-neu{display:inline-block; margin-left:5px; padding:0 5px; border-radius:var(--radius); background:var(--accent-soft);
+    color:var(--accent); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase}
+  tr.neu td{background:var(--accent-soft)}
+  .ap-units{font-size:11px; color:var(--ink-2)}
+  .au-sp{border:1px solid var(--edge-soft); border-radius:var(--radius); padding:9px 10px; display:grid; gap:8px}
+  .au-sp .kopf{display:flex; flex-wrap:wrap; gap:6px 14px; align-items:baseline}
+  .au-sp .kopf strong{font-size:13px}
+  .au-felder{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px 14px}
+  .au-f{display:grid; gap:3px; align-content:start; min-width:0}
+  .au-f .lab{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  .au-box{border:2px solid var(--accent); border-radius:var(--radius); padding:10px 12px; display:grid; gap:10px; background:var(--accent-soft)}
+  .au-box h3, .au-teil h3{margin:0}
+  .au-teil{display:grid; gap:8px}
+  .au-sitz{margin:0; padding-left:18px; font-size:12px; line-height:1.5}
+  details.au-det > summary{cursor:pointer; font-size:12px; color:var(--muted)}
+  details.au-det[open]{display:grid; gap:6px}
+</style>
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+
+<div class="wrap" id="zusatz-sperre"><section class="panel"><h2>Fakes aufstocken</h2>
+  <div class="body"><p class="empty" id="zusatz-msg">Lade …</p></div></section></div>
+<main class="wrap" id="seite" hidden>
+  <section class="panel" aria-labelledby="h-plan">
+    <h2 id="h-plan">1 · Angriffsplan einlesen
+      <span class="hint">In DS-Ultimate im Angriffsplaner „Export“, den Text für den Import (JSON) kopieren und hier einfügen. Zeilen aus DS Workbench gehen auch. Alles bleibt in deinem Browser.</span></h2>
+    <div class="body" style="display:grid; gap:6px">
+      <textarea class="ap-ta" id="plan-text" spellcheck="false" placeholder='{"title":null,"uvMode":0,"world":"de259","items":[…]}'></textarea>
+      <div class="ap-row">
+        <button class="tw" type="button" id="plan-datei-knopf">Datei laden …</button>
+        <input type="file" id="plan-datei" accept=".json,.txt,application/json,text/plain" hidden>
+        <button class="tw" type="button" id="plan-leeren">Leeren</button>
+        <span class="ap-note" id="plan-note"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-kern">
+    <h2 id="h-kern">2 · Off- und AG-Plan <span class="hint" id="kern-hint"></span></h2>
+    <div class="body" id="kern" style="display:grid; gap:8px"><p class="empty">Noch kein Plan eingelesen.</p></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-fake">
+    <h2 id="h-fake">3 · Fake-Plan <span class="hint" id="fake-hint"></span></h2>
+    <div class="body" id="fake" style="display:grid; gap:10px"><p class="empty">Noch kein Plan eingelesen.</p></div>
+  </section>
+
+  <footer>Fakes aufstocken für Welt 259: Plan aus DS-Ultimate einlesen, getrennt exportieren, Fakes je Spieler aufstocken.
+    Die Truppenübersichten und der Plan bleiben in diesem Browser.
+    <button class="tw" type="button" id="zusatz-sperren" title="Entfernt den gespeicherten Schlüssel, die Reiter verschwinden">Zusatzfunktionen in diesem Browser sperren</button></footer>
+</main>
+
+<script src="app.js"></script>
+<script>
+buildAppbar("aufstocken", "Fakes aufstocken");
+/* Einfacher Passwortschutz im Browser wie beim Angriffsplaner (Dennis 10.11.2026): die Skripte liegen lesbar im Repo und
+   starten erst, wenn dieser Browser freigeschaltet ist. */
+(async function () {
+  const msg = $("zusatz-msg"), z = zusatzSchluessel();
+  let ok = false;
+  if (z) {
+    try { const d = await zusatzDatei(); ok = d.salt === z.salt && await zusatzEntschluesseln(z.k, d.pruef) === ZUSATZ_PRUEF; }
+    catch (e) { ok = false; }
+  }
+  if (!ok) {
+    if (z) { zusatzSperren(); buildAppbar("aufstocken", "Fakes aufstocken"); }
+    msg.textContent = z ? "Das Passwort hat sich geändert. Bitte oben neu freischalten." : "Gesperrt. Oben „Zusatzfunktionen freischalten“ und das Passwort eingeben.";
+    return;
+  }
+  $("zusatz-sperre").remove();
+  $("seite").hidden = false;
+  for (const src of ["angriff-core.js", "aufstocken-seite.js"])
+    await new Promise((fertig, fehl) => { const s = document.createElement("script"); s.src = src; s.onload = fertig; s.onerror = fehl; document.body.appendChild(s); });
+})();
+</script>
+</body>
+</html>

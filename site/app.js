@@ -127,7 +127,8 @@ function zusatzDialog(bar) {
 /* ---------- Kopfzeile ---------- */
 const PAGES = [["./", "Punkteübersicht", "index"], ["praegen.html", "Prägerechner", "praegen"],
                ["dashboard.html", "Dashboard", "dashboard"], ["karte.html", "Karte", "karte"], ["moral.html", "Moral", "moral"],
-               ["sortieren.html", "Dörfer sortieren", "sortieren"], ["angriff.html", "Angriffsplaner", "angriff", true]];
+               ["sortieren.html", "Dörfer sortieren", "sortieren"], ["angriff.html", "Angriffsplaner", "angriff", true],
+               ["aufstocken.html", "Fakes aufstocken", "aufstocken", true]];
 function buildAppbar(current, title) {
   const bar = $("appbar");
   if (!bar) return;
