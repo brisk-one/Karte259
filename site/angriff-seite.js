@@ -369,6 +369,9 @@ function attBlock(i) {
 function attsBauen() {
   const box = $("atts");
   box.replaceChildren();
+  // nach dem Entfernen eines Angreifers keine Auswertung über das Listenende hinaus (Dennis 13.11.2026 08:04: sonst brach der
+  // Aufbau der AG-Ziele an der übrig gebliebenen Auswertung ab, „als AG-Ziele hinzufügen“ schien nichts zu tun)
+  ANALYSE.length = S.atts.length;
   fensterJeBauen();
   S.atts.forEach((a, i) => { box.append(attBlock(i)); attAnalyse(i); });
 }
@@ -568,10 +571,10 @@ function zieleBauen() {
   }
   if (!S.ziele.length) { box.replaceChildren(el("p", "ap-note", "Noch keine AG-Ziele.")); return; }
   const agDorfer = [];
-  ANALYSE.forEach((A, i) => { if (A) A.dorfer.forEach(d => { if (agZahl(S.atts[i], d) > 0) agDorfer.push(d); }); });
+  ANALYSE.forEach((A, i) => { if (A && S.atts[i]) A.dorfer.forEach(d => { if (agZahl(S.atts[i], d) > 0) agDorfer.push(d); }); });
   const rows = S.ziele.map((z, n) => {
-    const d = dorf(z.xy);
-    const nah = agDorfer.length ? Math.min(...agDorfer.map(a => Math.hypot(a.x - d.x, a.y - d.y))) : null;
+    const d = dorf(z.xy);                         // fehlt das Dorf in den Weltdaten, bleibt die Zeile trotzdem sichtbar
+    const nah = d && agDorfer.length ? Math.min(...agDorfer.map(a => Math.hypot(a.x - d.x, a.y - d.y))) : null;
     const sel = el("select");
     const o0 = el("option", null, "automatisch"); o0.value = ""; sel.append(o0);
     S.atts.forEach((a, i) => { const o = el("option", null, ANALYSE[i] ? ANALYSE[i].name : "Angreifer " + (i + 1)); o.value = i; sel.append(o); });
@@ -581,6 +584,7 @@ function zieleBauen() {
     const x = el("button", "tw", "×"); x.type = "button"; x.title = "entfernen";
     x.addEventListener("click", () => { S.ziele.splice(n, 1); geaendert(); });
     const weit = nah != null && nah > W.snob_max_dist;
+    if (!d) return [[koord(z.xy), "num"], ["nicht in den Weltdaten"], [""], ["–", "num", 0], ["–", "num", null], [sel], [x]];
     return [[koord(z.xy), "num"], [d.name], [spielerName(d.p)], [nf.format(d.pts), "num", d.pts],
             [nah == null ? "–" : nf1.format(nah), weit ? "num down" : "num", nah, weit ? "außerhalb der AG-Reichweite von " + W.snob_max_dist + " Feldern" : ""],
             [sel], [x]];
