@@ -1197,6 +1197,14 @@ function bilanzBox(r) {
       (offFrei ? ", " + offFrei + " frei" : ""));
     if (vonFremden.length) teile.push(vonFremden.length + (vonFremden.length === 1 ? " fremde Off" : " fremde Offs") + " auf seinen AG-Zielen");
     if (!teile.length) return;
+    // Fakes und welche Dörfer faken können (Dennis 13.11.2026 10:40)
+    const fd = r.fakeDoerfer && r.fakeDoerfer[a.id], nFakes = r.items.filter(i => i.kind === "fake" && i.att === a.id);
+    if (fd && fd.gesamt) {
+      const genutzt = new Set(nFakes.map(i => i.v.id)).size;
+      const ohne = [fd.belagerung && fd.belagerung + " ohne Katapult oder Ramme", fd.spaeher && fd.spaeher + " ohne Späher",
+        fd.limit && fd.limit + " mit zu wenig Katapulten und Spähern fürs Fakelimit", fd.rolle && fd.rolle + " ohne Fake-Rolle", fd.punkte && fd.punkte + " ohne Dorfpunkte"].filter(Boolean);
+      teile.push("Fakes " + nFakes.length + " aus " + genutzt + " Dörfern, faken können " + fd.faehig + " von " + fd.gesamt + (ohne.length ? " (" + ohne.join(", ") + ")" : ""));
+    }
     const ok = !eigene.length || eigene.every(z => z.geadelt && !z.offFehlt);
     zeile(ok, (a.name || "Angreifer") + ": " + teile.join(" · ") + (a.eigeneStark ? " · eigene AG-Ziele stark" : ""));
   });

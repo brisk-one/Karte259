@@ -1171,6 +1171,21 @@ function plan(input) {
   });
   const fakes = [];
   const fakeQuellen = villages.filter(v => v.fakeMin && v.rolleFake);
+  // Welche Dörfer überhaupt faken können (Dennis 13.11.2026 10:40: „aus allen Dörfern, auch Deff?“ und „warum so wenige bei
+  // Zwoogel?“): je Spieler gezählt, vor dem Verteilen; Grund für die übrigen
+  const fakeDoerfer = new Map();
+  villages.forEach(v => {
+    if (!fakeDoerfer.has(v.att)) fakeDoerfer.set(v.att, {gesamt: 0, faehig: 0, rolle: 0, belagerung: 0, spaeher: 0, limit: 0, punkte: 0});
+    const z = fakeDoerfer.get(v.att), rMax = att.get(v.att).rammenMax;
+    z.gesamt++;
+    if (!v.rolleFake) { z.rolle++; return; }
+    if (!v.fakeMin) { z.punkte++; return; }
+    const av = v.fakeAv;
+    if (av.catapult < 1 && !(av.ram >= 1 && rMax >= 1)) { z.belagerung++; return; }
+    if (av.spy < 1) { z.spaeher++; return; }
+    if (!fakeAus(Object.assign({}, av), v.fakeMin, pop, "kata", rMax) && !fakeAus(Object.assign({}, av), v.fakeMin, pop, "spaeher", rMax)) { z.limit++; return; }
+    z.faehig++;
+  });
   const ohneSpaeherListe = fakeQuellen.filter(v => v.fakeAv.spy < 1 && v.fakeAv.catapult + v.fakeAv.ram >= 1), ohneSpaeher = ohneSpaeherListe.length;
   if (villages.some(v => !v.fakeMin)) warnings.push({art: "punkte", text: "Dörfer ohne Dorfpunkte in den Weltdaten schicken keine Fakes"});
   // Stammesmitglieder reihum (je Mitglied ein Dorf, starke zuerst), damit jedes gewählte Mitglied Fakes bekommt, auch wenn
@@ -1609,6 +1624,7 @@ function plan(input) {
           freieAGs: agVillages.map(v => ({id: v.id, x: v.x, y: v.y, att: v.att, frei: v.nobles - verplanteAGs(v, trains)})).filter(x => x.frei > 0),
           warnings, stats: statistik(items, zielInfo, att), cfg, k, form, zeit, knapp, sitzungen, hinweise,
           fakeAufstocken: fakeAufstocken.map(x => ({att: x.a.id, soll: x.soll, ist: x.ist, vorher: x.vorher, grund: x.grund})),
+          fakeDoerfer: Object.fromEntries([...fakeDoerfer].map(([a, z]) => [a, z])),
           bewertung: bewertung(items, zielInfo, att, world)};
 }
 
