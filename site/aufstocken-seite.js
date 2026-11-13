@@ -8,16 +8,43 @@ const SPEICHER = "k259-aufstocken";
 const neuerSpieler = () => ({uebersicht: "", fenster: "", soll: "", rammenMax: ""});
 let S = {text: "", spieler: {}, dazu: [], ank: "", ankPlan: "", arten: {ag: true, off: true, fake: true},
          cfg: {fakes_max_je_dorf: 4, fake_extra_pop: 5, min_send_gap_s: 3}, expFmt: "dsu", seed: 1, aktiv: false};
+/** Gespeicherter Stand des Angriffsplaners in diesem Browser ({v: 1, S}), sonst null. */
+function planerStand() {
+  try {
+    const a = JSON.parse(localStorage.getItem("k259-angriff") || "null");
+    return a && a.v === 1 && a.S && typeof a.S === "object" ? a.S : null;
+  } catch (e) { return null; }
+}
 function laden() {
   try {
     const d = JSON.parse(localStorage.getItem(SPEICHER) || "null");
     if (d && typeof d === "object") S = Object.assign(S, d, {cfg: Object.assign({}, S.cfg, d.cfg), arten: Object.assign({}, S.arten, d.arten)});
-    else {
-      // erster Aufruf: Fake-Einstellungen aus dem Angriffsplaner dieses Browsers übernehmen
-      const a = JSON.parse(localStorage.getItem("k259-angriff") || "null");
-      if (a && a.cfg) ["fakes_max_je_dorf", "fake_extra_pop", "min_send_gap_s"].forEach(k => { if (a.cfg[k] != null && !isNaN(+a.cfg[k])) S.cfg[k] = +a.cfg[k]; });
-    }
   } catch (e) { /* Speicher gesperrt oder kaputt: Standard */ }
+  // einmal: Fake-Einstellungen aus dem Angriffsplaner dieses Browsers übernehmen (Dennis 13.11.2026 14:36: stand auf 4 statt 3)
+  if (!S.cfgAusPlaner) {
+    const a = planerStand();
+    if (a && a.cfg) ["fakes_max_je_dorf", "fake_extra_pop", "min_send_gap_s"].forEach(k => { if (a.cfg[k] != null && a.cfg[k] !== "" && !isNaN(+a.cfg[k])) S.cfg[k] = +a.cfg[k]; });
+    S.cfgAusPlaner = true;
+  }
+}
+/** Truppenübersichten und Abschickzeiträume aus dem Angriffsplaner dieses Browsers, je Spieler (Besitzer der meisten Dörfer
+    der Übersicht laut Weltdaten). Zeiträume: die eigenen des Angreifers, wenn „je Angreifer“ an ist, sonst die gemeinsamen. */
+function planerDaten() {
+  const out = new Map(), a = planerStand();
+  if (!a || !Array.isArray(a.atts)) return out;
+  const gemeinsam = Array.isArray(a.fen) ? K.fensterAusZeilen(a.fen).fenster : [];
+  a.atts.forEach(at => {
+    if (!at || typeof at.text !== "string" || !at.text.trim()) return;
+    const o = K.parseOverview(at.text, SPALTEN), n = new Map();
+    o.villages.forEach(v => { const i = byXY.get(v.x * 1000 + v.y); if (i != null && V.rows[i][1] >= 0) n.set(V.rows[i][1], (n.get(V.rows[i][1]) || 0) + 1); });
+    let p = -1, best = 0;
+    n.forEach((c, q) => { if (c > best) { best = c; p = q; } });
+    if (p < 0) return;
+    const eigen = a.fenJe && Array.isArray(at.fen) ? K.fensterAusZeilen(at.fen).fenster : [];
+    const f = eigen.length ? eigen : gemeinsam;
+    out.set(spielerName(p), {text: at.text, fenster: f.map(([x, y]) => K.fmtZeit(x).slice(0, 16) + " bis " + K.fmtZeit(y).slice(0, 16)).join("\n")});
+  });
+  return out;
 }
 function speichern() {
   try { localStorage.setItem(SPEICHER, JSON.stringify(S)); } catch (e) { /* voll oder gesperrt: nur für diese Sitzung */ }
@@ -25,7 +52,7 @@ function speichern() {
 const sp = name => S.spieler[name] || (S.spieler[name] = neuerSpieler());
 
 /* ---------- Weltdaten ---------- */
-let P = null, pIdx = {}, V = null, IDS = null, W = null, WELT = "de259";
+let P = null, pIdx = {}, V = null, IDS = null, W = null, WELT = "de259", SPALTEN = undefined;
 const byXY = new Map(), byId = new Map();
 const spielerName = p => p >= 0 && P && P.rows[p] ? P.rows[p][pIdx.name] : "Barbaren";
 const dorf = i => { const r = V.rows[i]; return {id: IDS[i], x: Math.floor(r[0] / 1000), y: r[0] % 1000, owner: r[1], pts: r[2], name: r[4]}; };
@@ -38,7 +65,7 @@ const UEB = new Map();     // Spieler → gelesene Truppenübersicht
 function uebersichtLesen(name) {
   const text = sp(name).uebersicht;
   if (!text.trim()) return null;
-  const o = K.parseOverview(text);
+  const o = K.parseOverview(text, SPALTEN);
   o.villages.forEach(v => {
     const i = byXY.get(v.x * 1000 + v.y);
     const d = i != null && IDS ? dorf(i) : null;
@@ -50,6 +77,20 @@ function einlesen() {
   NEU = null;
   PLAN = S.text.trim() ? K.parsePlan(S.text) : null;
   if (!PLAN || !IDS) return;
+  // Spieler des Plans ohne eigene Übersicht: Übersicht und Abschickzeiträume aus dem Angriffsplaner dieses Browsers
+  // (Dennis 13.11.2026 14:36: Aufstocken ohne Übersicht brachte nichts, ohne Hinweis)
+  const namen = new Set(S.dazu);
+  PLAN.items.forEach(it => { const a = byId.get(it.source); if (a != null && V.rows[a][1] >= 0) namen.add(spielerName(V.rows[a][1])); });
+  const pl = planerDaten();
+  let neuGeholt = false;
+  namen.forEach(n => {
+    const d = pl.get(n);
+    if (!d) return;
+    const s = sp(n);
+    if (!s.uebersicht.trim()) { s.uebersicht = d.text; s.ausPlaner = true; neuGeholt = true; }
+    if (!s.fenster.trim() && d.fenster) { s.fenster = d.fenster; s.fensterAusPlaner = true; neuGeholt = true; }
+  });
+  if (neuGeholt) speichern();
   // Truppenübersichten: Befehle aus Dörfern einer Übersicht gehören diesem Spieler, auch wenn das Dorf laut Weltdaten
   // inzwischen jemand anderem gehört; sonst zählt der Besitzer laut Weltdaten
   UEB.clear();
@@ -233,9 +274,16 @@ function feld(lab, ctl, extra) {
 }
 /** Neu zeichnen erst nach dem Fokuswechsel und den Fokus auf das gleiche Feld zurück: sonst ersetzt das Neuzeichnen beim
     Verlassen eines Felds das Feld, in das gerade geklickt wurde, und der Klick geht verloren. Felder tragen data-k. */
-let zeichnenTimer = 0;
+let zeichnenTimer = 0, gedrueckt = false, nachLoslassen = null;
+document.addEventListener("pointerdown", () => { gedrueckt = true; }, true);
+const losgelassen = () => { gedrueckt = false; if (nachLoslassen) { const f = nachLoslassen; nachLoslassen = null; setTimeout(f, 0); } };
+document.addEventListener("pointerup", losgelassen, true);
+document.addEventListener("pointercancel", losgelassen, true);
 function spaeter(fn) {
   clearTimeout(zeichnenTimer);
+  // Maustaste noch unten (Klick auf einen Knopf hat das Feld verlassen): erst nach dem Klick neu zeichnen, sonst ersetzt das
+  // Neuzeichnen den Knopf zwischen Drücken und Loslassen und der Klick geht verloren
+  if (gedrueckt) { nachLoslassen = () => spaeter(fn); return; }
   zeichnenTimer = setTimeout(() => {
     const a = document.activeElement, k = a && a.dataset ? a.dataset.k : null;
     let sel = null;
@@ -309,24 +357,26 @@ function zeigenFake() {
     const ta = el("textarea", "ap-ta klein"); ta.spellcheck = false; ta.value = s.uebersicht;
     ta.placeholder = "Truppenübersicht von " + name + " (Übersichten › Truppen, „Alle“ oder „Eigene“; oder Stamm › Mitglieder › Truppen)";
     ta.dataset.k = "ov:" + name;
-    ta.addEventListener("change", () => { if (s.uebersicht === ta.value) return; s.uebersicht = ta.value; speichern(); spaeter(() => { einlesen(); zeigen(); }); });
+    ta.addEventListener("change", () => { if (s.uebersicht === ta.value) return; s.uebersicht = ta.value; s.ausPlaner = false; speichern(); spaeter(() => { einlesen(); zeigen(); }); });
     let ovNote = "";
     if (o) {
       const fremd = o.villages.filter(v => v.id != null && spielerName(v.owner) !== name).length, ohne = o.villages.filter(v => v.id == null).length;
       ovNote = plural(o.villages.length, "Dorf", "Dörfer") + " gelesen" + (ohne ? ", " + ohne + " nicht in den Weltdaten" : "") +
-        (fremd ? ", " + fremd + " gehören laut Weltdaten jemand anderem" : "") + (o.errors.length ? "; " + o.errors[0] : "");
+        (fremd ? ", " + fremd + " gehören laut Weltdaten jemand anderem" : "") + (o.errors.length ? "; " + o.errors[0] : "") +
+        (s.ausPlaner ? ". Aus dem Angriffsplaner übernommen: haben sich seine Truppen seitdem geändert, die aktuelle Übersicht einfügen." : "");
     }
     const fen = K.parseFenster(s.fenster);
     const fta = el("textarea", "ap-ta klein"); fta.spellcheck = false; fta.value = s.fenster;
     fta.placeholder = "14.11.2026 06:00 bis 09:00\n13.11.2026 18:00 bis 23:00";
     if (fen.fehler.length) fta.classList.add("falsch");
     fta.dataset.k = "fen:" + name;
-    fta.addEventListener("change", () => { if (s.fenster === fta.value) return; s.fenster = fta.value; speichern(); spaeter(zeigenFake); });
+    fta.addEventListener("change", () => { if (s.fenster === fta.value) return; s.fenster = fta.value; s.fensterAusPlaner = false; speichern(); spaeter(zeigenFake); });
     const soll = eingabe("n", s.soll, v => { s.soll = v; speichern(); }, {type: "number", min: 0, max: 100000, placeholder: String(eig.filter(x => x.art === "fake").length), "data-k": "soll:" + name});
     soll.setAttribute("aria-label", "Fakes insgesamt für " + name);
     const rm = eingabe("n", s.rammenMax, v => { s.rammenMax = v; speichern(); }, {type: "number", min: 0, max: 50, placeholder: "1", "data-k": "rm:" + name});
-    f.append(feld("Truppenübersicht", ta, el("span", o && (o.errors.length || ovNote.includes("jemand")) ? "ap-warn" : "ap-note", ovNote || "Ohne Übersicht keine neuen Fakes für diesen Spieler.")),
-      feld("Abschickzeiträume (für zusätzliche Fake-Sitzungen)", fta, el("span", fen.fehler.length ? "ap-warn" : "ap-note", fen.fehler[0] || "Je Zeile ein Zeitraum. Leer: nur in seinen Sitzungen aus dem Plan.")),
+    const ovWarn = o ? o.errors.length || ovNote.includes("jemand") : parseInt(s.soll, 10) > 0;
+    f.append(feld("Truppenübersicht", ta, el("span", ovWarn ? "ap-warn" : "ap-note", ovNote || "Ohne Übersicht keine neuen Fakes für diesen Spieler: hier einfügen (Übersichten › Truppen) oder vorher im Angriffsplaner.")),
+      feld("Abschickzeiträume (für zusätzliche Fake-Sitzungen)", fta, el("span", fen.fehler.length ? "ap-warn" : "ap-note", fen.fehler[0] || (s.fensterAusPlaner ? "Aus dem Angriffsplaner übernommen. " : "") + "Je Zeile ein Zeitraum. Leer: nur in seinen Sitzungen aus dem Plan.")),
       feld("Fakes insgesamt (alte und neue)", soll, el("span", "ap-note", "Leer: nicht aufstocken.")),
       feld("Rammen je Fake höchstens", rm, el("span", "ap-note", "Katapulte gehen vor; leer: 1.")));
     k.append(f);
@@ -336,7 +386,8 @@ function zeigenFake() {
         const li = el("li", r.ist < r.soll ? "warn" : null, r.vorher + " Fakes im Plan, jetzt " + r.ist + " von " + r.soll + " gewünscht" + (r.ist > r.vorher ? " (" + (r.ist - r.vorher) + " neu)" : ""));
         ul.append(li);
         const g = r.grund;
-        if (g) ul.append(el("li", "warn", "Grenze: " + [g.truppen && plural(g.truppen, "Dorf", "Dörfer") + " ohne Katapulte oder Rammen mit Spähern für einen weiteren Fake",
+        if (g && g.keineDoerfer) ul.append(el("li", "warn", r.doerfer.gesamt ? "Kein Dorf seiner Übersicht steht mit Punkten in den Weltdaten, deshalb keine neuen Fakes." : "Keine Truppenübersicht, deshalb keine neuen Fakes. Übersicht oben einfügen und noch einmal aufstocken."));
+        else if (g) ul.append(el("li", "warn", "Grenze: " + [g.truppen && plural(g.truppen, "Dorf", "Dörfer") + " ohne Katapulte oder Rammen mit Spähern für einen weiteren Fake",
           g.sitzungen && plural(g.sitzungen, "Dorf", "Dörfer") + " ohne Ziel, das zeitlich in seine Sitzungen passt" + (s.fenster.trim() ? "" : " (Abschickzeiträume eintragen für zusätzliche Fake-Sitzungen)"),
           g.ziele && plural(g.ziele, "Dorf hat", "Dörfer haben") + " schon alle Ziele"].filter(Boolean).join(", ")));
         if (r.extra.length) ul.append(el("li", null, "Zusätzliche Fake-Sitzungen: " + r.extra.map(e => zeitKurz(e.von).slice(0, 12) + " bis " + zeitKurz(e.bis).slice(7, 12) + " (" + e.n + " Fakes)").join(", ")));
@@ -365,7 +416,7 @@ function zeigenFake() {
   const los = el("div", "ap-row");
   const b = el("button", "tw", "Fakes aufstocken"); b.type = "button";
   b.addEventListener("click", () => {
-    if (!namen.some(n => parseInt(sp(n).soll, 10) > 0)) { meld.textContent = "Bei mindestens einem Spieler „Fakes insgesamt“ eintragen."; return; }
+    if (!namen.some(n => parseInt(sp(n).soll, 10) > 0)) { meld.textContent = "Bei mindestens einem Spieler „Fakes insgesamt“ eintragen."; meld.className = "ap-warn"; return; }
     S.aktiv = true; speichern(); rechnen();
   });
   const zurueck = el("button", "tw", "↺ ohne neue Fakes"); zurueck.type = "button"; zurueck.disabled = !NEU;
@@ -375,7 +426,12 @@ function zeigenFake() {
   wuerfel.addEventListener("click", () => { S.seed = (S.seed % 100000) + 1; speichern(); rechnen(); });
   const meld = el("span", "ap-note");
   if (NEU && NEU.fehler) { meld.textContent = NEU.fehler; meld.className = "ap-warn"; }
-  else if (NEU) meld.textContent = "Berechnet " + hmf.format(new Date()) + " Uhr; die Abschickzeiten beginnen frühestens eine Minute nach dem Berechnen.";
+  else if (NEU) {
+    const ohne = namen.filter(n => parseInt(sp(n).soll, 10) > 0 && !UEB.get(n));
+    meld.textContent = "Berechnet " + hmf.format(new Date()) + " Uhr; die Abschickzeiten beginnen frühestens eine Minute nach dem Berechnen." +
+      (ohne.length ? " Ohne Truppenübersicht: " + ohne.join(", ") + "." : "");
+    if (ohne.length) meld.className = "ap-warn";
+  }
   los.append(b, zurueck, wuerfel, meld);
   au.append(los);
   if (NEU && NEU.warnings && NEU.warnings.length) { const ul = el("ul", "ap-list"); NEU.warnings.forEach(w => ul.append(el("li", "warn", w.text))); au.append(ul); }
@@ -434,6 +490,7 @@ $("zusatz-sperren").addEventListener("click", () => { zusatzSperren(); location.
   IDS = ids && ids.ids && ids.ids.length === V.rows.length ? ids.ids : null;
   V.rows.forEach((r, i) => { byXY.set(r[0], i); if (IDS) byId.set(IDS[i], i); });
   W = K.makeWorld(units, angriff);
+  SPALTEN = units && units.units ? units.units.map(u => u.id).concat(["militia"]) : undefined;
   if (angriff && angriff.world) WELT = angriff.world;
   einlesen();
   if (S.aktiv && PLAN) aufstocken();

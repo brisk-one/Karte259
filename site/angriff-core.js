@@ -2403,7 +2403,8 @@ function fakesNachImport(input) {
     });
     const res = {key: sp.key, name: sp.name, vorher, ist, soll, grund: null, doerfer, extra: [], kern};
     ergebnis.push(res);
-    if (!soll || ist >= soll || !quellen.length) return;
+    if (!soll || ist >= soll) return;
+    if (!quellen.length) { res.grund = {keineDoerfer: true}; return; }
     // Streuung über die Zielspieler wie im Planer: je Fake dieses Spielers auf denselben Besitzer zwei Felder Rammenlaufzeit mehr
     const paar = new Map(), paarK = t => t.owner != null ? "p" + t.owner : "t" + t.id;
     eigene.forEach(it => { if (it.fake) paar.set(paarK(it.t), (paar.get(paarK(it.t)) || 0) + 1); });
