@@ -1367,3 +1367,28 @@ test("Fakes aufstocken: laufende Angriffe ohne Plan zählen je Ziel mit und sper
   assert.ok(!mit.neu.some(f => f.source === eigene[2].id && f.destination === ziele[1].id), "Paar aus der Übersicht gesperrt");
   assert.equal(mit.ziele.find(z => z.t.id === ziele[0].id).fakes - auf(ziele[0].id)(mit), 8);
 });
+
+test("Fakes je Spieler reduzieren: höchstens N, zuerst von den Zielen mit den meisten Fakes (Dennis 13.11.2026 18:44)", () => {
+  const input = szenario({fakes_per_village: 3});
+  const r0 = K.plan(input);
+  const a = input.attackers.find(x => r0.items.filter(i => i.kind === "fake" && i.att === x.id).length >= 4);
+  assert.ok(a, "Angreifer mit Fakes");
+  const vorher = r0.items.filter(i => i.kind === "fake" && i.att === a.id).length, ziel = Math.floor(vorher / 2);
+  a.fakeMax = ziel;
+  const r = K.plan(input);
+  const nach = r.items.filter(i => i.kind === "fake" && i.att === a.id);
+  assert.equal(nach.length, ziel);
+  assert.deepEqual(r.fakeReduziert.find(x => x.att === a.id), {att: a.id, max: ziel, vorher, ist: ziel});
+  // andere Angreifer und Offs/AGs unverändert in der Zahl
+  input.attackers.filter(x => x !== a).forEach(x => assert.equal(r.items.filter(i => i.kind === "fake" && i.att === x.id).length, r0.items.filter(i => i.kind === "fake" && i.att === x.id).length));
+  assert.equal(r.items.filter(i => i.kind !== "fake").length, r0.items.filter(i => i.kind !== "fake").length);
+  assert.deepEqual(K.pruefePlan(r, input).filter(x => !/Mindestabstand/.test(x)), []);
+  // Ziele: die mit den meisten Fakes verlieren zuerst, kein Ziel verliert seinen letzten Fake, solange andere zwei haben
+  const proZiel = its => { const m = new Map(); its.filter(i => i.kind === "fake").forEach(i => m.set(i.t.id, (m.get(i.t.id) || 0) + 1)); return m; };
+  const m0 = proZiel(r0.items), m1 = proZiel(r.items);
+  const verloren = [...m0.keys()].filter(t => !m1.has(t)).length;
+  assert.ok(verloren === 0 || [...m1.values()].every(n => n <= 1), "Ziele ganz ohne Fake nur, wenn sonst keins mehr zwei hat");
+  // 0: keine Fakes für ihn
+  a.fakeMax = 0;
+  assert.equal(K.plan(input).items.filter(i => i.kind === "fake" && i.att === a.id).length, 0);
+});

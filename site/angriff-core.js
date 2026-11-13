@@ -643,7 +643,8 @@ function plan(input) {
       fakeModus: fakeModus && zahl(a.fakeN, 20) != null ? fakeModus : null, fakeN: zahl(a.fakeN, 20),
       rammenMax: zahl(a.rammenMax, 1000) != null ? zahl(a.rammenMax, 1000) : 1,       // Rammen je Fake höchstens (Dennis 10.11.2026)
       stark: !!a.eigeneStark,                                                           // eigene AG-Ziele stark (Dennis 12.11.2026 22:05)
-      fakeSoll: zahl(a.fakeSoll, 100000)});                                            // Fakes insgesamt aufstocken (Dennis 13.11.2026 09:27)
+      fakeSoll: zahl(a.fakeSoll, 100000),                                               // Fakes insgesamt aufstocken (Dennis 13.11.2026 09:27)
+      fakeMax: zahl(a.fakeMax, 100000)});                                               // Fakes insgesamt reduzieren (Dennis 13.11.2026 18:44)
     if (!wunsch.length) warnings.push({art: "fenster", text: "Kein Abschickzeitraum für " + (a.name || a.id) + (streng ? "" : ", Abschickzeiten frei gewählt")});
     // Teilnahme je Spieler (Offs, AGs, Fakes) und Dorfauswahl für Offs und AGs (Dennis 16:57)
     const rollen = Object.assign({off: true, ag: true, fake: true}, a.rollen);
@@ -1546,6 +1547,9 @@ function plan(input) {
   // zusätzliche Weckzeit)
   const extraGenutzt = [];
   let extraWeg = 0;
+  const fakeExtraText = liste => "Zusätzliche Fake-Sitzungen in den Abschickzeiträumen, weil die Off- und AG-Sitzungen nicht reichten: " +
+    [...new Set(liste.map(x => x.a))].map(a => att.get(a).name + " " + liste.filter(x => x.a === a).sort((p, q) => p.von - q.von)
+      .map(x => fmtZeit(x.von).slice(0, 5) + ". " + fmtZeit(x.von).slice(11, 16) + " (" + x.n + " Fakes)").join(", ")).join("; ");
   fakeExtraListe.forEach((liste, a) => {
     // jeder Fake, der nur in einer zusätzlichen Sitzung geht, zählt bei genau einer (bei zweien: der volleren)
     const ivF = f => sendIvFake(travelS(world, "ram", dist(f.v, f.t)) * 1000);
@@ -1569,9 +1573,7 @@ function plan(input) {
   for (let i = fakes.length - 1; i >= 0; i--) if (fakes[i].weg) fakes.splice(i, 1);
   // was dabei frei wurde, noch einmal verteilen (ohne die entfallenen Sitzungen)
   if (extraWeg) { verteilen(); if (herkunft) { herkunftLauf("kata"); herkunftLauf("spaeher"); } }
-  if (extraGenutzt.length) warnings.push({art: "fakeextra", text: "Zusätzliche Fake-Sitzungen in den Abschickzeiträumen, weil die Off- und AG-Sitzungen nicht reichten: " +
-    [...new Set(extraGenutzt.map(x => x.a))].map(a => att.get(a).name + " " + extraGenutzt.filter(x => x.a === a).sort((p, q) => p.von - q.von)
-      .map(x => fmtZeit(x.von).slice(0, 5) + ". " + fmtZeit(x.von).slice(11, 16) + " (" + x.n + " Fakes)").join(", ")).join("; ")});
+  if (extraGenutzt.length) warnings.push({art: "fakeextra", text: fakeExtraText(extraGenutzt)});
   // Fakes je Dorf ist Richtwert (Dennis 21:04): eine Sammelzeile statt einer Warnung je Ziel
   let fakeSoll = 0;
   if (!herkunft && fakeQuellen.some(v => att.get(v.att).fakeModus !== "ziel")) fakeSoll += cfg.fakes_per_village;
@@ -1677,6 +1679,51 @@ function plan(input) {
   });
   items.sort((a, b) => a.sendMs - b.sendMs || a.offset - b.offset);
 
+  // Fakes je Spieler reduzieren (Dennis 13.11.2026 18:44): höchstens fakeMax Fakes im fertigen Plan (nach der Zeitplanung, damit
+  // die Zahl stimmt; Wegnehmen verletzt keinen Abstand). Zuerst fallen ganze zusätzliche Fake-Sitzungen weg (die kleinste zuerst,
+  // solange sie ganz wegkönnen: eine Weckzeit weniger), dann je ein Fake auf dem Ziel mit den meisten Fakes (bei gleich vielen
+  // aus dem Dorf mit den meisten Fakes); den letzten Fake eines Ziels erst, wenn kein Ziel mehr zwei hat.
+  const fakeReduziert = [];
+  att.forEach(a => {
+    if (a.fakeMax == null) return;
+    const ihre = () => items.filter(it => it.kind === "fake" && it.att === a.id && !it.weg);
+    const vorher = ihre().length;
+    let zuViel = vorher - a.fakeMax;
+    if (zuViel <= 0) { fakeReduziert.push({a, max: a.fakeMax, vorher, ist: vorher}); return; }
+    const weg = it => { it.weg = true; zuViel--; };
+    const fenster = (fakeExtraListe.get(a.id) || []).map(win => ({win, drin: ihre().filter(it => ivHas(win, it.sendMs))})).sort((p, q) => p.drin.length - q.drin.length);
+    const gestrichen = [];
+    fenster.forEach(x => { if (x.drin.length && x.drin.length <= zuViel) { x.drin.forEach(weg); gestrichen.push(x.win); } });
+    const zahlT = new Map(), zahlV = new Map();
+    items.forEach(it => { if (it.kind !== "fake" || it.weg) return; zahlT.set(it.t.id, (zahlT.get(it.t.id) || 0) + 1); zahlV.set(it.v.id, (zahlV.get(it.v.id) || 0) + 1); });
+    while (zuViel > 0) {
+      let best = null, bestC = -Infinity;
+      ihre().forEach(it => {
+        const nT = zahlT.get(it.t.id) || 0, c = (nT > 1 ? 1e6 : 0) + nT * 1000 + (zahlV.get(it.v.id) || 0) * 10 + (it.extra ? 1 : 0);
+        if (c > bestC) { bestC = c; best = it; }
+      });
+      if (!best) break;
+      weg(best);
+      zahlT.set(best.t.id, zahlT.get(best.t.id) - 1); zahlV.set(best.v.id, zahlV.get(best.v.id) - 1);
+    }
+    fakeReduziert.push({a, max: a.fakeMax, vorher, ist: ihre().length, gestrichen});
+  });
+  if (fakeReduziert.some(x => x.ist < x.vorher)) {
+    for (let i = items.length - 1; i >= 0; i--) if (items[i].weg) items.splice(i, 1);
+    // Hinweis zu den zusätzlichen Fake-Sitzungen: gestrichene raus, Zahlen der Reduzierten aus dem fertigen Plan
+    const wi = warnings.findIndex(w => w.art === "fakeextra");
+    if (wi >= 0) {
+      const red = new Map(fakeReduziert.filter(x => x.ist < x.vorher).map(x => [x.a.id, x]));
+      const noch = extraGenutzt.map(x => {
+        const r0 = red.get(x.a);
+        if (!r0) return x;
+        const win = (fakeExtraListe.get(x.a) || []).find(w => w[0][0] === x.von);
+        return Object.assign({}, x, {n: win ? items.filter(it => it.kind === "fake" && it.att === x.a && ivHas(win, it.sendMs)).length : 0});
+      }).filter(x => x.n > 0);
+      if (noch.length) warnings[wi].text = fakeExtraText(noch); else warnings.splice(wi, 1);
+    }
+  }
+
   // Hinweise je Ziel
   let zusatzNachAG = 0;
   const dauerText = ms => { const sek = Math.round(ms / 1000); return sek < 60 ? sek + " s" : sek < 3600 ? Math.round(sek / 60) + " Min." : (Math.round(sek / 360) / 10).toLocaleString("de-DE") + " h"; };
@@ -1746,6 +1793,7 @@ function plan(input) {
           freieAGs: agVillages.map(v => ({id: v.id, x: v.x, y: v.y, att: v.att, frei: v.nobles - verplanteAGs(v, trains)})).filter(x => x.frei > 0),
           warnings, stats: statistik(items, zielInfo, att), cfg, k, form, zeit, knapp, sitzungen, hinweise,
           fakeAufstocken: fakeAufstocken.map(x => ({att: x.a.id, soll: x.soll, ist: x.ist, vorher: x.vorher, grund: x.grund})),
+          fakeReduziert: fakeReduziert.map(x => ({att: x.a.id, max: x.max, vorher: x.vorher, ist: x.ist})),
           fakeDoerfer: Object.fromEntries([...fakeDoerfer].map(([a, z]) => [a, z])),
           bewertung: bewertung(items, zielInfo, att, world)};
 }
