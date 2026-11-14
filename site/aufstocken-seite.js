@@ -34,6 +34,9 @@ function laden() {
   S.staffel = Object.assign({min: 5, max: 15}, S.staffel);
   if (typeof S.befehle !== "string") S.befehle = "";            // bisheriges gemeinsames Feld (vor 14.11.2026 02:00)
   if (!S.befehleJe || typeof S.befehleJe !== "object") S.befehleJe = {};
+  // weitere freie Felder, unabhängig von den Spielern im Plan (Dennis 14.11.2026 07:10, 1a)
+  if (!Array.isArray(S.befehleFrei)) S.befehleFrei = [];
+  S.befehleFrei = S.befehleFrei.map(t => typeof t === "string" ? t : "");
   // einmal: Fake-Einstellungen aus dem Angriffsplaner dieses Browsers übernehmen (Dennis 13.11.2026 14:36: stand auf 4 statt 3)
   if (!S.cfgAusPlaner) {
     const a = planerStand();
@@ -157,15 +160,19 @@ function einlesen() {
     felder.forEach(f => {
       const b = K.parseBefehle(f.text, Date.now(), SPALTEN);
       b.befehle.forEach(x => alle.push(x));
-      b.fehler.forEach(e => fehler.push((f.name ? f.name + ": " : "") + e));
-      // Befehle aus Dörfern eines anderen Spielers: wohl ins falsche Feld eingefügt
+      b.fehler.forEach(e => fehler.push((f.name ? feldName(f) + ": " : "") + e));
+      // Befehle aus Dörfern eines anderen Spielers: wohl ins falsche Feld eingefügt (nicht bei freien Feldern)
       const eigene = new Set(PLAN.items.filter(it => it.spieler === f.name && it.v).map(it => koord(it.v)));
-      const fremd = f.name ? b.befehle.filter(x => {
+      const fremd = f.name && f.frei == null ? b.befehle.filter(x => {
         if (eigene.has(koord(x.von))) return false;
         const i = byXY.get(x.von.x * 1000 + x.von.y);
         return i != null && spielerName(V.rows[i][1]) !== f.name;
       }).length : 0;
-      je.set(f.name, {befehle: b.befehle, fehler: b.fehler, fremd, serverzeit: f.text.includes("Serverzeit")});
+      // freie Felder: Spieler an den Herkunftsdörfern erkennen (der häufigste Besitzer)
+      const besitzer = new Map();
+      b.befehle.forEach(x => { const i = byXY.get(x.von.x * 1000 + x.von.y); if (i != null) { const n = spielerName(V.rows[i][1]); besitzer.set(n, (besitzer.get(n) || 0) + 1); } });
+      const erkannt = [...besitzer.entries()].sort((a, c) => c[1] - a[1]).map(x => x[0]);
+      je.set(f.name, {befehle: b.befehle, fehler: b.fehler, fremd, erkannt, serverzeit: f.text.includes("Serverzeit")});
     });
     BEF = Object.assign({befehle: alle, fehler, je}, K.befehleAbgleichen(PLAN.items, alle));
     // Spieler mit eingefügter Befehlsübersicht (Name des Felds und Besitzer der Herkunftsdörfer): ihre Offs aus dem Plan, die
@@ -173,7 +180,7 @@ function einlesen() {
     BEF.mitUebersicht = new Set();
     je.forEach((j, name) => {
       if (!j.befehle.length) return;
-      if (name) BEF.mitUebersicht.add(name);
+      if (name && !name.startsWith("frei:")) BEF.mitUebersicht.add(name);
       j.befehle.forEach(x => { const i = byXY.get(x.von.x * 1000 + x.von.y); if (i != null && V.rows[i][1] >= 0) BEF.mitUebersicht.add(spielerName(V.rows[i][1])); });
     });
     const ohne = new Set(BEF.ohnePlan);
@@ -399,12 +406,16 @@ function pruefListe(its, mitFakes) {
   return ul.childElementCount ? ul : null;
 }
 
-/** Felder der Befehlsübersicht: je Spieler der Pläne eins, dazu das bisherige gemeinsame Feld (Name ""), solange es Text hat. */
+/** Felder der Befehlsübersicht: je Spieler der Pläne eins, weitere freie Felder (Name „frei:N“, Dennis 14.11.2026 07:10)
+    und das bisherige gemeinsame Feld (Name ""), solange es Text hat. */
 function befehlsFelder() {
   const out = PLAN ? spielerListe().map(name => ({name, text: S.befehleJe[name] || ""})) : [];
+  if (PLAN) S.befehleFrei.forEach((text, i) => out.push({name: "frei:" + i, frei: i, text}));
   if (S.befehle.trim()) out.push({name: "", text: S.befehle});
   return out;
 }
+const feldName = f => f.frei != null ? "Weitere Übersicht " + (f.frei + 1) : f.name || "Bisheriges Feld (alle Spieler zusammen)";
+const feldText = name => name.startsWith("frei:") ? S.befehleFrei[+name.slice(5)] || "" : name ? S.befehleJe[name] || "" : S.befehle;
 let befehlsSig = null;
 /** Eingabefelder der Befehlsübersicht; neu gebaut nur, wenn sich die Spieler ändern, sonst bleibt der Fokus. */
 function befehleFelderBauen() {
@@ -412,18 +423,25 @@ function befehleFelderBauen() {
   if (sig === befehlsSig) return;
   befehlsSig = sig;
   const box = $("befehle");
-  if (!felder.length) { box.replaceChildren(el("p", "empty", "Erst einen Plan einlesen (Abschnitt 1), dann gibt es hier je Spieler ein Feld.")); return; }
-  box.replaceChildren(...felder.map(f => {
+  if (!PLAN && !felder.length) { box.replaceChildren(el("p", "empty", "Erst einen Plan einlesen (Abschnitt 1), dann gibt es hier je Spieler ein Feld und Platz für weitere Übersichten.")); return; }
+  const teile = felder.map(f => {
     const d = el("div", "au-plan au-bef"), kopf = el("div", "kopf");
-    kopf.append(el("strong", null, f.name || "Bisheriges Feld (alle Spieler zusammen)"), el("span", "bef-note ap-note", ""));
+    kopf.append(el("strong", null, feldName(f)), el("span", "bef-note ap-note", ""));
     if (!f.name) kopf.append(el("span", "ap-note", "Bitte auf die Felder der Spieler verteilen und hier leeren."));
+    if (f.frei != null) {
+      const x = el("button", "tw", "entfernen"); x.type = "button";
+      x.addEventListener("click", () => { S.befehleFrei.splice(f.frei, 1); befehleNeu(); });
+      kopf.append(x);
+    }
     const ta = el("textarea", "ap-ta klein"); ta.spellcheck = false; ta.value = f.text; ta.dataset.k = "bef:" + f.name;
-    ta.placeholder = f.name ? "Befehlsübersicht von " + f.name + ": Übersichten › Befehle, Strg+A, kopieren, hier einfügen" : "";
-    ta.setAttribute("aria-label", "Befehlsübersicht " + (f.name || "alle Spieler"));
+    ta.placeholder = f.frei != null ? "Befehlsübersicht eines weiteren Spielers oder Accounts: Übersichten › Befehle, Strg+A, kopieren, hier einfügen"
+      : f.name ? "Befehlsübersicht von " + f.name + ": Übersichten › Befehle, Strg+A, kopieren, hier einfügen" : "";
+    ta.setAttribute("aria-label", "Befehlsübersicht " + (f.name ? feldName(f) : "alle Spieler"));
     const neu = () => {
-      const alt = f.name ? S.befehleJe[f.name] || "" : S.befehle;
+      const alt = feldText(f.name);
       if (ta.value === alt) return;
-      if (f.name) { if (ta.value.trim()) S.befehleJe[f.name] = ta.value; else delete S.befehleJe[f.name]; } else S.befehle = ta.value;
+      if (f.frei != null) S.befehleFrei[f.frei] = ta.value;
+      else if (f.name) { if (ta.value.trim()) S.befehleJe[f.name] = ta.value; else delete S.befehleJe[f.name]; } else S.befehle = ta.value;
       befehleNeu();
     };
     ta.addEventListener("change", neu);
@@ -431,20 +449,33 @@ function befehleFelderBauen() {
     d.append(kopf, ta);
     d.dataset.name = f.name;
     return d;
-  }));
+  });
+  if (PLAN) {
+    const b = el("button", "tw", "+ weiteres Feld"); b.type = "button"; b.id = "bef-plus";
+    b.title = "Für die Befehlsübersicht eines Spielers oder Accounts, der nicht im Plan steht; der Spieler wird an den Herkunftsdörfern erkannt";
+    b.addEventListener("click", () => {
+      S.befehleFrei.push(""); speichern(); befehleFelderBauen(); befehleNotizen();
+      const t = $("befehle").querySelector('textarea[data-k="bef:frei:' + (S.befehleFrei.length - 1) + '"]');
+      if (t) t.focus();
+    });
+    const z = el("div", "ap-row"); z.append(b, el("span", "ap-note", "für die Übersicht eines Mitspielers oder eines weiteren Accounts, der nicht im Plan steht"));
+    teile.push(z);
+  }
+  box.replaceChildren(...teile);
 }
 /** Meldung je Feld: gelesen, im Plan gefunden, ohne passenden Befehl, aus fremden Dörfern. */
 function befehleNotizen() {
   [...$("befehle").querySelectorAll(".au-bef")].forEach(d => {
     // fester Klassenname: ap-note und ap-warn wechseln je nach Meldung
-    const n = d.querySelector(".kopf .bef-note"), name = d.dataset.name, text = name ? S.befehleJe[name] || "" : S.befehle;
+    const n = d.querySelector(".kopf .bef-note"), name = d.dataset.name, text = feldText(name);
     const j = BEF && BEF.je ? BEF.je.get(name) : null;
     if (!n) return;
     if (!text.trim()) { n.textContent = ""; n.className = "bef-note ap-note"; return; }
     if (!j) { n.textContent = "Noch kein Plan eingelesen."; n.className = "bef-note ap-note"; return; }
     const g = j.grund || {}, gr = [[g.herkunft, "Herkunft nicht im Plan"], [g.ziel, "Herkunft im Plan, aber anderes Ziel"], [g.art, "AG oder Off passt nicht oder schon vergeben"]].filter(x => x[0]);
     n.className = "bef-note " + (j.fehler.length || j.fremd || (j.befehle.length && !j.zugeordnet) ? "ap-warn" : "ap-note");
-    n.textContent = plural(j.befehle.length, "Angriff", "Angriffe") + " gelesen, " + j.zugeordnet + " im Plan gefunden" +
+    n.textContent = (name.startsWith("frei:") && j.erkannt.length ? "Dörfer von " + j.erkannt.slice(0, 2).join(" und ") + (j.erkannt.length > 2 ? " u. a." : "") + ": " : "") +
+      plural(j.befehle.length, "Angriff", "Angriffe") + " gelesen, " + j.zugeordnet + " im Plan gefunden" +
       (j.ohnePlan ? ", " + j.ohnePlan + " ohne passenden Befehl im Plan (" + gr.map(x => x[0] + " " + x[1]).join(", ") + ")" +
         (j.beispiel ? ", etwa " + koord(j.beispiel.von) + " → " + koord(j.beispiel.nach) + " (Zeile " + j.beispiel.zeile + ")" : "") : "") +
       (j.fremd ? "; " + plural(j.fremd, "Angriff", "Angriffe") + " aus Dörfern eines anderen Spielers, falsches Feld?" : "") +
