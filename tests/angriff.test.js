@@ -1297,6 +1297,45 @@ test("AGs an die zuletzt abgeschickte Off angleichen: später immer, früher nur
   assert.deepEqual(K.agsAngleichen(s4.items, {now: jetzt}), []);
 });
 
+test("AGs angleichen mit laufenden Offs ohne Plan-Befehl (Dennis 14.11.2026 02:38): zählen, wenn sie zuletzt abgeschickt sind; Fakes und AGs nicht", () => {
+  const u = x => Object.assign(Object.fromEntries(K.UNITS.map(n => [n, 0])), x);
+  const OFF = u({axe: 6000, light: 2500, ram: 250});
+  const ziel = {x: 520, y: 520};
+  const lauf = (von, ank, units) => ({von, nach: ziel, arrivalMs: ank, units});
+  // nah am Ziel, kommt 10 min nach dem Plan an: als letzte abgeschickt, nicht im Plan → Train dahinter
+  const s = staffelSzenario(), jetzt = Math.min(...s.items.map(i => i.sendMs)) - 3600000;
+  const abst = s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs);
+  const r = K.agsAngleichen(s.items, {now: jetzt, world: s.w, laufend: [lauf({x: 515, y: 515}, s.T0 + 600000, OFF)]});
+  assert.equal(r.length, 1);
+  assert.equal(r[0].art, "spaeter");
+  assert.equal(s.ags[0].arrivalMs, s.T0 + 600000 + 200);
+  assert.deepEqual(s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs), abst, "Train bleibt in sich gleich");
+  assert.deepEqual([r[0].anker.imPlan, r[0].anker.unterwegs, r[0].anker.von, r[0].fremd, r[0].laufende], [false, true, {x: 515, y: 515}, 1, 1]);
+  // dieselbe Zeit als Fake (1 Katapult) oder als AG: zählt nicht
+  for (const units of [u({catapult: 1, spy: 1}), u({snob: 1, axe: 50})]) {
+    const f = staffelSzenario();
+    assert.deepEqual(K.agsAngleichen(f.items, {now: jetzt, world: f.w, laufend: [lauf({x: 515, y: 515}, f.T0 + 600000, units)]}), []);
+  }
+  // ohne Truppenzahlen: zählt vorsichtshalber als Off (Laufzeit der Ramme)
+  const o = staffelSzenario();
+  assert.equal(K.agsAngleichen(o.items, {now: jetzt, world: o.w, laufend: [lauf({x: 515, y: 515}, o.T0 + 600000, u({}))]})[0].art, "spaeter");
+  // auf ein anderes Ziel: keine Wirkung
+  const a = staffelSzenario();
+  assert.deepEqual(K.agsAngleichen(a.items, {now: jetzt, world: a.w, laufend: [{von: {x: 515, y: 515}, nach: {x: 1, y: 1}, arrivalMs: a.T0 + 600000, units: OFF}]}), []);
+  // weit weg und früher abgeschickt als die letzte Off des Plans: Train bleibt bei ihr, Hinweis „nach dem Train“
+  const w = staffelSzenario(), vorher = w.ags.map(x => x.arrivalMs);
+  const rw = K.agsAngleichen(w.items, {now: jetzt, world: w.w, laufend: [lauf({x: 400, y: 400}, w.T0 + 300000, OFF)]});
+  assert.deepEqual(w.ags.map(x => x.arrivalMs), vorher);
+  assert.deepEqual(rw.map(x => [x.art, x.n, x.anker.imPlan]), [["nachTrain", 1, true]]);
+  // AG-Ziel ganz ohne Offs im Plan: nur die laufende zählt
+  const n = staffelSzenario();
+  const nur = n.items.filter(i => i.art === "ag");
+  const rn = K.agsAngleichen(nur, {now: jetzt, world: n.w, laufend: [lauf({x: 515, y: 515}, n.T0 + 600000, OFF)]});
+  assert.deepEqual([rn.length, rn[0].art, n.ags[0].arrivalMs], [1, "spaeter", n.T0 + 600000 + 200]);
+  assert.deepEqual(K.agsAngleichen(staffelSzenario().items.filter(i => i.art === "ag"), {now: jetzt}), [], "ohne Offs und ohne laufende: nichts");
+  assert.deepEqual([K.laufArt(OFF), K.laufArt(u({axe: 3})), K.laufArt(u({})), K.laufArt(u({snob: 1}))], ["off", "fake", "unbekannt", "ag"]);
+});
+
 test("Offs staffeln: zuletzt abgeschickte Off in der Sekunde des Trains, andere 5 bis 15 Minuten vorher; zurück auf die Sekunde", () => {
   const s = staffelSzenario(), jetzt = Math.min(...s.items.map(i => i.sendMs)) - 3600000;
   const letzte = s.offs.slice().sort((a, b) => b.sendMs - a.sendMs)[0];

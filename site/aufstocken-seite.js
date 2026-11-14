@@ -478,7 +478,8 @@ function zeigenPlan() {
   const bn = $("befehle-note");
   bn.className = "ap-note";
   bn.textContent = BEF ? "Zusammen " + plural(BEF.befehle.length, "Angriff", "Angriffe") + " aus " + plural(BEF.je.size, "Feld", "Feldern") + ", " +
-    BEF.zugeordnet + " davon im Plan gefunden (unterwegs, bleiben fest)" + (BEF.ohnePlan.length ? ", " + BEF.ohnePlan.length + " ohne passenden Befehl im Plan (zählen bei der Fakezahl je Ziel mit)" : "") + "." : "";
+    BEF.zugeordnet + " davon im Plan gefunden (unterwegs, bleiben fest)" + (BEF.ohnePlan.length ? ", " + BEF.ohnePlan.length + " ohne passenden Befehl im Plan (zählen bei der Fakezahl je Ziel mit" +
+    (laufendAufAG().length ? "; " + plural(laufendAufAG().length, "Off", "Offs") + " davon auf AG-Ziele, zählen beim Angleichen der AGs mit" : "") + ")" : "") + "." : "";
   if (!IDS) { note.textContent = "Dorf-IDs fehlen in den Weltdaten, Einlesen nicht möglich."; note.className = "ap-warn"; return; }
   if (!PLAN) { note.textContent = ""; return; }
   const it = PLAN.items, n = a => it.filter(x => x.art === a).length, unb = it.filter(x => !x.v || !x.t).length;
@@ -501,7 +502,8 @@ function zeitenAendern(was, auto) {
     PLAN.items.forEach(it => { if (it.arrivalOrig != null && it.sendMs != null) { it.sendMs += it.arrivalOrig - it.arrivalMs; it.arrivalMs = it.arrivalOrig; } });
     info = {art: "zurueck"};
   } else if (was === "angleichen") {
-    info = {art: "angleichen", liste: K.agsAngleichen(PLAN.items, {now: Date.now()}), lage: angleichLage()};
+    // laufende Angriffe ohne Plan-Befehl zählen mit (Dennis 14.11.2026 02:38), Auswahl der Offs in K.agsAngleichen
+    info = {art: "angleichen", liste: K.agsAngleichen(PLAN.items, {now: Date.now(), laufend: BEF ? BEF.ohnePlan : [], world: W || undefined}), lage: angleichLage()};
   } else {
     const rng = K.mulberry32((Date.now() & 0x7fffffff) || 1);
     info = Object.assign({art: was}, K.offsZeitenNeu(PLAN.items, {art: was, minMin: S.staffel.min, maxMin: S.staffel.max, now: Date.now(), world: W,
@@ -514,24 +516,34 @@ function zeitenAendern(was, auto) {
   if (S.aktiv) aufstocken();
   zeigen();
 }
-/** Wie viele AG-Ziele es gibt und auf wie vielen schon eine Off unterwegs ist (laut Befehlsübersicht in Abschnitt 2).
-    Ohne abgeschickte Off richtet sich der Train nach den geplanten Zeiten, das Angleichen ändert dann nichts. */
+/** Laufende Offs aus den Befehlsübersichten ohne passenden Plan-Befehl auf ein AG-Ziel des Plans (Dennis 14.11.2026 02:38:
+    zählen beim Angleichen mit, egal ob sie zum Plan passen). Off oder ohne Truppenzahlen, keine Fakes und AGs (K.laufArt). */
+function laufendAufAG() {
+  if (!BEF || !PLAN) return [];
+  const agZ = new Set(PLAN.items.filter(it => !it.fake && it.t && (it.art === "ag" || it.units.snob > 0)).map(it => koord(it.t)));
+  return BEF.ohnePlan.filter(b => agZ.has(koord(b.nach)) && ["off", "unbekannt"].includes(K.laufArt(b.units, W && W.pop)));
+}
+/** Wie viele AG-Ziele es gibt und auf wie vielen schon eine Off unterwegs ist (laut Befehlsübersicht in Abschnitt 2, mit oder
+    ohne Plan-Befehl). Ohne laufende Off richtet sich der Train nach den geplanten Zeiten, das Angleichen ändert dann nichts. */
 function angleichLage() {
   const ziele = new Map();
   PLAN.items.forEach(it => {
     if (it.fake || !it.t) return;
-    const z = ziele.get(it.t.id) || {ag: false, unterwegs: false};
-    if (it.art === "ag") z.ag = true; else if (it.gesendet != null) z.unterwegs = true;
-    ziele.set(it.t.id, z);
+    const z = ziele.get(koord(it.t)) || {ag: false, unterwegs: false};
+    if (it.art === "ag" || it.units.snob > 0) z.ag = true; else if (it.gesendet != null) z.unterwegs = true;
+    ziele.set(koord(it.t), z);
   });
+  const fremd = laufendAufAG();
+  fremd.forEach(b => { ziele.get(koord(b.nach)).unterwegs = true; });
   const ag = [...ziele.values()].filter(z => z.ag);
-  return {agZiele: ag.length, mitOff: ag.filter(z => z.unterwegs).length, unterwegs: PLAN.items.filter(it => !it.fake && it.gesendet != null).length};
+  return {agZiele: ag.length, mitOff: ag.filter(z => z.unterwegs).length, fremd: fremd.length,
+          unterwegs: PLAN.items.filter(it => !it.fake && it.gesendet != null).length + fremd.length};
 }
 function zeitenBox(its) {
   const box = el("div", "au-box");
   const agZiele = new Set(its.filter(x => x.art === "ag" && x.t).map(x => x.t.id));
   box.append(el("h3", null, "Zeiten anpassen"),
-    el("p", "ap-note", "„AGs angleichen“: Jeder AG-Train landet in derselben Sekunde direkt hinter der Off, die auf sein Ziel als letzte abgeschickt wird, aus allen Plänen; für schon abgeschickte Offs zählt die Ankunft laut Befehlsübersicht (Abschnitt 2). Das passiert beim Einfügen einer Befehlsübersicht automatisch; Offs anderer Spieler, die erst nach dem Train landen, stehen unten. „Offs staffeln“: Auf jedes AG-Ziel landet nur die Off, die als letzte abgeschickt wird, in der Sekunde des AG-Trains, die anderen zufällig " +
+    el("p", "ap-note", "„AGs angleichen“: Jeder AG-Train landet in derselben Sekunde direkt hinter der Off, die auf sein Ziel als letzte abgeschickt wird, aus allen Plänen; für schon abgeschickte Offs zählt die Ankunft laut Befehlsübersicht (Abschnitt 2), auch für laufende Offs, die in keinem Plan stehen (ab 1000 BH Off-Truppen; ohne gelesene Truppenzahlen zählen sie als Off mit Rammen-Laufzeit, Fakes und AGs nicht). Das passiert beim Einfügen einer Befehlsübersicht automatisch; Offs anderer Spieler, die erst nach dem Train landen, stehen unten. „Offs staffeln“: Auf jedes AG-Ziel landet nur die Off, die als letzte abgeschickt wird, in der Sekunde des AG-Trains, die anderen zufällig " +
       S.staffel.min + " bis " + S.staffel.max + " Minuten vorher (untereinander mehr Rammen zuerst), nie im Nachtbonus. „Offs auf die Sekunde“: alle Offs wieder direkt vor dem Train, je 200 ms. Unverändert bleiben Befehle, die schon unterwegs sind oder dafür vor jetzt plus einer Minute losmüssten, und der Mindestabstand zwischen den Abschickzeiten eines Spielers. Einzelne Ankunftszeiten lassen sich unten in den Tabellen von Hand ändern (Feld in der Spalte Ankunft, Enter übernimmt, Esc verwirft); die Knöpfe hier rechnen von den aktuellen Zeiten aus."));
   const zahl = (k, lab) => eingabe("n", S.staffel[k], v => { const n = parseFloat(String(v).replace(",", ".")); if (!isNaN(n)) S.staffel[k] = Math.min(60, Math.max(0, n)); if (S.staffel.max < S.staffel.min) S.staffel.max = S.staffel.min; speichern(); spaeter(zeigenKern); }, {type: "number", min: 0, max: 60, "data-k": "staffel:" + k, title: lab});
   const r1 = el("div", "ap-row");
@@ -558,16 +570,18 @@ function zeitenBox(its) {
     else if (a.art === "angleichen") {
       const l = a.lage || {agZiele: 0, mitOff: 0, unterwegs: 0};
       // Dennis 14.11.2026 02:27: „alle liegen schon richtig“ stand da, obwohl keine abgeschickte Off erkannt war
-      if (!l.unterwegs) ul.append(el("li", "warn", um + "keine abgeschickte Off erkannt: In Abschnitt 2 ist kein Befehl einem Befehl des Plans zugeordnet (Meldungen dort je Spieler). Ohne abgeschickte Offs richten sich die AG-Trains nach den geplanten Zeiten, angeglichen wurde nichts."));
+      if (!l.unterwegs) ul.append(el("li", "warn", um + "keine abgeschickte Off erkannt: In Abschnitt 2 ist weder ein Befehl einem Befehl des Plans zugeordnet noch läuft laut Befehlsübersicht eine Off auf ein AG-Ziel (Meldungen dort je Spieler). Ohne abgeschickte Offs richten sich die AG-Trains nach den geplanten Zeiten, angeglichen wurde nichts."));
       else {
         if (!a.liste.some(x => x.art !== "nachTrain")) ul.append(el("li", null, um + "alle AG-Trains liegen schon in der Sekunde der zuletzt abgeschickten Off."));
+        if (l.fremd) ul.append(el("li", null, um + plural(l.fremd, "laufende Off", "laufende Offs") + " aus den Befehlsübersichten ohne Befehl im Plan " + (l.fremd === 1 ? "zählt" : "zählen") + " auf " + (l.fremd === 1 ? "ihrem AG-Ziel" : "ihren AG-Zielen") + " mit."));
         if (l.mitOff < l.agZiele) ul.append(el("li", null, um + "auf " + (l.agZiele - l.mitOff) + " von " + plural(l.agZiele, "AG-Ziel", "AG-Zielen") + " ist laut Befehlsübersicht noch keine Off unterwegs; dort richtet sich der Train nach der geplanten Zeit der letzten Off."));
       }
+      const mit = x => "jetzt mit der zuletzt abgeschickten Off" + (x.anker && !x.anker.imPlan ? " (läuft schon, nicht im Plan, aus " + koord(x.anker.von) + ")" : "") + ".";
       const danach = x => x.nachTrain || x.n ? " " + plural(x.nachTrain || x.n, "Off landet", "Offs landen") + " erst nach dem Train." : "";
       a.liste.forEach(x => {
         const z = koord(x.t) + " (" + spielerName(x.t.owner) + "): ";
-        if (x.art === "spaeter") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " später, jetzt mit der zuletzt abgeschickten Off." + danach(x)));
-        else if (x.art === "frueher") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " früher, jetzt mit der zuletzt abgeschickten Off." + danach(x)));
+        if (x.art === "spaeter") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " später, " + mit(x) + danach(x)));
+        else if (x.art === "frueher") ul.append(el("li", null, um + z + plural(x.ags, "AG", "AGs") + " " + min(x.ms) + " früher, " + mit(x) + danach(x)));
         else if (x.art === "frueherNichtMoeglich") ul.append(el("li", "warn", um + z + "AG-Train landet " + min(x.ms) + " nach der zuletzt abgeschickten Off; früher abschicken geht nicht mehr, er bleibt." + danach(x)));
         else if (x.art === "zuSpaet") ul.append(el("li", "warn", um + z + "AG schon unterwegs und landet vor der zuletzt abgeschickten Off."));
         else if (x.art === "nachTrain") ul.append(el("li", "warn", um + z + "Train passt zur zuletzt abgeschickten Off;" + danach(x)));
@@ -916,10 +930,11 @@ $("plan-datei").addEventListener("change", e => {
     planGeaendert(); planFelder();
   });
 });
-// neue Befehlsübersicht: AGs gleich an die zuletzt abgeschickten Offs angleichen (Dennis 13.11.2026 19:56)
+// neue Befehlsübersicht: AGs gleich an die zuletzt abgeschickten Offs angleichen (Dennis 13.11.2026 19:56), auch wenn nur
+// laufende Offs ohne Plan-Befehl auf AG-Ziele drin sind (14.11.2026 02:38)
 function befehleNeu() {
   speichern();
-  spaeter(() => { einlesen(); if (BEF && BEF.zugeordnet) zeitenAendern("angleichen", true); else { if (S.aktiv) aufstocken(); zeigen(); } });
+  spaeter(() => { einlesen(); if (BEF && (BEF.zugeordnet || laufendAufAG().length)) zeitenAendern("angleichen", true); else { if (S.aktiv) aufstocken(); zeigen(); } });
 }
 $("zusatz-sperren").addEventListener("click", () => { zusatzSperren(); location.href = "./"; });
 
