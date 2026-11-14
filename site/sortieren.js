@@ -93,7 +93,7 @@ function zeile(rest) {
 /**
  * Liest je Dorf die Truppen, die zum Dorf gehören: eigene + auswärts + unterwegs. Ein Dorf beginnt mit der Zeile mit
  * Koordinaten (Bezeichnung „eigene“) und endet mit der Zeile „insgesamt“. Die Spalte Miliz darf fehlen.
- * @returns {{villages, errors, warnings}}
+ * @returns {{villages, errors, warnings}} je Dorf {name, x, y, k, line, units, fremd, eigene (Zeile „eigene“: im Dorf, sendbar)}
  */
 function leseDorfTruppen(text, columns) {
   columns = columns || K.OVERVIEW_COLUMNS;
@@ -120,7 +120,8 @@ function leseDorfTruppen(text, columns) {
     if (seen.has(key)) { warnings.push("Zeile " + nr + ": Dorf " + d.v.x + "|" + d.v.y + " doppelt, nur das erste zählt"); return; }
     seen.add(key);
     const fremd = insg ? K.UNITS.reduce((s, u) => s + Math.max(0, insg[u] - units[u]), 0) : 0;
-    villages.push(Object.assign(d.v, {units, fremd}));
+    // eigene: was davon gerade im Dorf steht und abgeschickt werden kann (Deffplaner, Dennis 14.11.2026 04:46)
+    villages.push(Object.assign(d.v, {units, fremd, eigene: Object.assign(leer(), d.zeilen.eigene)}));
   };
   String(text || "").split(/\r?\n/).forEach((line, i) => {
     const nr = i + 1;

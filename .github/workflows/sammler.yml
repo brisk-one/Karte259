@@ -198,6 +198,10 @@ jobs:
         if: steps.welche.outputs.sortieren != 'false'
         run: node --test tests/sortieren.test.js
 
+      - name: Tests Deffplaner
+        if: steps.welche.outputs.deff != 'false'
+        run: node --test tests/deff.test.js
+
       - name: Seite bauen
         run: python3 -m collector.build_site --out _site
 

@@ -52,3 +52,14 @@ test("aufstocken.html: Reiter „DS Ultimate Config“ (bis 14.11.2026 „Fakes 
   assert.ok(fs.existsSync(path.join(SITE, "aufstocken-seite.js")));
   assert.match(fs.readFileSync(path.join(SITE, "app.js"), "utf8"), /\["aufstocken\.html", "DS Ultimate Config", "aufstocken", true\]/);
 });
+
+test("deff.html: Reiter „Deffplaner“ (Dennis 14.11.2026 04:46) gesperrt wie der Planer, Skripte erst nach dem Freischalten", () => {
+  const h = fs.readFileSync(path.join(SITE, "deff.html"), "utf8");
+  assert.match(h, /id="zusatz-sperre"/);
+  assert.match(h, /<main class="wrap" id="seite" hidden>/);
+  assert.ok(!/<script src="(angriff-core|sortieren|deff-core|deff-seite)\.js">/.test(h), "kein direktes Laden vor der Prüfung");
+  assert.match(h, /\["angriff-core\.js", "sortieren\.js", "deff-core\.js", "deff-seite\.js"\]/);
+  assert.match(h, /zusatzEntschluesseln\(z\.k, d\.pruef\) === ZUSATZ_PRUEF/);
+  for (const f of ["deff-core.js", "deff-seite.js"]) assert.ok(fs.existsSync(path.join(SITE, f)), f);
+  assert.match(fs.readFileSync(path.join(SITE, "app.js"), "utf8"), /\["deff\.html", "Deffplaner", "deff", true\]/);
+});

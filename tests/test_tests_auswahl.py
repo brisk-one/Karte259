@@ -20,6 +20,13 @@ class TestsAuswahlTest(unittest.TestCase):
     def test_jeder_bereich_hat_einen_befehl(self):
         self.assertEqual(set(A.BEFEHL), set(A.BEREICHE))
 
+    def test_deffplaner(self):
+        w = A.auswahl(["site/deff-seite.js"])
+        self.assertTrue(w["deff"])
+        self.assertFalse(w["begleit"])
+        self.assertTrue(A.auswahl(["site/sortieren.js"])["deff"])     # liest die Truppenübersicht
+        self.assertTrue(A.auswahl(["site/deff.html"])["zusatz"])
+
     def test_begleitschutz(self):
         self.assertTrue(A.auswahl(["site/angriff-core.js"])["begleit"])
         self.assertTrue(A.auswahl(["site/aufstocken-seite.js"])["begleit"])

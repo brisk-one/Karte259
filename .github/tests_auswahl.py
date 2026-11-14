@@ -21,10 +21,11 @@ import sys
 BEREICHE = {
     "praegen": r"^(site/praegen|tests/praegen)",
     "angriff": r"^(site/angriff-core\.js|tests/angriff\.test\.js)",
-    "zusatz": r"^(site/(zusatz\.json|app\.js|angriff\.html|aufstocken\.html)|tools/zusatz|tests/zusatz)",
+    "zusatz": r"^(site/(zusatz\.json|app\.js|angriff\.html|aufstocken\.html|deff\.html)|tools/zusatz|tests/zusatz)",
     "truppen": r"^(site/truppen|tests/truppen)",
     "sortieren": r"^(site/angriff-core\.js|site/sortieren|tests/sortieren)",
     "begleit": r"^(site/angriff-core\.js|site/aufstocken|tests/begleit)",
+    "deff": r"^(site/angriff-core\.js|site/sortieren\.js|site/deff|tests/deff)",
 }
 # gemeinsam genutzt oder der Ablauf selbst: alles testen
 ALLE = r"^(\.github/|site/app\.js$|site/style\.css$|package\.json$)"
@@ -35,6 +36,7 @@ BEFEHL = {
     "truppen": "node --test tests/truppen.test.js",
     "sortieren": "node --test tests/sortieren.test.js",
     "begleit": "node --test tests/begleit.test.js",
+    "deff": "node --test tests/deff.test.js",
 }
 PYTHON = r"^(collector/|tests/test_.*\.py$|\.github/)"
 

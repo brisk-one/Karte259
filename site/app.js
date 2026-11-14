@@ -128,7 +128,7 @@ function zusatzDialog(bar) {
 const PAGES = [["./", "Punkteübersicht", "index"], ["praegen.html", "Prägerechner", "praegen"],
                ["dashboard.html", "Dashboard", "dashboard"], ["karte.html", "Karte", "karte"], ["moral.html", "Moral", "moral"],
                ["sortieren.html", "Dörfer sortieren", "sortieren"], ["angriff.html", "Angriffsplaner", "angriff", true],
-               ["aufstocken.html", "DS Ultimate Config", "aufstocken", true]];
+               ["aufstocken.html", "DS Ultimate Config", "aufstocken", true], ["deff.html", "Deffplaner", "deff", true]];
 function buildAppbar(current, title) {
   const bar = $("appbar");
   if (!bar) return;

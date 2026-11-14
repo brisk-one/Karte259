@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="de" data-theme="classic">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deffplaner · Welt 259</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  #seite .body > *{min-width:0}
+  .ap-note{font-size:11.5px; color:var(--muted)}
+  .ap-warn{color:var(--bad); font-weight:700}
+  .ap-done{font-size:11.5px; color:var(--good); font-weight:700}
+  .ap-row{display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center}
+  .ap-row label{display:inline-flex; gap:5px; align-items:center; font-size:12px}
+  textarea.ap-ta{width:100%; min-height:110px; resize:vertical; font:12px/1.4 ui-monospace,Consolas,monospace; color:var(--ink);
+    background:var(--field); border:1px solid var(--edge); border-radius:var(--radius); padding:6px 8px; box-sizing:border-box}
+  .df-in{font:12px/1.4 ui-monospace,Consolas,monospace; color:var(--ink); background:var(--field); border:1px solid var(--edge);
+    border-radius:var(--radius); padding:4px 6px; width:6.5em; box-sizing:border-box}
+  .ap-scroll{max-height:560px; overflow:auto; border:1px solid var(--edge-line); border-radius:var(--radius)}
+  .ap-scroll table{margin:0}
+  .df-tab th, .df-tab td{text-align:left; font-size:12px}
+  .df-k{font-weight:700; white-space:nowrap} .df-deff{color:var(--good)} .df-pala{color:var(--accent)} .df-fake{color:var(--muted)}
+  .df-fehlt{border:3px solid var(--bad); border-radius:var(--radius); padding:8px 12px; background:var(--bad-bg); display:grid; gap:4px}
+  .df-fehlt h3{margin:0; color:var(--bad); font-size:16px; font-weight:800}
+  .df-fehlt p{margin:0; color:var(--bad); font-weight:700; font-size:13px}
+  tr.vorbei td{color:var(--bad); text-decoration:line-through}
+  .df-sum{display:flex; flex-wrap:wrap; gap:8px; margin:0}
+  .df-sum>div{border:1px solid var(--edge-soft); border-radius:var(--radius); padding:4px 9px; font-size:12px}
+  .df-sum b{font-size:14px}
+</style>
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+
+<div class="wrap" id="zusatz-sperre"><section class="panel"><h2>Deffplaner</h2>
+  <div class="body"><p class="empty" id="zusatz-msg">Lade …</p></div></section></div>
+<main class="wrap" id="seite" hidden>
+  <section class="panel" aria-labelledby="h-bef">
+    <h2 id="h-bef">1 · Laufende Befehle
+      <span class="hint">Übersichten › Befehle, alles markieren und einfügen. Die AG-Trains darin bestimmen die Ziele und die Ankunft der Deff.</span></h2>
+    <div class="body" style="display:grid; gap:6px">
+      <textarea class="ap-ta" id="bef" placeholder="Befehlsübersicht: Übersichten › Befehle, Strg+A, kopieren, hier einfügen"></textarea>
+      <span class="ap-note" id="bef-note"></span>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-tr">
+    <h2 id="h-tr">2 · Truppenübersicht
+      <span class="hint">Übersichten › Truppen, Ansicht „Alle“. Deff-Dörfer wie in „Dörfer sortieren“; geschickt wird, was laut Zeile „eigene“ im Dorf steht.</span></h2>
+    <div class="body" style="display:grid; gap:6px">
+      <textarea class="ap-ta" id="tr" placeholder="Truppenübersicht, Ansicht „Alle“: Strg+A, kopieren, hier einfügen"></textarea>
+      <span class="ap-note" id="tr-note"></span>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-cfg">
+    <h2 id="h-cfg">3 · Einstellungen</h2>
+    <div class="body" style="display:grid; gap:6px">
+      <div class="ap-row" id="cfg"></div>
+      <span class="ap-note" id="cfg-note"></span>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-plan">
+    <h2 id="h-plan">4 · Deffplan <span class="hint" id="plan-hint"></span></h2>
+    <div class="body" id="plan" style="display:grid; gap:10px"><p class="empty">Erst Befehle und Truppenübersicht einfügen.</p></div>
+  </section>
+
+  <footer>Deffplaner für Welt 259: Deff aus den eigenen Deff-Dörfern 1 s hinter die laufenden AG-Trains, mit Fake-Unterstützungen, Export für DS-Ultimate.
+    Befehle und Übersicht bleiben in diesem Browser.
+    <button class="tw" type="button" id="zusatz-sperren" title="Entfernt den gespeicherten Schlüssel, die Reiter verschwinden">Zusatzfunktionen in diesem Browser sperren</button></footer>
+</main>
+
+<script src="app.js"></script>
+<script>
+buildAppbar("deff", "Deffplaner");
+/* Passwortschutz wie beim Angriffsplaner und der DS Ultimate Config: die Skripte starten erst nach dem Freischalten. */
+(async function () {
+  const msg = $("zusatz-msg"), z = zusatzSchluessel();
+  let ok = false;
+  if (z) {
+    try { const d = await zusatzDatei(); ok = d.salt === z.salt && await zusatzEntschluesseln(z.k, d.pruef) === ZUSATZ_PRUEF; }
+    catch (e) { ok = false; }
+  }
+  if (!ok) {
+    if (z) { zusatzSperren(); buildAppbar("deff", "Deffplaner"); }
+    msg.textContent = z ? "Das Passwort hat sich geändert. Bitte oben neu freischalten." : "Gesperrt. Oben „Zusatzfunktionen freischalten“ und das Passwort eingeben.";
+    return;
+  }
+  $("zusatz-sperre").remove();
+  $("seite").hidden = false;
+  for (const src of ["angriff-core.js", "sortieren.js", "deff-core.js", "deff-seite.js"])
+    await new Promise((fertig, fehl) => { const s = document.createElement("script"); s.src = src; s.onload = fertig; s.onerror = fehl; document.body.appendChild(s); });
+})();
+</script>
+</body>
+</html>
