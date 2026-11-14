@@ -504,6 +504,10 @@ function vorlageEinheiten(cfg, world) {
 }
 /** Truppen eines Befehls für den Export: Zahlen, bei einer Standard-Off aus der Dorfliste die Texte der Vorlage. */
 const exportEinheit = (it, u) => it.v && it.v.vorlage && it.kind !== "fake" && it.kind !== "ag" ? (VORLAGE_EXPORT[u] || "0") : String(Math.max(0, Math.round(it.units[u] || 0)));
+/* DS-Ultimate prüft beim JSON-Import jede Einheit als ganze Zahl (Quelltext ds-ultimatev2, itemVerificationArray seit 2023):
+   ein Text wie „all“ lässt den ganzen Import scheitern. Text geht nur über den Workbench-Import (Einheiten als Base64, ohne
+   Prüfung). Im JSON steht deshalb 0, „all“ nur in den Workbench-Zeilen (Befund 14.11.2026 02:50). */
+const nurZahl = w => /^\d+$/.test(String(w)) ? String(w) : "0";
 
 /* ---------- Kostenfluss (Zuteilung) ---------- */
 function heapPush(h, x) {
@@ -2462,14 +2466,37 @@ function toDSU(items, meta) {
   meta = meta || {};
   return {
     title: meta.title == null ? null : meta.title, uvMode: 0, world: meta.world || "de259", twWorld: meta.twWorld || meta.world || "de259",
-    items: nachAbschick(items).map(it => {
+    items: nachAbschick(zuegeBuendeln(items)).map(it => {
       const o = {source: it.v.id, destination: it.t.id, slowest_unit: it.kind === "fake" ? UNITS.indexOf("ram") : UNITS.indexOf(it.slow),
                  arrival_time: Math.floor(it.arrivalMs / 1000), type: DSU_TYPE[it.kind], support_boost: 0, tribe_skill: 0,
                  ms: ((it.arrivalMs % 1000) + 1000) % 1000};
-      UNITS.forEach(u => { o[u] = exportEinheit(it, u); });
+      UNITS.forEach(u => { o[u] = nurZahl(exportEinheit(it, u)); });
       return o;
     }),
   };
+}
+/**
+ * AG-Trains als ein Befehl (Dennis 14.11.2026 02:42): die AGs eines Trains aus einem Dorf (gleiche Aktion, gleiches Ziel) stehen im
+ * Export als ein Befehl mit allen AGs und dem ganzen Begleitschutz, Ankunft und Abschick des ersten AGs; Zeiten nachträglich
+ * anpassen heißt dann einen Befehl statt vier. Geteilt wird im Spiel (Train auf der Bestätigungsseite). Notiz „AG TRAIN“:
+ * nimmt DS-Ultimate beim Import nicht an (weder JSON noch Workbench), nur über Mehrfach-Bearbeiten in DS-Ultimate.
+ */
+const AG_TRAIN_NOTIZ = "AG TRAIN";
+function zuegeBuendeln(items) {
+  const out = [], zug = new Map();
+  items.forEach(it => {
+    if (it.kind !== "ag" || it.aktion == null || !it.v || !it.t) { out.push(it); return; }
+    const k = it.aktion + ":" + it.v.id + ":" + it.t.id, z = zug.get(k);
+    if (!z) {
+      const neu = Object.assign({}, it, {units: Object.assign({}, it.units), train: 1, trainItems: [it]});
+      zug.set(k, neu); out.push(neu); return;
+    }
+    UNITS.forEach(u => { z.units[u] = (z.units[u] || 0) + (it.units[u] || 0); });
+    z.train++; z.trainItems.push(it);
+    if (it.arrivalMs < z.arrivalMs) { z.arrivalMs = it.arrivalMs; z.sendMs = it.sendMs; }
+  });
+  out.forEach(it => { if (it.train > 1) it.notiz = AG_TRAIN_NOTIZ; });
+  return out;
 }
 
 /**
@@ -2480,7 +2507,7 @@ function toDSU(items, meta) {
  */
 const b64 = s => typeof btoa === "function" ? btoa(s) : Buffer.from(s, "utf8").toString("base64");
 function toWB(items) {
-  const zeilen = nachAbschick(items).map(it => {
+  const zeilen = nachAbschick(zuegeBuendeln(items)).map(it => {
     const slow = it.kind === "fake" ? "ram" : it.slow;
     const truppen = UNITS.map(u => u + "=" + b64(exportEinheit(it, u))).concat("militia=" + b64("0"));
     return [it.v.id, it.t.id, slow, Math.round(it.arrivalMs), DSU_TYPE[it.kind], "false", "false", truppen.join("/")].join("&");
@@ -2557,11 +2584,12 @@ function importDSU(items, meta) {
         if (+o.arrival_time !== sek || (+o.ms || 0) !== ms) { o.arrival_time = sek; o.ms = ms; }
         // aufgestockter AG-Begleitschutz (begleitAufstocken): neue Zahl, Typ wie im eingelesenen Plan
         if (it.begleit) Object.keys(it.begleit).forEach(u => { o[u] = typeof it.roh[u] === "number" ? it.begleit[u] : String(it.begleit[u]); });
+        UNITS.forEach(u => { if (o[u] != null && typeof o[u] !== "number") o[u] = nurZahl(o[u]); });   // JSON-Import: nur Zahlen
         return o;
       }
       const o = {source: it.source, destination: it.destination, slowest_unit: UNITS.indexOf(it.slow), arrival_time: Math.floor(it.arrivalMs / 1000),
                  type: it.type == null ? DSU_TYPE.fake : it.type, support_boost: 0, tribe_skill: 0, ms: ((it.arrivalMs % 1000) + 1000) % 1000};
-      UNITS.forEach(u => { o[u] = it.text && it.text[u] ? it.text[u] : String(it.units[u] || 0); });
+      UNITS.forEach(u => { o[u] = String(it.units[u] || 0); });   // JSON-Import: nur Zahlen, Text nur im Workbench-Export
       return o;
     }),
   };
@@ -2938,15 +2966,20 @@ const istAG = it => it.art === "ag" || (it.units && it.units.snob > 0);
 function befehleAbgleichen(items, befehle) {
   const key = (a, b) => a.x + "|" + a.y + ">" + b.x + "|" + b.y;
   const nachPaar = new Map();
-  items.forEach(it => { delete it.gesendet; if (!it.v || !it.t) return; const k = key(it.v, it.t); if (!nachPaar.has(k)) nachPaar.set(k, []); nachPaar.get(k).push(it); });
+  items.forEach(it => { delete it.gesendet; delete it.gesendetN; if (!it.v || !it.t) return; const k = key(it.v, it.t); if (!nachPaar.has(k)) nachPaar.set(k, []); nachPaar.get(k).push(it); });
   let zugeordnet = 0;
   const ohnePlan = [];
+  // AG-Train als ein Befehl mit mehreren AGs (Dennis 14.11.2026 02:42): im Spiel als einzelne Befehle geschickt; er nimmt so
+  // viele AG-Befehle auf, wie er AGs hat, wenn sie höchstens 1 s nach dem ersten landen
+  const frei = (it, b, ag) => it.gesendet == null || (ag && (it.gesendetN || 0) < (it.units.snob || 1) && b.arrivalMs - it.gesendet <= 1000);
   befehle.slice().sort((a, b) => a.arrivalMs - b.arrivalMs).forEach(b => {
     const ag = b.units.snob > 0;
-    const kand = (nachPaar.get(key(b.von, b.nach)) || []).filter(it => it.gesendet == null && istAG(it) === ag);
+    const kand = (nachPaar.get(key(b.von, b.nach)) || []).filter(it => istAG(it) === ag && frei(it, b, ag));
     if (!kand.length) { ohnePlan.push(b); return; }
     kand.sort((p, q) => Math.abs(p.arrivalMs - b.arrivalMs) - Math.abs(q.arrivalMs - b.arrivalMs));
-    kand[0].gesendet = b.arrivalMs;
+    const it = kand[0];
+    if (it.gesendet == null) it.gesendet = b.arrivalMs;
+    it.gesendetN = (it.gesendetN || 0) + 1;
     zugeordnet++;
   });
   return {zugeordnet, ohnePlan};
@@ -3085,7 +3118,7 @@ const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEF
              travelS, dist, popOf, langsamste, ivAbstand, sitzungenAus, dichtesterPunkt, besser, ankunftKandidaten, bewerteAnkunft, zeitHinweise,
              RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, tagesTeile, nachtGekuerzt,
              mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport, nachAbschick,
-             parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu, VORLAGE_ALLE, VORLAGE_EXPORT, vorlageEinheiten,
+             parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu, VORLAGE_ALLE, VORLAGE_EXPORT, vorlageEinheiten, zuegeBuendeln, AG_TRAIN_NOTIZ,
              begleitAufstocken, BEGLEIT_EINHEITEN, ankunftEingabe};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Angriff = api;

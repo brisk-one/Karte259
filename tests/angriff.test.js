@@ -381,21 +381,24 @@ test("Export im Format von DS-Ultimate", () => {
   const d = K.toDSU(r.items);
   assert.deepEqual(Object.keys(d), ["title", "uvMode", "world", "twWorld", "items"]);
   assert.equal(d.world, "de259");
-  assert.equal(d.items.length, r.items.length);
+  // AG-Trains als ein Befehl (Dennis 14.11.2026 02:42)
+  const exp = K.zuegeBuendeln(r.items);
+  assert.equal(d.items.length, exp.length);
+  assert.ok(exp.length < r.items.length, "Trains zusammengefasst");
   const keys = ["source", "destination", "slowest_unit", "arrival_time", "type", "support_boost", "tribe_skill", "ms"].concat(K.UNITS);
   d.items.forEach(x => assert.deepEqual(Object.keys(x), keys));
   const typ = new Set(d.items.map(x => x.type + "/" + x.slowest_unit));
   assert.deepEqual([...typ].sort(), ["11/11", "14/8", "8/8"]);
   const ag = d.items.find(x => x.type === 11);
-  assert.equal(ag.snob, "1");
   assert.equal(typeof ag.axe, "string");
-  const it = r.items[0];
-  assert.equal(d.items[0].arrival_time * 1000 + d.items[0].ms, it.arrivalMs);
+  assert.equal(d.items.filter(x => x.type === 11).reduce((n, x) => n + +x.snob, 0), r.items.filter(i => i.kind === "ag").reduce((n, i) => n + i.units.snob, 0), "alle AGs drin");
   // DS-Ultimate rechnet die Abschickzeit selbst: Ankunft minus round(Minuten je Feld × 60 × Entfernung)
+  const sortiert = K.nachAbschick(exp);
   d.items.forEach((x, i) => {
-    const src = r.items[i].v, dst = r.items[i].t;
+    const src = sortiert[i].v, dst = sortiert[i].t;
+    assert.equal(x.arrival_time * 1000 + x.ms, sortiert[i].arrivalMs);
     const lauf = Math.round(W.speed[K.UNITS[x.slowest_unit]] * 60 * Math.hypot(src.x - dst.x, src.y - dst.y));
-    assert.equal((x.arrival_time - lauf) * 1000 + x.ms, r.items[i].sendMs);
+    assert.equal((x.arrival_time - lauf) * 1000 + x.ms, sortiert[i].sendMs);
   });
 });
 
@@ -1452,8 +1455,9 @@ test("Off-Dörfer als Liste mit Standard-Off: nur Offs, Export alle Äxte, LKav,
   const aus = r.items.filter(i => i.v.id === 22 || i.v.id === 23);
   assert.ok(aus.length >= 1, "Standard-Offs eingeplant");
   assert.ok(aus.every(i => i.kind === "clean" || i.kind === "rest"), "nur Offs, keine AGs, keine Fakes");
+  // DS-Ultimate-JSON: nur Zahlen (der Import prüft jede Einheit als ganze Zahl, Befund 14.11.2026), „all“ nur im Workbench-Export
   const dsu = K.toDSU(aus).items[0];
-  assert.equal(dsu.axe, K.VORLAGE_ALLE); assert.equal(dsu.light, K.VORLAGE_ALLE); assert.equal(dsu.ram, K.VORLAGE_ALLE);
+  assert.equal(dsu.axe, "0"); assert.equal(dsu.light, "0"); assert.equal(dsu.ram, "0");
   assert.equal(dsu.spy, "1"); assert.equal(dsu.catapult, "0"); assert.equal(dsu.spear, "0");
   assert.equal(dsu.slowest_unit, K.UNITS.indexOf("ram"));
   // übrige Befehle mit Zahlen
@@ -1475,7 +1479,7 @@ test("Fakes aufstocken: Off mit „all“ im Plan nimmt alle Einheiten dieser Ar
   const dorf = id => eigene.find(v => v.id === id) || ziele.find(t => t.id === id);
   plan.items.forEach(it => { it.v = dorf(it.source); it.t = dorf(it.destination); it.spieler = "A"; });
   assert.deepEqual(plan.items[0].text, {axe: "all", light: "all", ram: "all"});
-  assert.equal(K.importDSU(plan.items.slice(0, 1), plan.meta).items[0].ram, "all");
+  assert.equal(K.importDSU(plan.items.slice(0, 1), plan.meta).items[0].ram, "0", "JSON nur Zahlen");
   assert.equal(K.parsePlan(K.importWB(plan.items.slice(0, 1))).items[0].text.light, "all");
   const r = K.fakesNachImport({world: w, cfg: {fakes_max_je_dorf: 3}, now: sendOff - 6 * 3600000, seed: 1,
     ankunft: {from: ank - 1800000, to: ank + 1800000}, items: plan.items, laufend: [],
@@ -1519,4 +1523,33 @@ test("Off-Ziele: Zahl je Ziel, Zuordnung, gestaffelt, erst Clean-Offs, selbst oh
   assert.ok(rk.warnings.some(w => w.art === "offziel" && /1 statt 3 Offs/.test(w.text)));
   // ein Dorf, das AG-Ziel ist, wird kein Off-Ziel
   assert.equal(K.plan(basis({agTargets: [{id: 901, x: 470, y: 500, owner: 900}], offTargets: [z(901, 470, 500, 2)]})).offZiele.length, 0);
+});
+
+test("AG-Trains als ein Befehl mit allen AGs, Befehlsübersicht ordnet die einzelnen AG-Befehle zu (Dennis 14.11.2026 02:42)", () => {
+  const r = K.plan(szenario({}));
+  const ags = r.items.filter(i => i.kind === "ag");
+  const zuege = K.zuegeBuendeln(r.items).filter(i => i.kind === "ag");
+  assert.ok(zuege.length < ags.length);
+  zuege.forEach(z => {
+    const teile = ags.filter(i => i.aktion === z.aktion);
+    assert.equal(z.train, teile.length);
+    assert.equal(z.units.snob, teile.reduce((n, i) => n + i.units.snob, 0));
+    assert.equal(z.units.sword, teile.reduce((n, i) => n + i.units.sword, 0), "Begleitschutz summiert");
+    assert.equal(z.arrivalMs, Math.min(...teile.map(i => i.arrivalMs)), "Ankunft des ersten AGs");
+    assert.equal(z.notiz, z.train > 1 ? K.AG_TRAIN_NOTIZ : undefined);
+  });
+  // eingegebene Befehle bleiben unverändert
+  assert.ok(ags.every(i => i.train == null));
+  // WB-Zeilen: ebenso ein Befehl je Train
+  assert.equal(K.toWB(ags).trim().split("\n").length, zuege.length);
+  // Befehlsübersicht: die im Spiel einzeln geschickten AGs gehören zum einen Befehl des Trains
+  const z = zuege.find(x => x.train === 4);
+  const plan = K.parsePlan(JSON.stringify(K.toDSU(z.trainItems))).items;
+  assert.equal(plan.length, 1); assert.equal(plan[0].units.snob, 4);
+  plan.forEach(it => { it.v = z.v; it.t = z.t; });
+  const bef = z.trainItems.map((i, n) => ({von: z.v, nach: z.t, arrivalMs: z.arrivalMs + 5000 + n * 50, units: Object.assign({}, i.units)}));
+  const ab = K.befehleAbgleichen(plan, bef);
+  assert.equal(ab.zugeordnet, 4);
+  assert.equal(ab.ohnePlan.length, 0);
+  assert.equal(plan[0].gesendet, z.arrivalMs + 5000);
 });
