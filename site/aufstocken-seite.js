@@ -488,6 +488,7 @@ function zeigenPlan() {
   bn.textContent = BEF ? "Zusammen " + plural(BEF.befehle.length, "Angriff", "Angriffe") + " aus " + plural(BEF.je.size, "Feld", "Feldern") + ", " +
     BEF.zugeordnet + " davon im Plan gefunden (unterwegs, bleiben fest)" + (BEF.ohnePlan.length ? ", " + BEF.ohnePlan.length + " ohne passenden Befehl im Plan (zählen bei der Fakezahl je Ziel mit" +
     (laufendAufAG().length ? "; " + plural(laufendAufAG().length, "Off", "Offs") + " davon auf AG-Ziele, zählen beim Angleichen der AGs mit" : "") + ")" : "") + "." : "";
+  abweichungenZeigen();
   if (!IDS) { note.textContent = "Dorf-IDs fehlen in den Weltdaten, Einlesen nicht möglich."; note.className = "ap-warn"; return; }
   if (!PLAN) { note.textContent = ""; return; }
   const it = PLAN.items, n = a => it.filter(x => x.art === a).length, unb = it.filter(x => !x.v || !x.t).length;
@@ -548,6 +549,84 @@ function angleichLage() {
   const ag = [...ziele.values()].filter(z => z.ag);
   return {agZiele: ag.length, mitOff: ag.filter(z => z.unterwegs).length, fremd: fremd.length,
           unterwegs: PLAN.items.filter(it => !it.fake && it.gesendet != null).length + fremd.length};
+}
+/** Abweichungen der Befehlsübersichten vom Plan (Dennis 14.11.2026 03:35: gut sichtbar, mit den einzelnen Dörfern).
+    Zählen nur Offs (ab 1000 BH Off-Truppen) und AGs laut Übersicht, keine Fakes und Befehle ohne Truppenzahlen.
+    anderesZiel: aus einem Dorf des Plans auf ein Ziel, das der Plan für dieses Dorf nicht vorsieht.
+    andereHerkunft: je Ziel des Plans, was aus einem Dorf läuft, das der Plan für dieses Ziel nicht vorsieht, mit den
+    geplanten Offs auf das Ziel und ihrem Stand (Ziele ohne Off im Plan nur bei fremden AGs). fehlen: Offs des Plans, die in der Übersicht ihres Spielers fehlen, ohne
+    Ersatz auf ihrem Ziel. */
+function abweichungen() {
+  if (!BEF || !PLAN) return null;
+  const echt = b => ["off", "ag"].includes(K.laufArt(b.units, W && W.pop));
+  const plan = PLAN.items.filter(it => it.v && it.t && !it.fake && (it.art === "off" || it.art === "ag"));
+  const vonDorf = new Map(), aufZiel = new Map();
+  plan.forEach(it => {
+    const v = koord(it.v), t = koord(it.t);
+    if (!vonDorf.has(v)) vonDorf.set(v, []);
+    vonDorf.get(v).push(it);
+    if (!aufZiel.has(t)) aufZiel.set(t, []);
+    aufZiel.get(t).push(it);
+  });
+  const laufend = BEF.ohnePlan.filter(echt).sort((a, b) => a.arrivalMs - b.arrivalMs);
+  const anderesZiel = laufend.filter(b => vonDorf.has(koord(b.von)) && !vonDorf.get(koord(b.von)).some(it => koord(it.t) === koord(b.nach)))
+    .map(b => ({b, geplant: vonDorf.get(koord(b.von))}));
+  const schon = new Set(anderesZiel.map(x => x.b));     // nicht zweimal: steht schon unter „anderes Ziel“
+  const stand = it => it.gesendet != null ? "unterwegs" : BEF.mitUebersicht.has(it.spieler) ? "fehlt in der Übersicht" : "ohne Übersicht des Spielers";
+  const andereHerkunft = [];
+  aufZiel.forEach((its, t) => {
+    // ohne Off im Plan (nur AGs) ist eine Off aus einem beliebigen Dorf keine Abweichung, ein fremdes AG schon
+    const geplant = its.filter(it => it.art === "off");
+    const l = laufend.filter(b => koord(b.nach) === t && !schon.has(b) && !its.some(it => koord(it.v) === koord(b.von)) && (geplant.length || b.units.snob > 0));
+    if (l.length) andereHerkunft.push({t: its[0].t, ag: its.some(it => it.art === "ag"), laufend: l, geplant, stand});
+  });
+  const ersetzt = new Set(andereHerkunft.map(x => koord(x.t)));
+  const fehlen = plan.filter(it => it.art === "off" && it.gesendet == null && BEF.mitUebersicht.has(it.spieler) && !ersetzt.has(koord(it.t)))
+    .sort((a, b) => a.arrivalMs - b.arrivalMs);
+  return {anderesZiel, andereHerkunft, fehlen, n: anderesZiel.length + andereHerkunft.length + fehlen.length};
+}
+function abweichungenZeigen() {
+  const box = $("befehle-abw");
+  if (!box) return;
+  const a = abweichungen();
+  if (!a) { box.replaceChildren(); return; }
+  if (!a.n) { box.replaceChildren(el("p", "au-abw-ok", "Keine Abweichung vom Plan: Alle Offs und AGs der Befehlsübersichten aus Dörfern des Plans laufen auf ihre geplanten Ziele, auf die Ziele des Plans läuft nichts aus anderen Dörfern.")); return; }
+  const dorfText = k => { const i = byXY.get(k.x * 1000 + k.y); return koord(k) + (i != null ? " " + V.rows[i][4] : ""); };
+  const zielText = k => { const i = byXY.get(k.x * 1000 + k.y); return koord(k) + (i != null ? " (" + spielerName(V.rows[i][1]) + ")" : ""); };
+  const art = b => el("span", "ap-kind " + (b.units.snob > 0 ? "k-ag" : "k-off"), b.units.snob > 0 ? "AG" : "Off");
+  const tabelle = (kopf, zeilen) => {
+    const t = el("table"), th = el("tr");
+    kopf.forEach(k => th.append(el("th", null, k)));
+    const tb = el("tbody");
+    zeilen.forEach(z => { const tr = el("tr"); z.forEach(c => { const td = el("td"); if (c instanceof Node) td.append(c); else td.textContent = c; tr.append(td); }); tb.append(tr); });
+    const kp = el("thead"); kp.append(th); t.append(kp, tb);
+    const d = el("div", "ap-scroll"); d.append(t);
+    return d;
+  };
+  const teile = [el("h3", null, "Abweichungen vom Plan laut Befehlsübersicht")];
+  const zahl = [];
+  if (a.anderesZiel.length) zahl.push(plural(a.anderesZiel.length, "Angriff", "Angriffe") + " auf ein anderes Ziel als im Plan");
+  if (a.andereHerkunft.length) zahl.push(plural(a.andereHerkunft.length, "Ziel bekommt", "Ziele bekommen") + " eine Off oder ein AG aus einem anderen Dorf als im Plan");
+  if (a.fehlen.length) zahl.push(plural(a.fehlen.length, "Off aus dem Plan fehlt", "Offs aus dem Plan fehlen") + " in der Übersicht, ohne Ersatz");
+  zahl.forEach(z => teile.push(el("p", "zahl", z)));
+  if (a.anderesZiel.length) {
+    teile.push(el("h4", null, "Auf ein anderes Ziel als im Plan"),
+      tabelle(["Art", "Herkunft", "Geschickt auf", "Ankunft", "Laut Plan auf"], a.anderesZiel.map(({b, geplant}) =>
+        [art(b), dorfText(b.von), zielText(b.nach), zeitKurz(b.arrivalMs, true), [...new Set(geplant.map(it => ART[it.art] + " " + zielText(it.t)))].join(", ")])));
+  }
+  if (a.andereHerkunft.length) {
+    teile.push(el("h4", null, "Aus einem anderen Dorf als im Plan"),
+      tabelle(["Ziel", "Art", "Läuft aus", "Ankunft", "Laut Plan Off aus"], a.andereHerkunft.flatMap(x => x.laufend.map((b, i) =>
+        [i ? "" : zielText(x.t) + (x.ag ? ", AG-Ziel" : ""), art(b), dorfText(b.von), zeitKurz(b.arrivalMs, true),
+         i ? "" : (x.geplant.length ? x.geplant.map(it => koord(it.v) + " (" + x.stand(it) + ")").join(", ") : "keine Off im Plan")]))));
+  }
+  if (a.fehlen.length) {
+    teile.push(el("h4", null, "Offs aus dem Plan, die in der Übersicht ihres Spielers fehlen"),
+      tabelle(["Spieler", "Herkunft", "Ziel", "Geplante Ankunft"], a.fehlen.map(it => [it.spieler, dorfText(it.v), zielText(it.t), zeitKurz(it.arrivalMs, true)])));
+  }
+  const d = el("div", "au-abw");
+  d.append(...teile);
+  box.replaceChildren(d);
 }
 function zeitenBox(its) {
   const box = el("div", "au-box");
@@ -708,6 +787,16 @@ function zeigenKern() {
   const offen = x => x.gesendet == null, geaendert = x => offen(x) && ((x.arrivalOrig != null && x.arrivalMs !== x.arrivalOrig) || !!x.begleit);
   const knoepfe = (a, name) => [["Offs und AGs", a, name], ["noch nicht abgeschickt", a.filter(offen), name + "_offen"], ["nur geänderte", a.filter(geaendert), name + "_geaendert"]];
   const teile = [zeitenBox(its), begleitBox(its), formatZeile("kern")];
+  const abw = abweichungen();
+  if (abw && abw.n) {
+    const p = el("p", "au-abw-kurz", "Abweichungen vom Plan: " + [
+      abw.anderesZiel.length ? plural(abw.anderesZiel.length, "Angriff", "Angriffe") + " auf ein anderes Ziel" : "",
+      abw.andereHerkunft.length ? plural(abw.andereHerkunft.length, "Ziel", "Ziele") + " mit Off oder AG aus einem anderen Dorf" : "",
+      abw.fehlen.length ? plural(abw.fehlen.length, "Off fehlt", "Offs fehlen") + " in der Übersicht" : ""].filter(Boolean).join(", ") + ". ");
+    const l = el("a", null, "Liste in Abschnitt 2"); l.href = "#befehle-abw";
+    p.append(l);
+    teile.unshift(p);
+  }
   if (its.some(geaendert)) teile.push(el("p", "ap-warn", "Geänderte Befehle (Zeit oder Begleitschutz): Die betroffenen Spieler brauchen ihren Plan neu. In DS-Ultimate einen neuen Plan anlegen (oder die alten Befehle löschen) und „noch nicht abgeschickt“ importieren; nur die geänderten Befehle tauschen geht mit „nur geänderte“."));
   // je eingelesenem Plan getrennt (Dennis 13.11.2026 17:20)
   PLAN.je.forEach((j, i) => {

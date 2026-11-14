@@ -59,6 +59,15 @@
   .au-sitz{margin:0; padding-left:18px; font-size:12px; line-height:1.5}
   details.au-det > summary{cursor:pointer; font-size:12px; color:var(--muted)}
   details.au-det[open]{display:grid; gap:6px}
+  /* Abweichungen vom Plan (Dennis 14.11.2026 03:35: dick und fett) */
+  .au-abw{border:3px solid var(--bad); border-radius:var(--radius); padding:10px 12px; display:grid; gap:8px; background:var(--bad-bg); min-width:0}
+  .au-abw h3{margin:0; color:var(--bad); font-size:18px; font-weight:800}
+  .au-abw h4{margin:4px 0 0; color:var(--bad); font-size:13.5px; font-weight:800}
+  .au-abw .zahl{margin:0; color:var(--bad); font-size:14.5px; font-weight:800}
+  .au-abw table{font-size:12px} .au-abw th, .au-abw td{text-align:left}
+  .au-abw-ok{margin:0; color:var(--good); font-weight:700; font-size:12.5px}
+  .au-abw-kurz{margin:0; color:var(--bad); font-size:15px; font-weight:800; border-left:5px solid var(--bad); padding:4px 10px; background:var(--bad-bg)}
+  .au-abw-kurz a{color:inherit}
 </style>
 </head>
 <body>
@@ -88,6 +97,7 @@
     <div class="body" style="display:grid; gap:6px">
       <div id="befehle" style="display:grid; gap:8px"><p class="empty">Erst einen Plan einlesen (Abschnitt 1), dann gibt es hier je Spieler ein Feld.</p></div>
       <span class="ap-note" id="befehle-note"></span>
+      <div id="befehle-abw"></div>
     </div>
   </section>
 
