@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fakes aufstocken · Welt 259</title>
+<title>DS Ultimate Config · Welt 259</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <style>
@@ -64,7 +64,7 @@
 <body>
 <header class="appbar" id="appbar"></header>
 
-<div class="wrap" id="zusatz-sperre"><section class="panel"><h2>Fakes aufstocken</h2>
+<div class="wrap" id="zusatz-sperre"><section class="panel"><h2>DS Ultimate Config</h2>
   <div class="body"><p class="empty" id="zusatz-msg">Lade …</p></div></section></div>
 <main class="wrap" id="seite" hidden>
   <section class="panel" aria-labelledby="h-plan">
@@ -84,9 +84,9 @@
 
   <section class="panel" aria-labelledby="h-bef">
     <h2 id="h-bef">2 · Befehlsübersicht (schon abgeschickt)
-      <span class="hint">Übersichten › Befehle, alles markieren und hier einfügen; mehrere Spieler einfach untereinander. Abgeschickte Befehle werden im Plan erkannt und bleiben fest; ihre echte Ankunft zählt beim Angleichen der AGs.</span></h2>
+      <span class="hint">Je Spieler ein Feld: Übersichten › Befehle, alles markieren und in das Feld des Spielers einfügen. Abgeschickte Befehle werden im Plan erkannt und bleiben fest; ihre echte Ankunft zählt beim Angleichen der AGs.</span></h2>
     <div class="body" style="display:grid; gap:6px">
-      <textarea class="ap-ta klein" id="befehle-text" spellcheck="false" placeholder="Angriff auf … (598|568) K55	[007] … (621|594) K56	morgen um 08:04:09:663	0	0	…"></textarea>
+      <div id="befehle" style="display:grid; gap:8px"><p class="empty">Erst einen Plan einlesen (Abschnitt 1), dann gibt es hier je Spieler ein Feld.</p></div>
       <span class="ap-note" id="befehle-note"></span>
     </div>
   </section>
@@ -101,14 +101,14 @@
     <div class="body" id="fake" style="display:grid; gap:10px"><p class="empty">Noch kein Plan eingelesen.</p></div>
   </section>
 
-  <footer>Fakes aufstocken für Welt 259: Plan aus DS-Ultimate einlesen, getrennt exportieren, Fakes je Spieler aufstocken.
+  <footer>DS Ultimate Config für Welt 259: Pläne aus DS-Ultimate einlesen, Zeiten und Begleitschutz anpassen, getrennt exportieren, Fakes je Spieler aufstocken.
     Die Truppenübersichten und der Plan bleiben in diesem Browser.
     <button class="tw" type="button" id="zusatz-sperren" title="Entfernt den gespeicherten Schlüssel, die Reiter verschwinden">Zusatzfunktionen in diesem Browser sperren</button></footer>
 </main>
 
 <script src="app.js"></script>
 <script>
-buildAppbar("aufstocken", "Fakes aufstocken");
+buildAppbar("aufstocken", "DS Ultimate Config");
 /* Einfacher Passwortschutz im Browser wie beim Angriffsplaner (Dennis 10.11.2026): die Skripte liegen lesbar im Repo und
    starten erst, wenn dieser Browser freigeschaltet ist. */
 (async function () {
@@ -119,7 +119,7 @@ buildAppbar("aufstocken", "Fakes aufstocken");
     catch (e) { ok = false; }
   }
   if (!ok) {
-    if (z) { zusatzSperren(); buildAppbar("aufstocken", "Fakes aufstocken"); }
+    if (z) { zusatzSperren(); buildAppbar("aufstocken", "DS Ultimate Config"); }
     msg.textContent = z ? "Das Passwort hat sich geändert. Bitte oben neu freischalten." : "Gesperrt. Oben „Zusatzfunktionen freischalten“ und das Passwort eingeben.";
     return;
   }

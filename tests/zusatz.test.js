@@ -42,7 +42,7 @@ test("angriff.html: Planer gesperrt, Skripte erst nach dem Freischalten", () => 
   for (const f of ["angriff-core.js", "angriff-seite.js"]) assert.ok(fs.existsSync(path.join(SITE, f)), f);
 });
 
-test("aufstocken.html: Reiter „Fakes aufstocken“ gesperrt wie der Planer, Skripte erst nach dem Freischalten", () => {
+test("aufstocken.html: Reiter „DS Ultimate Config“ (bis 14.11.2026 „Fakes aufstocken“) gesperrt wie der Planer, Skripte erst nach dem Freischalten", () => {
   const h = fs.readFileSync(path.join(SITE, "aufstocken.html"), "utf8");
   assert.match(h, /id="zusatz-sperre"/);
   assert.match(h, /<main class="wrap" id="seite" hidden>/);
@@ -50,5 +50,5 @@ test("aufstocken.html: Reiter „Fakes aufstocken“ gesperrt wie der Planer, Sk
   assert.match(h, /\["angriff-core\.js", "aufstocken-seite\.js"\]/);
   assert.match(h, /zusatzEntschluesseln\(z\.k, d\.pruef\) === ZUSATZ_PRUEF/);
   assert.ok(fs.existsSync(path.join(SITE, "aufstocken-seite.js")));
-  assert.match(fs.readFileSync(path.join(SITE, "app.js"), "utf8"), /\["aufstocken\.html", "Fakes aufstocken", "aufstocken", true\]/);
+  assert.match(fs.readFileSync(path.join(SITE, "app.js"), "utf8"), /\["aufstocken\.html", "DS Ultimate Config", "aufstocken", true\]/);
 });

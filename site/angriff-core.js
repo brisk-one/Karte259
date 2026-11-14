@@ -2488,7 +2488,7 @@ function toWB(items) {
   return zeilen.length ? zeilen.join("\n") + "\n" : "";
 }
 
-/* ---------- Eingelesener Plan: Fakes aufstocken (Reiter „Fakes aufstocken“, Dennis 13.11.2026 12:26, 1a und 2b) ----------
+/* ---------- Eingelesener Plan: Fakes aufstocken (Reiter „DS Ultimate Config“, bis 14.11.2026 „Fakes aufstocken“, Dennis 13.11.2026 12:26, 1a und 2b) ----------
    Gespeicherte Pläne liegen am Ende meist in DS-Ultimate. Der Reiter liest so einen Plan ein (JSON wie toDSU, oder Zeilen
    wie toWB), trennt ihn in den Off- und AG-Plan und den Fake-Plan und stockt die Fakes je Spieler auf: aus seinen Dörfern
    laut Truppenübersicht (abzüglich der Truppen seiner Befehle im Plan), auf die Ziele des Plans, in seinen Abschicksitzungen
@@ -2574,7 +2574,7 @@ function importWB(items) {
 }
 
 /**
- * AG-Begleitschutz aufstocken (Reiter „Fakes aufstocken“, Dennis 14.11.2026 00:52 und 01:08): Mindestwerte je Einheit
+ * AG-Begleitschutz aufstocken (Reiter „DS Ultimate Config“, Dennis 14.11.2026 00:52 und 01:08): Mindestwerte je Einheit
  * (Standard 60 Schwert, 50 Axt, 30 LKav; 0 schaltet die Einheit ab). AGs aus Deff-Dörfern laufen mit Schwert, aus
  * Off-Dörfern mit Axt, LKav geht auch.
  * - Unverändert: abgeschickte Befehle (gesendet), Nicht-AGs, Schutz-Einheit als Text („all“), AGs, die bei einer Einheit den
@@ -2643,7 +2643,7 @@ function begleitAufstocken(items, min, doerfer) {
   return {aenderungen, ohne, knapp};
 }
 
-/** Ankunft aus einem Eingabefeld (Fakes aufstocken, Dennis 14.11.2026 01:08): „17.11.2026 01:00:09:000“, „17.11. 01:00:09:000“
+/** Ankunft aus einem Eingabefeld (DS Ultimate Config, Dennis 14.11.2026 01:08): „17.11.2026 01:00:09:000“, „17.11. 01:00:09:000“
     oder nur die Uhrzeit (Tag wie bezug, Serverzeit). Ohne Jahr das Jahr, mit dem die Zeit bezug am nächsten liegt.
     Ergebnis {ms} oder {fehler}. */
 function ankunftEingabe(text, bezug) {
