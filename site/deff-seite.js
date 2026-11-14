@@ -117,25 +117,16 @@ function zeigenPlan() {
        z.kandidaten.length ? "" : ", kein Deff-Dorf erreicht es rechtzeitig") + " (Deff an " + zeit(z.ankunft) + ")")));
     teile.push(f);
   }
-  // Export
-  const ex = D.exportDSU(p.befehle, idVon, {title: "Deff " + K.fmtZeit(e.now).slice(0, 6), world: WELT});
-  const row = el("div", "ap-row");
-  const b1 = el("button", "tw", "DS-Ultimate kopieren (" + ex.n + ")"); b1.type = "button";
-  b1.addEventListener("click", () => kopieren(ex.text, b1, ex.n));
-  const b2 = el("button", "tw", "als Datei"); b2.type = "button";
-  b2.addEventListener("click", () => herunterladen(ex.text, "deff_" + K.fmtZeit(e.now).slice(0, 5).replace(".", "-") + ".json"));
-  const b3 = el("button", "tw", "Neu rechnen (jetzt)"); b3.type = "button"; b3.title = "Abschick frühestens ab jetzt plus Vorlauf, mit der aktuellen Uhrzeit";
-  b3.addEventListener("click", () => { rechnen(); zeigen(); });
-  row.append(b1, b2, b3);
-  teile.push(row, el("p", "ap-note", "In DS-Ultimate einen Angriffsplan für Welt 259 öffnen, „Import DS-Ultimate“, einfügen. Symbole: Unterstützung (echt) und Fake-Unterstützung." +
-    (ex.fehlt.length ? " " + plural(ex.fehlt.length, "Befehl fehlt", "Befehle fehlen") + " im Export (Dorf nicht in den Weltdaten)." : "")));
+  // Export: oben und direkt an der Liste (Dennis 14.11.2026 05:45), nur noch nicht fällige Abschickzeiten, gerechnet beim Klick
+  teile.push(exportZeile(p), el("p", "ap-note", "In DS-Ultimate einen Angriffsplan für Welt 259 öffnen, „Import DS-Ultimate“ (JSON) oder „Import Workbench“ (Zeilen) wählen, einfügen. " +
+    "Symbole: Unterstützung (echt) und Fake-Unterstützung. Abschickzeiten, die schon vorbei sind (durchgestrichen), kommen nicht mit."));
   // Übersicht je Ziel
   teile.push(el("h3", null, "Je geadeltem Dorf"));
   teile.push(tabelle(["Ziel", "Letztes AG", "Deff an", "Deff", "Unterstützungen"], p.ziele.map(z => ({cls: z.erreicht ? null : "warn", zellen: [
     zielText(z.t), zeit(z.letzteAG), zeit(z.ankunft), prozent(z.wert, p.soll) + " des Solls, " + nf.format(z.bh) + " BH" + (z.laufendBH ? " (" + nf.format(z.laufendBH) + " unterwegs)" : "") + (z.erreicht ? "" : ", zu wenig"),
     z.echt.length + " echt, " + z.fakes.length + " Fake" + (z.laufend ? ", " + z.laufend + " schon unterwegs" : "")]}))));
   // alle Befehle nach Abschickzeit
-  teile.push(el("h3", null, "Alle Unterstützungen nach Abschickzeit"));
+  teile.push(el("h3", null, "Alle Unterstützungen nach Abschickzeit"), exportZeile(p));
   teile.push(tabelle(["Abschick", "Art", "Herkunft", "Ziel", "Truppen", "Laufzeit", "Ankunft"], p.befehle.map(b => {
     const art = el("span", "df-k " + (b.art === "fake" ? "df-fake" : b.pala ? "df-pala" : "df-deff"), b.art === "fake" ? "Fake" : (b.pala ? "Deff mit Pala" : "Deff") + (b.verstaerkung ? " (Verstärkung)" : ""));
     return {cls: b.sendMs < Date.now() ? "vorbei" : null, zellen: [zeit(b.sendMs), art, koord(b.von) + " " + (b.von.name || ""), zielText(b.nach),
@@ -144,6 +135,22 @@ function zeigenPlan() {
   if (p.ungenutzt.length) teile.push(el("p", "ap-note", "Nicht eingesetzt (zu weit für die Ankunft oder schon genug Deff): " +
     p.ungenutzt.map(q => koord(q) + " " + q.name + " (" + nf.format(q.bh) + " BH, " + prozent(q.wert, p.soll) + (q.pala ? ", Pala" : "") + ")").join(", ") + "."));
   box.replaceChildren(...teile);
+}
+
+/** Knöpfe zum Kopieren und Speichern der Liste für DS-Ultimate (JSON und Workbench-Zeilen). */
+function exportZeile(p) {
+  const offen = () => p.befehle.filter(b => b.sendMs > Date.now());
+  const meta = () => ({title: "Deff " + K.fmtZeit(ERG.now).slice(0, 6), world: WELT});
+  const row = el("div", "ap-row"), n = offen().length;
+  const knopf = (t, f) => { const b = el("button", "tw", t); b.type = "button"; b.addEventListener("click", () => f(b)); row.append(b); };
+  knopf("Für DS-Ultimate kopieren (" + n + ")", b => { const ex = D.exportDSU(offen(), idVon, meta()); kopieren(ex.text, b, ex.n); });
+  knopf("als Workbench-Zeilen kopieren", b => { const ex = D.exportWB(offen(), idVon); kopieren(ex.text, b, ex.n); });
+  knopf("als Datei", () => herunterladen(D.exportDSU(offen(), idVon, meta()).text, "deff_" + K.fmtZeit(ERG.now).slice(0, 5).replace(".", "-") + ".json"));
+  knopf("Neu rechnen (jetzt)", () => { rechnen(); zeigen(); });
+  const weg = p.befehle.length - n, fehlt = D.exportDSU(offen(), idVon, {}).fehlt.length;
+  if (weg || fehlt) row.append(el("span", "ap-note", (weg ? plural(weg, "Abschickzeit", "Abschickzeiten") + " schon vorbei, nicht im Export" : "") +
+    (weg && fehlt ? "; " : "") + (fehlt ? plural(fehlt, "Befehl", "Befehle") + " ohne Dorf-ID in den Weltdaten" : "") + "."));
+  return row;
 }
 
 /* ---------- Bedienung ---------- */

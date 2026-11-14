@@ -195,7 +195,21 @@ function exportDSU(befehle, idVon, meta) {
   return {text: JSON.stringify({title: m.title || "Deff", uvMode: 0, world: m.world || "de259", twWorld: m.world || "de259", items}), n: items.length, fehlt};
 }
 
-const api = {DEFF_UNITS, DEF, PAKET, STANDARD, GRENZEN, DSU_SUPPORT, einstellungen, agZiele, laufendeUnterstuetzung, deffDoerfer, planen, exportDSU, bh, wert, sollWert};
+/** Dieselben Befehle als DS-Workbench-Zeilen (DS-Ultimate: „Import Workbench“): Herkunft&Ziel&Einheit&Ankunft ms&Symbol&false&false&
+    Einheiten als Base64 (ds-ultimatev2, AttackPlannerController::importWB). */
+function exportWB(befehle, idVon) {
+  const b64 = t => typeof Buffer !== "undefined" ? Buffer.from(t).toString("base64") : btoa(t);
+  const zeilen = [], fehlt = [];
+  befehle.forEach(b => {
+    const s = idVon(b.von.x, b.von.y), d = idVon(b.nach.x, b.nach.y);
+    if (s == null || d == null) { fehlt.push(b); return; }
+    const truppen = K.UNITS.map(u => u + "=" + b64(String(b.units[u] || 0))).concat("militia=" + b64("0"));
+    zeilen.push([s, d, b.slow, Math.round(b.arrivalMs), DSU_SUPPORT[b.art], "false", "false", truppen.join("/")].join("&"));
+  });
+  return {text: zeilen.join("\n"), n: zeilen.length, fehlt};
+}
+
+const api = {DEFF_UNITS, DEF, PAKET, STANDARD, GRENZEN, DSU_SUPPORT, einstellungen, agZiele, laufendeUnterstuetzung, deffDoerfer, planen, exportDSU, exportWB, bh, wert, sollWert};
 if (node) module.exports = api;
 else root.Deff = api;
 })(typeof window !== "undefined" ? window : globalThis);

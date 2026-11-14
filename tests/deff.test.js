@@ -156,3 +156,19 @@ test("Wert (Dennis 05:08): Infanterie plus Kavallerie, Bogen-Verteidigung zählt
   assert.ok(D.wert(paket25) >= D.sollWert(D.einstellungen()));
   assert.ok(D.wert(leer({spear: 14000})) < D.sollWert(D.einstellungen()), "nur Speer: zu wenig gegen Infanterie");
 });
+
+test("Export als Workbench-Zeilen (Dennis 05:45: Liste direkt nach DS-Ultimate): Symbol, Einheit, Ankunft in ms, Einheiten Base64", () => {
+  const v = lage([{name: "P", x: 505, y: 505, eigene: {spear: 7000, sword: 7000, knight: 1}}, {name: "F", x: 503, y: 503, eigene: {sword: 3}}]);
+  const ziele = D.agZiele([ag({x: 500, y: 500}, {x: 510, y: 510}, T0 + 250)]);
+  const p = D.planen({ziele, villages: v, world: W, now: T0 - 3 * 3600000, cfg: {fakes: 1}});
+  const ids = {"505|505": 11, "503|503": 12, "500|500": 99};
+  const wb = D.exportWB(p.befehle, (x, y) => ids[x + "|" + y]);
+  assert.equal(wb.n, 2);
+  const zeilen = wb.text.split("\n").map(z => z.split("&"));
+  const echt = zeilen.find(z => z[4] === "0"), fake = zeilen.find(z => z[4] === "46");
+  assert.deepEqual(echt.slice(0, 7), ["11", "99", "knight", String(T0 + 1250), "0", "false", "false"]);
+  const einheiten = Object.fromEntries(echt[7].split("/").map(x => x.split("=")).map(([u, b]) => [u, Buffer.from(b, "base64").toString()]));
+  assert.deepEqual([einheiten.spear, einheiten.sword, einheiten.knight, einheiten.light, einheiten.militia], ["7000", "7000", "1", "0", "0"]);
+  assert.deepEqual(fake.slice(0, 5), ["12", "99", "sword", String(T0 + 1250), "46"]);
+  assert.ok(!echt[7].split("/").some(x => x.split("=")[1].includes("/")), "Base64 ohne Schrägstrich (DS-Ultimate trennt daran)");
+});
