@@ -2574,45 +2574,92 @@ function importWB(items) {
 }
 
 /**
- * AG-Begleitschutz aufstocken (Reiter „Fakes aufstocken“, Dennis 14.11.2026 00:52): Ein AG-Befehl, der nur Schwert oder nur
- * Axt als Begleitschutz trägt und unter dem Mindestwert liegt, bekommt den Mindestwert (Standard 60 Schwert, 50 Axt; AGs aus
- * Deff-Dörfern laufen mit Schwert, aus Off-Dörfern mit Axt). Unverändert bleiben: abgeschickte Befehle (gesendet), AGs mit
- * genug Schwert oder Axt (etwa das AG mit der ganzen Off), Einheiten als Text („all“), AGs ohne Schwert und Axt und AGs mit
- * beidem unter dem Mindestwert; die beiden letzten kommen als Liste zurück. Mindestwert 0 schaltet die Einheit ab.
- * items: eingelesene Befehle (parsePlan, Feld units je Befehl die eingelesenen Zahlen); min: {sword, axe};
- * doerfer: optional Map Dorf-ID → Einheiten laut Truppenübersicht. Dann je Dorf: Truppen minus alle Befehle des Plans aus dem
- * Dorf (Einheit als Text nimmt alle) gegen das, was das Aufstocken zusätzlich braucht.
- * Ergebnis {aenderungen:[{it, u, alt, neu}], ohne:[it], beide:[it], knapp:[{source, u, braucht, frei, alle}]}; items bleibt unverändert.
+ * AG-Begleitschutz aufstocken (Reiter „Fakes aufstocken“, Dennis 14.11.2026 00:52 und 01:08): Mindestwerte je Einheit
+ * (Standard 60 Schwert, 50 Axt, 30 LKav; 0 schaltet die Einheit ab). AGs aus Deff-Dörfern laufen mit Schwert, aus
+ * Off-Dörfern mit Axt, LKav geht auch.
+ * - Unverändert: abgeschickte Befehle (gesendet), Nicht-AGs, Schutz-Einheit als Text („all“), AGs, die bei einer Einheit den
+ *   Mindestwert schon haben (etwa das AG mit der ganzen Off).
+ * - Eine Schutz-Einheit dabei, unter dem Wert: auf den Mindestwert.
+ * - Mehrere dabei, alle unter dem Wert (Frage 2b): die mit der größten Zahl; gleich viele: Axt vor Schwert vor LKav.
+ * - Keine dabei (Frage 1b): nach dem Dorf laut Truppenübersicht, mehr Axt als Schwert 50 Axt, sonst 60 Schwert; reicht das
+ *   Freie nicht, 30 LKav; sonst und ohne Übersicht unverändert, in der Liste ohne.
+ * items: eingelesene Befehle (parsePlan; units die eingelesenen Zahlen); min: {sword, axe, light};
+ * doerfer: optional Map Dorf-ID → Einheiten laut Truppenübersicht. Frei je Dorf: Truppen minus alle Befehle des Plans aus dem
+ * Dorf (Einheit als Text nimmt alle). Aufstocken bei einer vorhandenen Einheit geschieht immer, zu wenig Freies kommt als
+ * Hinweis (knapp); AGs ohne Schutz bekommen nur, was frei ist, nach Abschickzeit.
+ * Ergebnis {aenderungen:[{it, u, alt, neu, grund: "nur"|"mehr"|"dorf"}], ohne:[{it, grund: "ohneUebersicht"|"zuWenig"}],
+ *           knapp:[{source, u, braucht, frei, alle}]}; items bleibt unverändert.
  */
+const BEGLEIT_EINHEITEN = ["axe", "sword", "light"];
 function begleitAufstocken(items, min, doerfer) {
-  const m = {sword: Math.max(0, Math.round(+(min && min.sword) || 0)), axe: Math.max(0, Math.round(+(min && min.axe) || 0))};
-  const aenderungen = [], ohne = [], beide = [], knapp = [];
+  const m = {};
+  BEGLEIT_EINHEITEN.forEach(u => { m[u] = Math.max(0, Math.round(+(min && min[u]) || 0)); });
+  const an = BEGLEIT_EINHEITEN.filter(u => m[u] > 0);
+  const aenderungen = [], ohneSchutz = [], knapp = [];
   (items || []).forEach(it => {
     if (it.gesendet != null || (it.art || importArt(it)) !== "ag") return;
     const t = it.text || {};
-    if (t.sword || t.axe) return;
-    const sw = Math.max(0, it.units.sword || 0), ax = Math.max(0, it.units.axe || 0);
-    if ((m.sword && sw >= m.sword) || (m.axe && ax >= m.axe)) return;
-    if (sw > 0 && ax > 0) { beide.push(it); return; }
-    if (sw > 0) { if (m.sword) aenderungen.push({it, u: "sword", alt: sw, neu: m.sword}); return; }
-    if (ax > 0) { if (m.axe) aenderungen.push({it, u: "axe", alt: ax, neu: m.axe}); return; }
-    ohne.push(it);
+    if (an.some(u => t[u])) return;
+    const n = u => Math.max(0, it.units[u] || 0);
+    if (an.some(u => n(u) >= m[u])) return;
+    const dabei = an.filter(u => n(u) > 0);
+    if (dabei.length) {
+      const u = dabei.reduce((best, x) => (n(x) > n(best) ? x : best), dabei[0]);
+      aenderungen.push({it, u, alt: n(u), neu: m[u], grund: dabei.length > 1 ? "mehr" : "nur"});
+    } else ohneSchutz.push(it);
   });
-  if (doerfer && doerfer.size) {
-    const braucht = new Map();
-    aenderungen.forEach(a => { const k = a.it.source + ":" + a.u; braucht.set(k, (braucht.get(k) || 0) + a.neu - a.alt); });
-    braucht.forEach((n, k) => {
-      const [source, u] = [+k.split(":")[0], k.split(":")[1]], d = doerfer.get(source);
-      if (!d) return;
-      let frei = Math.max(0, d[u] || 0), alle = false;
-      items.forEach(it => {
-        if (it.source !== source) return;
-        if (it.text && it.text[u]) { alle = true; frei = 0; } else frei = Math.max(0, frei - (it.units[u] || 0));
-      });
-      if (n > frei) knapp.push({source, u, braucht: n, frei, alle});
+  // frei je Dorf und Einheit nach allen Befehlen des Plans, dann nach dem Aufstocken der Befehle mit Schutz
+  const frei = new Map(), alle = new Set();
+  const freiVon = source => {
+    if (frei.has(source)) return frei.get(source);
+    const d = doerfer && doerfer.get(source);
+    if (!d) { frei.set(source, null); return null; }
+    const f = Object.assign(emptyUnits(), d);
+    items.forEach(it => {
+      if (it.source !== source) return;
+      UNITS.forEach(u => { if (it.text && it.text[u]) { f[u] = 0; alle.add(source + ":" + u); } else f[u] = Math.max(0, f[u] - (it.units[u] || 0)); });
     });
-  }
-  return {aenderungen, ohne, beide, knapp};
+    frei.set(source, f);
+    return f;
+  };
+  const braucht = new Map();
+  aenderungen.forEach(a => { const k = a.it.source + ":" + a.u; braucht.set(k, (braucht.get(k) || 0) + a.neu - a.alt); });
+  braucht.forEach((n, k) => {
+    const [q, u] = k.split(":"), source = +q, f = freiVon(source);
+    if (!f) return;
+    if (n > f[u]) knapp.push({source, u, braucht: n, frei: f[u], alle: alle.has(k)});
+    f[u] = Math.max(0, f[u] - n);
+  });
+  const ohne = [];
+  ohneSchutz.slice().sort((p, q) => (p.sendMs != null ? p.sendMs : p.arrivalMs) - (q.sendMs != null ? q.sendMs : q.arrivalMs)).forEach(it => {
+    const d = doerfer && doerfer.get(it.source), f = freiVon(it.source);
+    if (!d || !f) { ohne.push({it, grund: "ohneUebersicht"}); return; }
+    const art = (d.axe || 0) > (d.sword || 0) ? "axe" : "sword";
+    const u = [art, "light"].find(x => m[x] > 0 && f[x] >= m[x]);
+    if (!u) { ohne.push({it, grund: "zuWenig"}); return; }
+    f[u] -= m[u];
+    aenderungen.push({it, u, alt: 0, neu: m[u], grund: "dorf"});
+  });
+  return {aenderungen, ohne, knapp};
+}
+
+/** Ankunft aus einem Eingabefeld (Fakes aufstocken, Dennis 14.11.2026 01:08): „17.11.2026 01:00:09:000“, „17.11. 01:00:09:000“
+    oder nur die Uhrzeit (Tag wie bezug, Serverzeit). Ohne Jahr das Jahr, mit dem die Zeit bezug am nächsten liegt.
+    Ergebnis {ms} oder {fehler}. */
+function ankunftEingabe(text, bezug) {
+  const s = String(text || "").trim().replace(/\s+/g, " ");
+  const m = /^(?:(\d{1,2})\.(\d{1,2})\.?(\d{4}|\d{2})?\s+)?(\d{1,2}(?::\d{2}(?::\d{2}(?:[:.,]\d{1,3})?)?)?)$/.exec(s);
+  if (!m) return {fehler: "Ankunft nicht erkannt, etwa „17.11. 01:00:09:000“"};
+  const t = parseUhrzeit(m[4]);
+  if (!t) return {fehler: "Uhrzeit nicht erkannt: " + m[4]};
+  const ref = bezug != null && isFinite(bezug) ? bezug : Date.now(), b = berlinParts(ref);
+  if (!m[1]) return {ms: berlinToUtc(b.y, b.mo, b.d, t.h, t.mi, t.s, t.ms)};
+  const d = +m[1], mo = +m[2];
+  const jahre = m[3] ? [m[3].length === 2 ? 2000 + +m[3] : +m[3]] : [b.y - 1, b.y, b.y + 1];
+  const gueltig = jahre.filter(y => parseDatum(pad(d) + "." + pad(mo) + "." + y));
+  if (!gueltig.length) return {fehler: "Tag nicht erkannt: " + pad(d) + "." + pad(mo) + "."};
+  const kand = gueltig.map(y => berlinToUtc(y, mo, d, t.h, t.mi, t.s, t.ms));
+  return {ms: kand.reduce((best, x) => (Math.abs(x - ref) < Math.abs(best - ref) ? x : best), kand[0])};
 }
 
 /** Auffälligkeiten eines eingelesenen Plans (Dennis 13.11.2026 12:38: ein Dorf sollte 6 statt höchstens 3 Fakes schicken):
@@ -3039,7 +3086,7 @@ const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEF
              RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, tagesTeile, nachtGekuerzt,
              mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport, nachAbschick,
              parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu, VORLAGE_ALLE, VORLAGE_EXPORT, vorlageEinheiten,
-             begleitAufstocken};
+             begleitAufstocken, BEGLEIT_EINHEITEN, ankunftEingabe};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Angriff = api;
 })(typeof window !== "undefined" ? window : globalThis);

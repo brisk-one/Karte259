@@ -9,7 +9,7 @@ const neuerSpieler = () => ({uebersicht: "", fenster: "", soll: "", rammenMax: "
 // texte: eingefügte Pläne (Dennis 13.11.2026 15:40: mehrere); befehle: Befehlsübersichten; zeiten: angeglichene oder
 // gestaffelte Ankünfte je Befehl (Schlüssel aus Herkunft, Ziel, eingelesener Ankunft und Symbol)
 // begleit: aufgestockter AG-Begleitschutz je Befehl (Schlüssel wie zeiten, Wert {Einheit: Zahl}); begleitMin: Mindestwerte
-let S = {texte: [""], namen: [""], befehle: "", zeiten: {}, begleit: {}, begleitMin: {sword: 60, axe: 50}, staffel: {min: 5, max: 15}, spieler: {}, dazu: [], ank: "", ankPlan: "",
+let S = {texte: [""], namen: [""], befehle: "", zeiten: {}, begleit: {}, begleitMin: {sword: 60, axe: 50, light: 30}, staffel: {min: 5, max: 15}, spieler: {}, dazu: [], ank: "", ankPlan: "",
          arten: {ag: true, off: true, fake: true}, cfg: {fakes_max_je_dorf: 4, fake_extra_pop: 5, min_send_gap_s: 3}, expFmt: "dsu", seed: 1, aktiv: false};
 /** Gespeicherter Stand des Angriffsplaners in diesem Browser ({v: 1, S}), sonst null. */
 function planerStand() {
@@ -30,7 +30,7 @@ function laden() {
   S.namen.length = S.texte.length;
   if (!S.zeiten || typeof S.zeiten !== "object") S.zeiten = {};
   if (!S.begleit || typeof S.begleit !== "object") S.begleit = {};
-  S.begleitMin = Object.assign({sword: 60, axe: 50}, S.begleitMin);
+  S.begleitMin = Object.assign({sword: 60, axe: 50, light: 30}, S.begleitMin);
   S.staffel = Object.assign({min: 5, max: 15}, S.staffel);
   if (typeof S.befehle !== "string") S.befehle = "";
   // einmal: Fake-Einstellungen aus dem Angriffsplaner dieses Browsers übernehmen (Dennis 13.11.2026 14:36: stand auf 4 statt 3)
@@ -219,6 +219,36 @@ const einheitenText = (u, text) => K.UNITS.filter(x => u[x] > 0 || (text && text
   .map(x => (text && text[x] ? (text[x] === K.VORLAGE_ALLE ? "alle" : text[x]) : nf.format(u[x])) + " " + KURZ[x]).join(", ") || "–";
 const zeitKurz = (ms, mitMs) => { const t = K.fmtZeit(ms, mitMs); return t.slice(0, 6) + t.slice(10); };
 const dauer = ms => { const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h + ":" + String(m).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+/** Ankunft eines Befehls; eingelesene, noch nicht abgeschickte Befehle als Feld zum Ändern von Hand (Dennis 14.11.2026
+    01:08). Die neue Zeit landet wie Angleichen und Staffeln in S.zeiten, die Laufzeit bleibt, die Abschickzeit rückt mit. */
+function ankunftZelle(it) {
+  if (it.gesendet != null || it.neu || it.key == null) return el("span", null, zeitKurz(it.gesendet != null ? it.gesendet : it.arrivalMs, true));
+  const z = el("span", "au-ank");
+  const inp = eingabe("zt", zeitKurz(it.arrivalMs, true), v => {
+    const r = K.ankunftEingabe(v, it.arrivalMs);
+    if (r.fehler) { inp.classList.add("falsch"); inp.title = r.fehler; return; }
+    ankunftVonHand(it, r.ms);
+  }, {"data-k": "ank:" + it.key, title: "Ankunft ändern, etwa 17.11. 01:00:09:000 (Tag, Uhrzeit, Millisekunden); Enter oder Feld verlassen übernimmt",
+      "aria-label": "Ankunft " + (it.v ? koord(it.v) : it.source) + " nach " + (it.t ? koord(it.t) : it.destination)});
+  inp.spellcheck = false;
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } if (e.key === "Escape") { inp.value = zeitKurz(it.arrivalMs, true); inp.classList.remove("falsch"); inp.blur(); } });
+  z.append(inp);
+  const jetzt = Date.now();
+  if (it.sendMs != null && it.sendMs < jetzt) z.append(el("span", "au-alt warn", "Abschickzeit vorbei"));
+  else if (W && K.istNacht(W, it.arrivalMs)) z.append(el("span", "au-alt warn", "im Nachtbonus"));
+  return z;
+}
+function ankunftVonHand(it, ms) {
+  if (ms === it.arrivalMs) { spaeter(zeigen); return; }
+  const alt = it.arrivalMs;
+  if (it.sendMs != null) it.sendMs += ms - it.arrivalMs;
+  it.arrivalMs = ms;
+  if (it.arrivalMs === it.arrivalOrig) delete S.zeiten[it.key]; else S.zeiten[it.key] = it.arrivalMs;
+  AENDERUNG = {art: "hand", geaendert: [{it, alt}], zeit: Date.now()};
+  speichern();
+  if (S.aktiv) aufstocken();
+  spaeter(zeigen);
+}
 /** Truppen eines Befehls; aufgestockter Begleitschutz mit der eingelesenen Zahl darunter. */
 function truppenZelle(it) {
   const z = el("span", "ap-units", einheitenText(it.units, it.text));
@@ -234,7 +264,7 @@ function befehlsTabelle(items) {
     if (it.neu) art.append(el("span", "au-neu", "neu"));
     if (it.gesendet != null) art.append(el("span", "au-weg", "unterwegs"));
     else if ((it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) || it.begleit) art.append(el("span", "au-geaendert", "geändert"));
-    const ank = el("span", null, zeitKurz(it.gesendet != null ? it.gesendet : it.arrivalMs, true));
+    const ank = ankunftZelle(it);
     if (it.gesendet != null && Math.abs(it.gesendet - it.arrivalMs) >= 1000) ank.append(el("span", "au-alt", "geplant " + zeitKurz(it.arrivalMs, true)));
     else if (it.gesendet == null && it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) ank.append(el("span", "au-alt", "eingelesen " + zeitKurz(it.arrivalOrig, true)));
     return [["", "num"], [it.spieler], [it.v ? it.v.name + " (" + koord(it.v) + ")" : "Dorf-ID " + it.source + " (unbekannt)", null, it.v ? koord(it.v) : ""],
@@ -408,7 +438,7 @@ function zeitenBox(its) {
   const agZiele = new Set(its.filter(x => x.art === "ag" && x.t).map(x => x.t.id));
   box.append(el("h3", null, "Zeiten anpassen"),
     el("p", "ap-note", "„AGs angleichen“: Jeder AG-Train landet in derselben Sekunde direkt hinter der Off, die auf sein Ziel als letzte abgeschickt wird, aus allen Plänen; für schon abgeschickte Offs zählt die Ankunft laut Befehlsübersicht (Abschnitt 2). Das passiert beim Einfügen einer Befehlsübersicht automatisch; Offs anderer Spieler, die erst nach dem Train landen, stehen unten. „Offs staffeln“: Auf jedes AG-Ziel landet nur die Off, die als letzte abgeschickt wird, in der Sekunde des AG-Trains, die anderen zufällig " +
-      S.staffel.min + " bis " + S.staffel.max + " Minuten vorher (untereinander mehr Rammen zuerst), nie im Nachtbonus. „Offs auf die Sekunde“: alle Offs wieder direkt vor dem Train, je 200 ms. Unverändert bleiben Befehle, die schon unterwegs sind oder dafür vor jetzt plus einer Minute losmüssten, und der Mindestabstand zwischen den Abschickzeiten eines Spielers."));
+      S.staffel.min + " bis " + S.staffel.max + " Minuten vorher (untereinander mehr Rammen zuerst), nie im Nachtbonus. „Offs auf die Sekunde“: alle Offs wieder direkt vor dem Train, je 200 ms. Unverändert bleiben Befehle, die schon unterwegs sind oder dafür vor jetzt plus einer Minute losmüssten, und der Mindestabstand zwischen den Abschickzeiten eines Spielers. Einzelne Ankunftszeiten lassen sich unten in den Tabellen von Hand ändern (Feld in der Spalte Ankunft, Enter übernimmt, Esc verwirft); die Knöpfe hier rechnen von den aktuellen Zeiten aus."));
   const zahl = (k, lab) => eingabe("n", S.staffel[k], v => { const n = parseFloat(String(v).replace(",", ".")); if (!isNaN(n)) S.staffel[k] = Math.min(60, Math.max(0, n)); if (S.staffel.max < S.staffel.min) S.staffel.max = S.staffel.min; speichern(); spaeter(zeigenKern); }, {type: "number", min: 0, max: 60, "data-k": "staffel:" + k, title: lab});
   const r1 = el("div", "ap-row");
   r1.append(el("span", "ap-note", "Offs staffeln von"), zahl("min", "Minuten vorher, mindestens"), el("span", "ap-note", "bis"), zahl("max", "Minuten vorher, höchstens"), el("span", "ap-note", "Minuten vor dem AG"));
@@ -426,6 +456,11 @@ function zeitenBox(its) {
     const a = AENDERUNG, ul = el("ul", "ap-list"), um = hmf.format(new Date(a.zeit)) + " Uhr" + (a.auto ? " (nach dem Einlesen der Befehlsübersicht)" : "") + ": ";
     const min = ms => ms >= 60000 ? (Math.round(ms / 6000) / 10).toLocaleString("de-DE") + " min" : (Math.round(ms / 100) / 10).toLocaleString("de-DE") + " s";
     if (a.art === "zurueck") ul.append(el("li", null, um + "alle Zeiten wie eingelesen."));
+    else if (a.art === "hand") {
+      const x = a.geaendert[0];
+      ul.append(el("li", null, um + "Ankunft von Hand geändert: " + x.it.spieler + " " + ART[x.it.art] + " " + (x.it.v ? koord(x.it.v) : x.it.source) + " → " + (x.it.t ? koord(x.it.t) : x.it.destination) +
+        ", " + zeitKurz(x.alt, true) + " → " + zeitKurz(x.it.arrivalMs, true) + (x.it.sendMs != null ? ", Abschick jetzt " + zeitKurz(x.it.sendMs) : "") + "."));
+    }
     else if (a.art === "angleichen") {
       if (!a.liste.some(x => x.art !== "nachTrain")) ul.append(el("li", null, um + "alle AG-Trains liegen schon in der Sekunde der zuletzt abgeschickten Off."));
       const danach = x => x.nachTrain || x.n ? " " + plural(x.nachTrain || x.n, "Off landet", "Offs landen") + " erst nach dem Train." : "";
@@ -482,11 +517,12 @@ function begleitBox(its) {
   const box = el("div", "au-box");
   const ags = its.filter(x => x.art === "ag"), ort = it => it.v ? koord(it.v) : "Dorf-ID " + it.source;
   box.append(el("h3", null, "Begleitschutz der AGs"),
-    el("p", "ap-note", "„Begleitschutz aufstocken“: AGs, die nur Schwert oder nur Axt als Begleitschutz tragen und darunter liegen, bekommen den Mindestwert (AGs aus Deff-Dörfern laufen mit Schwert, aus Off-Dörfern mit Axt). Unverändert bleiben Befehle, die schon unterwegs sind, AGs mit genug Schwert oder Axt (etwa das AG mit der ganzen Off) und „alle“; AGs ohne Schwert und Axt oder mit beidem darunter stehen unten. Mindestwert 0 schaltet die Einheit ab. Danach die betroffenen Spieler neu nach DS-Ultimate importieren (unten „nur geänderte“ oder „noch nicht abgeschickt“)."));
+    el("p", "ap-note", "„Begleitschutz aufstocken“: Ein AG, das Schwert, Axt oder LKav als Begleitschutz trägt und unter dem Mindestwert liegt, wird auf den Mindestwert aufgestockt; mit mehreren davon die, von der am meisten dabei ist. Ein AG ganz ohne bekommt laut Truppenübersicht seines Dorfs 50 Axt (mehr Axt als Schwert im Dorf) oder 60 Schwert, reicht das Freie nicht, 30 LKav; ohne Übersicht oder ohne genug Freies bleibt es und steht unten. Unverändert bleiben Befehle, die schon unterwegs sind, AGs, die den Mindestwert schon haben (etwa das AG mit der ganzen Off), und „alle“. Mindestwert 0 schaltet die Einheit ab. Danach die betroffenen Spieler neu nach DS-Ultimate importieren (unten „nur geänderte“ oder „noch nicht abgeschickt“)."));
   const zahl = (u, lab) => eingabe("n", S.begleitMin[u], v => { const n = parseInt(v, 10); if (!isNaN(n)) S.begleitMin[u] = Math.min(100000, Math.max(0, n)); speichern(); spaeter(zeigenKern); },
     {type: "number", min: 0, max: 100000, "data-k": "begleit:" + u, title: lab});
   const r1 = el("div", "ap-row");
-  r1.append(el("span", "ap-note", "Schwert mindestens"), zahl("sword", "Schwertkämpfer je AG mindestens"), el("span", "ap-note", "Axt mindestens"), zahl("axe", "Axtkämpfer je AG mindestens"));
+  r1.append(el("span", "ap-note", "Schwert mindestens"), zahl("sword", "Schwertkämpfer je AG mindestens"), el("span", "ap-note", "Axt mindestens"), zahl("axe", "Axtkämpfer je AG mindestens"),
+    el("span", "ap-note", "LKav mindestens"), zahl("light", "Leichte Kavallerie je AG mindestens"));
   [["auf", "Begleitschutz aufstocken"], ["zurueck", "↺ Begleitschutz wie eingelesen"]].forEach(([w, t]) => {
     const b = el("button", "tw", t); b.type = "button";
     b.disabled = w === "zurueck" ? !Object.keys(S.begleit).length : !ags.length;
@@ -501,17 +537,19 @@ function begleitBox(its) {
     if (n) ul.append(el("li", null, plural(n, "AG trägt", "AGs tragen") + " aufgestockten Begleitschutz (gespeichert in diesem Browser)."));
   } else if (a.art === "zurueck") ul.append(el("li", null, hmf.format(new Date(a.zeit)) + " Uhr: Begleitschutz wie eingelesen."));
   else {
-    const um = hmf.format(new Date(a.zeit)) + " Uhr: ", je = u => a.aenderungen.filter(x => x.u === u).length;
+    const um = hmf.format(new Date(a.zeit)) + " Uhr: ", je = u => a.aenderungen.filter(x => x.u === u).length, grund = g => a.aenderungen.filter(x => x.grund === g).length;
     ul.append(el("li", null, um + (a.aenderungen.length ? plural(a.aenderungen.length, "AG", "AGs") + " aufgestockt" +
-      [["sword", "Schwert"], ["axe", "Axt"]].filter(([u]) => je(u)).map(([u, t]) => ", " + je(u) + " auf " + nf.format(S.begleitMin[u]) + " " + t).join("") + "."
-      : "nichts aufzustocken, alle AGs haben genug Schwert oder Axt.")));
+      [["sword", "Schwert"], ["axe", "Axt"], ["light", "LKav"]].filter(([u]) => je(u)).map(([u, t]) => ", " + je(u) + " auf " + nf.format(S.begleitMin[u]) + " " + t).join("") + "." +
+      (grund("dorf") ? " Davon " + grund("dorf") + " ohne Begleitschutz, nach dem Dorf." : "") + (grund("mehr") ? " " + plural(grund("mehr"), "AG", "AGs") + " mit mehreren Schutz-Einheiten: die größte aufgestockt." : "")
+      : "nichts aufzustocken, alle AGs haben genug Begleitschutz.")));
     const ortId = id => { const i = byId.get(id); return i != null ? koord(dorf(i)) : "Dorf-ID " + id; };
     a.knapp.forEach(k => ul.append(el("li", "warn", "Laut Truppenübersicht zu wenig im Dorf " + ortId(k.source) + ": " +
       "das Aufstocken braucht " + nf.format(k.braucht) + " " + KURZ[k.u] + " mehr, frei sind " + nf.format(k.frei) + (k.alle ? " (ein Befehl aus dem Dorf nimmt alle " + KURZ[k.u] + ")" : "") + ".")));
     if (a.ungeprueft) ul.append(el("li", null, plural(a.ungeprueft, "Dorf", "Dörfer") + " ohne Truppenübersicht (Abschnitt 4), dort nicht geprüft, ob genug da ist."));
-    const liste = xs => xs.slice(0, 12).map(it => it.spieler + " " + ort(it)).join(", ") + (xs.length > 12 ? " …" : "");
-    if (a.ohne.length) ul.append(el("li", "warn", plural(a.ohne.length, "AG ohne", "AGs ohne") + " Schwert und Axt, unverändert: " + liste(a.ohne)));
-    if (a.beide.length) ul.append(el("li", "warn", plural(a.beide.length, "AG mit", "AGs mit") + " Schwert und Axt unter dem Mindestwert, unverändert: " + liste(a.beide)));
+    const liste = xs => xs.slice(0, 12).map(o => o.it.spieler + " " + ort(o.it)).join(", ") + (xs.length > 12 ? " …" : "");
+    const ohneUeb = a.ohne.filter(o => o.grund === "ohneUebersicht"), zuWenig = a.ohne.filter(o => o.grund === "zuWenig");
+    if (ohneUeb.length) ul.append(el("li", "warn", plural(ohneUeb.length, "AG", "AGs") + " ohne Begleitschutz und ohne Truppenübersicht des Dorfs (Abschnitt 4), unverändert: " + liste(ohneUeb)));
+    if (zuWenig.length) ul.append(el("li", "warn", plural(zuWenig.length, "AG", "AGs") + " ohne Begleitschutz, im Dorf laut Übersicht nicht genug Axt, Schwert oder LKav frei, unverändert: " + liste(zuWenig)));
   }
   if (ul.childElementCount) box.append(ul);
   if (a && a.art === "auf" && a.aenderungen.length) {
@@ -519,7 +557,7 @@ function begleitBox(its) {
     d.append(el("summary", null, plural(a.aenderungen.length, "Befehl", "Befehle") + " geändert"));
     const ul2 = el("ul", "au-sitz");
     a.aenderungen.slice().sort((p, q) => (p.it.sendMs || 0) - (q.it.sendMs || 0)).forEach(x => ul2.append(el("li", null, x.it.spieler + ": AG " + ort(x.it) + " → " +
-      (x.it.t ? koord(x.it.t) : x.it.destination) + ", " + nf.format(x.alt) + " → " + nf.format(x.neu) + " " + KURZ[x.u])));
+      (x.it.t ? koord(x.it.t) : x.it.destination) + ", " + nf.format(x.alt) + " → " + nf.format(x.neu) + " " + KURZ[x.u] + (x.grund === "dorf" ? " (ohne Begleitschutz, nach dem Dorf)" : ""))));
     d.append(ul2);
     box.append(d);
   }
