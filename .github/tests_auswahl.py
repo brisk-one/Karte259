@@ -34,6 +34,7 @@ BEFEHL = {
     "zusatz": "node --test tests/zusatz.test.js",
     "truppen": "node --test tests/truppen.test.js",
     "sortieren": "node --test tests/sortieren.test.js",
+    "begleit": "node --test tests/begleit.test.js",
 }
 PYTHON = r"^(collector/|tests/test_.*\.py$|\.github/)"
 
