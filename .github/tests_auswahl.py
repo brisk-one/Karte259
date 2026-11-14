@@ -6,7 +6,11 @@ nur die Tests der Bereiche, deren Dateien sich seit dem letzten erfolgreichen Se
 geändert haben. Ist ein Code-Push durchgefallen, holt der nächste Bau dessen Tests nach, ungetesteter Code geht
 also nicht live. Ohne gesicherten Bezugspunkt, bei geändertem Workflow oder gemeinsamen Dateien: alle Tests.
 
-Aufruf: python3 .github/tests_auswahl.py runs.json <eigene run_id>; schreibt name=true|false nach $GITHUB_OUTPUT.
+Aufruf im Workflow: python3 .github/tests_auswahl.py runs.json <eigene run_id>; schreibt name=true|false nach $GITHUB_OUTPUT.
+Lokal vor dem Testen (Dennis 14.11.2026 01:11: nur testen, was die Änderung wirklich betrifft):
+  python3 .github/tests_auswahl.py --lokal [Basis, Standard origin/main]
+vergleicht die Arbeitskopie (auch nicht committete und neue Dateien) mit der Basis und nennt die Testbefehle
+und die Seiten für den Browsertest. Diese Datei ist die eine Quelle für die Zuordnung Bereich → Tests.
 """
 import json
 import os
@@ -24,6 +28,14 @@ BEREICHE = {
 }
 # gemeinsam genutzt oder der Ablauf selbst: alles testen
 ALLE = r"^(\.github/|site/app\.js$|site/style\.css$|package\.json$)"
+BEFEHL = {
+    "praegen": "node --test tests/praegen.test.js",
+    "angriff": "node --test tests/angriff.test.js",
+    "zusatz": "node --test tests/zusatz.test.js",
+    "truppen": "node --test tests/truppen.test.js",
+    "sortieren": "node --test tests/sortieren.test.js",
+}
+PYTHON = r"^(collector/|tests/test_.*\.py$|\.github/)"
 
 
 def auswahl(dateien):
@@ -48,7 +60,44 @@ def geaendert(sha):
     return None if r.returncode else [z for z in r.stdout.splitlines() if z]
 
 
+def seiten(dateien, site="site"):
+    """Seiten für den Browsertest: geänderte HTML-Seiten und Seiten, die eine geänderte Skriptdatei laden."""
+    if dateien is None:
+        return ["alle"]
+    if any(re.match(r"^site/(app\.js|style\.css)$", d) for d in dateien):
+        return ["alle"]
+    html = sorted(f for f in os.listdir(site) if f.endswith(".html")) if os.path.isdir(site) else []
+    out = set()
+    for d in dateien:
+        if not d.startswith("site/"):
+            continue
+        name = d[len("site/"):]
+        if name.endswith(".html"):
+            out.add(name)
+        elif name.endswith(".js"):
+            for h in html:
+                if '"' + name + '"' in open(os.path.join(site, h), encoding="utf-8").read():
+                    out.add(h)
+    return sorted(out)
+
+
+def lokal(basis):
+    r = subprocess.run(["git", "diff", "--name-only", basis], capture_output=True, text=True)
+    neu = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True)
+    dateien = None if r.returncode else sorted(set(z for z in (r.stdout + neu.stdout).splitlines() if z))
+    wahl = auswahl(dateien)
+    print("Basis:", basis, "·", "unbekannt, alles testen" if dateien is None else f"{len(dateien)} Dateien geändert")
+    befehle = [BEFEHL[b] for b, ja in wahl.items() if ja]
+    if dateien is None or any(re.match(PYTHON, d) for d in dateien):
+        befehle.insert(0, "python3 -m unittest discover -s tests")
+    print("Tests:", *(befehle or ["keine"]), sep="\n  ")
+    print("Browsertest:", ", ".join(seiten(dateien)) or "keine Seite betroffen")
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--lokal":
+        lokal(sys.argv[2] if len(sys.argv) > 2 else "origin/main")
+        return
     try:
         runs = json.load(open(sys.argv[1], encoding="utf-8")).get("workflow_runs", [])
     except (OSError, ValueError, IndexError):

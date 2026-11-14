@@ -44,6 +44,13 @@ class TestsAuswahlTest(unittest.TestCase):
         self.assertEqual(A.bezug(runs, 9), "s")
         self.assertIsNone(A.bezug([], 1))
 
+    def test_seiten_fuer_den_browsertest(self):
+        site = os.path.join(os.path.dirname(__file__), "..", "site")
+        self.assertEqual(A.seiten(["site/praegen-core.js"], site), ["praegen.html"])
+        self.assertIn("aufstocken.html", A.seiten(["site/angriff-core.js"], site))
+        self.assertEqual(A.seiten(["site/style.css"], site), ["alle"])
+        self.assertEqual(A.seiten(["data/villages.json"], site), [])
+
 
 if __name__ == "__main__":
     unittest.main()
