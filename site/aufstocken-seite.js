@@ -8,7 +8,8 @@ const SPEICHER = "k259-aufstocken";
 const neuerSpieler = () => ({uebersicht: "", fenster: "", soll: "", rammenMax: ""});
 // texte: eingefügte Pläne (Dennis 13.11.2026 15:40: mehrere); befehle: Befehlsübersichten; zeiten: angeglichene oder
 // gestaffelte Ankünfte je Befehl (Schlüssel aus Herkunft, Ziel, eingelesener Ankunft und Symbol)
-let S = {texte: [""], namen: [""], befehle: "", zeiten: {}, staffel: {min: 5, max: 15}, spieler: {}, dazu: [], ank: "", ankPlan: "",
+// begleit: aufgestockter AG-Begleitschutz je Befehl (Schlüssel wie zeiten, Wert {Einheit: Zahl}); begleitMin: Mindestwerte
+let S = {texte: [""], namen: [""], befehle: "", zeiten: {}, begleit: {}, begleitMin: {sword: 60, axe: 50}, staffel: {min: 5, max: 15}, spieler: {}, dazu: [], ank: "", ankPlan: "",
          arten: {ag: true, off: true, fake: true}, cfg: {fakes_max_je_dorf: 4, fake_extra_pop: 5, min_send_gap_s: 3}, expFmt: "dsu", seed: 1, aktiv: false};
 /** Gespeicherter Stand des Angriffsplaners in diesem Browser ({v: 1, S}), sonst null. */
 function planerStand() {
@@ -28,6 +29,8 @@ function laden() {
   while (S.namen.length < S.texte.length) S.namen.push("");
   S.namen.length = S.texte.length;
   if (!S.zeiten || typeof S.zeiten !== "object") S.zeiten = {};
+  if (!S.begleit || typeof S.begleit !== "object") S.begleit = {};
+  S.begleitMin = Object.assign({sword: 60, axe: 50}, S.begleitMin);
   S.staffel = Object.assign({min: 5, max: 15}, S.staffel);
   if (typeof S.befehle !== "string") S.befehle = "";
   // einmal: Fake-Einstellungen aus dem Angriffsplaner dieses Browsers übernehmen (Dennis 13.11.2026 14:36: stand auf 4 statt 3)
@@ -81,6 +84,7 @@ let PLAN = null;           // {items, fehler, meta, je: [{n, fehler}] je eingef�
 let BEF = null;            // gelesene Befehlsübersichten und Abgleich
 let AENDERUNG = null;      // letzte Zeitänderung (Knöpfe in Abschnitt 3)
 let NEU = null;            // Ergebnis von fakesNachImport
+let BEGLEIT = null;        // letztes Aufstocken des Begleitschutzes (Knöpfe in Abschnitt 3)
 const UEB = new Map();     // Spieler → gelesene Truppenübersicht
 function uebersichtLesen(name) {
   const text = sp(name).uebersicht;
@@ -148,6 +152,13 @@ function einlesen() {
     const b = K.parseBefehle(S.befehle, Date.now(), SPALTEN);
     BEF = Object.assign(b, K.befehleAbgleichen(PLAN.items, b.befehle));
   }
+  // aufgestockter AG-Begleitschutz (Abschnitt 3) wieder anwenden, nicht auf schon abgeschickte Befehle
+  PLAN.items.forEach(it => {
+    const z = S.begleit[it.key];
+    if (!z || it.gesendet != null) return;
+    it.begleitAlt = {}; it.begleit = {};
+    Object.keys(z).forEach(u => { if (u in it.units) { it.begleitAlt[u] = it.units[u]; it.units[u] = z[u]; it.begleit[u] = z[u]; } });
+  });
   // Ankunft der neuen Fakes: Standard der Zeitraum des Plans; neuer Plan, neuer Standard
   const arr = PLAN.items.map(it => it.arrivalOrig);
   if (arr.length) {
@@ -208,6 +219,13 @@ const einheitenText = (u, text) => K.UNITS.filter(x => u[x] > 0 || (text && text
   .map(x => (text && text[x] ? (text[x] === K.VORLAGE_ALLE ? "alle" : text[x]) : nf.format(u[x])) + " " + KURZ[x]).join(", ") || "–";
 const zeitKurz = (ms, mitMs) => { const t = K.fmtZeit(ms, mitMs); return t.slice(0, 6) + t.slice(10); };
 const dauer = ms => { const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h + ":" + String(m).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+/** Truppen eines Befehls; aufgestockter Begleitschutz mit der eingelesenen Zahl darunter. */
+function truppenZelle(it) {
+  const z = el("span", "ap-units", einheitenText(it.units, it.text));
+  if (it.begleit) z.append(el("span", "au-alt", "Begleitschutz aufgestockt, eingelesen " +
+    Object.keys(it.begleit).map(u => nf.format(it.begleitAlt[u] || 0) + " " + KURZ[u]).join(", ")));
+  return z;
+}
 function befehlsTabelle(items) {
   const cols = [["#", "num"], ["Spieler", null, "text"], ["Herkunft", null, "text"], ["Ziel", null, "text"], ["Zielspieler", null, "text"],
                 ["Art", null, "text"], ["Truppen"], ["Abschick", "num", true], ["Ankunft", "num", true], ["Laufzeit", "num", true]];
@@ -215,13 +233,13 @@ function befehlsTabelle(items) {
     const art = el("span", "ap-kind k-" + it.art, ART[it.art]);
     if (it.neu) art.append(el("span", "au-neu", "neu"));
     if (it.gesendet != null) art.append(el("span", "au-weg", "unterwegs"));
-    else if (it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) art.append(el("span", "au-geaendert", "geändert"));
+    else if ((it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) || it.begleit) art.append(el("span", "au-geaendert", "geändert"));
     const ank = el("span", null, zeitKurz(it.gesendet != null ? it.gesendet : it.arrivalMs, true));
     if (it.gesendet != null && Math.abs(it.gesendet - it.arrivalMs) >= 1000) ank.append(el("span", "au-alt", "geplant " + zeitKurz(it.arrivalMs, true)));
     else if (it.gesendet == null && it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) ank.append(el("span", "au-alt", "eingelesen " + zeitKurz(it.arrivalOrig, true)));
     return [["", "num"], [it.spieler], [it.v ? it.v.name + " (" + koord(it.v) + ")" : "Dorf-ID " + it.source + " (unbekannt)", null, it.v ? koord(it.v) : ""],
             [it.t ? koord(it.t) : "Dorf-ID " + it.destination + " (unbekannt)"], [it.t ? spielerName(it.t.owner) : "–"],
-            [art, null, ART[it.art] + (it.neu ? " neu" : "") + (it.gesendet != null ? " unterwegs" : "")], [el("span", "ap-units", einheitenText(it.units, it.text))],
+            [art, null, ART[it.art] + (it.neu ? " neu" : "") + (it.gesendet != null ? " unterwegs" : "")], [truppenZelle(it)],
             [it.sendMs != null ? zeitKurz(it.sendMs) : "–", "num", it.sendMs], [ank, "num", it.gesendet != null ? it.gesendet : it.arrivalMs],
             [it.sendMs != null ? dauer(it.arrivalMs - it.sendMs) : "–", "num", it.sendMs != null ? it.arrivalMs - it.sendMs : null]];
   });
@@ -229,7 +247,7 @@ function befehlsTabelle(items) {
   [...t.tBodies[0].rows].forEach((tr, i) => {
     const it = items[i];
     if (it && it.neu) tr.classList.add("neu");
-    else if (it && it.gesendet == null && it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) tr.classList.add("geaendert");
+    else if (it && it.gesendet == null && ((it.arrivalOrig != null && it.arrivalMs !== it.arrivalOrig) || it.begleit)) tr.classList.add("geaendert");
   });
   const box = el("div", "ap-scroll"); box.append(t);
   return box;
@@ -324,7 +342,7 @@ function planFelder() {
     kopf.append(el("strong", null, "Plan " + (i + 1)), name, el("span", "ap-note", ""));
     if (S.texte.length > 1) {
       const x = el("button", "tw", "entfernen"); x.type = "button";
-      x.addEventListener("click", () => { S.texte.splice(i, 1); S.namen.splice(i, 1); S.zeiten = {}; planGeaendert(); planFelder(); });
+      x.addEventListener("click", () => { S.texte.splice(i, 1); S.namen.splice(i, 1); S.zeiten = {}; S.begleit = {}; planGeaendert(); planFelder(); });
       kopf.append(x);
     }
     const ta = el("textarea", "ap-ta" + (S.texte.length > 1 ? " klein" : "")); ta.spellcheck = false; ta.value = t;
@@ -336,7 +354,7 @@ function planFelder() {
     return d;
   }));
 }
-function planGeaendert() { S.aktiv = false; AENDERUNG = null; speichern(); spaeter(() => { einlesen(); zeigen(); }); }
+function planGeaendert() { S.aktiv = false; AENDERUNG = null; BEGLEIT = null; speichern(); spaeter(() => { einlesen(); zeigen(); }); }
 function zeigenPlan() {
   const note = $("plan-note");
   [...$("plaene").querySelectorAll(".au-plan")].forEach((d, i) => {
@@ -433,17 +451,93 @@ function zeitenBox(its) {
   }
   return box;
 }
+/** AG-Begleitschutz aufstocken (Dennis 14.11.2026 00:52): AGs mit nur Schwert oder nur Axt unter dem Mindestwert auf den
+    Mindestwert (Rechnung K.begleitAufstocken), oder alles wie eingelesen. Bleibt im Browser (S.begleit), Export mit den neuen
+    Zahlen. Jedes Drücken rechnet vom eingelesenen Stand aus neu, damit geänderte Mindestwerte ganz gelten. */
+function begleitAendern(was) {
+  if (!PLAN) return;
+  PLAN.items.forEach(it => { if (it.begleitAlt) Object.assign(it.units, it.begleitAlt); delete it.begleitAlt; delete it.begleit; });
+  S.begleit = {};
+  let info = {art: "zurueck"};
+  if (was === "auf") {
+    const doerfer = new Map();
+    UEB.forEach(o => o.villages.forEach(v => { if (v.id != null && !doerfer.has(v.id)) doerfer.set(v.id, v.units); }));
+    const r = K.begleitAufstocken(PLAN.items, S.begleitMin, doerfer);
+    r.aenderungen.forEach(a => {
+      const it = a.it;
+      it.begleitAlt = Object.assign(it.begleitAlt || {}, {[a.u]: a.alt});
+      it.begleit = Object.assign(it.begleit || {}, {[a.u]: a.neu});
+      it.units[a.u] = a.neu;
+      S.begleit[it.key] = it.begleit;
+    });
+    const ungeprueft = new Set(r.aenderungen.filter(a => !doerfer.has(a.it.source)).map(a => a.it.source));
+    info = Object.assign({art: "auf", ungeprueft: ungeprueft.size}, r);
+  }
+  BEGLEIT = Object.assign(info, {zeit: Date.now()});
+  speichern();
+  if (S.aktiv) aufstocken();
+  zeigen();
+}
+function begleitBox(its) {
+  const box = el("div", "au-box");
+  const ags = its.filter(x => x.art === "ag"), ort = it => it.v ? koord(it.v) : "Dorf-ID " + it.source;
+  box.append(el("h3", null, "Begleitschutz der AGs"),
+    el("p", "ap-note", "„Begleitschutz aufstocken“: AGs, die nur Schwert oder nur Axt als Begleitschutz tragen und darunter liegen, bekommen den Mindestwert (AGs aus Deff-Dörfern laufen mit Schwert, aus Off-Dörfern mit Axt). Unverändert bleiben Befehle, die schon unterwegs sind, AGs mit genug Schwert oder Axt (etwa das AG mit der ganzen Off) und „alle“; AGs ohne Schwert und Axt oder mit beidem darunter stehen unten. Mindestwert 0 schaltet die Einheit ab. Danach die betroffenen Spieler neu nach DS-Ultimate importieren (unten „nur geänderte“ oder „noch nicht abgeschickt“)."));
+  const zahl = (u, lab) => eingabe("n", S.begleitMin[u], v => { const n = parseInt(v, 10); if (!isNaN(n)) S.begleitMin[u] = Math.min(100000, Math.max(0, n)); speichern(); spaeter(zeigenKern); },
+    {type: "number", min: 0, max: 100000, "data-k": "begleit:" + u, title: lab});
+  const r1 = el("div", "ap-row");
+  r1.append(el("span", "ap-note", "Schwert mindestens"), zahl("sword", "Schwertkämpfer je AG mindestens"), el("span", "ap-note", "Axt mindestens"), zahl("axe", "Axtkämpfer je AG mindestens"));
+  [["auf", "Begleitschutz aufstocken"], ["zurueck", "↺ Begleitschutz wie eingelesen"]].forEach(([w, t]) => {
+    const b = el("button", "tw", t); b.type = "button";
+    b.disabled = w === "zurueck" ? !Object.keys(S.begleit).length : !ags.length;
+    b.addEventListener("click", () => begleitAendern(w));
+    r1.append(b);
+  });
+  box.append(r1);
+  if (!ags.length) { box.append(el("p", "ap-note", "Keine AGs im Plan.")); return box; }
+  const n = its.filter(x => x.begleit).length;
+  const a = BEGLEIT, ul = el("ul", "ap-list");
+  if (!a) {
+    if (n) ul.append(el("li", null, plural(n, "AG trägt", "AGs tragen") + " aufgestockten Begleitschutz (gespeichert in diesem Browser)."));
+  } else if (a.art === "zurueck") ul.append(el("li", null, hmf.format(new Date(a.zeit)) + " Uhr: Begleitschutz wie eingelesen."));
+  else {
+    const um = hmf.format(new Date(a.zeit)) + " Uhr: ", je = u => a.aenderungen.filter(x => x.u === u).length;
+    ul.append(el("li", null, um + (a.aenderungen.length ? plural(a.aenderungen.length, "AG", "AGs") + " aufgestockt" +
+      [["sword", "Schwert"], ["axe", "Axt"]].filter(([u]) => je(u)).map(([u, t]) => ", " + je(u) + " auf " + nf.format(S.begleitMin[u]) + " " + t).join("") + "."
+      : "nichts aufzustocken, alle AGs haben genug Schwert oder Axt.")));
+    const ortId = id => { const i = byId.get(id); return i != null ? koord(dorf(i)) : "Dorf-ID " + id; };
+    a.knapp.forEach(k => ul.append(el("li", "warn", "Laut Truppenübersicht zu wenig im Dorf " + ortId(k.source) + ": " +
+      "das Aufstocken braucht " + nf.format(k.braucht) + " " + KURZ[k.u] + " mehr, frei sind " + nf.format(k.frei) + (k.alle ? " (ein Befehl aus dem Dorf nimmt alle " + KURZ[k.u] + ")" : "") + ".")));
+    if (a.ungeprueft) ul.append(el("li", null, plural(a.ungeprueft, "Dorf", "Dörfer") + " ohne Truppenübersicht (Abschnitt 4), dort nicht geprüft, ob genug da ist."));
+    const liste = xs => xs.slice(0, 12).map(it => it.spieler + " " + ort(it)).join(", ") + (xs.length > 12 ? " …" : "");
+    if (a.ohne.length) ul.append(el("li", "warn", plural(a.ohne.length, "AG ohne", "AGs ohne") + " Schwert und Axt, unverändert: " + liste(a.ohne)));
+    if (a.beide.length) ul.append(el("li", "warn", plural(a.beide.length, "AG mit", "AGs mit") + " Schwert und Axt unter dem Mindestwert, unverändert: " + liste(a.beide)));
+  }
+  if (ul.childElementCount) box.append(ul);
+  if (a && a.art === "auf" && a.aenderungen.length) {
+    const d = el("details", "au-det");
+    d.append(el("summary", null, plural(a.aenderungen.length, "Befehl", "Befehle") + " geändert"));
+    const ul2 = el("ul", "au-sitz");
+    a.aenderungen.slice().sort((p, q) => (p.it.sendMs || 0) - (q.it.sendMs || 0)).forEach(x => ul2.append(el("li", null, x.it.spieler + ": AG " + ort(x.it) + " → " +
+      (x.it.t ? koord(x.it.t) : x.it.destination) + ", " + nf.format(x.alt) + " → " + nf.format(x.neu) + " " + KURZ[x.u])));
+    d.append(ul2);
+    box.append(d);
+  }
+  return box;
+}
 function zeigenKern() {
   const box = $("kern");
   if (!PLAN || !PLAN.items.length) { box.replaceChildren(el("p", "empty", "Noch kein Plan eingelesen.")); $("kern-hint").textContent = ""; return; }
   const its = PLAN.items.filter(x => x.art !== "fake");
   const nG = its.filter(x => x.gesendet == null && x.arrivalOrig != null && x.arrivalMs !== x.arrivalOrig).length, nW = its.filter(x => x.gesendet != null).length;
-  $("kern-hint").textContent = its.length + " Befehle" + (nW ? ", " + nW + " davon unterwegs" : "") + (nG ? ", " + nG + " mit geänderter Zeit" : ", Zeiten wie eingelesen") + ".";
+  const nB = its.filter(x => x.begleit).length;
+  $("kern-hint").textContent = its.length + " Befehle" + (nW ? ", " + nW + " davon unterwegs" : "") + (nG ? ", " + nG + " mit geänderter Zeit" : ", Zeiten wie eingelesen") +
+    (nB ? ", " + nB + " mit aufgestocktem Begleitschutz" : "") + ".";
   if (!its.length) { box.replaceChildren(el("p", "empty", "Keine Offs oder AGs in den Plänen.")); return; }
-  const offen = x => x.gesendet == null, geaendert = x => offen(x) && x.arrivalOrig != null && x.arrivalMs !== x.arrivalOrig;
+  const offen = x => x.gesendet == null, geaendert = x => offen(x) && ((x.arrivalOrig != null && x.arrivalMs !== x.arrivalOrig) || !!x.begleit);
   const knoepfe = (a, name) => [["Offs und AGs", a, name], ["noch nicht abgeschickt", a.filter(offen), name + "_offen"], ["nur geänderte", a.filter(geaendert), name + "_geaendert"]];
-  const teile = [zeitenBox(its), formatZeile("kern")];
-  if (its.some(geaendert)) teile.push(el("p", "ap-warn", "Geänderte Zeiten: Die betroffenen Spieler brauchen ihren Plan neu. In DS-Ultimate einen neuen Plan anlegen (oder die alten Befehle löschen) und „noch nicht abgeschickt“ importieren; nur die geänderten Befehle tauschen geht mit „nur geänderte“."));
+  const teile = [zeitenBox(its), begleitBox(its), formatZeile("kern")];
+  if (its.some(geaendert)) teile.push(el("p", "ap-warn", "Geänderte Befehle (Zeit oder Begleitschutz): Die betroffenen Spieler brauchen ihren Plan neu. In DS-Ultimate einen neuen Plan anlegen (oder die alten Befehle löschen) und „noch nicht abgeschickt“ importieren; nur die geänderten Befehle tauschen geht mit „nur geänderte“."));
   // je eingelesenem Plan getrennt (Dennis 13.11.2026 17:20)
   PLAN.je.forEach((j, i) => {
     const a = its.filter(x => x.plan === i);
@@ -668,7 +762,7 @@ function rechnen() {
 
 /* ---------- Bedienung ---------- */
 $("plan-dazu").addEventListener("click", () => { S.texte.push(""); S.namen.push(""); speichern(); planFelder(); zeigenPlan(); const t = $("plaene").querySelectorAll("textarea"); t[t.length - 1].focus(); });
-$("plan-leeren").addEventListener("click", () => { S.texte = [""]; S.namen = [""]; S.zeiten = {}; planGeaendert(); planFelder(); });
+$("plan-leeren").addEventListener("click", () => { S.texte = [""]; S.namen = [""]; S.zeiten = {}; S.begleit = {}; planGeaendert(); planFelder(); });
 $("plan-datei-knopf").addEventListener("click", () => $("plan-datei").click());
 $("plan-datei").addEventListener("change", e => {
   const files = [...(e.target.files || [])];

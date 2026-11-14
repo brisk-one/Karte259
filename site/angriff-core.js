@@ -2555,6 +2555,8 @@ function importDSU(items, meta) {
         // eingelesen: unverändert, außer die Ankunft wurde angeglichen oder gestaffelt
         const o = Object.assign({}, it.roh), sek = Math.floor(it.arrivalMs / 1000), ms = ((it.arrivalMs % 1000) + 1000) % 1000;
         if (+o.arrival_time !== sek || (+o.ms || 0) !== ms) { o.arrival_time = sek; o.ms = ms; }
+        // aufgestockter AG-Begleitschutz (begleitAufstocken): neue Zahl, Typ wie im eingelesenen Plan
+        if (it.begleit) Object.keys(it.begleit).forEach(u => { o[u] = typeof it.roh[u] === "number" ? it.begleit[u] : String(it.begleit[u]); });
         return o;
       }
       const o = {source: it.source, destination: it.destination, slowest_unit: UNITS.indexOf(it.slow), arrival_time: Math.floor(it.arrivalMs / 1000),
@@ -2569,6 +2571,48 @@ function importWB(items) {
     const truppen = UNITS.map(u => u + "=" + b64(it.text && it.text[u] ? it.text[u] : String(Math.max(0, Math.round(it.units[u] || 0))))).concat("militia=" + b64("0"));
     return [it.source, it.destination, it.slow || "ram", Math.round(it.arrivalMs), it.type == null ? DSU_TYPE.fake : it.type, "false", "false", truppen.join("/")].join("&");
   }).join("\n");
+}
+
+/**
+ * AG-Begleitschutz aufstocken (Reiter „Fakes aufstocken“, Dennis 14.11.2026 00:52): Ein AG-Befehl, der nur Schwert oder nur
+ * Axt als Begleitschutz trägt und unter dem Mindestwert liegt, bekommt den Mindestwert (Standard 60 Schwert, 50 Axt; AGs aus
+ * Deff-Dörfern laufen mit Schwert, aus Off-Dörfern mit Axt). Unverändert bleiben: abgeschickte Befehle (gesendet), AGs mit
+ * genug Schwert oder Axt (etwa das AG mit der ganzen Off), Einheiten als Text („all“), AGs ohne Schwert und Axt und AGs mit
+ * beidem unter dem Mindestwert; die beiden letzten kommen als Liste zurück. Mindestwert 0 schaltet die Einheit ab.
+ * items: eingelesene Befehle (parsePlan, Feld units je Befehl die eingelesenen Zahlen); min: {sword, axe};
+ * doerfer: optional Map Dorf-ID → Einheiten laut Truppenübersicht. Dann je Dorf: Truppen minus alle Befehle des Plans aus dem
+ * Dorf (Einheit als Text nimmt alle) gegen das, was das Aufstocken zusätzlich braucht.
+ * Ergebnis {aenderungen:[{it, u, alt, neu}], ohne:[it], beide:[it], knapp:[{source, u, braucht, frei, alle}]}; items bleibt unverändert.
+ */
+function begleitAufstocken(items, min, doerfer) {
+  const m = {sword: Math.max(0, Math.round(+(min && min.sword) || 0)), axe: Math.max(0, Math.round(+(min && min.axe) || 0))};
+  const aenderungen = [], ohne = [], beide = [], knapp = [];
+  (items || []).forEach(it => {
+    if (it.gesendet != null || (it.art || importArt(it)) !== "ag") return;
+    const t = it.text || {};
+    if (t.sword || t.axe) return;
+    const sw = Math.max(0, it.units.sword || 0), ax = Math.max(0, it.units.axe || 0);
+    if ((m.sword && sw >= m.sword) || (m.axe && ax >= m.axe)) return;
+    if (sw > 0 && ax > 0) { beide.push(it); return; }
+    if (sw > 0) { if (m.sword) aenderungen.push({it, u: "sword", alt: sw, neu: m.sword}); return; }
+    if (ax > 0) { if (m.axe) aenderungen.push({it, u: "axe", alt: ax, neu: m.axe}); return; }
+    ohne.push(it);
+  });
+  if (doerfer && doerfer.size) {
+    const braucht = new Map();
+    aenderungen.forEach(a => { const k = a.it.source + ":" + a.u; braucht.set(k, (braucht.get(k) || 0) + a.neu - a.alt); });
+    braucht.forEach((n, k) => {
+      const [source, u] = [+k.split(":")[0], k.split(":")[1]], d = doerfer.get(source);
+      if (!d) return;
+      let frei = Math.max(0, d[u] || 0), alle = false;
+      items.forEach(it => {
+        if (it.source !== source) return;
+        if (it.text && it.text[u]) { alle = true; frei = 0; } else frei = Math.max(0, frei - (it.units[u] || 0));
+      });
+      if (n > frei) knapp.push({source, u, braucht: n, frei, alle});
+    });
+  }
+  return {aenderungen, ohne, beide, knapp};
 }
 
 /** Auffälligkeiten eines eingelesenen Plans (Dennis 13.11.2026 12:38: ein Dorf sollte 6 statt höchstens 3 Fakes schicken):
@@ -2994,7 +3038,8 @@ const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEF
              travelS, dist, popOf, langsamste, ivAbstand, sitzungenAus, dichtesterPunkt, besser, ankunftKandidaten, bewerteAnkunft, zeitHinweise,
              RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, tagesTeile, nachtGekuerzt,
              mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport, nachAbschick,
-             parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu, VORLAGE_ALLE, VORLAGE_EXPORT, vorlageEinheiten};
+             parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu, VORLAGE_ALLE, VORLAGE_EXPORT, vorlageEinheiten,
+             begleitAufstocken};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.Angriff = api;
 })(typeof window !== "undefined" ? window : globalThis);

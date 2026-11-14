@@ -186,6 +186,10 @@ jobs:
         if: steps.welche.outputs.angriff != 'false'
         run: node --test tests/angriff.test.js
 
+      - name: Tests AG-Begleitschutz
+        if: steps.welche.outputs.begleit != 'false'
+        run: node --test tests/begleit.test.js
+
       - name: Tests Truppen-Äquivalent
         if: steps.welche.outputs.truppen != 'false'
         run: node --test tests/truppen.test.js

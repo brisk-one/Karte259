@@ -17,6 +17,11 @@ class TestsAuswahlTest(unittest.TestCase):
         self.assertFalse(w["praegen"])
         self.assertFalse(w["truppen"])
 
+    def test_begleitschutz(self):
+        self.assertTrue(A.auswahl(["site/angriff-core.js"])["begleit"])
+        self.assertTrue(A.auswahl(["site/aufstocken-seite.js"])["begleit"])
+        self.assertEqual([b for b, ja in A.auswahl(["tests/begleit.test.js"]).items() if ja], ["begleit"])
+
     def test_praegen_nur_praegen(self):
         w = A.auswahl(["site/praegen-core.js"])
         self.assertEqual([b for b, ja in w.items() if ja], ["praegen"])

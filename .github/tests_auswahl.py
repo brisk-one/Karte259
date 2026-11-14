@@ -20,6 +20,7 @@ BEREICHE = {
     "zusatz": r"^(site/(zusatz\.json|app\.js|angriff\.html|aufstocken\.html)|tools/zusatz|tests/zusatz)",
     "truppen": r"^(site/truppen|tests/truppen)",
     "sortieren": r"^(site/angriff-core\.js|site/sortieren|tests/sortieren)",
+    "begleit": r"^(site/angriff-core\.js|site/aufstocken|tests/begleit)",
 }
 # gemeinsam genutzt oder der Ablauf selbst: alles testen
 ALLE = r"^(\.github/|site/app\.js$|site/style\.css$|package\.json$)"
