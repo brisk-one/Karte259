@@ -169,7 +169,17 @@ function einlesen() {
     });
     BEF = Object.assign({befehle: alle, fehler, je}, K.befehleAbgleichen(PLAN.items, alle));
     const ohne = new Set(BEF.ohnePlan);
-    je.forEach(j => { j.ohnePlan = j.befehle.filter(x => ohne.has(x)).length; j.zugeordnet = j.befehle.length - j.ohnePlan; });
+    // warum nicht zugeordnet (Dennis 14.11.2026 02:27): Herkunft nicht im Plan, Herkunft da, aber Ziel nicht, oder Paar da,
+    // aber Art (AG oder Off) passt nicht oder der Plan-Befehl ist schon vergeben
+    const herk = new Set(PLAN.items.filter(it => it.v).map(it => koord(it.v)));
+    const paare = new Set(PLAN.items.filter(it => it.v && it.t).map(it => koord(it.v) + ">" + koord(it.t)));
+    je.forEach(j => {
+      const o = j.befehle.filter(x => ohne.has(x));
+      j.ohnePlan = o.length; j.zugeordnet = j.befehle.length - o.length;
+      j.grund = {herkunft: 0, ziel: 0, art: 0};
+      o.forEach(x => { const h = koord(x.von); if (!herk.has(h)) j.grund.herkunft++; else if (!paare.has(h + ">" + koord(x.nach))) j.grund.ziel++; else j.grund.art++; });
+      j.beispiel = o.find(x => !herk.has(koord(x.von))) || o[0] || null;
+    });
   }
   // aufgestockter AG-Begleitschutz (Abschnitt 3) wieder anwenden, nicht auf schon abgeschickte Befehle
   PLAN.items.forEach(it => {
@@ -424,11 +434,13 @@ function befehleNotizen() {
     if (!n) return;
     if (!text.trim()) { n.textContent = ""; n.className = "bef-note ap-note"; return; }
     if (!j) { n.textContent = "Noch kein Plan eingelesen."; n.className = "bef-note ap-note"; return; }
-    n.className = "bef-note " + (j.fehler.length || j.fremd ? "ap-warn" : "ap-note");
+    const g = j.grund || {}, gr = [[g.herkunft, "Herkunft nicht im Plan"], [g.ziel, "Herkunft im Plan, aber anderes Ziel"], [g.art, "AG oder Off passt nicht oder schon vergeben"]].filter(x => x[0]);
+    n.className = "bef-note " + (j.fehler.length || j.fremd || (j.befehle.length && !j.zugeordnet) ? "ap-warn" : "ap-note");
     n.textContent = plural(j.befehle.length, "Angriff", "Angriffe") + " gelesen, " + j.zugeordnet + " im Plan gefunden" +
-      (j.ohnePlan ? ", " + j.ohnePlan + " ohne passenden Befehl im Plan" : "") +
+      (j.ohnePlan ? ", " + j.ohnePlan + " ohne passenden Befehl im Plan (" + gr.map(x => x[0] + " " + x[1]).join(", ") + ")" +
+        (j.beispiel ? ", etwa " + koord(j.beispiel.von) + " → " + koord(j.beispiel.nach) + " (Zeile " + j.beispiel.zeile + ")" : "") : "") +
       (j.fremd ? "; " + plural(j.fremd, "Angriff", "Angriffe") + " aus Dörfern eines anderen Spielers, falsches Feld?" : "") +
-      (j.fehler.length ? "; " + j.fehler.slice(0, 2).join("; ") : "") +
+      (j.fehler.length ? "; " + plural(j.fehler.length, "Zeile", "Zeilen") + " nicht gelesen (" + j.fehler[0] + (j.fehler.length > 1 ? " …" : "") + ")" : "") +
       (j.befehle.length && !j.serverzeit ? ". Ohne Zeile „Serverzeit“ gelten „heute“ und „morgen“ ab dem heutigen Tag." : "");
   });
 }
@@ -489,7 +501,7 @@ function zeitenAendern(was, auto) {
     PLAN.items.forEach(it => { if (it.arrivalOrig != null && it.sendMs != null) { it.sendMs += it.arrivalOrig - it.arrivalMs; it.arrivalMs = it.arrivalOrig; } });
     info = {art: "zurueck"};
   } else if (was === "angleichen") {
-    info = {art: "angleichen", liste: K.agsAngleichen(PLAN.items, {now: Date.now()})};
+    info = {art: "angleichen", liste: K.agsAngleichen(PLAN.items, {now: Date.now()}), lage: angleichLage()};
   } else {
     const rng = K.mulberry32((Date.now() & 0x7fffffff) || 1);
     info = Object.assign({art: was}, K.offsZeitenNeu(PLAN.items, {art: was, minMin: S.staffel.min, maxMin: S.staffel.max, now: Date.now(), world: W,
@@ -501,6 +513,19 @@ function zeitenAendern(was, auto) {
   speichern();
   if (S.aktiv) aufstocken();
   zeigen();
+}
+/** Wie viele AG-Ziele es gibt und auf wie vielen schon eine Off unterwegs ist (laut Befehlsübersicht in Abschnitt 2).
+    Ohne abgeschickte Off richtet sich der Train nach den geplanten Zeiten, das Angleichen ändert dann nichts. */
+function angleichLage() {
+  const ziele = new Map();
+  PLAN.items.forEach(it => {
+    if (it.fake || !it.t) return;
+    const z = ziele.get(it.t.id) || {ag: false, unterwegs: false};
+    if (it.art === "ag") z.ag = true; else if (it.gesendet != null) z.unterwegs = true;
+    ziele.set(it.t.id, z);
+  });
+  const ag = [...ziele.values()].filter(z => z.ag);
+  return {agZiele: ag.length, mitOff: ag.filter(z => z.unterwegs).length, unterwegs: PLAN.items.filter(it => !it.fake && it.gesendet != null).length};
 }
 function zeitenBox(its) {
   const box = el("div", "au-box");
@@ -531,7 +556,13 @@ function zeitenBox(its) {
         ", " + zeitKurz(x.alt, true) + " → " + zeitKurz(x.it.arrivalMs, true) + (x.it.sendMs != null ? ", Abschick jetzt " + zeitKurz(x.it.sendMs) : "") + "."));
     }
     else if (a.art === "angleichen") {
-      if (!a.liste.some(x => x.art !== "nachTrain")) ul.append(el("li", null, um + "alle AG-Trains liegen schon in der Sekunde der zuletzt abgeschickten Off."));
+      const l = a.lage || {agZiele: 0, mitOff: 0, unterwegs: 0};
+      // Dennis 14.11.2026 02:27: „alle liegen schon richtig“ stand da, obwohl keine abgeschickte Off erkannt war
+      if (!l.unterwegs) ul.append(el("li", "warn", um + "keine abgeschickte Off erkannt: In Abschnitt 2 ist kein Befehl einem Befehl des Plans zugeordnet (Meldungen dort je Spieler). Ohne abgeschickte Offs richten sich die AG-Trains nach den geplanten Zeiten, angeglichen wurde nichts."));
+      else {
+        if (!a.liste.some(x => x.art !== "nachTrain")) ul.append(el("li", null, um + "alle AG-Trains liegen schon in der Sekunde der zuletzt abgeschickten Off."));
+        if (l.mitOff < l.agZiele) ul.append(el("li", null, um + "auf " + (l.agZiele - l.mitOff) + " von " + plural(l.agZiele, "AG-Ziel", "AG-Zielen") + " ist laut Befehlsübersicht noch keine Off unterwegs; dort richtet sich der Train nach der geplanten Zeit der letzten Off."));
+      }
       const danach = x => x.nachTrain || x.n ? " " + plural(x.nachTrain || x.n, "Off landet", "Offs landen") + " erst nach dem Train." : "";
       a.liste.forEach(x => {
         const z = koord(x.t) + " (" + spielerName(x.t.owner) + "): ";
