@@ -3016,57 +3016,66 @@ function laufArt(units, pop) {
   return offInfo(u, pop || POP).offPop >= LAUF_OFF_MIN_BH ? "off" : "fake";
 }
 /**
- * AG-Trains an die Off angleichen, die als letzte abgeschickt wird (Dennis 13.11.2026 19:56, 1a; vorher die zuletzt
- * ankommende). Seit 14.11.2026 02:38 (Dennis) zählen dabei auch laufende Angriffe aus den Befehlsübersichten, die keinem
- * Plan-Befehl zugeordnet sind, egal ob sie zum Plan passen (opt.laufend: [{von, nach, arrivalMs, units}]; AGs und Fakes
- * zählen nicht, siehe laufArt). Je Ziel mit AGs: Kandidaten sind die Offs des Plans (abgeschickt: Ankunft laut
- * Befehlsübersicht, sonst geplant) und die laufenden ohne Plan-Befehl (Abschickzeit = Ankunft minus Laufzeit der langsamsten
- * Einheit, ohne Truppenzahlen Ramme); Anker = Ankunft der zuletzt abgeschickten. Alle noch nicht abgeschickten AGs
- * verschieben sich gemeinsam (Abstände und Laufzeiten bleiben); früher nur, wenn alle noch nach now + 1 min loskönnen;
- * liegt der Train schon höchstens 1 s dahinter, bleibt er. Offs, die erst nach dem Train landen: Hinweis (nachTrain).
- * opt {now, gapMs, laufend, world, pop}. Ergebnis je Ziel {t, art: "spaeter"|"frueher"|"frueherNichtMoeglich"|"zuSpaet"|
- * "nachTrain", ms, ags, erstesAG, nachTrain, anker: {arrivalMs, unterwegs, imPlan, von, spieler}, laufende, fremd}.
+ * AG-Trains an die zuletzt ankommende Off angleichen, die auf ihr Ziel läuft (Dennis 14.11.2026 03:25; ersetzt fürs Angleichen
+ * die zuletzt abgeschickte Off vom 13.11.2026 19:56, 1a). Laufend sind Offs des Plans, die in einer Befehlsübersicht stehen
+ * (Ankunft von dort), und laufende Angriffe aus den Befehlsübersichten ohne passenden Plan-Befehl (opt.laufend:
+ * [{von, nach, arrivalMs, units}], seit 02:38; AGs und Fakes zählen nicht, siehe laufArt). Offs des Plans von Spielern mit
+ * eingefügter Befehlsübersicht (opt.mitUebersicht: Namen), die dort nicht stehen, gelten als noch nicht abgeschickt: Sie zählen
+ * nur, wenn auf das Ziel noch nichts läuft, sonst nur für den Hinweis „nach dem Train“. Offs von Spielern ohne Übersicht zählen
+ * mit der geplanten Zeit. Anker = späteste Ankunft dieser Offs. Alle noch nicht abgeschickten AGs verschieben sich gemeinsam
+ * (Abstände und Laufzeiten bleiben), erstes AG gapMs hinter den Anker; früher nur, wenn alle noch nach now + 1 min loskönnen;
+ * liegt der Train schon höchstens 1 s dahinter, bleibt er. opt {now, gapMs, laufend, mitUebersicht, world, pop}.
+ * Ergebnis je Ziel {t, art: "spaeter"|"frueher"|"frueherNichtMoeglich"|"zuSpaet"|"nachTrain", ms, ags, erstesAG, n|nachTrain,
+ * nachGeplant, anker: {arrivalMs, unterwegs, imPlan, von, spieler}, laufende, fremd, ohneAbschick}.
  */
 function agsAngleichen(items, opt) {
   opt = opt || {};
   const gap = opt.gapMs != null ? opt.gapMs : 200, ab = (opt.now != null ? opt.now : Date.now()) + 60000;
   const world = opt.world || WORLD_DEFAULT;
+  const mitUeb = new Set(opt.mitUebersicht || []);
   const lauf = new Map();
   (opt.laufend || []).forEach(b => {
     if (!b || !b.nach || !b.von || !(b.arrivalMs > 0)) return;
     const art = laufArt(b.units, opt.pop || world.pop);
     if (art === "ag" || art === "fake") return;
-    const slow = art === "unbekannt" ? "ram" : langsamste(Object.assign(emptyUnits(), b.units), world);
     const k = b.nach.x * 1000 + b.nach.y;
     if (!lauf.has(k)) lauf.set(k, []);
-    lauf.get(k).push({arrivalMs: b.arrivalMs, sendMs: b.arrivalMs - travelS(world, slow, dist(b.von, b.nach)) * 1000, von: b.von, unbekannt: art === "unbekannt"});
+    lauf.get(k).push({arrivalMs: b.arrivalMs, von: b.von, unbekannt: art === "unbekannt"});
   });
   const out = [];
   agZiele(items).forEach(z => {
     const fremd = lauf.get(z.t.x * 1000 + z.t.y) || [];
-    const offs = z.offs.map(o => ({arrivalMs: ankunftIst(o), sendMs: sendIst(o), unterwegs: o.gesendet != null, it: o}))
-      .concat(fremd.map(f => ({arrivalMs: f.arrivalMs, sendMs: f.sendMs, unterwegs: true, f})));
-    if (!offs.length) return;
-    const a = offs.reduce((b, o) => (o.sendMs > b.sendMs ? o : b), offs[0]);
+    const alle = z.offs.map(o => ({arrivalMs: ankunftIst(o), unterwegs: o.gesendet != null, geplant: o.gesendet == null && mitUeb.has(o.spieler), it: o}))
+      .concat(fremd.map(f => ({arrivalMs: f.arrivalMs, unterwegs: true, f})));
+    if (!alle.length) return;
+    // läuft schon etwas auf das Ziel, zählen nicht abgeschickte Offs von Spielern mit Übersicht nicht; sonst alles wie geplant
+    const laeuft = alle.some(o => o.unterwegs);
+    const kand = laeuft ? alle.filter(o => !o.geplant) : alle;
+    const a = kand.reduce((b, o) => (o.arrivalMs > b.arrivalMs ? o : b), kand[0]);
     const anker = a.arrivalMs;
     const info = {anker: {arrivalMs: anker, unterwegs: a.unterwegs, imPlan: !!a.it, von: a.it ? a.it.v : a.f.von, spieler: a.it ? a.it.spieler : null},
-                  laufende: offs.filter(o => o.unterwegs).length, fremd: fremd.length};
+                  laufende: alle.filter(o => o.unterwegs).length, fremd: fremd.length, ohneAbschick: laeuft ? alle.length - kand.length : 0};
     const offen = z.ags.filter(x => x.gesendet == null).sort((p, q) => p.arrivalMs - q.arrivalMs);
     const fest = z.ags.filter(x => x.gesendet != null);
-    const nachTrain = T => offs.filter(o => o !== a && o.arrivalMs > T).length;
+    const nach = T => alle.filter(o => o !== a && o.arrivalMs > T);
+    const danach = T => { const l = nach(T); return {nachTrain: l.length, nachGeplant: l.filter(o => o.geplant).length}; };
     if (!offen.length) {
       if (fest.some(x => x.gesendet <= anker)) out.push(Object.assign({t: z.t, art: "zuSpaet", text: "AG schon unterwegs und kommt vor der letzten Off an"}, info));
       return;
     }
     const abst = offen[0].arrivalMs - anker;
     const d = abst > 0 && abst <= 1000 ? 0 : anker + gap - offen[0].arrivalMs;
-    if (!d) { const n = nachTrain(offen[0].arrivalMs); if (n) out.push(Object.assign({t: z.t, art: "nachTrain", n}, info)); return; }
+    if (!d) {
+      const n = danach(offen[0].arrivalMs);
+      if (n.nachTrain) out.push(Object.assign({t: z.t, art: "nachTrain", n: n.nachTrain, nachGeplant: n.nachGeplant}, info));
+      return;
+    }
     if (d < 0 && offen.some(x => x.sendMs + d < ab)) {
-      out.push(Object.assign({t: z.t, art: "frueherNichtMoeglich", ms: -d, ags: offen.length, nachTrain: nachTrain(offen[0].arrivalMs)}, info));
+      out.push(Object.assign({t: z.t, art: "frueherNichtMoeglich", ms: -d, ags: offen.length}, danach(offen[0].arrivalMs), info));
       return;
     }
     offen.forEach(x => verschieben(x, x.arrivalMs + d));
-    out.push(Object.assign({t: z.t, art: d > 0 ? "spaeter" : "frueher", ms: Math.abs(d), ags: offen.length, erstesAG: offen[0], nachTrain: nachTrain(offen[0].arrivalMs)}, info));
+    out.push(Object.assign({t: z.t, art: d > 0 ? "spaeter" : "frueher", ms: Math.abs(d), ags: offen.length, erstesAG: offen[0]}, danach(offen[0].arrivalMs), info));
   });
   return out;
 }

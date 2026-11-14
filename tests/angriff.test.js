@@ -1258,9 +1258,9 @@ test("Befehlsübersicht lesen: heute, morgen, am, Serverzeit je Übersicht, Rüc
   assert.equal(K.fmtZeit(r.befehle[2].arrivalMs), "01.12.2026 23:59:59", "eigene Serverzeit je Übersicht");
 });
 
-test("AGs an die zuletzt abgeschickte Off angleichen: später immer, früher nur wenn noch Zeit, Train bleibt in sich gleich (Dennis 13.11.2026 19:56)", () => {
+test("AGs an die zuletzt ankommende laufende Off angleichen: später immer, früher nur wenn noch Zeit, Train bleibt in sich gleich (Dennis 14.11.2026 03:25)", () => {
   const s = staffelSzenario(), jetzt = Math.min(...s.items.map(i => i.sendMs)) - 3600000;
-  // die zuletzt abgeschickte Off (kürzeste Laufzeit, Off 2) ist unterwegs und kommt 7 Minuten später an als geplant
+  // Off 2 ist unterwegs und kommt 7 Minuten später an als geplant
   const bef = [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s.T0 + 400 + 7 * 60000, units: s.offs[2].units}];
   const ab = K.befehleAbgleichen(s.items, bef);
   assert.equal(ab.zugeordnet, 1);
@@ -1269,40 +1269,50 @@ test("AGs an die zuletzt abgeschickte Off angleichen: später immer, früher nur
   const r = K.agsAngleichen(s.items, {now: jetzt});
   assert.equal(r.length, 1);
   assert.equal(r[0].art, "spaeter");
-  assert.equal(s.ags[0].arrivalMs, s.T0 + 400 + 7 * 60000 + 200, "erstes AG 200 ms hinter der zuletzt abgeschickten Off");
+  assert.equal(s.ags[0].arrivalMs, s.T0 + 400 + 7 * 60000 + 200, "erstes AG 200 ms hinter der zuletzt ankommenden Off");
   assert.deepEqual(s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs), abst);
   assert.deepEqual(s.ags.map(a => a.arrivalMs - a.sendMs), lauf);
-  // eine früher abgeschickte Off (anderer Spieler) kommt später als der Train: der Train bleibt bei der letzten, Hinweis
+  assert.deepEqual([r[0].anker.imPlan, r[0].anker.unterwegs, r[0].nachTrain], [true, true, 0]);
+  // eine früher abgeschickte Off kommt später als der Train: maßgeblich ist die Ankunft, der Train rückt dahinter
+  // (bis 14.11. 03:25 blieb er bei der zuletzt abgeschickten)
   const s1 = staffelSzenario();
   K.befehleAbgleichen(s1.items, [{von: {x: 505, y: 498}, nach: {x: 520, y: 520}, arrivalMs: s1.T0 + 9 * 60000, units: s1.offs[1].units}]);
-  const vor1 = s1.ags.map(a => a.arrivalMs);
   const r1 = K.agsAngleichen(s1.items, {now: jetzt});
-  assert.deepEqual(s1.ags.map(a => a.arrivalMs), vor1);
-  assert.deepEqual(r1.map(x => [x.art, x.n]), [["nachTrain", 1]]);
-  // die letzte Off kommt früher als geplant: AGs rücken nach vorn, wenn sie noch rechtzeitig loskönnen
+  assert.deepEqual([r1[0].art, s1.ags[0].arrivalMs], ["spaeter", s1.T0 + 9 * 60000 + 200]);
+  // die laufende Off kommt früher als geplant; die anderen Offs des Spielers fehlen in seiner Übersicht, gelten also als nicht
+  // abgeschickt: AGs rücken nach vorn, die geplanten Offs stehen im Hinweis
   const s2 = staffelSzenario();
   K.befehleAbgleichen(s2.items, [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s2.T0 - 120000, units: s2.offs[2].units}]);
-  const r2 = K.agsAngleichen(s2.items, {now: jetzt});
-  assert.equal(r2[0].art, "frueher");
+  const r2 = K.agsAngleichen(s2.items, {now: jetzt, mitUebersicht: ["A"]});
+  assert.deepEqual([r2[0].art, r2[0].nachTrain, r2[0].nachGeplant, r2[0].ohneAbschick], ["frueher", 2, 2, 2]);
   assert.equal(s2.ags[0].arrivalMs, s2.T0 - 120000 + 200);
+  // ohne Übersicht dieses Spielers zählen seine anderen Offs mit der geplanten Zeit: Train bleibt
+  const s2b = staffelSzenario();
+  K.befehleAbgleichen(s2b.items, [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s2b.T0 - 120000, units: s2b.offs[2].units}]);
+  assert.deepEqual(K.agsAngleichen(s2b.items, {now: jetzt}), []);
   // zu spät, um früher abzuschicken: AGs bleiben
   const s3 = staffelSzenario();
   K.befehleAbgleichen(s3.items, [{von: {x: 510, y: 503}, nach: {x: 520, y: 520}, arrivalMs: s3.T0 - 600000, units: s3.offs[2].units}]);
   const vorher = s3.ags.map(a => a.arrivalMs);
-  const r3 = K.agsAngleichen(s3.items, {now: s3.ags[0].sendMs - 30000});
+  const r3 = K.agsAngleichen(s3.items, {now: s3.ags[0].sendMs - 30000, mitUebersicht: ["A"]});
   assert.equal(r3[0].art, "frueherNichtMoeglich");
   assert.deepEqual(s3.ags.map(a => a.arrivalMs), vorher);
-  // schon in derselben Sekunde: nichts zu tun
-  const s4 = staffelSzenario();
-  assert.deepEqual(K.agsAngleichen(s4.items, {now: jetzt}), []);
+  // schon direkt dahinter: nichts zu tun, auch mit Übersicht, in der noch nichts läuft (dann zählt der Plan)
+  assert.deepEqual(K.agsAngleichen(staffelSzenario().items, {now: jetzt}), []);
+  assert.deepEqual(K.agsAngleichen(staffelSzenario().items, {now: jetzt, mitUebersicht: ["A"]}), []);
+  // nichts läuft, Train 30 min nach den Offs geplant: rückt an die zuletzt ankommende Off des Plans
+  const s5 = staffelSzenario();
+  s5.ags.forEach(a => { a.arrivalMs += 1800000; a.sendMs += 1800000; });
+  const r5 = K.agsAngleichen(s5.items, {now: jetzt, mitUebersicht: ["A"]});
+  assert.deepEqual([r5[0].art, s5.ags[0].arrivalMs, r5[0].anker.unterwegs], ["frueher", s5.T0 + 400 + 200, false]);
 });
 
-test("AGs angleichen mit laufenden Offs ohne Plan-Befehl (Dennis 14.11.2026 02:38): zählen, wenn sie zuletzt abgeschickt sind; Fakes und AGs nicht", () => {
+test("AGs angleichen mit laufenden Offs ohne Plan-Befehl (Dennis 14.11.2026 02:38 und 03:25): zuletzt ankommende zählt; Fakes und AGs nicht", () => {
   const u = x => Object.assign(Object.fromEntries(K.UNITS.map(n => [n, 0])), x);
   const OFF = u({axe: 6000, light: 2500, ram: 250});
   const ziel = {x: 520, y: 520};
   const lauf = (von, ank, units) => ({von, nach: ziel, arrivalMs: ank, units});
-  // nah am Ziel, kommt 10 min nach dem Plan an: als letzte abgeschickt, nicht im Plan → Train dahinter
+  // kommt 10 min nach dem Plan an, nicht im Plan → Train dahinter
   const s = staffelSzenario(), jetzt = Math.min(...s.items.map(i => i.sendMs)) - 3600000;
   const abst = s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs);
   const r = K.agsAngleichen(s.items, {now: jetzt, world: s.w, laufend: [lauf({x: 515, y: 515}, s.T0 + 600000, OFF)]});
@@ -1311,22 +1321,29 @@ test("AGs angleichen mit laufenden Offs ohne Plan-Befehl (Dennis 14.11.2026 02:3
   assert.equal(s.ags[0].arrivalMs, s.T0 + 600000 + 200);
   assert.deepEqual(s.ags.map(a => a.arrivalMs - s.ags[0].arrivalMs), abst, "Train bleibt in sich gleich");
   assert.deepEqual([r[0].anker.imPlan, r[0].anker.unterwegs, r[0].anker.von, r[0].fremd, r[0].laufende], [false, true, {x: 515, y: 515}, 1, 1]);
+  // weit weg, also früher abgeschickt, kommt aber zuletzt an: Train dahinter
+  const w = staffelSzenario();
+  const rw = K.agsAngleichen(w.items, {now: jetzt, world: w.w, laufend: [lauf({x: 400, y: 400}, w.T0 + 300000, OFF)]});
+  assert.deepEqual([rw[0].art, w.ags[0].arrivalMs, rw[0].anker.imPlan], ["spaeter", w.T0 + 300000 + 200, false]);
   // dieselbe Zeit als Fake (1 Katapult) oder als AG: zählt nicht
   for (const units of [u({catapult: 1, spy: 1}), u({snob: 1, axe: 50})]) {
     const f = staffelSzenario();
     assert.deepEqual(K.agsAngleichen(f.items, {now: jetzt, world: f.w, laufend: [lauf({x: 515, y: 515}, f.T0 + 600000, units)]}), []);
   }
-  // ohne Truppenzahlen: zählt vorsichtshalber als Off (Laufzeit der Ramme)
+  // ohne Truppenzahlen: zählt vorsichtshalber als Off
   const o = staffelSzenario();
   assert.equal(K.agsAngleichen(o.items, {now: jetzt, world: o.w, laufend: [lauf({x: 515, y: 515}, o.T0 + 600000, u({}))]})[0].art, "spaeter");
   // auf ein anderes Ziel: keine Wirkung
   const a = staffelSzenario();
   assert.deepEqual(K.agsAngleichen(a.items, {now: jetzt, world: a.w, laufend: [{von: {x: 515, y: 515}, nach: {x: 1, y: 1}, arrivalMs: a.T0 + 600000, units: OFF}]}), []);
-  // weit weg und früher abgeschickt als die letzte Off des Plans: Train bleibt bei ihr, Hinweis „nach dem Train“
-  const w = staffelSzenario(), vorher = w.ags.map(x => x.arrivalMs);
-  const rw = K.agsAngleichen(w.items, {now: jetzt, world: w.w, laufend: [lauf({x: 400, y: 400}, w.T0 + 300000, OFF)]});
-  assert.deepEqual(w.ags.map(x => x.arrivalMs), vorher);
-  assert.deepEqual(rw.map(x => [x.art, x.n, x.anker.imPlan]), [["nachTrain", 1, true]]);
+  // Dennis' Fall: die Offs des Plans fehlen in der Übersicht des Spielers (aus anderen Dörfern geschickt), die laufende Off
+  // kommt 20 min vor dem Train: Train rückt an sie, die Plan-Offs stehen im Hinweis
+  const d = staffelSzenario();
+  const rd = K.agsAngleichen(d.items, {now: jetzt, world: d.w, mitUebersicht: ["A"], laufend: [lauf({x: 400, y: 400}, d.T0 - 1200000, OFF)]});
+  assert.deepEqual([rd[0].art, d.ags[0].arrivalMs, rd[0].nachTrain, rd[0].nachGeplant, rd[0].ohneAbschick], ["frueher", d.T0 - 1200000 + 200, 3, 3, 3]);
+  // ohne Übersicht des Spielers zählen seine Plan-Offs: Train bleibt bei ihnen, Hinweis gibt es keinen (die laufende landet davor)
+  const e = staffelSzenario();
+  assert.deepEqual(K.agsAngleichen(e.items, {now: jetzt, world: e.w, laufend: [lauf({x: 400, y: 400}, e.T0 - 1200000, OFF)]}), []);
   // AG-Ziel ganz ohne Offs im Plan: nur die laufende zählt
   const n = staffelSzenario();
   const nur = n.items.filter(i => i.art === "ag");
