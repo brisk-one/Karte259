@@ -3,7 +3,7 @@
    Lesbar im Repo, deff.html lädt es erst nach dem Freischalten. */
 const K = window.Angriff, So = window.Sortieren, D = window.Deff;
 const SPEICHER = "k259-deff";
-const NAME = {spear: "Speer", sword: "Schwert", archer: "Bogen", heavy: "SKav", knight: "Paladin"};
+const NAME = {spear: "Speer", sword: "Schwert", archer: "Bogen", heavy: "SKav", spy: "Späher", knight: "Paladin"};
 const LAUF = {spear: "Speer", sword: "Schwert", archer: "Bogen", heavy: "SKav", knight: "Paladin"};
 const CFG = [["speer", "Speer je Dorf"], ["schwert", "Schwert je Dorf"], ["minAnteil", "Mindestanteil (%)"], ["fakes", "Fakes je Dorf"], ["vorlaufMin", "Vorlauf (Minuten)"]];
 let S = {befehle: "", truppen: "", cfg: {}};
@@ -25,6 +25,7 @@ const zeit = ms => { const t = K.fmtZeit(ms, true); return t.slice(0, 6) + " " +
 const spielerName = p => p >= 0 && P && P.rows[p] ? P.rows[p][pIdx.name] : "Barbaren";
 const zielText = t => { const i = byXY.get(t.x * 1000 + t.y); return koord(t) + (i != null ? " (" + spielerName(V.rows[i][1]) + ")" : ""); };
 const idVon = (x, y) => { const i = byXY.get(x * 1000 + y); return i != null && IDS ? IDS[i] : null; };
+const prozent = (w, soll) => Math.round(100 * w / soll) + " %";
 const truppen = u => D.DEFF_UNITS.concat(["knight"]).filter(x => u[x] > 0).map(x => (x === "knight" ? "" : nf.format(u[x]) + " ") + NAME[x]).join(", ");
 
 async function kopieren(text, btn, n) {
@@ -85,9 +86,10 @@ function zeigen() {
   tn.textContent = S.truppen.trim() ? (e.tr.errors.length ? e.tr.errors.join(" ") + " " : "") + plural(e.tr.villages.length, "Dorf", "Dörfer") + " gelesen, " +
     plural(e.quellen.length, "Deff-Dorf", "Deff-Dörfer") + " mit Deff im Dorf" + (pala ? " (" + pala + " mit Paladin)" : "") + ", zusammen " +
     nf.format(e.quellen.reduce((s, q) => s + q.bh, 0)) + " BH Deff." + (e.tr.warnings.length ? " " + e.tr.warnings.join(" ") : "") : "";
-  const c = D.einstellungen(S.cfg), pop = (W && W.pop) || K.POP;
-  $("cfg-note").textContent = "Soll je geadeltem Dorf: " + nf.format(c.speer * pop.spear + c.schwert * pop.sword) + " BH Deff (Speer, Schwert, Bogen, SKav zählen nach Bauernhofplätzen), erreicht ab " +
-    c.toleranz + " %. Bekäme ein Dorf weniger als den Mindestanteil, bekommt es keine Deff allein; die Deff verstärkt dann ein anderes Ziel. Ein Deff-Dorf schickt seine ganze Deff (mit Paladin, wenn er im Dorf steht: dann Paladin-Laufzeit). Fakes: 1 Schwert oder 1 Speer aus verschiedenen Dörfern. Abschick frühestens jetzt plus Vorlauf.";
+  const c = D.einstellungen(S.cfg), soll = D.sollWert(c), paket = D.wert(D.PAKET);
+  $("cfg-note").textContent = "Soll je geadeltem Dorf: Deff im Wert von " + nf.format(c.speer) + " Speer und " + nf.format(c.schwert) + " Schwert, gemessen als Verteidigung gegen Infanterie plus gegen Kavallerie " +
+    "(Bogen-Verteidigung zählt nicht). Das sind etwa " + nf.format(Math.round(10 * soll / paket) / 10) + " typische Deffpakete (126 Speer, 200 Schwert, 170 Bogen, 2 Späher, je 500 BH), rund " +
+    nf.format(Math.round(soll / paket * 500 / 100) * 100) + " BH. Erreicht ab " + c.toleranz + " %. Bekäme ein Dorf weniger als den Mindestanteil, bekommt es keine Deff allein; die Deff verstärkt dann ein anderes Ziel. Ein Deff-Dorf schickt seine ganze Deff mit allen Spähern (mit Paladin, wenn er im Dorf steht: dann Paladin-Laufzeit). Fakes: 1 Schwert oder 1 Speer aus verschiedenen Dörfern. Abschick frühestens jetzt plus Vorlauf.";
   zeigenPlan();
 }
 function zeigenPlan() {
@@ -109,9 +111,9 @@ function zeigenPlan() {
   if (knapp.length) {
     const f = el("div", "df-fehlt");
     f.append(el("h3", null, plural(knapp.length, "geadeltes Dorf bekommt", "geadelte Dörfer bekommen") + " nicht genug Deff"));
-    knapp.forEach(z => f.append(el("p", null, zielText(z.t) + ": " + nf.format(z.bh) + " von " + nf.format(p.soll) + " BH" +
-      (z.laufendBH ? " (davon " + nf.format(z.laufendBH) + " schon unterwegs)" : "") +
-      (z.geloestBH ? ", erreichbar wären nur " + nf.format(z.geloestBH) + " BH, unter dem Mindestanteil: stattdessen anderswo eingesetzt" :
+    knapp.forEach(z => f.append(el("p", null, zielText(z.t) + ": " + prozent(z.wert, p.soll) + " des Solls (" + nf.format(z.bh) + " BH" +
+      (z.laufendBH ? ", davon " + nf.format(z.laufendBH) + " schon unterwegs" : "") + ")" +
+      (z.geloestWert ? ", erreichbar wären nur " + prozent(z.geloestWert, p.soll) + " (" + nf.format(z.geloestBH) + " BH), unter dem Mindestanteil: stattdessen anderswo eingesetzt" :
        z.kandidaten.length ? "" : ", kein Deff-Dorf erreicht es rechtzeitig") + " (Deff an " + zeit(z.ankunft) + ")")));
     teile.push(f);
   }
@@ -130,17 +132,17 @@ function zeigenPlan() {
   // Übersicht je Ziel
   teile.push(el("h3", null, "Je geadeltem Dorf"));
   teile.push(tabelle(["Ziel", "Letztes AG", "Deff an", "Deff", "Unterstützungen"], p.ziele.map(z => ({cls: z.erreicht ? null : "warn", zellen: [
-    zielText(z.t), zeit(z.letzteAG), zeit(z.ankunft), nf.format(z.bh) + " BH" + (z.laufendBH ? " (" + nf.format(z.laufendBH) + " unterwegs)" : "") + (z.erreicht ? "" : " (zu wenig)"),
+    zielText(z.t), zeit(z.letzteAG), zeit(z.ankunft), prozent(z.wert, p.soll) + " des Solls, " + nf.format(z.bh) + " BH" + (z.laufendBH ? " (" + nf.format(z.laufendBH) + " unterwegs)" : "") + (z.erreicht ? "" : ", zu wenig"),
     z.echt.length + " echt, " + z.fakes.length + " Fake" + (z.laufend ? ", " + z.laufend + " schon unterwegs" : "")]}))));
   // alle Befehle nach Abschickzeit
   teile.push(el("h3", null, "Alle Unterstützungen nach Abschickzeit"));
   teile.push(tabelle(["Abschick", "Art", "Herkunft", "Ziel", "Truppen", "Laufzeit", "Ankunft"], p.befehle.map(b => {
     const art = el("span", "df-k " + (b.art === "fake" ? "df-fake" : b.pala ? "df-pala" : "df-deff"), b.art === "fake" ? "Fake" : (b.pala ? "Deff mit Pala" : "Deff") + (b.verstaerkung ? " (Verstärkung)" : ""));
     return {cls: b.sendMs < Date.now() ? "vorbei" : null, zellen: [zeit(b.sendMs), art, koord(b.von) + " " + (b.von.name || ""), zielText(b.nach),
-      b.art === "fake" ? "1 " + NAME[b.slow] : truppen(b.units) + " (" + nf.format(b.bh) + " BH)", LAUF[b.slow] || b.slow, zeit(b.arrivalMs)]};
+      b.art === "fake" ? "1 " + NAME[b.slow] : truppen(b.units) + " (" + nf.format(b.bh) + " BH, " + prozent(b.wert, p.soll) + " des Solls)", LAUF[b.slow] || b.slow, zeit(b.arrivalMs)]};
   })));
   if (p.ungenutzt.length) teile.push(el("p", "ap-note", "Nicht eingesetzt (zu weit für die Ankunft oder schon genug Deff): " +
-    p.ungenutzt.map(q => koord(q) + " " + q.name + " (" + nf.format(q.bh) + " BH" + (q.pala ? ", Pala" : "") + ")").join(", ") + "."));
+    p.ungenutzt.map(q => koord(q) + " " + q.name + " (" + nf.format(q.bh) + " BH, " + prozent(q.wert, p.soll) + (q.pala ? ", Pala" : "") + ")").join(", ") + "."));
   box.replaceChildren(...teile);
 }
 

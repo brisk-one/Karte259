@@ -29,7 +29,7 @@ test("AG-Ziele: letzte Ankunft je Ziel, Offs und Fakes zählen nicht", () => {
   assert.deepEqual(z.map(x => [x.t, x.letzteAG, x.ags]), [[{x: 490, y: 500}, T0 - 5000, 1], [{x: 500, y: 500}, T0 + 600, 2]]);
 });
 
-test("Deff-Dörfer: Zeile „eigene“, ohne LKav, Katapulte und Späher; Paladin läuft mit, Off-Dörfer und Raubzug-Speer nicht", () => {
+test("Deff-Dörfer: Zeile „eigene“, mit allen Spähern, ohne LKav und Katapulte; Paladin läuft mit, Off-Dörfer und Raubzug-Speer nicht", () => {
   const v = lage([{name: "D1", x: 505, y: 505, eigene: DEFF},
                   {name: "P1", x: 506, y: 505, eigene: Object.assign({}, DEFF, {knight: 1})},
                   {name: "O1", x: 507, y: 505, eigene: {axe: 6000, light: 3000, ram: 300, sword: 5}},
@@ -37,8 +37,11 @@ test("Deff-Dörfer: Zeile „eigene“, ohne LKav, Katapulte und Späher; Paladi
                   {name: "W1", x: 509, y: 505, eigene: {spear: 200}, weg: {spear: 6000, sword: 6000}}]);
   assert.equal(v[0].eigene.light, 500, "Zeile eigene gelesen");
   const d = D.deffDoerfer(v, null, W);
-  assert.deepEqual(d.map(x => [x.name, x.bh, x.pala, x.slow]), [["D1", 14000, false, "sword"], ["P1", 14000, true, "knight"]]);
-  assert.deepEqual([d[0].units.light, d[0].units.catapult, d[0].units.spy, d[1].units.knight], [0, 0, 0, 1]);
+  assert.deepEqual(d.map(x => [x.name, x.bh, x.pala, x.slow]), [["D1", 14100, false, "sword"], ["P1", 14110, true, "knight"]]);
+  assert.deepEqual([d[0].units.light, d[0].units.catapult, d[0].units.spy, d[1].units.knight], [0, 0, 50, 1]);
+  // Wert: allgemeine plus Kavallerie-Verteidigung (Speer 15+45, Schwert 50+15, Bogen 50+40, Späher 2+1, Paladin 250+400)
+  assert.equal(d[0].wert, 5000 * 60 + 5000 * 65 + 4000 * 90 + 50 * 3);
+  assert.equal(d[1].wert, d[0].wert + 650);
 });
 
 test("Verteilung: Deff 1 s nach dem letzten AG, ganze Dörfer, kleinstes passendes zuerst, nur rechtzeitig erreichbare", () => {
@@ -142,4 +145,14 @@ test("Schon laufende Unterstützungen aus der Befehlsübersicht zählen mit (nur
   assert.equal(ziele.length, 1);
   const p = D.planen({ziele, villages: lage([{name: "X", x: 504, y: 504, eigene: {spear: 7000, sword: 7000}}]), world: W, now: T0 - 3 * 3600000, laufend: l});
   assert.deepEqual([p.ziele[0].laufendBH, p.ziele[0].laufend, p.ziele[0].echt.length, p.ziele[0].erreicht], [14000, 1, 0, true]);
+});
+
+test("Wert (Dennis 05:08): Infanterie plus Kavallerie, Bogen-Verteidigung zählt nicht; Soll aus Speer und Schwert", () => {
+  assert.equal(D.sollWert(D.einstellungen()), 7000 * (15 + 45) + 7000 * (50 + 15));
+  assert.equal(D.wert(leer({archer: 100})), 100 * (50 + 40));
+  assert.equal(D.bh(D.PAKET), 500, "typisches Deffpaket: 500 BH");
+  // ein Dorf aus 25 typischen Paketen erreicht das Soll
+  const paket25 = Object.fromEntries(Object.entries(D.PAKET).map(([u, n]) => [u, n * 25]));
+  assert.ok(D.wert(paket25) >= D.sollWert(D.einstellungen()));
+  assert.ok(D.wert(leer({spear: 14000})) < D.sollWert(D.einstellungen()), "nur Speer: zu wenig gegen Infanterie");
 });
