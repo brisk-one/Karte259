@@ -30,6 +30,8 @@ function laden() {
   S.namen.length = S.texte.length;
   if (!S.zeiten || typeof S.zeiten !== "object") S.zeiten = {};
   if (!S.begleit || typeof S.begleit !== "object") S.begleit = {};
+  if (!Array.isArray(S.papierkorb)) S.papierkorb = [];
+  S.papierkorb = S.papierkorb.filter(e => e && Array.isArray(e.plaene) && e.plaene.every(p => p && typeof p.text === "string"));
   S.begleitMin = Object.assign({sword: 60, axe: 50, light: 30}, S.begleitMin);
   S.staffel = Object.assign({min: 5, max: 15}, S.staffel);
   if (typeof S.befehle !== "string") S.befehle = "";            // bisheriges gemeinsames Feld (vor 14.11.2026 02:00)
@@ -70,7 +72,11 @@ function planerDaten() {
   return out;
 }
 function speichern() {
-  try { localStorage.setItem(SPEICHER, JSON.stringify(S)); } catch (e) { /* voll oder gesperrt: nur für diese Sitzung */ }
+  // Speicher voll: zuerst die ältesten entfernten Pläne opfern, damit der Stand selbst gespeichert bleibt
+  for (;;) {
+    try { localStorage.setItem(SPEICHER, JSON.stringify(S)); return; }
+    catch (e) { if (S.papierkorb && S.papierkorb.length) S.papierkorb.pop(); else return; /* gesperrt: nur für diese Sitzung */ }
+  }
 }
 const sp = name => S.spieler[name] || (S.spieler[name] = neuerSpieler());
 
@@ -483,6 +489,49 @@ function befehleNotizen() {
       (j.befehle.length && !j.serverzeit ? ". Ohne Zeile „Serverzeit“ gelten „heute“ und „morgen“ ab dem heutigen Tag." : "");
   });
 }
+/* Entfernte Pläne wiederherstellen (Dennis 16.11.2026 21:54): „entfernen“ und „Alle leeren“ legen die Pläne mit Namen,
+   Platz und den dabei verworfenen Zeitänderungen und dem Begleitschutz in den Papierkorb (höchstens 5, mit dem Stand
+   gespeichert). „Wiederherstellen“ setzt sie an ihren Platz zurück; neuere Änderungen gehen vor. */
+const PAPIERKORB_MAX = 5;
+function inPapierkorb(plaene) {
+  const echte = plaene.filter(p => p.text.trim());
+  if (!echte.length) return;
+  S.papierkorb.unshift({plaene: echte, zeiten: S.zeiten, begleit: S.begleit, t: Date.now()});
+  if (S.papierkorb.length > PAPIERKORB_MAX) S.papierkorb.length = PAPIERKORB_MAX;
+}
+function wiederherstellen(k) {
+  const e = S.papierkorb.splice(k, 1)[0];
+  if (!e) return;
+  if (S.texte.length === 1 && !S.texte[0].trim() && !S.namen[0]) { S.texte = []; S.namen = []; }   // leeres Feld ersetzen
+  e.plaene.slice().sort((a, b) => a.pos - b.pos).forEach(p => {
+    const pos = Math.max(0, Math.min(p.pos, S.texte.length));
+    S.texte.splice(pos, 0, p.text); S.namen.splice(pos, 0, p.name || "");
+  });
+  S.zeiten = Object.assign({}, e.zeiten || {}, S.zeiten);
+  S.begleit = Object.assign({}, e.begleit || {}, S.begleit);
+  planGeaendert(); planFelder();
+}
+const befehlZahl = t => { try { return K.parsePlan(t).items.length; } catch (e) { return 0; } };
+function papierkorbZeile() {
+  if (!S.papierkorb.length) return null;
+  const korb = el("div", "au-korb");
+  korb.append(el("span", "lab", "Entfernt"));
+  S.papierkorb.forEach((e, k) => {
+    const z = el("span", "au-korb-z"), p0 = e.plaene[0];
+    const n = e.plaene.reduce((s0, p) => s0 + befehlZahl(p.text), 0);
+    const titel = e.plaene.length === 1 ? "Plan " + (p0.pos + 1) + (p0.name ? " „" + p0.name + "“" : "") : e.plaene.length + " Pläne (Alle leeren)";
+    const um = new Date(e.t).toLocaleTimeString("de-DE", {hour: "2-digit", minute: "2-digit"});
+    z.append(el("span", null, titel + " · " + plural(n, "Befehl", "Befehle") + " · " + um + " Uhr"));
+    const w = el("button", "tw", "Wiederherstellen"); w.type = "button";
+    w.title = "Wieder an seinen Platz, mit den beim Entfernen verworfenen Zeitänderungen und dem Begleitschutz";
+    w.addEventListener("click", () => wiederherstellen(k));
+    const x = el("button", "tw", "×"); x.type = "button"; x.title = "Endgültig verwerfen"; x.setAttribute("aria-label", titel + " endgültig verwerfen");
+    x.addEventListener("click", () => { S.papierkorb.splice(k, 1); speichern(); planFelder(); });
+    z.append(w, x);
+    korb.append(z);
+  });
+  return korb;
+}
 /** Eingabefelder für die Pläne; neu gebaut nur beim Hinzufügen und Entfernen, sonst bleibt der Fokus. */
 function planFelder() {
   const box = $("plaene");
@@ -493,7 +542,10 @@ function planFelder() {
     kopf.append(el("strong", null, "Plan " + (i + 1)), name, el("span", "ap-note", ""));
     if (S.texte.length > 1) {
       const x = el("button", "tw", "entfernen"); x.type = "button";
-      x.addEventListener("click", () => { S.texte.splice(i, 1); S.namen.splice(i, 1); S.zeiten = {}; S.begleit = {}; planGeaendert(); planFelder(); });
+      x.addEventListener("click", () => {
+        inPapierkorb([{text: S.texte[i], name: S.namen[i] || "", pos: i}]);
+        S.texte.splice(i, 1); S.namen.splice(i, 1); S.zeiten = {}; S.begleit = {}; planGeaendert(); planFelder();
+      });
       kopf.append(x);
     }
     const ta = el("textarea", "ap-ta" + (S.texte.length > 1 ? " klein" : "")); ta.spellcheck = false; ta.value = t;
@@ -504,6 +556,8 @@ function planFelder() {
     d.append(kopf, ta);
     return d;
   }));
+  const korb = papierkorbZeile();
+  if (korb) box.append(korb);
 }
 function planGeaendert() { S.aktiv = false; AENDERUNG = null; BEGLEIT = null; speichern(); spaeter(() => { einlesen(); zeigen(); }); }
 function zeigenPlan() {
@@ -1053,7 +1107,10 @@ function rechnen() {
 
 /* ---------- Bedienung ---------- */
 $("plan-dazu").addEventListener("click", () => { S.texte.push(""); S.namen.push(""); speichern(); planFelder(); zeigenPlan(); const t = $("plaene").querySelectorAll("textarea"); t[t.length - 1].focus(); });
-$("plan-leeren").addEventListener("click", () => { S.texte = [""]; S.namen = [""]; S.zeiten = {}; S.begleit = {}; planGeaendert(); planFelder(); });
+$("plan-leeren").addEventListener("click", () => {
+  inPapierkorb(S.texte.map((t, i) => ({text: t, name: S.namen[i] || "", pos: i})));
+  S.texte = [""]; S.namen = [""]; S.zeiten = {}; S.begleit = {}; planGeaendert(); planFelder();
+});
 $("plan-datei-knopf").addEventListener("click", () => $("plan-datei").click());
 $("plan-datei").addEventListener("change", e => {
   const files = [...(e.target.files || [])];
