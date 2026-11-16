@@ -269,6 +269,12 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .marks .mk .txt{display:flex; flex-direction:column; min-width:0; line-height:1.25}
 .marks .mk .nm{font-weight:700; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .marks .mk .meta{font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.auswahl .aw-gruppen{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+.auswahl .aw-gruppen[hidden]{display:none}
+.auswahl .aw-gr{border:1px solid var(--edge); border-top:3px solid #ff9100; border-radius:var(--radius); padding:5px 7px; display:grid; gap:4px; min-width:0}
+.auswahl .aw-gr .t{font-weight:700; font-size:12.5px}
+.auswahl .aw-gr .r{font-size:11px; color:var(--muted)}
+.auswahl .aw-gr .k{display:flex; flex-wrap:wrap; gap:4px}
 .auswahl .aw-num{width:6em; font:inherit; color:var(--ink); background:var(--field); border:1px solid var(--edge); border-radius:var(--radius); padding:2px 5px}
 .auswahl .aw-zeile>b{font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); min-width:62px}
 .auswahl .seg .opt button.tw{border-radius:0}
@@ -473,17 +479,16 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
     <p class="aw-hilfe" id="aw-hilfe"></p>
     <div class="aw-zeile"><span class="aw-zahl" id="aw-zahl">0 Dörfer</span>
       <button class="tw small" type="button" id="aw-mark" hidden title="Die Dörfer des gesuchten Spielers oder Stammes übernehmen, mit Grenze und Mindestpunkten darunter"></button></div>
-    <!-- Hervorgehobene nur bis zu einer Koordinate und ab einer Punktzahl übernehmen (Dennis 16.11.2026) -->
-    <div class="aw-zeile" id="aw-filter" hidden><b>Nur</b>
-      <select class="sel" id="aw-grenze" aria-label="Grenze für das Übernehmen" title="Grenze einschließlich: links bis X heißt X kleiner oder gleich dem Wert">
-        <option value="">ohne Grenze</option>
-        <option value="xl">links bis X</option>
-        <option value="xr">rechts ab X</option>
-        <option value="yo">oben bis Y</option>
-        <option value="yu">unten ab Y</option>
+    <!-- Hervorgehobene an einer Trennlinie in zwei Gruppen teilen und ab einer Punktzahl übernehmen (Dennis 16.11.2026 20:49) -->
+    <div class="aw-zeile" id="aw-filter" hidden><b>Trennlinie</b>
+      <select class="sel" id="aw-trenn" aria-label="Trennlinie für die Hervorgehobenen" title="Teilt die hervorgehobenen Dörfer an einer Linie in zwei Gruppen zum Kopieren">
+        <option value="">keine</option>
+        <option value="x">bei X</option>
+        <option value="y">bei Y</option>
       </select>
-      <input type="number" class="aw-num" id="aw-grenzwert" min="0" max="999" step="1" placeholder="500" aria-label="Koordinate der Grenze">
+      <input type="number" class="aw-num" id="aw-grenzwert" min="0" max="999" step="1" placeholder="500" aria-label="Koordinate der Trennlinie">
       <label>ab <input type="number" class="aw-num" id="aw-punkte" min="0" max="99999" step="100" placeholder="0" aria-label="Mindestpunkte je Dorf"> Punkten</label></div>
+    <div class="aw-gruppen" id="aw-gruppen" hidden></div>
     <p class="aw-hilfe aw-note" id="aw-note" hidden aria-live="polite"></p>
     <div class="aw-zeile" id="aw-knoepfe"></div>
   </div>
@@ -2485,7 +2490,7 @@ $("q").addEventListener("keydown", e=>{ if(e.key==="Escape") $("sugg").hidden=tr
 const AW_PLANER="k259-angriff-auswahl", AW_ENTWURF="k259-karte-auswahl";
 const AW={aktiv:false, ziel:null, fuer:"", werkzeug:"rechteck", wirkung:"add", nurSpieler:true, sel:new Set(),
           zug:null, vorschau:null, panKnopf:false, mitte:null, markRef:undefined, markN:0, eingeklappt:false, kaempfeAus:false,
-          markGrenze:"", markWert:null, markPunkte:0,
+          trenn:"", markWert:null, markPunkte:0,
           start:false, startZiel:null, startFuer:""};
 const AW_HILFE={
   klick:"Klick wählt ein Dorf an oder ab, Ziehen verschiebt die Karte.",
@@ -2495,15 +2500,20 @@ const AW_HILFE={
 const awKey = i => vx[i]*1000+vy[i];
 const awDoerfer = n => n===1? "1 Dorf" : nf.format(n)+" Dörfer";
 const awErlaubt = i => !AW.nurSpieler || vp[i]>=0;
-/* Hervorgehobene nur bis zu einer Koordinate und ab einer Punktzahl übernehmen (Dennis 16.11.2026). Grenzen einschließlich;
-   links und rechts hängen an X (erste Zahl der Koordinate), oben und unten an Y (zweite Zahl, wächst nach unten). */
-function awMarkPasst(i){
-  if(AW.markPunkte>0 && vpts[i]<AW.markPunkte) return false;
-  const g=AW.markGrenze, w=AW.markWert;
-  if(!g || w==null) return true;
-  return g==="xl"? vx[i]<=w : g==="xr"? vx[i]>=w : g==="yo"? vy[i]<=w : vy[i]>=w;
-}
+/* Hervorgehobene ab einer Punktzahl übernehmen und an einer Trennlinie in zwei Gruppen teilen (Dennis 16.11.2026 20:49, statt
+   der vier Richtungen von 19:59). Trennlinie bei X = w: links x ≤ w, rechts x ≥ w+1; bei Y = w: oben y ≤ w, unten y ≥ w+1
+   (Y wächst nach unten). Die Linie liegt zwischen w und w+1. */
+const awMarkPasst = i => !(AW.markPunkte>0 && vpts[i]<AW.markPunkte);
 const awMarkDoerfer = () => marked? [...marked].filter(i=>awErlaubt(i) && awMarkPasst(i)) : [];
+function awGruppen(){
+  const t=AW.trenn, w=AW.markWert;
+  if(!marked || !t || w==null) return null;
+  const alle=awMarkDoerfer(), c = i => t==="x"? vx[i] : vy[i];
+  const n1=w+1;
+  return [{name: t==="x"? "Links" : "Oben", regel: (t==="x"? "x" : "y")+" ≤ "+w, liste: alle.filter(i=>c(i)<=w)},
+          {name: t==="x"? "Rechts" : "Unten", regel: (t==="x"? "x" : "y")+" ≥ "+n1, liste: alle.filter(i=>c(i)>w)}];
+}
+const koordText = liste => liste.map(awKey).sort((a,b)=>a-b).map(k=>Math.floor(k/1000)+"|"+(k%1000)).join("\n");
 let awHinweisTimer=0;
 function awTitel(){
   if(!AW.ziel) return "Dörfer auswählen";
@@ -2515,7 +2525,7 @@ function awTitel(){
 function awSpeichern(){
   try{ sessionStorage.setItem(AW_ENTWURF, JSON.stringify({ziel:AW.ziel, keys:[...AW.sel], werkzeug:AW.werkzeug,
     wirkung:AW.wirkung, nurSpieler:AW.nurSpieler, kaempfeAus:AW.kaempfeAus,
-    markGrenze:AW.markGrenze, markWert:AW.markWert, markPunkte:AW.markPunkte})); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
+    trenn:AW.trenn, markWert:AW.markWert, markPunkte:AW.markPunkte})); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
 }
 function awStart(ziel, fuer){
   if(!zusatzFrei()){ ziel=null; fuer=""; }            // ohne freigeschalteten Angriffsplaner nur Auswahl und Kopieren
@@ -2526,7 +2536,8 @@ function awStart(ziel, fuer){
     if(AW_HILFE[d.werkzeug]) AW.werkzeug=d.werkzeug;
     if(d.wirkung==="add" || d.wirkung==="del") AW.wirkung=d.wirkung;
     if(typeof d.nurSpieler==="boolean") AW.nurSpieler=d.nurSpieler;
-    if(["", "xl", "xr", "yo", "yu"].includes(d.markGrenze)) AW.markGrenze=d.markGrenze;
+    if(["", "x", "y"].includes(d.trenn)) AW.trenn=d.trenn;
+    else if(["xl", "xr", "yo", "yu"].includes(d.markGrenze)) AW.trenn=d.markGrenze[0];       // Entwurf von 19:59
     if(d.markWert==null || (Number.isInteger(d.markWert) && d.markWert>=0 && d.markWert<=999)) AW.markWert=d.markWert;
     if(Number.isFinite(d.markPunkte) && d.markPunkte>=0) AW.markPunkte=d.markPunkte;
     // Entwurf nur zum selben Ziel wiederherstellen, etwa nach dem Neuladen der Seite
@@ -2692,7 +2703,7 @@ function awZeichnen(x0, x1, y0, y1){
     octx.fillStyle=weg? "#ff8a80" : "#ffffff"; octx.fillText(t, X, Y);
   }
 }
-/** Knopf „Hervorgehobene übernehmen“: die Dörfer aus der Suche (Spieler oder Stamm). */
+/** Knopf „Hervorgehobene übernehmen“: die Dörfer der ausgewählten Spieler (und eines gesuchten Stammes). */
 function awMarkKnopf(){
   if(marked===AW.markRef) return;
   AW.markRef=marked;
@@ -2702,30 +2713,63 @@ function awMarkKnopf(){
   $("aw-filter").hidden=!alle;
   if(alle){
     b.textContent="Hervorgehobene übernehmen ("+nf.format(AW.markN)+(AW.markN<alle? " von "+nf.format(alle) : "")+")";
-    b.title="Dörfer von "+(suchFokus? suchFokus.label : "den ausgewählten Spielern")+" übernehmen, mit Grenze und Mindestpunkten darunter";
+    b.title="Dörfer von "+(suchFokus? suchFokus.label : "den ausgewählten Spielern")+" übernehmen, ab der Punktzahl darunter";
   }
+  awGruppenZeigen();
 }
-/** Grenze für „Hervorgehobene übernehmen“ als gestrichelte Linie auf der Zeigerebene. */
+/** Die zwei Gruppen an der Trennlinie, je mit Kopieren und Übernehmen. */
+function awGruppenZeigen(){
+  const box=$("aw-gruppen"), gr=awGruppen();
+  box.hidden=!gr; box.replaceChildren();
+  if(!gr) return;
+  gr.forEach(g=>{
+    const k=document.createElement("div"); k.className="aw-gr";
+    const t=document.createElement("span"); t.className="t"; t.textContent=g.name+": "+awDoerfer(g.liste.length);
+    const r=document.createElement("span"); r.className="r"; r.textContent=g.regel;
+    const kn=document.createElement("div"); kn.className="k";
+    const kop=document.createElement("button"); kop.type="button"; kop.className="tw small"; kop.textContent="Kopieren"; kop.disabled=!g.liste.length;
+    kop.title="Koordinaten dieser Gruppe in die Zwischenablage, je Zeile ein Dorf";
+    kop.addEventListener("click", async ()=>{ const ok=await textKopieren(koordText(g.liste));
+      awHinweis(ok? g.name+": "+(g.liste.length===1? "1 Koordinate" : nf.format(g.liste.length)+" Koordinaten")+" kopiert." : "Kopieren nicht möglich, der Browser hat es abgelehnt."); });
+    const ueb=document.createElement("button"); ueb.type="button"; ueb.className="tw small"; ueb.textContent="Übernehmen"; ueb.disabled=!g.liste.length;
+    ueb.title="Diese Gruppe zur Auswahl hinzufügen";
+    ueb.addEventListener("click", ()=>awAnwenden(g.liste, "add"));
+    kn.append(kop, ueb); k.append(t, r, kn); box.appendChild(k);
+  });
+}
+/** Trennlinie als gestrichelte Linie auf der Zeigerebene, mit der Zahl der Dörfer je Seite. */
 function awGrenzeZeichnen(){
-  const g=AW.markGrenze, w=AW.markWert;
-  if(!marked || !g || w==null) return;
+  const gr=awGruppen();
+  if(!gr) return;
+  const w=AW.markWert, alsX=AW.trenn==="x";
   octx.save(); octx.setLineDash([8,5]); octx.lineWidth=2; octx.strokeStyle="#ff9100";
   octx.beginPath();
-  if(g[0]==="x"){ const X=sx(g==="xl"? w+1 : w); octx.moveTo(X,0); octx.lineTo(X,H); }
-  else { const Y=sy(g==="yo"? w+1 : w); octx.moveTo(0,Y); octx.lineTo(W,Y); }
-  octx.stroke(); octx.restore();
+  const L = alsX? sx(w+1) : sy(w+1);
+  if(alsX){ octx.moveTo(L,0); octx.lineTo(L,H); } else { octx.moveTo(0,L); octx.lineTo(W,L); }
+  octx.stroke(); octx.setLineDash([]);
+  octx.font="bold 12px system-ui, sans-serif"; octx.lineWidth=3; octx.strokeStyle="rgba(0,0,0,.75)"; octx.fillStyle="#ffd180";
+  const schreib=(t, X, Y, ausr, basis)=>{ octx.textAlign=ausr; octx.textBaseline=basis; octx.strokeText(t, X, Y); octx.fillText(t, X, Y); };
+  if(alsX){ schreib("← "+nf.format(gr[0].liste.length), L-6, 8, "right", "top"); schreib(nf.format(gr[1].liste.length)+" →", L+6, 8, "left", "top"); }
+  else { schreib("↑ "+nf.format(gr[0].liste.length), 8, L-6, "left", "bottom"); schreib("↓ "+nf.format(gr[1].liste.length), 8, L+6, "left", "top"); }
+  octx.restore();
 }
-function awFilterLesen(){
-  AW.markGrenze=$("aw-grenze").value;
+function awFilterLesen(e){
+  const vorher=AW.trenn;
+  AW.trenn=$("aw-trenn").value;
   const w=parseInt($("aw-grenzwert").value, 10);
   AW.markWert = isNaN(w)? null : Math.max(0, Math.min(999, w));
+  // Linie gleich sichtbar: beim Einschalten oder Wechsel zwischen X und Y die Mitte der Hervorgehobenen auf dieser Achse
+  if(AW.trenn && AW.trenn!==vorher && (AW.markWert==null || vorher) && marked && marked.size){
+    let sum=0; for(const i of marked) sum += AW.trenn==="x"? vx[i] : vy[i];
+    AW.markWert=Math.round(sum/marked.size); $("aw-grenzwert").value=String(AW.markWert);
+  }
   const pt=parseInt($("aw-punkte").value, 10);
   AW.markPunkte = isNaN(pt)? 0 : Math.max(0, pt);
   AW.markRef=undefined; awMarkKnopf(); awSpeichern(); drawOverlay();
 }
 function awText(){ return [...AW.sel].sort((a,b)=>a-b).map(k=>Math.floor(k/1000)+"|"+(k%1000)).join("\n"); }
-async function awKopieren(melden){
-  const text=awText(); let ok=false;
+async function textKopieren(text){
+  let ok=false;
   try{ await navigator.clipboard.writeText(text); ok=true; }
   catch(e){
     const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
@@ -2733,6 +2777,10 @@ async function awKopieren(melden){
     try{ ok=document.execCommand("copy"); }catch(e2){ ok=false; }
     ta.remove();
   }
+  return ok;
+}
+async function awKopieren(melden){
+  const ok=await textKopieren(awText());
   if(melden) awHinweis(ok? (AW.sel.size===1? "1 Koordinate" : nf.format(AW.sel.size)+" Koordinaten")+" kopiert, je Zeile ein Dorf." : "Kopieren nicht möglich, der Browser hat es abgelehnt.");
   return ok;
 }
@@ -2751,7 +2799,7 @@ function renderAuswahl(){
     b.setAttribute("aria-pressed", String(b.dataset.m===AW.wirkung)); b.disabled=AW.werkzeug==="klick"; });
   $("aw-spieler").checked=AW.nurSpieler;
   $("aw-kaempfe").checked=AW.kaempfeAus;
-  $("aw-grenze").value=AW.markGrenze; $("aw-grenzwert").value=AW.markWert==null? "" : String(AW.markWert);
+  $("aw-trenn").value=AW.trenn; $("aw-grenzwert").value=AW.markWert==null? "" : String(AW.markWert);
   $("aw-punkte").value=AW.markPunkte? String(AW.markPunkte) : "";
   $("aw-hilfe").textContent=AW_HILFE[AW.werkzeug]+(AW.werkzeug==="klick"? "" : " Alt kehrt die Wirkung um.")+" Escape beendet.";
   wrap.classList.toggle("aw-zug", AW.werkzeug!=="klick");
@@ -2815,7 +2863,7 @@ $("aw-spieler").addEventListener("change", e=>{
 });
 $("aw-kaempfe").addEventListener("change", e=>{ AW.kaempfeAus=e.target.checked; awSpeichern(); draw(); });
 $("aw-mark").addEventListener("click", ()=>{ if(marked) awAnwenden(awMarkDoerfer(), "add"); });
-["aw-grenze", "aw-grenzwert", "aw-punkte"].forEach(id=>$(id).addEventListener("input", awFilterLesen));
+["aw-trenn", "aw-grenzwert", "aw-punkte"].forEach(id=>$(id).addEventListener("input", awFilterLesen));
 // Rechte Maustaste verschiebt im Auswahlmodus, deshalb kein Kontextmenü; die mittlere startet kein Rollen
 wrap.addEventListener("contextmenu", e=>{ if(AW.aktiv) e.preventDefault(); });
 wrap.addEventListener("mousedown", e=>{ if(AW.aktiv && e.button===1) e.preventDefault(); });
