@@ -257,6 +257,9 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
 .auswahl .kh button:hover{background:rgba(255,255,255,.18)}
 .auswahl .aw-kopf{padding:7px 10px 8px; display:flex; flex-direction:column; gap:6px; border-bottom:1px solid var(--edge-line)}
 .auswahl .aw-zeile{display:flex; flex-wrap:wrap; align-items:center; gap:5px 8px}
+#marks .pick{display:inline-flex; align-items:center; gap:4px; margin-right:8px}
+#marks .pick .meta{color:var(--muted); font-size:11px}
+.auswahl .aw-num{width:6em; font:inherit; color:var(--ink); background:var(--field); border:1px solid var(--edge); border-radius:var(--radius); padding:2px 5px}
 .auswahl .aw-zeile>b{font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); min-width:62px}
 .auswahl .seg .opt button.tw{border-radius:0}
 .auswahl .seg .opt:first-child button.tw{border-radius:var(--radius) 0 0 var(--radius)}
@@ -359,6 +362,8 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
     <div class="grp">
       <button class="tw" type="button" id="names" aria-pressed="false"
               title="Nur Namen von Spielern mit vielen Bashpunkten zeigen (ab Rot) statt auch mit mittleren (ab Gelb)">Weniger Spielernamen anzeigen</button>
+      <button class="tw" type="button" id="kampfaus" aria-pressed="false"
+              title="Kampfsymbole, Pfeile, Kampfnamen und Kampf-Infofelder ausblenden (Dennis 16.11.2026)">Kämpfe ausblenden</button>
       <button class="tw" type="button" id="kriegbtn" aria-pressed="false" aria-controls="kriege"
               title="Rechts neben der Karte: Stämme im Krieg laut Kampfauswertung">Kriege</button>
     </div>
@@ -457,7 +462,18 @@ canvas{display:block; width:100%; height:100%; position:absolute; inset:0}
       <label title="Kampfsymbole, Pfeile und Namen der Kämpfe ausblenden, damit sie beim Auswählen nicht im Weg sind"><input type="checkbox" id="aw-kaempfe"> Kämpfe ausblenden</label></div>
     <p class="aw-hilfe" id="aw-hilfe"></p>
     <div class="aw-zeile"><span class="aw-zahl" id="aw-zahl">0 Dörfer</span>
-      <button class="tw small" type="button" id="aw-mark" hidden title="Die Dörfer des gesuchten Spielers oder Stammes übernehmen"></button></div>
+      <button class="tw small" type="button" id="aw-mark" hidden title="Die Dörfer des gesuchten Spielers oder Stammes übernehmen, mit Grenze und Mindestpunkten darunter"></button></div>
+    <!-- Hervorgehobene nur bis zu einer Koordinate und ab einer Punktzahl übernehmen (Dennis 16.11.2026) -->
+    <div class="aw-zeile" id="aw-filter" hidden><b>Nur</b>
+      <select class="sel" id="aw-grenze" aria-label="Grenze für das Übernehmen" title="Grenze einschließlich: links bis X heißt X kleiner oder gleich dem Wert">
+        <option value="">ohne Grenze</option>
+        <option value="xl">links bis X</option>
+        <option value="xr">rechts ab X</option>
+        <option value="yo">oben bis Y</option>
+        <option value="yu">unten ab Y</option>
+      </select>
+      <input type="number" class="aw-num" id="aw-grenzwert" min="0" max="999" step="1" placeholder="500" aria-label="Koordinate der Grenze">
+      <label>ab <input type="number" class="aw-num" id="aw-punkte" min="0" max="99999" step="100" placeholder="0" aria-label="Mindestpunkte je Dorf"> Punkten</label></div>
     <p class="aw-hilfe aw-note" id="aw-note" hidden aria-live="polite"></p>
     <div class="aw-zeile" id="aw-knoepfe"></div>
   </div>
@@ -582,6 +598,10 @@ const kriegCache=new Map();
 let KRIEG=null, kriegOffen=false, kriegSel=null;        // kriegSel: [Stamm, Stamm] hebt deren Kämpfe hervor
 let pIdx={}, aIdx={}, allyOf=null, growth={}, arrowOf=null, refs={}, tagOf=new Map(), allyById=new Map();
 let tribeColor=new Map(), tribeList=[], marks=new Map();   // selbst markierte Stämme: id -> Farbe
+// Gesuchte Spieler mit eigener Farbe (Dennis 16.11.2026): Spieler-ID -> Farbe, in der Stammesansicht vor der Stammesfarbe
+let spielerMarks=new Map(), pRowOf=new Map();
+// Kämpfe ganz ausblenden: Symbole, Pfeile, Kampfnamen, Infofelder (Dennis 16.11.2026)
+let kaempfeAus=false;
 let inaday=new Map();                                      // player_id -> {typ: {rank, value, date}}
 let rankOf={};                                             // Spielerzeile -> Weltrang in der aktiven Rangliste
 let buckets=[], colorList=[];
@@ -927,7 +947,7 @@ function imKrieg(r){
   const sa=aAlly(a), sv=vAlly(r);
   return (sa===kriegSel[0] && sv===kriegSel[1]) || (sa===kriegSel[1] && sv===kriegSel[0]);
 }
-const kaempfeVerborgen = () => AW.aktiv && AW.kaempfeAus;      // Auswahlmodus, „Kämpfe ausblenden“
+const kaempfeVerborgen = () => kaempfeAus || (AW.aktiv && AW.kaempfeAus);      // Knopf „Kämpfe ausblenden“ oder Auswahlmodus
 function drawKaempfe(){
   kampfHits=[]; kampfPfeile=[];
   if(!kampfSel.length || kaempfeVerborgen()) return;
@@ -1351,7 +1371,7 @@ function drawOverlay(){
       octx.strokeRect(sx(x)+off-1.5, sy(y)+off-1.5, size+3, size+3);
     }
   }
-  if(AW.aktiv) awZeichnen(x0, x1, y0, y1);
+  if(AW.aktiv){ awZeichnen(x0, x1, y0, y1); awGrenzeZeichnen(); }
   if(selA>=0){
     const punkte=[[selA,"A"]].concat(selB>=0? [[selB,"B"]] : []);
     const mitte=i=>[sx(vx[i])+off+size/2, sy(vy[i])+off+size/2];
@@ -1443,10 +1463,12 @@ function buildBuckets(){
   const map=new Map();
   const push=(color,i)=>{ let l=map.get(color); if(!l) map.set(color,l=[]); l.push(i); };
   if(view==="tribes"){
+    const pm=new Map();
+    for(const [pid,c] of spielerMarks){ const r=pRowOf.get(pid); if(r!=null) pm.set(r, c); }
     for(let i=0;i<N;i++){
       const p=vp[i];
       if(p<0){ push(vb[i]? C_BONUS : C_BARB, i); continue; }
-      push(tribeColorOf(allyOf[p]) || C_OTHER, i);
+      push(pm.get(p) || tribeColorOf(allyOf[p]) || C_OTHER, i);
     }
   } else if(isRank(view)){
     for(let i=0;i<N;i++){
@@ -1486,8 +1508,10 @@ function buildBuckets(){
   }
   const order=[C_BARB,C_BONUS,C_NONE,C_OTHER,...GROWTH_COLORS,...BASH_COLORS,...RANK_SCALE,C_LOSS,
                ...TRIBE_COLORS,C_TRACKED,...EXTRA_COLORS];
+  // Spielerfarben zuletzt zeichnen, damit sie über gleichfarbigen Stämmen liegen
+  const spielerFarben=new Set(spielerMarks.values());
   const keys=[...map.keys()].sort((a,b)=>{
-    const ia=order.indexOf(a), ib=order.indexOf(b);
+    const ia=spielerFarben.has(a)? 200 : order.indexOf(a), ib=spielerFarben.has(b)? 200 : order.indexOf(b);
     return (ia<0?99:ia)-(ib<0?99:ib);
   });
   colorList=keys; buckets=keys.map(k=>map.get(k));
@@ -1500,6 +1524,7 @@ function renderLegend(){
     i.style.background=color; li.append(i, document.createTextNode(text)); items.appendChild(li); };
   if(view==="tribes"){
     $("legend-title").textContent="Stämme";
+    for(const [pid,c] of spielerMarks){ const r=pRowOf.get(pid); if(r!=null) add(c, P.rows[r][pIdx.name]+" (Spieler)"); }
     [...marks.keys()].forEach(id=>add(marks.get(id), (tagOf.get(id)||"?")+" (gewählt)"));
     (T.tribe_ids||[]).forEach(id=>{ if(!marks.has(id)) add(C_TRACKED, tagOf.get(id)||"?"); });
     tribeList.forEach(a=>{ if(!marks.has(a[0]) && !(T.tribe_ids||[]).includes(a[0])) add(tribeColor.get(a[0]), a[2]||a[1]); });
@@ -1546,7 +1571,8 @@ function renderLegend(){
   zeile("<b>&#9650;</b><u>&#9660;</u>", key
     ? "Rechts oben: Punktezuwachs über "+VIEW_LABEL["d"+key]+", ein Pfeil ab "+e[1]+" %, zwei ab "+e[2]+" %, drei ab "+e[3]+" %"
     : "Pfeile für den Punktezuwachs erscheinen ab zwölf Stunden Historie");
-  if(KAMPF){
+  if(KAMPF && kaempfeAus) zeile(AXES_IMG[2], "Kämpfe ausgeblendet (Knopf „Kämpfe ausblenden“ unter Kämpfe)");
+  else if(KAMPF){
     zeile(AXES_IMG[2], (kampfTag? "Kämpfe am "+tagLang(kampfTag) : "Kämpfe der letzten "+windowText(axeKey||"24h"))
       +(suchFokus? " mit "+(suchFokus.ally!=null? "Stamm " : "")+suchFokus.label : "")+" ab Stärke "+nf.format(minStaerke)+": "+nf.format(kampfSel.length)
       +(kampfAus? " ("+nf.format(kampfAus)+" kleinere ausgeblendet)" : "")
@@ -1860,7 +1886,7 @@ $("kampf-close").addEventListener("click", e=>{ e.preventDefault(); e.stopPropag
 
 /* ---------- Stamm markieren ---------- */
 function nextColor(){
-  const used=new Set([...marks.values(), ...tribeColor.values()]);
+  const used=new Set([...marks.values(), ...tribeColor.values(), ...spielerMarks.values()]);
   return EXTRA_COLORS.find(c=>!used.has(c)) || EXTRA_COLORS[marks.size % EXTRA_COLORS.length];
 }
 function addMark(id, color){
@@ -1869,10 +1895,39 @@ function addMark(id, color){
   pushUndo(()=>{ marks.delete(id); renderMarks(); buildBuckets(); renderLegend(); draw(); });
   renderMarks(); buildBuckets(); renderLegend(); draw();
 }
+function neuMalen(){ renderMarks(); buildBuckets(); renderLegend(); draw(); saveUrl(); }
+function addSpielerMark(pid, color){
+  if(pid==null || spielerMarks.has(pid)) return;
+  spielerMarks.set(pid, color || nextColor());
+  pushUndo(()=>{ spielerMarks.delete(pid); neuMalen(); });
+  neuMalen();
+}
 function renderMarks(){
   const box=$("marks"); box.replaceChildren();
-  if(!marks.size) return;
+  if(!marks.size && !spielerMarks.size) return;
   const label=document.createElement("b"); label.textContent="Markiert"; box.appendChild(label);
+  // Spieler mit eigener Farbe (Dennis 16.11.2026); jede Spielersuche nimmt einen weiteren dazu
+  for(const [pid,color] of spielerMarks){
+    const r=pRowOf.get(pid); if(r==null) continue;
+    const name=P.rows[r][pIdx.name];
+    const wrap2=document.createElement("span"); wrap2.className="pick";
+    const dot=document.createElement("span"); dot.className="dot"; dot.style.background=color;
+    const tag=document.createElement("span"); tag.className="tag"; tag.textContent=name;
+    const cnt=document.createElement("span"); cnt.className="meta"; cnt.textContent="Spieler · "+nf.format(pCount? pCount[r] : 0)+" Dörfer";
+    const inp=document.createElement("input"); inp.type="color"; inp.value=color; inp.title="Farbe für "+name;
+    inp.setAttribute("aria-label", "Farbe für "+name);
+    inp.addEventListener("input", ()=>{ spielerMarks.set(pid, inp.value); dot.style.background=inp.value; buildBuckets(); renderLegend(); draw(); });
+    inp.addEventListener("change", saveUrl);
+    const del=document.createElement("button"); del.type="button"; del.className="tw small"; del.textContent="×";
+    del.title="Spieler nicht mehr markieren"; del.setAttribute("aria-label", name+" nicht mehr markieren");
+    del.addEventListener("click", ()=>{
+      const vorher=spielerMarks.get(pid);
+      spielerMarks.delete(pid); neuMalen();
+      pushUndo(()=>{ spielerMarks.set(pid, vorher); neuMalen(); });
+    });
+    wrap2.append(dot, tag, cnt, inp, del);
+    box.appendChild(wrap2);
+  }
   for(const [id,color] of marks){
     const wrap2=document.createElement("span"); wrap2.className="pick";
     const dot=document.createElement("span"); dot.className="dot"; dot.style.background=color;
@@ -1883,6 +1938,7 @@ function renderMarks(){
     inp.title="Farbe für "+(tagOf.get(id)||id);
     inp.addEventListener("input", ()=>{ marks.set(id, inp.value); dot.style.background=inp.value;
       buildBuckets(); renderLegend(); draw(); });
+    inp.addEventListener("change", saveUrl);
     const del=document.createElement("button"); del.type="button"; del.className="tw small"; del.textContent="×";
     del.title="Markierung entfernen";
     del.addEventListener("click", ()=>{
@@ -1948,6 +2004,7 @@ function search(qRaw){
     label=player[pIdx.name];
     setSuchFokus({pid:player[pIdx.id], label});
     if(allyOf[pi]) addMark(allyOf[pi]);          // Stamm des Spielers gleich mit markieren
+    addSpielerMark(player[pIdx.id]);             // Spieler mit eigener Farbe, weitere Suchen nehmen weitere dazu
   } else if(ally){
     for(let i=0;i<N;i++) if(vp[i]>=0 && allyOf[vp[i]]===ally[0]) set.add(i);
     label=(ally[2]||ally[1]);
@@ -2152,7 +2209,7 @@ function renderSlim(){
   const info=$("slim-info"); info.replaceChildren();
   const teil=(k,v)=>{ if(info.childNodes.length) info.append(document.createTextNode(" · ")); info.append(k+" ", el("b",null,v)); };
   teil("Dorffarbe:", $("legend-title").textContent);
-  teil("Kämpfe:", kampfTag? tagLang(kampfTag) : "letzte "+winShort(bashWindow()||"24h"));
+  teil("Kämpfe:", kaempfeAus? "ausgeblendet" : kampfTag? tagLang(kampfTag) : "letzte "+winShort(bashWindow()||"24h"));
   if(kriegOffen) teil("Kriege:", "offen");
   info.append(document.createTextNode(" · "+$("stand").textContent));
 }
@@ -2172,6 +2229,8 @@ function saveUrl(){
     if(namesFrom===NAME_AB_ROT) p.set("n", "rot");
     if(kriegOffen) p.set("k", kriegSel? kriegSel.join("-") : "1");
     if(marks.size) p.set("m", [...marks].map(([id,c])=>id+"-"+c.replace("#","")).join(","));
+    if(spielerMarks.size) p.set("sp", [...spielerMarks].map(([id,c])=>id+"-"+c.replace("#","")).join(","));
+    if(kaempfeAus) p.set("ka", "0");
     if(AW.aktiv){ p.set("auswahl", AW.ziel||"1"); if(AW.fuer) p.set("fuer", AW.fuer); }
     const q=p.toString();
     history.replaceState(null,"", q? "?"+q : location.pathname);
@@ -2193,6 +2252,11 @@ function readUrl(){
     const [id,c]=s.split("-");
     if(/^\d+$/.test(id) && /^[0-9a-fA-F]{6}$/.test(c||"")) marks.set(+id, "#"+c);
   });
+  (p.get("sp")||"").split(",").filter(Boolean).forEach(s=>{
+    const [id,c]=s.split("-");
+    if(/^\d+$/.test(id) && /^[0-9a-fA-F]{6}$/.test(c||"")) spielerMarks.set(+id, "#"+c);
+  });
+  if(p.get("ka")==="0") kaempfeAus=true;
   const c=(p.get("c")||"").match(/^(\d{1,3})[|,](\d{1,3})$/);
   const z=parseFloat(p.get("z")), r=parseFloat(p.get("r"));
   if(c){
@@ -2228,6 +2292,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   allyOf=new Int32Array(P.rows.length);
   P.rows.forEach((r,i)=>{ allyOf[i]=r[pIdx.ally]||0; rowOfPid.set(r[pIdx.id], i); });
   // Schwerpunkt der Dörfer je Spieler, für die Namen in den Bash-Ansichten
+  pRowOf=new Map(P.rows.map((r,i)=>[r[pIdx.id], i]));
   pSumX=new Float64Array(P.rows.length); pSumY=new Float64Array(P.rows.length); pCount=new Int32Array(P.rows.length);
   for(let i=0;i<N;i++){ const p=vp[i]; if(p>=0){ pSumX[p]+=vx[i]; pSumY[p]+=vy[i]; pCount[p]++; } }
   A.rows.forEach(a=>{ tagOf.set(a[0], a[2]||a[1]); allyById.set(a[0], a); });
@@ -2288,6 +2353,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
   let leiste="1"; try{ leiste=localStorage.getItem("karte.leiste")||"1"; }catch(e){ /* ohne Speicher ausgeklappt */ }
   if(leiste==="0") setLeiste(false);
   $("names").setAttribute("aria-pressed", String(namesFrom===NAME_AB_ROT));
+  $("kampfaus").setAttribute("aria-pressed", String(kaempfeAus));
   if(kriegOffen){ $("kriege").hidden=false; $("kriegbtn").setAttribute("aria-pressed","true"); renderKriege(); }
   labelBashButtons();
   resize();
@@ -2332,6 +2398,12 @@ $("names").addEventListener("click", ()=>{
 });
 $("zout").addEventListener("click", ()=>zoomAt(W/2,H/2,1/1.6));
 $("kriegbtn").addEventListener("click", ()=>setKrieg(!kriegOffen));
+$("kampfaus").addEventListener("click", ()=>{
+  kaempfeAus=!kaempfeAus;
+  $("kampfaus").setAttribute("aria-pressed", String(kaempfeAus));
+  if(kaempfeAus){ pfeilFix=null; pfeilHover=null; $("kampf").hidden=true; tip.style.display="none"; }
+  renderLegend(); draw(); saveUrl();
+});
 $("kriege-close").addEventListener("click", ()=>setKrieg(false));
 $("einklappen").addEventListener("click", ()=>setLeiste(false));
 STAERKE_STUFEN.forEach(v=>{ const o=document.createElement("option"); o.value=String(v); o.textContent=nf.format(v); $("minst").appendChild(o); });
@@ -2375,6 +2447,7 @@ $("q").addEventListener("keydown", e=>{ if(e.key==="Escape") $("sugg").hidden=tr
 const AW_PLANER="k259-angriff-auswahl", AW_ENTWURF="k259-karte-auswahl";
 const AW={aktiv:false, ziel:null, fuer:"", werkzeug:"rechteck", wirkung:"add", nurSpieler:true, sel:new Set(),
           zug:null, vorschau:null, panKnopf:false, mitte:null, markRef:undefined, markN:0, eingeklappt:false, kaempfeAus:false,
+          markGrenze:"", markWert:null, markPunkte:0,
           start:false, startZiel:null, startFuer:""};
 const AW_HILFE={
   klick:"Klick wählt ein Dorf an oder ab, Ziehen verschiebt die Karte.",
@@ -2384,6 +2457,15 @@ const AW_HILFE={
 const awKey = i => vx[i]*1000+vy[i];
 const awDoerfer = n => n===1? "1 Dorf" : nf.format(n)+" Dörfer";
 const awErlaubt = i => !AW.nurSpieler || vp[i]>=0;
+/* Hervorgehobene nur bis zu einer Koordinate und ab einer Punktzahl übernehmen (Dennis 16.11.2026). Grenzen einschließlich;
+   links und rechts hängen an X (erste Zahl der Koordinate), oben und unten an Y (zweite Zahl, wächst nach unten). */
+function awMarkPasst(i){
+  if(AW.markPunkte>0 && vpts[i]<AW.markPunkte) return false;
+  const g=AW.markGrenze, w=AW.markWert;
+  if(!g || w==null) return true;
+  return g==="xl"? vx[i]<=w : g==="xr"? vx[i]>=w : g==="yo"? vy[i]<=w : vy[i]>=w;
+}
+const awMarkDoerfer = () => marked? [...marked].filter(i=>awErlaubt(i) && awMarkPasst(i)) : [];
 let awHinweisTimer=0;
 function awTitel(){
   if(!AW.ziel) return "Dörfer auswählen";
@@ -2394,7 +2476,8 @@ function awTitel(){
 }
 function awSpeichern(){
   try{ sessionStorage.setItem(AW_ENTWURF, JSON.stringify({ziel:AW.ziel, keys:[...AW.sel], werkzeug:AW.werkzeug,
-    wirkung:AW.wirkung, nurSpieler:AW.nurSpieler, kaempfeAus:AW.kaempfeAus})); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
+    wirkung:AW.wirkung, nurSpieler:AW.nurSpieler, kaempfeAus:AW.kaempfeAus,
+    markGrenze:AW.markGrenze, markWert:AW.markWert, markPunkte:AW.markPunkte})); }catch(e){ /* ohne Speicher nur für diesen Besuch */ }
 }
 function awStart(ziel, fuer){
   if(!zusatzFrei()){ ziel=null; fuer=""; }            // ohne freigeschalteten Angriffsplaner nur Auswahl und Kopieren
@@ -2405,6 +2488,9 @@ function awStart(ziel, fuer){
     if(AW_HILFE[d.werkzeug]) AW.werkzeug=d.werkzeug;
     if(d.wirkung==="add" || d.wirkung==="del") AW.wirkung=d.wirkung;
     if(typeof d.nurSpieler==="boolean") AW.nurSpieler=d.nurSpieler;
+    if(["", "xl", "xr", "yo", "yu"].includes(d.markGrenze)) AW.markGrenze=d.markGrenze;
+    if(d.markWert==null || (Number.isInteger(d.markWert) && d.markWert>=0 && d.markWert<=999)) AW.markWert=d.markWert;
+    if(Number.isFinite(d.markPunkte) && d.markPunkte>=0) AW.markPunkte=d.markPunkte;
     // Entwurf nur zum selben Ziel wiederherstellen, etwa nach dem Neuladen der Seite
     if(d.ziel===AW.ziel && Array.isArray(d.keys)) d.keys.forEach(k=>{ if(byXY.has(k)) AW.sel.add(k); });
   }
@@ -2572,9 +2658,29 @@ function awZeichnen(x0, x1, y0, y1){
 function awMarkKnopf(){
   if(marked===AW.markRef) return;
   AW.markRef=marked;
-  AW.markN = marked? [...marked].filter(awErlaubt).length : 0;
-  const b=$("aw-mark"); b.hidden=!AW.markN;
-  if(AW.markN) b.textContent="Hervorgehobene übernehmen ("+nf.format(AW.markN)+")";
+  AW.markN = awMarkDoerfer().length;
+  const b=$("aw-mark"), alle = marked? [...marked].filter(awErlaubt).length : 0;
+  b.hidden=!alle; b.disabled=!AW.markN;
+  $("aw-filter").hidden=!alle;
+  if(alle) b.textContent="Hervorgehobene übernehmen ("+nf.format(AW.markN)+(AW.markN<alle? " von "+nf.format(alle) : "")+")";
+}
+/** Grenze für „Hervorgehobene übernehmen“ als gestrichelte Linie auf der Zeigerebene. */
+function awGrenzeZeichnen(){
+  const g=AW.markGrenze, w=AW.markWert;
+  if(!marked || !g || w==null) return;
+  octx.save(); octx.setLineDash([8,5]); octx.lineWidth=2; octx.strokeStyle="#ff9100";
+  octx.beginPath();
+  if(g[0]==="x"){ const X=sx(g==="xl"? w+1 : w); octx.moveTo(X,0); octx.lineTo(X,H); }
+  else { const Y=sy(g==="yo"? w+1 : w); octx.moveTo(0,Y); octx.lineTo(W,Y); }
+  octx.stroke(); octx.restore();
+}
+function awFilterLesen(){
+  AW.markGrenze=$("aw-grenze").value;
+  const w=parseInt($("aw-grenzwert").value, 10);
+  AW.markWert = isNaN(w)? null : Math.max(0, Math.min(999, w));
+  const pt=parseInt($("aw-punkte").value, 10);
+  AW.markPunkte = isNaN(pt)? 0 : Math.max(0, pt);
+  AW.markRef=undefined; awMarkKnopf(); awSpeichern(); drawOverlay();
 }
 function awText(){ return [...AW.sel].sort((a,b)=>a-b).map(k=>Math.floor(k/1000)+"|"+(k%1000)).join("\n"); }
 async function awKopieren(melden){
@@ -2604,6 +2710,8 @@ function renderAuswahl(){
     b.setAttribute("aria-pressed", String(b.dataset.m===AW.wirkung)); b.disabled=AW.werkzeug==="klick"; });
   $("aw-spieler").checked=AW.nurSpieler;
   $("aw-kaempfe").checked=AW.kaempfeAus;
+  $("aw-grenze").value=AW.markGrenze; $("aw-grenzwert").value=AW.markWert==null? "" : String(AW.markWert);
+  $("aw-punkte").value=AW.markPunkte? String(AW.markPunkte) : "";
   $("aw-hilfe").textContent=AW_HILFE[AW.werkzeug]+(AW.werkzeug==="klick"? "" : " Alt kehrt die Wirkung um.")+" Escape beendet.";
   wrap.classList.toggle("aw-zug", AW.werkzeug!=="klick");
   const dorfer=[...AW.sel].map(k=>byXY.get(k)).filter(i=>i!=null);
@@ -2665,7 +2773,8 @@ $("aw-spieler").addEventListener("change", e=>{
   renderAuswahl();
 });
 $("aw-kaempfe").addEventListener("change", e=>{ AW.kaempfeAus=e.target.checked; awSpeichern(); draw(); });
-$("aw-mark").addEventListener("click", ()=>{ if(marked) awAnwenden([...marked].filter(awErlaubt), "add"); });
+$("aw-mark").addEventListener("click", ()=>{ if(marked) awAnwenden(awMarkDoerfer(), "add"); });
+["aw-grenze", "aw-grenzwert", "aw-punkte"].forEach(id=>$(id).addEventListener("input", awFilterLesen));
 // Rechte Maustaste verschiebt im Auswahlmodus, deshalb kein Kontextmenü; die mittlere startet kein Rollen
 wrap.addEventListener("contextmenu", e=>{ if(AW.aktiv) e.preventDefault(); });
 wrap.addEventListener("mousedown", e=>{ if(AW.aktiv && e.button===1) e.preventDefault(); });
