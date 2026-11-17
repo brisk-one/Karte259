@@ -37,6 +37,18 @@
   .pr-mhead{display:flex; gap:6px; align-items:center; font-size:12px; font-weight:700; cursor:pointer}
   .pr-mhead input{accent-color:var(--accent); margin:0}
   .pr-mnote{margin:0; font-size:11px; color:var(--muted); line-height:1.35}
+  /* Einklappbare Abschnitte (Wunsch Dennis 17.11.2026 16:17) */
+  .panel>h2.klappbar{cursor:pointer}
+  .pr-klapp{flex:none; display:inline-grid; place-items:center; width:20px; height:20px; margin:-3px -6px -3px -5px; padding:0;
+    border:0; border-radius:4px; background:none; cursor:pointer; color:var(--head-ink); -webkit-text-fill-color:var(--head-ink)}
+  [data-theme="futuristic"] .pr-klapp{color:var(--accent); -webkit-text-fill-color:var(--accent)}
+  .pr-klapp:hover{background:var(--accent-soft)}
+  .pr-klapp svg{width:12px; height:12px; transition:transform .15s ease-out}
+  .panel.zu .pr-klapp svg{transform:rotate(-90deg)}
+  .panel.zu>:not(h2){display:none !important}
+  .panel.zu>h2{border-bottom-color:transparent}
+  .panel.zu{align-self:start}
+  @media (prefers-reduced-motion:reduce){ .pr-klapp svg{transition:none} }
   .pr-row input[type="number"]{width:84px}
   .pr-ctl input[type="number"],.pr-adv input[type="number"]{font:inherit; font-size:12px; padding:2px 6px; color:var(--ink);
     background:var(--field); border:1px solid var(--edge); border-radius:var(--radius)}
@@ -896,6 +908,42 @@ pctPakete();
 document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } });
 let rsz = null;
 window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } }, 200); });
+
+/* Abschnitte einklappen (Wunsch Dennis 17.11.2026 16:17): Pfeil vor jeder Überschrift oder Klick auf die Überschrift
+   außerhalb ihrer Knöpfe. Eingeklappte Abschnitte merkt sich dieser Browser; ohne Speicher ist beim Laden alles offen.
+   Beim Aufklappen zeichnen Karte und Diagramme mit der richtigen Breite neu (über das resize-Ereignis oben). */
+const KLAPP_KEY = "praegen-zu";
+let ZU = new Set();
+try { ZU = new Set(JSON.parse(localStorage.getItem(KLAPP_KEY) || "[]")); } catch (e) { ZU = new Set(); }
+function klappZustand(sec, b, titel, zu) {
+  sec.classList.toggle("zu", zu);
+  b.setAttribute("aria-expanded", String(!zu));
+  b.setAttribute("aria-label", titel + (zu ? " aufklappen" : " einklappen"));
+  b.title = zu ? "aufklappen" : "einklappen";
+}
+document.querySelectorAll("section.panel > h2[id]").forEach(h => {
+  const sec = h.parentElement, titel = (h.firstChild && h.firstChild.nodeType === 3 ? h.firstChild.textContent : h.textContent).trim();
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "pr-klapp";
+  b.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.25 6 7.75l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  h.insertBefore(b, h.firstChild);
+  h.classList.add("klappbar");
+  const umschalten = () => {
+    const zu = !sec.classList.contains("zu");
+    klappZustand(sec, b, titel, zu);
+    if (zu) ZU.add(h.id); else ZU.delete(h.id);
+    try { localStorage.setItem(KLAPP_KEY, JSON.stringify([...ZU])); } catch (e) { /* nur für diese Sitzung */ }
+    if (!zu) window.dispatchEvent(new Event("resize"));
+  };
+  b.addEventListener("click", umschalten);
+  h.addEventListener("click", e => {
+    if (e.target.closest("button,a,input,select,label,textarea,[role=button],[role=group]")) return;
+    const sel = window.getSelection && String(window.getSelection());
+    if (sel) return;                                                     // Text markieren klappt nicht zu
+    umschalten();
+  });
+  klappZustand(sec, b, titel, ZU.has(h.id));
+});
 
 /* Beispiel: erfundene Dörfer in drei Haufen, damit die Seite ohne eigene Daten ausprobiert werden kann */
 $("example").addEventListener("click", () => {
