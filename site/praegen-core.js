@@ -990,8 +990,8 @@ const ROUTE_N = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 70, 80
    (Dörfer rechnen im Prägeverhältnis unabhängig voneinander); eine Route ist (Prägedorf, Abstand, Händlerzahl),
    jedes Dorf kommt in die Route seines Prägedorfs, die ihm am meisten bringt. Auswahl je Routenzahl gierig, dann
    Tausch einzelner Routen, solange es besser wird.
-   Höchstens 250 Handelsrouten im Account-Manager (Hinweis Dennis 17.11.2026 14:27), also höchstens 250 Lieferdörfer
-   mit Route (P.routenDoerfer, sonst ROUTEN_DOERFER). Bis dahin wie bisher (1c: Routen ersetzen das Anfordern).
+   Höchstens 250 Handelsrouten im Account-Manager (Hinweis Dennis 17.11.2026 14:27, gezählt je Dorf, bestätigt 14:36),
+   also höchstens 250 Lieferdörfer mit Route (P.routenDoerfer, sonst ROUTEN_DOERFER). Bis dahin wie bisher (1c: Routen ersetzen das Anfordern).
    Gibt es mehr Lieferdörfer, werden die übrigen weiter angefordert (im Takt der Klicks), und eine Route bekommen
    die Dörfer, denen sie gegenüber dem Anfordern am meisten bringt: Wert = Anfordern aller Lieferdörfer plus die
    größten positiven Gewinne (Route minus Anfordern) von höchstens 250 Dörfern. */

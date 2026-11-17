@@ -1961,7 +1961,7 @@ function renderRouten() {
   if (pl.coins > base + 0.5) notes.push("Warum Routen mehr bringen können als das Anfordern: angefordert wird nur im Takt der Einlöseklicks (alle " + ivl(P.intervalMin)
     + "). Händler, deren Hin- und Rückweg länger dauert, warten bis zum nächsten Klick; eine Route mit kurzem Abstand schickt sie bald nach der Rückkehr wieder los. "
     + "Das Anfordern ist deshalb nur der Vergleichswert, nicht das Höchstmögliche.");
-  notes.push("Annahmen zur Spielmechanik, noch nicht belegt: eine Route mit einer Gruppe als Start lässt jedes Dorf der Gruppe die Menge schicken, und die Route wiederholt sich im angegebenen Abstand; höchstens " + ganz(K.ROUTEN_DOERFER) + " Handelsrouten, gezählt je Dorf. Belegt: Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Pakete werden weiter von Hand nach dem Zeitplan eingelöst. Wer zusätzlich anfordert, verschickt mit den übrigen Händlern noch mehr.");
+  notes.push("Annahmen zur Spielmechanik, noch nicht belegt: eine Route mit einer Gruppe als Start lässt jedes Dorf der Gruppe die Menge schicken, und die Route wiederholt sich im angegebenen Abstand. Belegt: Fehlen Rohstoffe oder Händler, fällt die Lieferung aus; höchstens " + ganz(K.ROUTEN_DOERFER) + " Handelsrouten je Account, gezählt je Dorf. Pakete werden weiter von Hand nach dem Zeitplan eingelöst. Wer zusätzlich anfordert, verschickt mit den übrigen Händlern noch mehr.");
   box.appendChild(el("p", "pr-note", notes.join(" ")));
 }
 
