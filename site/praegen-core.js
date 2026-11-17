@@ -1019,6 +1019,216 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
   return {base: base.coins, baseOv: base.ov, eigen, plans: out};
 }
 
+/* ---------- Handelsrouten und Anfordern zusammen (Wunsch Dennis 17.11.2026) ----------
+   Im Vergleich „Wie viele Flaggendoppler“ wahlweise mit den Handelsrouten, wie sie oben eingestellt sind: jedes Dorf
+   einer Route schickt alle dt Stunden die feste Menge a (nur wenn genug Rohstoffe und Händler da sind, sonst fällt die
+   Lieferung aus), dazu wird weiter alle klickT Stunden angefordert (Infinity: gar nicht). Bei gleicher Zeit zuerst
+   Pakete einlösen, dann die Route, dann der Klick mit dem, was übrig ist. Produktion läuft stetig. Prägen im
+   Lieferdorf (P.mintLocal) ist hier nicht eingerechnet.
+   route: {a: [Holz, Lehm, Eisen], dt} oder null. acc wie in villageRun (ov, arr); zusätzlich zählt das Ergebnis,
+   wie viel über die Route und wie viel über Klicks verschickt wurde (Rohstoffe). */
+function routeKlickRun(s, tau, P, cnt, route, klickT, sink, acc) {
+  const T = P.interval, C = P.carry, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, K = cnt.length;
+  const add1 = P.pkgSize / 100 * s.cap, cap = P.ohneSpeicher ? Infinity : s.cap, S0 = startBestand(s, P), M = s.merchants;
+  const pr = [s.prod.wood, s.prod.stone, s.prod.iron], vb = s.vorab;
+  const x = [0, 1, 2].map(r => vb ? Math.min(cap, S0[r] + vb[r]) : S0[r]);
+  const a = route ? route.a : null, dt = route ? route.dt : Infinity, need = a ? Math.ceil((a[0] + a[1] + a[2]) / C - 1e-7) : 0;
+  const tKlickEnde = lastClick(P) * T + EPS;
+  const qT = [], qN = [];
+  let qh = 0, busy = 0, overflow = 0, pkgRes = 0, viaRoute = 0, viaKlick = 0, skipped = 0, tLast = 0, k = 0, j = 0, m = 0;
+  const raus = (t, a0, a1, a2) => {
+    if (sink && t + tau <= P.window + EPS) sink(t + tau, a0, a1, a2);
+    if (acc && t + tau <= P.deadline + EPS) { acc.arr[0] += a0; acc.arr[1] += a1; acc.arr[2] += a2; }
+  };
+  for (;;) {
+    const tk = k < K ? k * T : Infinity;
+    const tr = a && j * dt + tau <= P.window + EPS ? j * dt : Infinity;
+    const tc = isFinite(klickT) && m * klickT <= tKlickEnde ? m * klickT : Infinity;
+    const t = Math.min(tk, tr, tc);
+    if (t === Infinity) break;
+    const d = t - tLast;
+    if (d > 0) { for (let r = 0; r < 3; r++) x[r] = Math.min(cap, x[r] + pr[r] * d); tLast = t; }
+    if (tk <= t + EPS && tk === t) {                                           // Pakete zuerst
+      const n = cnt[k];
+      if (n) {
+        const add = n * add1;
+        pkgRes += 3 * add;
+        for (let r = 0; r < 3; r++) { x[r] += add; if (x[r] > cap) { overflow += x[r] - cap; if (acc) acc.ov[r] += x[r] - cap; x[r] = cap; } }
+      }
+      k++;
+      continue;
+    }
+    while (qh < qT.length && qT[qh] <= t + EPS) { busy -= qN[qh]; qh++; }
+    if (tr === t) {                                                            // Route vor dem Klick
+      if (M - busy >= need && x[0] >= a[0] - 1e-6 && x[1] >= a[1] - 1e-6 && x[2] >= a[2] - 1e-6) {
+        for (let r = 0; r < 3; r++) x[r] -= a[r];
+        busy += need; qT.push(t + 2 * tau); qN.push(need); viaRoute += a[0] + a[1] + a[2];
+        raus(t, a[0], a[1], a[2]);
+      } else skipped++;
+      j++;
+      continue;
+    }
+    m++;                                                                       // Klick: alles, was die freien Händler tragen
+    const free = (M - busy) * C;
+    if (free <= EPS) continue;
+    let a0, a1, a2;
+    if (P.ignoreRatio) {
+      const tot = x[0] + x[1] + x[2];
+      if (tot <= EPS) continue;
+      const q = Math.min(1, free / tot);
+      a0 = x[0] * q; a1 = x[1] * q; a2 = x[2] * q;
+    } else {
+      const u = Math.min(x[0] / cw, x[1] / cs, x[2] / ci, free / P.unitRes);
+      if (u <= EPS) continue;
+      a0 = u * cw; a1 = u * cs; a2 = u * ci;
+    }
+    const amt = a0 + a1 + a2;
+    if (amt <= EPS) continue;
+    const used = Math.ceil(amt / C - 1e-7);
+    busy += used; qT.push(t + 2 * tau); qN.push(used);
+    x[0] -= a0; x[1] -= a1; x[2] -= a2; viaKlick += amt;
+    raus(t, a0, a1, a2);
+  }
+  return {overflow, pkgRes, viaRoute, viaKlick, skipped};
+}
+
+/* Ganzes Konto wie lockstep, je Lieferdorf mit seiner Route (routeOf[i] oder null) und Klicks alle klickT Stunden. */
+function lockstepRouten(src, P, sites, cnt, routeOf, klickT, detail) {
+  const n = src.length, K = cnt.length, site = src.map((_, i) => nearestSite(src, i, sites));
+  const tau = src.map((s, i) => site[i] === i ? 0 : travelHours(s, src[site[i]], P));
+  const m = detail ? mengenNeu() : null;
+  let coins = 0, units = 0, ovSum = 0, pkSum = 0, viaRoute = 0, viaKlick = 0;
+  const bins = P.ignoreRatio ? new Map(sites.map(j => [j, new Array(K + 1)])) : null;
+  let cur = null;
+  const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, P)); units += a0 / P.coin.wood; };
+  // Route im Prägeverhältnis: geprägt wird nach dem knappsten Rohstoff (Menge auf 100 abgerundet)
+  const sinkRoute = (ta, a0, a1, a2) => { const u = Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron); coins += u / (1 - reduction(ta, P)); units += u; };
+  const sinkBin = (ta, a0, a1, a2) => { const k = Math.min(K, Math.floor(ta / P.interval + EPS)); (cur[k] || (cur[k] = [])).push(ta, a0, a1, a2); };
+  for (let i = 0; i < n; i++) {
+    if (site[i] === i) continue;
+    if (bins) cur = bins.get(site[i]);
+    const acc = m ? {ov: [0, 0, 0], arr: [0, 0, 0]} : null;
+    const r = routeKlickRun(src[i], tau[i], P, cnt, routeOf[i] || null, klickT, bins ? sinkBin : routeOf[i] ? sinkRoute : sinkRatio, acc);
+    ovSum += r.overflow; pkSum += r.pkgRes; viaRoute += r.viaRoute; viaKlick += r.viaKlick;
+    if (m) mengenDorf(m, P, r.pkgRes / 3, acc.ov, acc.arr);
+  }
+  for (const j of sites) {
+    const acc = m ? {arr: [0, 0, 0], sov: m.sov} : null;
+    const r = siteRun(src[j], P, cnt, bins ? bins.get(j) : null, acc);
+    coins += r.coins; units += r.minted; pkSum += r.pkgRes;
+    if (m) mengenDorf(m, P, r.pkgRes / 3, [0, 0, 0], acc.arr);
+  }
+  return {coins, units, ov: pkSum > 0 ? ovSum / pkSum : 0, viaRoute, viaKlick, mengen: m ? mengenFertig(m) : null};
+}
+
+/* Einfache Rechnung mit Route (wie simulate): alle Pakete bei 0 h, ohne Speichergrenze; Route alle dt, Klicks alle
+   klickT (Infinity: keine), beide laufen nach den 48 h weiter, bis die Pakete weg sind (höchstens horizon). */
+function simulateRoute(s, tau, P, horizon, merchants, route, klickT) {
+  const cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, C = P.carry;
+  const M = merchants != null ? merchants : s.merchants;
+  const x = [s.pkg.wood, s.pkg.stone, s.pkg.iron], pr = [s.prod.wood, s.prod.stone, s.prod.iron];
+  const avail = () => P.ignoreRatio ? (x[0] + x[1] + x[2]) / P.unitRes : Math.min(x[0] / cw, x[1] / cs, x[2] / ci);
+  const pkgUnits = avail();
+  const a = route ? route.a : null, dt = route ? route.dt : Infinity, need = a ? Math.ceil((a[0] + a[1] + a[2]) / C - 1e-7) : 0;
+  const aU = a ? (P.ignoreRatio ? (a[0] + a[1] + a[2]) / P.unitRes : Math.min(a[0] / cw, a[1] / cs, a[2] / ci)) : 0;
+  let shipped = 0, coins = 0, inTime = 0, doneAt = pkgUnits <= EPS ? 0 : Infinity, tLast = 0, j = 0, m = 0, busy = 0, qh = 0;
+  const qT = [], qN = [], arrivals = [];
+  const tau0 = tau === 0;
+  const ab = (t, units) => {
+    const ta = t + tau, pkgPart = Math.max(0, Math.min(units, pkgUnits - shipped));
+    shipped += units;
+    if (pkgPart > 0 && doneAt === Infinity && shipped >= pkgUnits - 1e-7) doneAt = ta;
+    if (ta <= P.window + EPS) coins += units / (1 - reduction(ta, P));
+    if (pkgPart > 0 && ta <= P.deadline + EPS) inTime += pkgPart;
+    if (pkgPart > 0) arrivals.push([ta, pkgPart]);
+  };
+  for (let schritte = 0; schritte < 2e6; schritte++) {
+    const tr = a && !tau0 ? j * dt : Infinity, tc = isFinite(klickT) || tau0 ? m * (tau0 ? P.interval : klickT) : Infinity;
+    const t = Math.min(tr, tc);
+    if (t === Infinity || t > horizon + EPS) break;
+    if (tLast >= P.window && t > tLast && shipped >= pkgUnits - 1e-7) break;   // Pakete weg, Prägezeit vorbei (wie simulate)
+    const d = Math.min(t, P.window) - Math.min(tLast, P.window);
+    if (d > 0) for (let r = 0; r < 3; r++) x[r] += pr[r] * d;
+    tLast = t;
+    while (qh < qT.length && qT[qh] <= t + EPS) { busy -= qN[qh]; qh++; }
+    if (tr === t) {
+      if (M - busy >= need && avail() >= aU - 1e-9 && (P.ignoreRatio || (x[0] >= a[0] - 1e-6 && x[1] >= a[1] - 1e-6 && x[2] >= a[2] - 1e-6))) {
+        if (P.ignoreRatio) { const f = aU * P.unitRes / (x[0] + x[1] + x[2]); for (let r = 0; r < 3; r++) x[r] -= x[r] * f; }
+        else for (let r = 0; r < 3; r++) x[r] -= a[r];
+        busy += need; qT.push(t + 2 * tau); qN.push(need);
+        ab(t, aU);
+      }
+      j++;
+      continue;
+    }
+    m++;
+    const freeCap = tau0 ? Infinity : (M - busy) * C;
+    const units = Math.min(avail(), freeCap / P.unitRes);
+    if (units <= EPS) continue;
+    if (!tau0) { const used = Math.ceil(units * P.unitRes / C - 1e-7); busy += used; qT.push(t + 2 * tau); qN.push(used); }
+    if (P.ignoreRatio) { const f = units * P.unitRes / (x[0] + x[1] + x[2]); for (let r = 0; r < 3; r++) x[r] -= x[r] * f; }
+    else { x[0] -= units * cw; x[1] -= units * cs; x[2] -= units * ci; }
+    ab(t, units);
+  }
+  return {tau, pkgUnits, inTime, coins, doneAt, arrivals};
+}
+
+/* Vergleich mit Handelsrouten für eine Aufstellung (17.11.2026). Routen wie im Abschnitt „Handelsrouten“: routenPlan
+   mit dem Zeitplan der Aufstellung, rMax Routen, nurDt fester Abstand oder null. Ergebnis: Routen, Münzen nach und ohne
+   Überlauf, Überlauf, Mengen und Anteil über Routen (Gleichschritt mit Klick alle P.interval), die einfache Rechnung
+   mit Routen (Münzen, Ankunft, Engpass je Dorf) und die nötige Klickfrequenz zusätzlich zu den Routen
+   (stufen: Anteil rechtzeitig je Klickabstand der Leiter, Infinity = ohne Anfordern). */
+function vergleichRouten(src, P, sites, pos, rMax, nurDt, leiter) {
+  const cnt = toCnt(pos || [], lastClick(P));
+  const rp = routenPlan(src, P, sites, cnt, rMax, nurDt);
+  delete src._ls;
+  const pl = rp.plans.length ? rp.plans[Math.min(rMax, rp.plans.length) - 1] : null;
+  const routeOf = new Array(src.length).fill(null);
+  if (pl) pl.routes.forEach(r => r.dorf.forEach(i => { routeOf[i] = {a: r.a, dt: r.dt}; }));
+  const g = lockstepRouten(src, P, sites, cnt, routeOf, P.interval, true);
+  const ohne = lockstepRouten(src, Object.assign({}, P, {ohneSpeicher: true}), sites, cnt, routeOf, P.interval, false);
+  const site = src.map((_, i) => nearestSite(src, i, sites));
+  const tauOf = i => site[i] === i ? 0 : travelHours(src[i], src[site[i]], P);
+  // einfache Rechnung mit Routen und Klick alle P.interval: Münzen, Ankunft, Engpass (wie details)
+  const rows = [], curve = [];
+  let doneAt = 0, einfach = 0, pkg = 0, inTime = 0;
+  src.forEach((s, i) => {
+    const tau = tauOf(i), r = simulateRoute(s, tau, P, LONG_HORIZON, null, routeOf[i], P.interval);
+    let status = "ok";
+    if (r.inTime < r.pkgUnits - 1e-7) {
+      status = "weit";
+      for (let L = s.b.market + 1; L <= 25; L++) {
+        const q = simulateRoute(s, tau, P, P.window, Math.round(merchantsAt(L) * (s.mFaktor || 1)), routeOf[i], P.interval);
+        if (q.inTime >= q.pkgUnits - 1e-7) { status = "markt"; break; }
+      }
+    }
+    r.arrivals.forEach(([t, part]) => curve.push([t, part]));
+    if (r.doneAt > doneAt) doneAt = r.doneAt;
+    einfach += r.coins; pkg += r.pkgUnits; inTime += r.inTime;
+    rows.push({i, status});
+  });
+  curve.sort((x, y) => x[0] - y[0]);
+  // Leiter: Anteil rechtzeitig mit Routen je Klickabstand (Minuten), dazu ganz ohne Anfordern
+  const stufen = (leiter || []).concat([Infinity]).map(min => {
+    let pk = 0, it = 0;
+    src.forEach((s, i) => { const r = simulateRoute(s, tauOf(i), P, P.window, null, routeOf[i], min === Infinity ? Infinity : min / 60); pk += r.pkgUnits; it += r.inTime; });
+    return {min, share: pk > EPS ? it / pk : 1};
+  });
+  return {routen: pl ? {R: pl.R, routes: pl.routes.map(r => ({site: r.site, dt: r.dt, n: r.n, a: r.a, dorf: r.dorf.length}))} : null,
+          nach: g.coins, ohne: ohne.coins, ov: g.ov, mengen: g.mengen, viaRoute: g.viaRoute, viaKlick: g.viaKlick,
+          einfach, einfachShare: pkg > EPS ? inTime / pkg : 1, mengenEinfach: mengenEinfach(src, {pkg, inTime}, P),
+          d: {rows, curve, doneAt}, stufen};
+}
+/* Nötiger Klickabstand zusätzlich zu den Routen: größter Abstand (auch „gar nicht“), bei dem alles rechtzeitig ankommt;
+   sonst der größte mit 98 % des Bestwerts. */
+function noetigMitRouten(stufen) {
+  if (!stufen || !stufen.length) return null;
+  const full = stufen.filter(x => x.share >= 1 - 1e-6);
+  if (full.length) return {kind: "voll", min: Math.max(...full.map(x => x.min))};
+  const top = Math.max(...stufen.map(x => x.share));
+  return {kind: "plateau", min: Math.max(...stufen.filter(x => x.share >= 0.98 * top).map(x => x.min)), top};
+}
+
 /* ---------- Nächstes Prägedorf adeln (10.17, Wunsch Dennis 09.11.2026; 1: auch eigener Stamm, 2a, Top 10) ----------
    Kandidaten aus den Weltdaten der Seite (villages.json) im Rechteck um die eigenen Dörfer plus opt.rand Felder:
    Barbarendörfer, Dörfer anderer Spieler, Dörfer des eigenen Stammes (die man sich schenken lassen kann) und eigene
@@ -1521,7 +1731,7 @@ function aufstellungsCache() {
 const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
-             MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, packageValue, lastUsefulClick,
+             MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, routeKlickRun, lockstepRouten, simulateRoute, vergleichRouten, noetigMitRouten, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,
              mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, lagerTausch, parseLager, routeRun, routeMenge, routenPlan, ROUTE_DT, fremdeSuche, startBestand};
 if (typeof module !== "undefined" && module.exports) module.exports = api;

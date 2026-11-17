@@ -577,6 +577,8 @@
         <div class="pr-row pr-cmpopt" id="cmp-opt">
           <label class="pick"><span>Rohstoffe anfordern</span><select id="cmp-iv" aria-label="Klickfrequenz, dieselbe wie oben"></select></label>
           <span class="pr-mnote">gleiche Einstellung wie oben, rechnet neu</span>
+          <label class="pr-check"><input type="checkbox" id="cmp-routen"> Handelsrouten aus dem Account-Manager einrechnen</label>
+          <span class="pr-mnote" id="cmp-routen-hint">so viele Routen und derselbe Abstand wie unter „Handelsrouten im Account-Manager“</span>
         </div>
         <div id="cmp"></div>
       </div>
@@ -828,6 +830,7 @@ $("vergessen").addEventListener("click", eingabenLoeschen);
 document.querySelector("main").addEventListener("input", merkenSpaeter);
 document.querySelector("main").addEventListener("change", merkenSpaeter);
 const GEMERKT = eingabenLaden();          // Lagerstand dazu am Ende des Skripts, wenn LAGER angelegt ist
+$("cmp-iv").value = $("interval").value;  // Klickabstand im Vergleich folgt immer dem Feld oben
 setMode(GEMERKT || "pct");
 pctPakete();
 document.addEventListener("themechange", () => { if (RESULT) { renderView(); renderArrival(); renderFreq(); renderCurve(); } });
@@ -2384,6 +2387,51 @@ function vergleichZahlen() {
   });
 }
 
+/* ---------- Vergleich mit Handelsrouten (Wunsch Dennis 17.11.2026) ----------
+   Schalter im Vergleich: je Aufstellung die Routen wie im Abschnitt „Handelsrouten“ (Höchstzahl, Abstand) mit ihrem
+   Zeitplan, dazu Anfordern im eingestellten Klickabstand. Rechnet im eigenen Worker; Ergebnis je Eingabe gemerkt. */
+let VGLR = null, VWORKER = null;
+const festAbstand = () => { const f = Math.round(+$("routen-abstand").value || 0); return f >= 1 ? Math.min(720, f) : 0; };
+function vglPos(n) {
+  const R = RESULT, pk = R.pkg, x = n !== R.recommend ? KCACHE.get(RUN, n) : null;
+  if (pk && pk.perK) return pk.perK[n - 1] ? pk.perK[n - 1].pos : pk.pos;
+  if (pk) return x && x.pkg ? x.pkg.pos : pk.pos;
+  return x && x.zeitplan ? x.zeitplan.pos : R.zeitplan ? R.zeitplan.pos : [];
+}
+function routenVergleich() {
+  const R = RESULT;
+  if (!$("cmp-routen").checked || !R || !R.configs) return null;
+  const want = +$("routen-max").value || 3, fest = festAbstand();
+  const configs = R.configs.map((c, q) => ({k: q + 1, sites: c.sites, pos: vglPos(q + 1)}));
+  const key = RUN + "|" + want + "|" + fest + "|" + configs.map(c => c.pos.join(",")).join(";");
+  if (VGLR && VGLR.key === key) return VGLR;
+  VGLR = {key, res: null, fort: 0};
+  const msg = {core: CORE_URL, token: RUN, vglRouten: true, src: R.src, P: R.P, configs, rMax: want, nurDt: fest ? [fest / 60] : null, leiter: K.LADDER};
+  const fertig = res => { if (!VGLR || VGLR.key !== key) return; VGLR.res = res; renderCompare(); };
+  const direkt = () => setTimeout(() => fertig(configs.map(c => Object.assign({k: c.k}, K.vergleichRouten(R.src, R.P, c.sites, c.pos, want, msg.nurDt, K.LADDER)))), 0);
+  if (VWORKER) { VWORKER.terminate(); VWORKER = null; }
+  if (typeof Worker === "undefined" || !CORE_URL) { direkt(); return VGLR; }
+  try { VWORKER = new Worker("praegen-worker.js"); } catch (e) { VWORKER = null; direkt(); return VGLR; }
+  VWORKER.onmessage = e => {
+    const m = e.data;
+    if (m.error) { console.error(m.error); VWORKER = null; direkt(); return; }
+    if (m.fortschritt) { if (VGLR && VGLR.key === key) { VGLR.fort = m.fortschritt[0] / m.fortschritt[1]; renderCompare(); } return; }
+    if (m.vglRouten) fertig(m.vglRouten);
+  };
+  VWORKER.onerror = ev => { ev.preventDefault(); VWORKER = null; direkt(); };
+  VWORKER.postMessage(msg);
+  return VGLR;
+}
+function needTextRouten(stufen) {
+  const q = K.noetigMitRouten(stufen);
+  if (!q) return "–";
+  if (q.kind === "voll") return q.min === Infinity ? "kein Anfordern nötig, die Routen bringen alles rechtzeitig" : "zusätzlich alle " + ivl(q.min) + " anfordern oder öfter";
+  return q.min === Infinity ? "100 % nicht erreichbar, Anfordern bringt kaum mehr (höchstens " + pct0(q.top) + ")"
+    : "100 % nicht erreichbar, zusätzlich alle " + ivl(q.min) + " anfordern bringt fast alles (höchstens " + pct0(q.top) + ")";
+}
+$("cmp-routen").addEventListener("change", () => { if (RESULT && RESULT.configs) renderCompare(); });
+["routen-max", "routen-abstand"].forEach(id => $(id).addEventListener(id === "routen-max" ? "change" : "input", () => { if (RESULT && RESULT.configs && $("cmp-routen").checked) renderCompare(); }));
+
 /* ---------- Vergleich ----------
    10.14: Die gewählte Spalte sieht aus wie der gedrückte Knopf in der Lage, die Empfehlung trägt nur ein Abzeichen.
    Rechtzeitig und nicht rechtzeitig mit Rohstoffmengen, in Berechnung 2 aus dem Gleichschritt (Dennis 1a). */
@@ -2393,6 +2441,13 @@ function renderCompare() {
   const ban = el("div", "pr-wahl");
   wahlZeile(ban);
   box.appendChild(ban);
+  // Handelsrouten eingerechnet (Wunsch Dennis 17.11.2026): alle Werte aus vergleichRouten, solange es rechnet nur der Hinweis
+  const RT = routenVergleich();
+  if (RT && !RT.res) {
+    box.appendChild(el("p", "empty", "rechnet mit Handelsrouten … " + (RT.fort ? Math.round(RT.fort * 100) + " %" : "")));
+    return;
+  }
+  const RR = RT ? RT.res : null, rr = n => RR[n - 1];
   const t = el("table", "pr-cmp"), th = el("thead"), hr = el("tr");
   hr.appendChild(el("th", "l", ""));
   const kl = n => VIEW === n ? "sel" : "";
@@ -2420,8 +2475,19 @@ function renderCompare() {
     });
     tb.appendChild(tr);
   };
-  const pk = R.pkg, Z = vergleichZahlen();
+  const pk = R.pkg, Z = RR ? RR.map(v => ({n: pk && pk.perK && pk.perK[v.k - 1] ? pk.perK[v.k - 1].n : null, nach: v.nach, ohne: v.ohne, ov: v.ov,
+                                              einfach: v.einfach, haupt: pk ? v.nach : v.einfach})) : vergleichZahlen();
   row("Prägedorf", (x, n) => (pk && pk.perK && pk.perK[n - 1] ? pk.perK[n - 1].sites : x.sites).map(siteName).join(" + "));
+  if (RR) {
+    row("Handelsrouten", (x, n) => {
+      const r = rr(n).routen;
+      if (!r || !r.routes.length) return "keine, die etwas bringt";
+      const f = el("span", "pr-diff");
+      r.routes.forEach(q => f.appendChild(el("span", null, ganz(q.n) + " Händler alle " + abstand(q.dt) + " · " + (q.dorf === 1 ? "1 Dorf" : nf.format(q.dorf) + " Dörfer"))));
+      return f;
+    });
+    row("über Handelsrouten", (x, n) => { const v = rr(n), s = v.viaRoute + v.viaKlick; return s > 0 ? anteil(v.viaRoute / s) + " der verschickten Rohstoffe" : "–"; });
+  }
   const pK = pk && pk.perK, z = n => Z[n - 1], zahl = v => v == null ? "–" : nf.format(Math.round(v));
   // Münzen mit und ohne Überlauf (Wunsch Dennis 17.11.2026); bei „vorgeben“ zuerst die einfache Rechnung (Grundlage der Empfehlung)
   if (pK) row("Pakete (optimal)", (x, n) => z(n).n != null ? String(z(n).n) : "–");
@@ -2445,7 +2511,8 @@ function renderCompare() {
     const v = c && c.pkg ? c.pkg.detail.lokal : pk.configLokal ? pk.configLokal[n - 1] : null;
     return v != null ? nf.format(Math.round(v)) : "–";
   });
-  const mv = ns.map(mengenVergleich);
+  const mv = RR ? ns.map(n => pk ? rr(n).mengen : rr(n).mengenEinfach) : ns.map(mengenVergleich);
+  const dOf = (x, n) => RR ? rr(n).d : x.d;
   // Unterschied zu den anderen Aufstellungen in Münzen (nach Überlauf) und rechtzeitigen Paket-Rohstoffen (17.11.2026)
   if (ns.length > 1) ns.forEach(m => row("gegenüber " + fdName(m), (x, n) => {
     if (n === m) return "";
@@ -2474,11 +2541,11 @@ function renderCompare() {
     f.appendChild(split);
     return f;
   });
-  row("90 % angekommen", x => hrs(share90(x.d)), "grp");
-  row("alles angekommen", x => hrs(x.d.doneAt));
-  row("Nötige Klickfrequenz", (x, n) => needText(n, false));
-  row("Markt zu klein", x => String(engpass(x.d).m));
-  row("zu weit weg", x => String(engpass(x.d).w));
+  row("90 % angekommen", (x, n) => hrs(share90(dOf(x, n))), "grp");
+  row("alles angekommen", (x, n) => hrs(dOf(x, n).doneAt));
+  row(RR ? "Nötige Klickfrequenz zusätzlich" : "Nötige Klickfrequenz", (x, n) => RR ? needTextRouten(rr(n).stufen) : needText(n, false));
+  row("Markt zu klein", (x, n) => String(engpass(dOf(x, n)).m));
+  row("zu weit weg", (x, n) => String(engpass(dOf(x, n)).w));
   t.appendChild(tb);
   box.appendChild(t);
   const p = el("p", "empty");
@@ -2499,6 +2566,10 @@ function renderCompare() {
           + " % Paketen auf einmal ohne Speichergrenze; danach richtet sich die Empfehlung. Münzen nach Überlauf und der Überlauf kommen aus dem Gleichschritt mit dem Zeitplan von "
           + (zp ? paketen(zp.n) : "den Paketen") + " (wie unter „Zeitplan der Pakete“; eine angeklickte Aufstellung mit ihrem eigenen), Münzen ohne Überlauf aus demselben Zeitplan ohne Speichergrenze. ");
   text("„gegenüber …“ vergleicht die Münzen nach Überlauf und die rechtzeitig angekommenen Paket-Rohstoffe. ");
+  if (RR) text("Mit Handelsrouten: je Aufstellung die besten Routen wie unter „Handelsrouten im Account-Manager“ (höchstens " + (+$("routen-max").value || 3)
+    + ", Abstand " + (festAbstand() ? "fest " + abstand(festAbstand() / 60) : "frei ab 1 Minute") + ", mit dem Zeitplan der Aufstellung); die Dörfer schicken über die Route, "
+    + "solange Rohstoffe und Händler reichen, und alle " + ivl(R.P.intervalMin) + " wird zusätzlich angefordert, was übrig ist. Das gilt für alle Zeilen, auch für die einfache Rechnung. "
+    + "„Nötige Klickfrequenz zusätzlich“: wie oft neben den Routen noch angefordert werden muss. Prägen im Lieferdorf ist dabei nicht eingerechnet. ");
   text("Jedes Dorf beliefert das nächstgelegene Prägedorf.");
   p.style.padding = "8px 0 0";
   box.appendChild(p);
@@ -2852,8 +2923,8 @@ function renderAssumptions() {
     P.mintLocal ? "Prägen in Lieferdörfern (an): Lieferdörfer mit Adelshof prägen beim Einlösen eines Pakets selbst, was sonst über den Speicher ginge, im Prägeverhältnis und zum Grundpreis (vorsichtig: ohne eigene Flagge und ohne Erlass). Geprägt wird der kleinste Wert über die drei Rohstoffe, der Rest läuft weiter über. Diese Münzen zählen zu den Münzen, der Überlauf sinkt entsprechend, auch für die Überlaufgrenze. Das gilt im Gleichschritt, also in Berechnung 2 und im Zeitplan von Berechnung 1."
       : "Prägen in Lieferdörfern (aus): Überlauf ist verloren, auch in Dörfern mit Adelshof.",
     "Tausch vor dem Start (eigenes Feld): je Dorf ein Vorrat an Lehm und Holz zu Beginn, eingetauscht gegen Eisen. Gesucht wird je Dorf der Vorrat mit den meisten Münzen, bei dem das Dorf nicht mehr überläuft und mindestens 90 % des Vorrats geprägt werden; der Zeitplan der Pakete bleibt. " + (P.ignoreRatio ? "Mit „Verhältnis ignorieren“ ein gemeinsamer Anteil für alle Lieferdörfer ohne Überlauf, dann je Prägedorf. " : "") + "Mit Lagerstand aus der Produktionsübersicht zählt, was schon im Lager liegt; fehlendes Eisen in Stunden Mine aus der Eisenproduktion des Dorfes.",
-    "Nächstes Prägedorf adeln (eigenes Feld, auf Knopfdruck): Kandidaten sind die Dörfer im Gebiet um die eigenen Dörfer plus 8 Felder aus den Weltdaten der Seite, je nach Auswahl Barbarendörfer, Dörfer anderer Spieler, des eigenen Stammes und eigene Dörfer ohne Adelshof. Ein solches Dorf zählt nur als Empfänger: Adelshof gilt als gebaut, keine eigenen Pakete und keine Produktion. Bei einem Flaggendoppler ist es das Prägedorf, sonst ersetzt es eines der Prägedörfer deiner besten Aufstellung. Vorauswahl mit dem Zeitplan der Empfehlung, für die besten Kandidaten werden Zeitplan und Paketzahl neu optimiert.",
-    "Handelsrouten (eigenes Feld): statt Anfordern schickt jedes Dorf einer Gruppe alle 0,1 bis 6 Stunden (eingetragen als Stunden mit Komma, z. B. 0,25 für 15 Minuten) eine feste Menge im Prägeverhältnis an sein Prägedorf, so viel, wie eine bestimmte Zahl Händler trägt. Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Für 1 bis 8 Routen werden Abstand und Menge je Route und die Zuordnung der Dörfer so gewählt, dass die meisten Münzen herauskommen; der Zeitplan der Pakete bleibt.",
+    "Nächstes Prägedorf adeln (eigenes Feld, auf Knopfdruck): Kandidaten sind die Dörfer im Gebiet um die eigenen Dörfer plus 8 Felder aus den Weltdaten der Seite, je nach Auswahl Barbarendörfer, Dörfer anderer Spieler, des eigenen Stammes und eigene Dörfer ohne Adelshof. Ein solches Dorf zählt nur als Empfänger: Adelshof gilt als gebaut, keine eigenen Pakete und keine Produktion. Bei einem Flaggendoppler ist es das Prägedorf, sonst ersetzt es eines der Prägedörfer deiner besten Aufstellung. Vorauswahl mit dem Zeitplan der Empfehlung, für die besten Kandidaten wird der Zeitplan neu optimiert, mit der Paketzahl von oben, wenn sie feststeht (immer bei „Rohstoffprozentpunkte vorgeben“), sonst mit der jeweils optimalen.",
+    "Handelsrouten (eigenes Feld): statt Anfordern schickt jedes Dorf einer Gruppe alle 1 Minute bis 6 Stunden (eingetragen als Stunden mit Komma, z. B. 0,25 für 15 Minuten) eine feste Menge im Prägeverhältnis an sein Prägedorf, so viel, wie eine bestimmte Zahl Händler trägt. Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Für 1 bis 8 Routen werden Abstand und Menge je Route und die Zuordnung der Dörfer so gewählt, dass die meisten Münzen herauskommen; der Zeitplan der Pakete bleibt. Mit dem Schalter im Vergleich zählen Routen und Anfordern zusammen: die Routen liefern zuerst, ein Klick im eingestellten Abstand holt mit den freien Händlern den Rest.",
     "Markttausch (nur Obergrenze unter der Rohstoffbilanz, nicht in den Münzen): Der nicht prägbare Überschuss" + (P.ignoreRatio ? " im Prägedorf" : "") + " wird 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf zum Flaggenpreis am Ende der 48 h geprägt. Unsicher, weil Händler den Überschuss bringen müssen und jemand die Angebote annehmen muss.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",
     "Klick auf „Rohstoffe anfordern“ beim Start und dann alle " + ivl(P.intervalMin) + ". Jeder Klick schickt alle freien Händler aller Dörfer los. Jedes Dorf beliefert das nächstgelegene Prägedorf.",

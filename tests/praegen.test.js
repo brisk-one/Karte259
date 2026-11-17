@@ -933,6 +933,56 @@ test("17.11.: Suche nach dem nächsten Prägedorf nimmt bei „vorgeben“ die P
   });
 });
 
+/* ---------- Handelsrouten im Vergleich (Wunsch Dennis 17.11.2026) ---------- */
+test("17.11.: Routen und Anfordern zusammen: ohne Route wie bisher, ohne Klicks wie die Routen", () => {
+  for (const ign of [false, true]) {
+    const P = V5({mode: "max", maxOverflow: 10, startPct: 20, ignoreRatio: ign});
+    const R = K.plan(konto63(), P), sites = R.configs[1].sites, Kc = K.lastClick(P), cnt = K.toCnt([0, 0, 6, 12, 18, 24], Kc);
+    const keine = new Array(R.src.length).fill(null);
+    // ohne Routen, Klick alle P.interval: gleich dem Gleichschritt
+    const a = K.lockstep(R.src, P, sites, cnt, true), b = K.lockstepRouten(R.src, P, sites, cnt, keine, P.interval, true);
+    near(b.coins, a.coins, 1e-6 * a.coins); near(b.ov, a.ov, 1e-9);
+    [0, 1, 2].forEach(r => near(b.mengen.A[r], a.mengen.A[r], 1e-3));
+    assert.equal(b.viaRoute, 0);
+    // einfache Rechnung: simulateRoute ohne Route wie simulate
+    R.src.forEach((s, i) => {
+      const tau = sites.includes(i) ? 0 : 3.5, x = K.simulate(s, tau, P, P.window), y = K.simulateRoute(s, tau, P, P.window, null, null, P.interval);
+      near(y.coins, x.coins, 1e-9); near(y.inTime, x.inTime, 1e-9);
+    });
+  }
+  // nur Routen, keine Klicks: dieselben Münzen wie der Routenplan
+  const P = V5({mode: "max", maxOverflow: 10, startPct: 20});
+  const R = K.plan(konto63(), P), sites = R.configs[1].sites, cnt = K.toCnt([0, 0, 6, 12, 18, 24], K.lastClick(P));
+  const rp = K.routenPlan(R.src, P, sites, cnt, 3), pl = rp.plans[rp.plans.length - 1];
+  const routeOf = new Array(R.src.length).fill(null);
+  pl.routes.forEach(r => r.dorf.forEach(i => { routeOf[i] = {a: r.a, dt: r.dt}; }));
+  const nurRoute = K.lockstepRouten(R.src, P, sites, cnt, routeOf, Infinity, false);
+  near(nurRoute.coins, pl.coins, 1e-6 * pl.coins);
+  assert.equal(nurRoute.viaKlick, 0);
+  // Routen und Klicks: mindestens so viel wie nur Routen, Klicks schicken den Rest
+  const beides = K.lockstepRouten(R.src, P, sites, cnt, routeOf, P.interval, false);
+  assert.ok(beides.coins >= nurRoute.coins - 1e-6);
+  assert.ok(beides.viaRoute > 0 && beides.viaKlick > 0);
+});
+
+test("17.11.: Vergleich mit Routen je Aufstellung und nötiger Klickabstand zusätzlich", () => {
+  const P = V5({mode: "pct", pkgPct: 150, maxOverflow: 1});
+  const R = K.planPct(konto63(), P, []), sites = R.configs[R.recommend - 1].sites;
+  const v = K.vergleichRouten(R.src, R.P, sites, R.zeitplan.pos, 3, null, K.LADDER);
+  assert.ok(v.routen && v.routen.R >= 1 && v.routen.routes.length >= 1);
+  assert.ok(v.ohne >= v.nach - 1e-6 && v.ov >= 0);
+  assert.ok(v.viaRoute > 0);
+  assert.equal(v.d.rows.length, R.src.length);
+  assert.equal(v.stufen.length, K.LADDER.length + 1);
+  assert.equal(v.stufen[v.stufen.length - 1].min, Infinity);
+  // öfter klicken bringt nicht weniger (Leiter aufsteigend in Minuten)
+  for (let q = 1; q < K.LADDER.length; q++) assert.ok(v.stufen[q - 1].share >= v.stufen[q].share - 0.02, "Stufe " + q);
+  const q = K.noetigMitRouten(v.stufen);
+  assert.ok(q && (q.kind === "voll" || q.kind === "plateau"));
+  assert.deepEqual(K.noetigMitRouten([{min: 60, share: 1}, {min: Infinity, share: 1}]), {kind: "voll", min: Infinity});
+  assert.equal(K.noetigMitRouten([{min: 60, share: 1}, {min: 120, share: 0.9}, {min: Infinity, share: 0.5}]).min, 60);
+});
+
 // Lieferung über Zwischendörfer (site/praegen-umwege.js, inaktiv bis Supportfreigabe): eigene Testdatei, hier
 // eingebunden, damit der Seitenlauf sie mitprüft
 require("./praegen-umwege.test.js");

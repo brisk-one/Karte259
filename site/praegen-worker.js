@@ -25,6 +25,17 @@ self.onmessage = e => {
       self.postMessage({token: m.token, sitzErgebnis: self.PraegenSitzungen.plane(m.eingabe, melde)});
       return;
     }
+    // Vergleich mit Handelsrouten (17.11.2026): {vglRouten: true, src, P, configs: [{k, sites, pos}], rMax, nurDt, leiter},
+    // Fortschritt je Aufstellung, Antwort {token, vglRouten: [Ergebnis je Aufstellung]}
+    if (m.vglRouten) {
+      const out = [];
+      m.configs.forEach((c, q) => {
+        self.postMessage({token: m.token, fortschritt: [q, m.configs.length]});
+        out.push(Object.assign({k: c.k}, self.Praegen.vergleichRouten(m.src, m.P, c.sites, c.pos, m.rMax, m.nurDt, m.leiter)));
+      });
+      self.postMessage({token: m.token, vglRouten: out});
+      return;
+    }
     // 10.17: Suche nach dem nächsten Prägedorf unter fremden Dörfern, mit Fortschrittsmeldungen
     if (m.fremd) {
       const opt = Object.assign({}, m.opt, {fortschritt: (i, n) => self.postMessage({token: m.token, fortschritt: [i, n]})});
