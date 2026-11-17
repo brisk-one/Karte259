@@ -207,7 +207,7 @@ test("Schwelle stoppt die Suche: bei hoher Schwelle bleibt es bei einem", () => 
   const P = K.params({pkgPct: 300, flagLevel: 9, intervalMin: 60, merchantBonus: true, production: true, minGainPct: 500}, WELT);
   const r = K.plan(dreiHaufen(), P);
   assert.equal(r.recommend, 1);
-  assert.equal(r.configs.length, 2);
+  assert.equal(r.configs.length, 3);                       // gerechnet wird immer mindestens bis 3 (Dennis 8a, 17.11.2026)
 });
 
 test("Frequenzleiter liefert Anteile je Zahl der Prägedörfer", () => {
@@ -372,9 +372,11 @@ test("v0.5 automatisch: jede Aufstellung mit eigener Paketzahl, weiterer Flaggen
   const R = K.planPackages(konto63(), V5({}), []);
   const pK = R.pkg.perK;
   assert.ok(pK.length >= 1 && pK[0].k === 1);
-  for (let k = 2; k <= R.recommend; k++) assert.ok(pK[k - 1].coins >= pK[k - 2].coins * 1.1 - 1e-6, k + " Flaggendoppler ohne 10 % Mehrertrag");
+  const g = 1 + R.P.minGainPct / 100;
+  assert.equal(R.P.minGainPct, 6);                                   // Standard seit 17.11.2026 16:46
+  for (let k = 2; k <= R.recommend; k++) assert.ok(pK[k - 1].coins >= pK[k - 2].coins * g - 1e-6, k + " Flaggendoppler ohne 6 % Mehrertrag");
   const nxt = pK[R.recommend];
-  if (nxt) assert.ok(nxt.coins < pK[R.recommend - 1].coins * 1.1);
+  if (nxt) assert.ok(nxt.coins < pK[R.recommend - 1].coins * g);
   near(R.pkg.detail.coins, pK[R.recommend - 1].coins, 1e-6);
   assert.equal(R.pkg.chosen, pK[R.recommend - 1].n);
   assert.equal(K.planPackages(konto63(), V5({pkgCount: 4}), []).pkg.perK, null);   // feste Zahl: einfache Rechnung wählt
@@ -497,7 +499,7 @@ test("Vorgabe Flaggendoppler: genau diese Zahl, auch gegen die automatische Rege
     const P = V5({fdCount: f}), R = K.planPackages(v, P, []);
     assert.equal(R.recommend, f, "Vorgabe " + f);
     assert.equal(R.configs[f - 1].sites.length, f);
-    assert.equal(R.pkg.perK.length, f);
+    assert.equal(R.pkg.perK.length, Math.max(f, 3));             // mindestens bis 3 gerechnet (8a)
     const x = K.packagesForK(v, P, f, [], R.pkg.perK);          // nachgerechnet wie die Gesamtrechnung
     near(x.pkg.detail.coins, R.pkg.detail.coins, 1e-6);
     if (f === auto.recommend) near(R.pkg.detail.coins, auto.pkg.detail.coins, 1e-6);
@@ -1108,4 +1110,32 @@ test("17.11.: Handelsrouten höchstens für die Grenze an Dörfern, die übrigen
   // die gewählten Dörfer: größter Gewinn gegenüber dem Anfordern; ein anderes Dorf statt eines gewählten bringt nicht mehr
   const pl = mit.plans[mit.plans.length - 1];
   assert.ok(pl.coins > mit.base, "Routen für die Dörfer, die beim Anfordern nicht hinterherkommen, bringen mehr");
+});
+
+test("17.11.: Vergleich rechnet immer mindestens bis 3 Flaggendoppler, Empfehlung bleibt bei der Regel (Dennis 8a)", () => {
+  // langgezogenes Kunstkonto: Kern in der Mitte, Ausläufer nach Norden und Süden
+  const v = [];
+  let seed = 5; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 90; i++) {
+    const y = i < 50 ? 500 + Math.round(rnd() * 30) : (i % 2 ? 420 : 610) + Math.round(rnd() * 20), x = 500 + Math.round(rnd() * 20);
+    v.push({name: "D" + i, x, y, b: {market: 20, storage: 28, wood: 28, stone: 28, iron: 28, snob: i % 3 === 0 ? 1 : 0}});
+  }
+  for (const gain of [6, 500]) {
+    const P = K.params({mode: "pct", pkgPct: 200, flagLevel: 9, decreeN: 1, intervalMin: 120, merchantBonus: true, minGainPct: gain}, WELT);
+    const R = K.plan(v, P);
+    assert.ok(R.configs.length >= 3, "nur " + R.configs.length + " Spalten bei Schwelle " + gain);
+    // Empfehlung: höchstens bis vor die erste Aufstellung unter der Schwelle
+    let erwartet = 1;
+    for (let k = 2; k <= R.configs.length; k++) {
+      const a = R.configs[k - 2], b = R.configs[k - 1];
+      if (a.share >= 1 - 1e-6 || b.gainPct < gain - 1e-9) break;
+      erwartet = k;
+    }
+    assert.equal(R.recommend, erwartet);
+  }
+  // „maximieren“ automatisch: perK ebenfalls mindestens bis 3, Empfehlung nach Schwelle
+  const P = K.params({mode: "max", pkgSize: 30, flagLevel: 9, decreeN: 1, intervalMin: 120, merchantBonus: true, minGainPct: 500}, WELT);
+  const R = K.planPackages(v, P, []);
+  assert.ok(R.pkg.perK.length >= 3);
+  assert.equal(R.recommend, 1);
 });

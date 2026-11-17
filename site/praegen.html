@@ -416,7 +416,7 @@
           </div>
           <!-- Schwelle für einen weiteren Flaggendoppler, gilt in beiden Berechnungsarten (10.14, Wunsch Dennis 07.11.2026) -->
           <div class="pr-row pr-gain" id="gain-row" style="margin-top:8px">
-            <label class="pick"><span>Weiterer Flaggendoppler ab</span><input type="number" id="gain" min="0" max="500" step="1" value="10"
+            <label class="pick"><span>Weiterer Flaggendoppler ab</span><input type="number" id="gain" min="0" max="500" step="1" value="6"
               aria-label="Weiterer Flaggendoppler ab so viel Prozent mehr Münzen" aria-describedby="gain-note"></label>
             <span>% mehr Münzen</span>
             <span class="pr-mnote" id="gain-note"></span>
@@ -813,7 +813,7 @@ const merkFelder = () => [...document.querySelectorAll("main input[id], main sel
 var merkTimer = null;                    // var: Klicks auf die Berechnung können schon vor dieser Zeile wirken
 // gemerkt wird nur nach eigenen Eingaben (input, change, Wahl der Berechnung, ausgeschlossene Dörfer), nicht beim Laden
 function standDaten() {
-  const d = {mode: MODE, off: [...OFF], fest: FEST};
+  const d = {mode: MODE, off: [...OFF], fest: FEST, schwelle: 2};
   merkFelder().forEach(e => { d[e.id] = e.type === "checkbox" ? e.checked : e.value; });
   return d;
 }
@@ -824,6 +824,9 @@ function merkenSpaeter() { clearTimeout(merkTimer); merkTimer = setTimeout(merke
 function eingabenLaden() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(MERK) || "null"); } catch (e) { d = null; }
+  // Schwelle 6 statt 10 % (Dennis 17.11.2026 16:46): ein gemerkter alter Standardwert 10 wird einmal auf 6 gesetzt;
+  // gemerkte Stände ab dann tragen schwelle: 2. Ein geladener Stand aus einer Datei bleibt, wie er gespeichert wurde.
+  if (d && typeof d === "object" && !d.schwelle && String(d.gain) === "10") d.gain = "6";
   return eingabenAnwenden(d);
 }
 const festGueltig = f => !!f && typeof f === "object" && Number.isInteger(f.x) && Number.isInteger(f.y) && Array.isArray(f.bleibt)

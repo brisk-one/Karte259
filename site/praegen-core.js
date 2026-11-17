@@ -141,7 +141,8 @@ function params(input, world) {
     intervalMin: Math.max(1, +input.intervalMin || 60),
     production: input.production !== false,
     prodFactor: +input.prodFactor > 0 ? +input.prodFactor : 1,
-    minGainPct: Math.max(0, +(input.minGainPct != null ? input.minGainPct : 10)),
+    // Schwelle für einen weiteren Flaggendoppler: 6 % (Dennis 17.11.2026 16:46, vorher 10 %)
+    minGainPct: Math.max(0, +(input.minGainPct != null ? input.minGainPct : 6)),
     minMarket: Math.max(0, Math.min(25, input.minMarket | 0)),   // 0: Marktstufen wie im Dorf
     minStorage: Math.max(0, Math.min(30, input.minStorage | 0)), // 0: Speicherstufen wie im Dorf
     ignoreRatio: !!input.ignoreRatio,                             // Händler schicken, was im Dorf liegt
@@ -432,8 +433,11 @@ function details(src, P, sites, planner) {
    Regel 9.1a (Dennis 28.10.2026), verallgemeinert auf beliebig viele Flaggendoppler (Dennis 23:24): ein weiterer
    Flaggendoppler wird nur empfohlen, wenn die Aufstellung mit einem weniger nicht alle Paket-Rohstoffe rechtzeitig
    schafft und der weitere mindestens minGainPct mehr Münzen bringt. Gerechnet wird bis zur ersten Aufstellung, die
-   diese Hürde nicht nimmt, damit die Seite zeigen kann, warum dort Schluss ist. */
+   diese Hürde nicht nimmt, damit die Seite zeigen kann, warum dort Schluss ist, und immer mindestens bis K_MIN
+   Flaggendoppler (Frage 8, Dennis 8a am 17.11.2026 16:46: bei langgezogenen Konten kann der dritte mehr bringen als der
+   zweite). Empfohlen wird weiter nur bis vor die erste Aufstellung unter der Schwelle. */
 const K_MAX = 8;
+const K_MIN = 3;
 function search(src, P, pl) {
   const all = src.map(s => s.i), ah = src.filter(s => s.snob).map(s => s.i);
   const cands1 = ah.length ? ah : all, candsK = ah.length >= 2 ? ah : all;
@@ -452,7 +456,7 @@ function search(src, P, pl) {
     const stop = prev.share >= 1 - 1e-6 || next.gainPct < P.minGainPct - 1e-9;
     if (stop) frei = false;
     if (frei) recommend = k;
-    if (stop && k >= (P.fdCount || 0)) break;          // bei Vorgabe mindestens bis zu dieser Zahl rechnen
+    if (!frei && k >= Math.max(P.fdCount || 0, K_MIN)) break;   // mindestens bis K_MIN, bei Vorgabe bis zu dieser Zahl
   }
   if (P.fdCount) recommend = Math.min(P.fdCount, configs.length);
   return {configs, recommend, ah, all};
@@ -1741,19 +1745,23 @@ function bestForK(villages, P0, k, N0) {
 
 /* Gesamtrechnung v0.5. „automatisch“ (Dennis 3a, 29.10.2026): je Zahl der Flaggendoppler die eigene optimale
    Paketzahl; ein weiterer Flaggendoppler wird empfohlen, solange er damit mindestens minGainPct mehr Münzen bringt
-   (Regel 9.1a auf den Gleichschritt übertragen). Gerechnet wird bis zur ersten Aufstellung unter dieser Schwelle. */
+   (Regel 9.1a auf den Gleichschritt übertragen). Gerechnet wird bis zur ersten Aufstellung unter dieser Schwelle und
+   mindestens bis K_MIN (8a, 17.11.2026); mit Vorgabe (fdCount) bis zu dieser Zahl, mindestens bis K_MIN. */
 function planPackages(villages, P0, passive) {
   let best, perK = null;
   if (P0.pkgCount) best = bestForK(villages, P0, P0.fdCount || 0, P0.pkgCount);
   else {
     // automatisch: weiterer Flaggendoppler ab Mehrertrag; vorgegebene Zahl (fdCount): genau bis dorthin
     perK = [];
-    for (let k = 1; k <= (P0.fdCount || K_MAX); k++) {
-      const o = bestForK(villages, P0, k, best ? best.n || 1 : 3);
+    let last = null, frei = true;
+    for (let k = 1; k <= (P0.fdCount ? Math.max(P0.fdCount, K_MIN) : K_MAX); k++) {
+      const o = bestForK(villages, P0, k, last ? last.n || 1 : 3);
       if (!o || !o.cur) { if (!best) best = o; break; }
-      perK.push(o);
-      if (!P0.fdCount && best && o.coins < best.coins * (1 + P0.minGainPct / 100) - 1e-9) break;
-      best = o;
+      perK.push(o); last = o;
+      if (P0.fdCount) { if (k <= P0.fdCount) best = o; continue; }
+      if (frei && best && o.coins < best.coins * (1 + P0.minGainPct / 100) - 1e-9) frei = false;
+      if (frei) best = o;
+      if (!frei && k >= K_MIN) break;
     }
   }
   if (!best || !best.cur) return best ? best.R : plan(villages, P0);
@@ -1887,7 +1895,7 @@ function aufstellungsCache() {
 }
 
 const api = {ROUTEN_DOERFER, anpassenWarm, festAufstellung, festDorf, adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
-             WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
+             WORLD_DEFAULT, K_MAX, K_MIN, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, routeKlickRun, lockstepRouten, simulateRoute, vergleichRouten, noetigMitRouten, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,
