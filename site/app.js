@@ -42,14 +42,8 @@ const THEMES = {
 };
 function applyTheme(name) {
   document.documentElement.dataset.theme = name;
-  const b = $("theme-toggle");
-  if (b) {
-    // Der Knopf nennt die Fassung, zu der er wechselt, nicht die gerade sichtbare.
-    const ziel = THEMES[THEMES[name].next];
-    b.innerHTML = ziel.icon + "<span>" + ziel.label + "</span>";
-    b.title = "Zur Fassung " + ziel.label + " wechseln";
-    b.setAttribute("aria-label", b.title);
-  }
+  // Design-Schalter (17.11.2026): die gewählte Fassung ist gedrückt
+  document.querySelectorAll(".design-wahl button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.design === name)));
   document.dispatchEvent(new CustomEvent("themechange", {detail: name}));
 }
 function initTheme() {
@@ -57,10 +51,10 @@ function initTheme() {
   try { saved = localStorage.getItem("k259-theme"); } catch (e) { /* Speicher gesperrt */ }
   applyTheme(THEMES[saved] ? saved : "classic");
 }
-function toggleTheme() {
-  const next = THEMES[document.documentElement.dataset.theme].next;
-  try { localStorage.setItem("k259-theme", next); } catch (e) { /* Speicher gesperrt */ }
-  applyTheme(next);
+function setTheme(name) {
+  if (!THEMES[name] || document.documentElement.dataset.theme === name) return;
+  try { localStorage.setItem("k259-theme", name); } catch (e) { /* Speicher gesperrt */ }
+  applyTheme(name);
 }
 
 /* ---------- Zusatzfunktionen (Angriffsplaner) ----------
@@ -150,12 +144,22 @@ function buildAppbar(current, title) {
     z.addEventListener("click", () => zusatzDialog(bar));
     nav.appendChild(z);
   }
-  const btn = el("button");
-  btn.id = "theme-toggle";
-  btn.type = "button";
-  btn.addEventListener("click", toggleTheme);
-  nav.appendChild(btn);
-  w.append(h, world, nav);
+  /* Design (Wunsch Dennis 17.11.2026 03:02: der Knopf sah aus wie ein weiterer Reiter): eigener Schalter links beim
+     Titel, getrennt von den Reitern, rund statt eckig, mit Beschriftung „Design“ und beiden Fassungen zur Wahl */
+  const dz = el("div", "design-wahl");
+  dz.setAttribute("role", "group");
+  dz.setAttribute("aria-label", "Design der Seite");
+  dz.appendChild(el("span", "lbl", "Design"));
+  Object.entries(THEMES).forEach(([name, t]) => {
+    const b = el("button");
+    b.type = "button";
+    b.dataset.design = name;
+    b.innerHTML = t.icon + "<span>" + t.label + "</span>";
+    b.title = "Design " + t.label;
+    b.addEventListener("click", () => setTheme(name));
+    dz.appendChild(b);
+  });
+  w.append(h, world, dz, nav);                            // links beim Titel, getrennt von den Reitern rechts
   bar.replaceChildren(w);
   initTheme();
 }

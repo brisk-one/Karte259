@@ -94,12 +94,18 @@ a{color:var(--accent)}
 .appbar nav a:hover{background:var(--btn-hover)}
 .appbar nav a.on{background:var(--btn-on); color:var(--accent-ink); border-color:var(--accent)}
 [data-theme="classic"] .appbar nav a.on{color:var(--accent-ink)}
-#theme-toggle{margin-left:4px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;
-  font:inherit; font-size:11.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
-  color:var(--bar-dim); background:var(--btn); border:1px solid var(--bar-edge);
-  border-radius:var(--radius); padding:4px 10px; box-shadow:var(--shine)}
-[data-theme="classic"] #theme-toggle{color:var(--ink); border-color:#3f2100}
-#theme-toggle:hover{background:var(--btn-hover)}
+/* Design-Schalter (17.11.2026): beim Titel, getrennt von den Reitern, runder Schalter mit zwei Fassungen statt eckigem Reiterknopf */
+.design-wahl{display:inline-flex; align-items:center; gap:7px}
+.design-wahl .lbl{font-size:11px; color:var(--bar-dim)}
+.design-wahl button{display:inline-flex; align-items:center; gap:5px; cursor:pointer; font:inherit; font-size:12px; font-weight:600;
+  letter-spacing:0; text-transform:none; color:var(--bar-dim); background:rgba(0,0,0,.28); border:1px solid var(--bar-edge);
+  padding:3px 11px; border-radius:0}
+.design-wahl button:first-of-type{border-radius:999px 0 0 999px}
+.design-wahl button:last-of-type{border-radius:0 999px 999px 0; margin-left:-1px}
+.design-wahl button:hover{color:var(--bar-ink)}
+.design-wahl button[aria-pressed="true"]{background:var(--bar-ink); color:#3f2100; cursor:default}
+[data-theme="futuristic"] .design-wahl button[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+.design-wahl svg{width:13px; height:13px; flex:none}
 /* Zusatzfunktionen freischalten (Angriffsplaner, 03.11.2026): schlichter Knopf wie die Reiter, Feld unter der Kopfzeile */
 .zusatz-btn{font:inherit; font-size:11.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; cursor:pointer;
   color:var(--bar-dim); background:none; border:1px dashed var(--bar-edge); border-radius:var(--radius); padding:4px 10px}
@@ -110,7 +116,6 @@ a{color:var(--accent)}
 .zusatz-box input{font:inherit; padding:4px 7px; min-width:12em; color:var(--ink); background:var(--field);
   border:1px solid var(--edge); border-radius:var(--radius)}
 .zusatz-msg{font-size:12px; color:var(--ink-2)}
-#theme-toggle svg{width:14px; height:14px; flex:none}
 
 /* ---------- Kacheln mit Kennzahlen ---------- */
 .facts{display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:0}
