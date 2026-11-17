@@ -457,18 +457,48 @@ function search(src, P, pl) {
   if (P.fdCount) recommend = Math.min(P.fdCount, configs.length);
   return {configs, recommend, ah, all};
 }
+/* Festgelegtes Prägedorf (Wunsch Dennis 17.11.2026 02:18): ein Dorf aus „Nächstes Prägedorf adeln“ kommt wie in der
+   Suche als Empfänger ins Konto (Adelshof gilt als gebaut, keine Pakete, keine Produktion, beginnt leer) und bildet mit
+   den Prägedörfern, die laut Suche bleiben, eine zusätzliche Aufstellung am Ende der Liste. Gesucht wird ohne dieses
+   Dorf, die übrigen Aufstellungen bleiben dadurch unverändert. P.fest = {x, y, name, bleibt: [[x, y], …]}. */
+function festDorf(P, i) {
+  return {i, name: P.fest.name, x: P.fest.x, y: P.fest.y, b: {snob: 1, market: 0, storage: 0}, marketFrom: 0, storageFrom: 0,
+          cap: P.ignoreRatio ? storageCap(30) : 0, merchants: 0, mFaktor: 1, sFaktor: 1, snob: true, leer: true, neu: true,
+          pkg: {wood: 0, stone: 0, iron: 0}, prod: {wood: 0, stone: 0, iron: 0}, lager: null};
+}
+// Konto mit dem festgelegten Dorf am Ende und die Prägedörfer seiner Aufstellung; null, wenn ein bleibendes
+// Prägedorf in der Eingabe fehlt (z. B. ausgeschlossen)
+function festAufstellung(src, P) {
+  if (!P.fest) return null;
+  const sites = [];
+  for (const [x, y] of P.fest.bleibt || []) {
+    const i = src.findIndex(s => s.x === x && s.y === y);
+    if (i < 0 || sites.includes(i)) return null;
+    sites.push(i);
+  }
+  const s2 = src.concat([festDorf(P, src.length)]);
+  return {src: s2, sites: sites.concat([src.length])};
+}
 function plan(villages, P) {
-  const src = prepare(villages, P);
-  const pl = new Planner(src, P);
-  const out = {P, src, ahCount: src.filter(s => s.snob).length};
+  const src0 = prepare(villages, P), fa = festAufstellung(src0, P), src = fa ? fa.src : src0;
+  const pl = new Planner(src0, P);
+  const out = {P, src, ahCount: src0.filter(s => s.snob).length};
   // Dörfer, die für die Mindeststufe den Marktplatz vorher ausbauen, und die Summe der Ausbaustufen
-  const up = src.filter(s => s.b.market > s.marketFrom);
+  const up = src0.filter(s => s.b.market > s.marketFrom);
   out.marketUp = {count: up.length, levels: up.reduce((n, s) => n + s.b.market - s.marketFrom, 0)};
-  if (!src.length) return out;
-  const sr = search(src, P, pl);
-  out.configs = sr.configs;
+  if (!src0.length) return out;
+  const sr = search(src0, P, pl);
+  out.configs = sr.configs.slice();
   out.recommend = sr.recommend;
-  out.details = sr.configs.map(c => details(src, P, c.sites, pl));
+  if (P.fest) out.festFehlt = !fa;
+  const pl2 = fa ? new Planner(src, P) : pl;
+  if (fa) {
+    const r = pl2.evaluate(fa.sites);
+    r.needsSnob = false; r.gainPct = null; r.fest = true;
+    out.configs.push(r);
+    out.fest = {col: out.configs.length, k: fa.sites.length, x: P.fest.x, y: P.fest.y, name: P.fest.name};
+  }
+  out.details = out.configs.map(c => details(src, P, c.sites, pl2));
   // Bester Einzelstandort ohne Adelshof-Pflicht, nur als Hinweis, wenn er spürbar mehr bringt
   if (sr.ah.length && sr.ah.length < sr.all.length) {
     const any = pl.bestSingle(sr.all);
@@ -496,6 +526,9 @@ function ladderStep(villages, P, minutes, kMax) {
     if (!r) break;
     share.push(r.share); coins.push(r.coins); prev = r;
   }
+  // festgelegtes Prägedorf (17.11.2026): kMax ist die Zahl der übrigen Aufstellungen, die festgelegte folgt danach
+  const fa = festAufstellung(src, Q);
+  if (fa && kMax) { const r = new Planner(fa.src, Q).evaluate(fa.sites); share[kMax] = r.share; coins[kMax] = r.coins; }
   return {min: minutes, share, coins};
 }
 /* Größter Klickabstand, bei dem alles rechtzeitig ankommt; sonst der größte, der 98 % des Bestwerts erreicht.
@@ -1243,6 +1276,7 @@ function fremdeSuche(villages, P0, passive, welt, opt) {
   // „Rohstoffprozentpunkte vorgeben“ (17.11.2026): dieselbe Paketzahl wie oben (Prozentpunkte ÷ Paketgröße) und damit
   // dieselben eigenen Prägedörfer wie im Vergleich; bis dahin optimierte die Suche die Paketzahl selbst
   if (P0.mode === "pct" && !P0.pkgCount) P0 = Object.assign({}, P0, {pkgCount: Math.max(1, Math.round(P0.pkgPct / P0.pkgSize + 1e-9))});
+  if (P0.fest) P0 = Object.assign({}, P0, {fest: null});                     // gesucht wird ohne festgelegtes Dorf
   const R = planPackages(villages, P0, passive), P = R.P, src = R.src, pk = R.pkg;
   const Kc = lastClick(P), cnt = toCnt(pk.pos, Kc), xy = s => s.x * 1000 + s.y;
   const idx = new Map(src.map((s, i) => [xy(s), i]));
@@ -1292,9 +1326,9 @@ function fremdeSuche(villages, P0, passive, welt, opt) {
       const s2 = src.concat([pseudo(c)]), cv = packageCurve(s2, P, st, false), n = Math.min(P.pkgCount || cv.optimal || 0, cv.curve.length - 1), z = cv.curve[n];
       const ohne = ohneUeberlauf(s2, P, st, toCnt(z.pos, cv.K));
       melde(++fertig, schritte);
-      const bleibt = st.filter(i => i < src.length).map(i => src[i].name);
+      const bleibt = st.filter(i => i < src.length).map(i => src[i].name), bleibtXY = st.filter(i => i < src.length).map(i => [src[i].x, src[i].y]);
       const ersetzt = e.k === 1 ? [] : e.sites.filter(i => !st.includes(i)).map(i => src[i].name);
-      return Object.assign({}, c, {coins: z.coins, ohne, n, ov: z.ov, ok: z.ok, bleibt, ersetzt});
+      return Object.assign({}, c, {coins: z.coins, ohne, n, ov: z.ov, ok: z.ok, bleibt, bleibtXY, ersetzt});
     }).sort((a, b) => b.coins - a.coins || a.pts - b.pts);
     const top = genau(alle.filter(x => x.c.typ !== "eigen").slice(0, opt.genau)).slice(0, opt.top);
     const eigeneTop = genau(alle.filter(x => x.c.typ === "eigen").slice(0, opt.genauEigen));
@@ -1516,7 +1550,7 @@ function scheduleDetails(src, P, sites, pos, passive) {
     if (!cnt[k]) continue;
     sum += cnt[k];
     let pk = 0;
-    src.forEach(s => { pk += cnt[k] * P.pkgSize / 100 * s.cap * 3; });
+    src.forEach(s => { if (!s.leer) pk += cnt[k] * P.pkgSize / 100 * s.cap * 3; });
     rows.push({h: k * P.interval, n: cnt[k], sumPct: sum * P.pkgSize, overflow: r.ovClick[k], share: pk > 0 ? r.ovClick[k] / pk : 0});
   }
   const limiting = [];
@@ -1575,8 +1609,9 @@ function bestForK(villages, P0, k, N0) {
     const P = Object.assign({}, P0, {pkgPct: Math.max(1, N) * P0.pkgSize});
     const Rn = plan(villages, P);
     if (!Rn.src.length) return {R: Rn};
-    const kk = k || Rn.recommend;
-    if (Rn.configs.length < kk) break;
+    const nNorm = Rn.fest ? Rn.fest.col - 1 : Rn.configs.length;
+    const kk = k === "fest" ? (Rn.fest ? Rn.fest.col : 0) : k || Rn.recommend;
+    if (!kk || (k !== "fest" && nNorm < kk)) break;
     const sites = Rn.configs[kk - 1].sites;
     if (cur && key === sites.join(",")) break;          // gleiche Prägedörfer: Kurve bleibt gültig
     R = Rn; R.k = kk;
@@ -1612,6 +1647,8 @@ function planPackages(villages, P0, passive) {
     }
   }
   if (!best || !best.cur) return best ? best.R : plan(villages, P0);
+  // festgelegtes Prägedorf (17.11.2026): wie ein Eintrag in perK, Startwert wie in packagesForK
+  const festO = perK && P0.fest && best.R.fest ? bestForK(villages, P0, "fest", festStart(P0, perK)) : null;
   const R = best.R, P = R.P, src = R.src, sites = best.sites;
   R.recommend = best.k;
   packageCurve(src, best.Pc, sites, true, best.cur);
@@ -1620,12 +1657,7 @@ function planPackages(villages, P0, passive) {
   const pos = cv.curve[chosen].pos;
   R.pkg = Object.assign({}, cv, {chosen, pos, grid: best.m, grenze: grenzeInfo(cv, chosen, P),
     detail: scheduleDetails(src, P, sites, pos, prepare(passive || [], P)),
-    perK: perK && perK.map(o => {
-      // je Aufstellung mit ihrer eigenen Paketzahl und ihrem Zeitplan: Mengen für Vergleich und Begründung (10.14)
-      const pos = o.cv.curve[o.n].pos, c = toCnt(pos, o.cv.K), d = lockstep(o.R.src, o.R.P, o.sites, c, true);
-      return {k: o.k, n: o.n, coins: o.coins, ohne: ohneUeberlauf(o.R.src, o.R.P, o.sites, c), ov: d.ov, pos,
-              units: d.units, lokal: d.lokal, mengen: d.mengen, sites: o.sites.map(i => o.R.src[i])};
-    })});
+    perK: perK && perK.map(perKEintrag), festK: festO && festO.cur ? perKEintrag(festO) : null});
   // feste Paketzahl: alle Aufstellungen mit demselben Zeitplan
   const cfg = R.configs.map(c => lockstep(src, P, c.sites, toCnt(pos, cv.K), true));
   R.pkg.configCoins = cfg.map(d => d.coins);
@@ -1636,6 +1668,20 @@ function planPackages(villages, P0, passive) {
   R.pkg.configOhne = R.configs.map(c => ohneUeberlauf(src, P, c.sites, toCnt(pos, cv.K)));
   if (R.src) delete R.src._ls;
   return R;
+}
+
+// je Aufstellung mit ihrer eigenen Paketzahl und ihrem Zeitplan: Mengen für Vergleich und Begründung (10.14)
+function perKEintrag(o) {
+  const pos = o.cv.curve[o.n].pos, c = toCnt(pos, o.cv.K), d = lockstep(o.R.src, o.R.P, o.sites, c, true);
+  const e = {k: o.k, n: o.n, coins: o.coins, ohne: ohneUeberlauf(o.R.src, o.R.P, o.sites, c), ov: d.ov, pos,
+             units: d.units, lokal: d.lokal, mengen: d.mengen, sites: o.sites.map(i => o.R.src[i])};
+  delete o.R.src._ls;
+  return e;
+}
+// Startwert der Paketzahl für die festgelegte Aufstellung: die Paketzahl der Aufstellung mit gleich vielen Prägedörfern
+function festStart(P0, perK) {
+  const k = (P0.fest.bleibt || []).length + 1, e = perK && perK[Math.min(k, perK.length) - 1];
+  return P0.pkgCount || (e && e.n) || 3;
 }
 
 /* Neue Adelsgeschlechter aus Münzen (Dennis 29.10.2026, Regel 1a): das nächste kostet `naechstes` Münzen (im
@@ -1692,15 +1738,17 @@ function planPct(villages, P0, passive, sitesWahl, R0) {
    demselben Startwert wie in planPackages, damit die Werte mit der Spalte im Vergleich übereinstimmen; bei fester
    Paketzahl dieselbe Zahl. Berechnung 1: Zeitplan für die Prägedörfer der einfachen Rechnung.
    perK: R.pkg.perK der Gesamtrechnung (nur für den Startwert). Ergebnis {k, pkg} bzw. {k, zeitplan} oder null. */
-function packagesForK(villages, P0, k, passive, perK) {
+function packagesForK(villages, P0, k, passive, perK, fest) {
   if (P0.mode === "pct") {
-    const R = plan(villages, P0);
-    if (!R.configs || !R.configs[k - 1]) return null;
-    const z = planPct(villages, P0, passive, R.configs[k - 1].sites, R);
+    const R = plan(villages, P0), q = fest ? (R.fest ? R.fest.col : 0) : k;
+    if (!R.configs || !q || !R.configs[q - 1]) return null;
+    const z = planPct(villages, P0, passive, R.configs[q - 1].sites, R);
     return {k, zeitplan: z.zeitplan};
   }
   const prev = perK && perK[Math.min(k, perK.length + 1) - 2];
-  const o = bestForK(villages, P0, k, P0.pkgCount || (k === 1 ? 3 : (prev && prev.n) || 1));
+  // fest (17.11.2026): die festgelegte Aufstellung, Spalte k auf der Seite
+  const o = fest ? bestForK(villages, P0, "fest", festStart(P0, perK))
+    : bestForK(villages, P0, k, P0.pkgCount || (k === 1 ? 3 : (prev && prev.n) || 1));
   if (!o || !o.cur) return null;
   const P = o.R.P, src = o.R.src, sites = o.sites;
   packageCurve(src, o.Pc, sites, true, o.cur);
@@ -1728,7 +1776,7 @@ function aufstellungsCache() {
           has: (s, k) => { pruef(s); return m.has(k); }, size: () => m.size};
 }
 
-const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
+const api = {festAufstellung, festDorf, adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, routeKlickRun, lockstepRouten, simulateRoute, vergleichRouten, noetigMitRouten, packageValue, lastUsefulClick,

@@ -1,6 +1,6 @@
 /* Rechnet den Prägerechner im Hintergrund, damit die Seite bei großen Konten bedienbar bleibt (Dennis 4a,
    29.10.2026). Die Seite schickt die Adresse des Rechenkerns mit Versionskennung mit, damit der Worker nicht eine
-   ältere Fassung aus dem Zwischenspeicher lädt. Nachricht: {core, token, villages, P, passive, k?, perK?}, Antwort: {token, R}
+   ältere Fassung aus dem Zwischenspeicher lädt. Nachricht: {core, token, villages, P, passive, k?, perK?, fest?}, Antwort: {token, R}
    oder {token, error}. */
 "use strict";
 let loaded = null, loadedU = null, loadedS = null;
@@ -44,7 +44,7 @@ self.onmessage = e => {
     }
     // „Rohstoffprozentpunkte vorgeben“ einfach wie bis v0.4 plus Zeitplan (10.11), „maximieren“ wie v0.5
     // m.k: nur eine gewählte Aufstellung nachrechnen (10.12)
-    const R = m.k ? self.Praegen.packagesForK(m.villages, m.P, m.k, m.passive, m.perK)
+    const R = m.k ? self.Praegen.packagesForK(m.villages, m.P, m.k, m.passive, m.perK, m.fest)
       : m.P.mode === "pct" ? self.Praegen.planPct(m.villages, m.P, m.passive) : self.Praegen.planPackages(m.villages, m.P, m.passive);
     if (R && R.src) delete R.src._ls;                     // Zwischenspeicher des Rechenkerns, wird nicht übertragen
     self.postMessage({token: m.token, R});

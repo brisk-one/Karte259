@@ -8,12 +8,12 @@
 <link rel="stylesheet" href="style.css">
 <style>
   /* Serienfarben (1, 2, 3, 4 Flaggendoppler) und Statusfarben, je Gestaltung geprüft auf Abstand und Kontrast */
-  :root,[data-theme="classic"]{--s1:#8a5a12; --s2:#1f5fae; --s3:#b8366e; --s4:#6d4fc2; --st-ok:#2f6b1f; --st-markt:#a8700a; --st-weit:#9c2b1c;
+  :root,[data-theme="classic"]{--s1:#8a5a12; --s2:#1f5fae; --s3:#b8366e; --s4:#6d4fc2; --s5:#1d7a6c; --st-ok:#2f6b1f; --st-markt:#a8700a; --st-weit:#9c2b1c;
     --chart-grid:rgba(60,40,10,.16); --surface:#f4e4bc;
     /* Holz braun, Lehm orange, Eisen grau (Dennis 07.11.2026 16:43): Abstand für Farbsehschwäche geprüft gegen
        #f4e4bc, Braun und Grau bewusst wenig farbig, deshalb immer mit Wort daneben; Rest der Bilanz neutral */
     --holz:#6f4520; --lehm:#c95a24; --eisen:#7d8792; --st-rest:#a39373}
-  [data-theme="futuristic"]{--s1:#0aa3be; --s2:#9a6cf5; --s3:#d55181; --s4:#c98500; --st-ok:#34e5b0; --st-markt:#ff9f1c; --st-weit:#ff6b81;
+  [data-theme="futuristic"]{--s1:#0aa3be; --s2:#9a6cf5; --s3:#d55181; --s4:#c98500; --s5:#8bd450; --st-ok:#34e5b0; --st-markt:#ff9f1c; --st-weit:#ff6b81;
     --chart-grid:rgba(120,200,240,.14); --surface:#0a1622;
     --holz:#c9a27a; --lehm:#d95926; --eisen:#7f8a96; --st-rest:#5f7d92}
 
@@ -266,6 +266,11 @@
   .pr-fopt{gap:6px 16px; align-items:center}
   .pr-fopt input[type="number"]{width:84px}
   .pr-fk{margin-top:14px}
+  /* festgelegtes Prägedorf (17.11.2026) */
+  .pr-fest{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:6px 0 10px; padding:6px 10px;
+    border:1px solid var(--accent); border-radius:6px; font-size:12.5px}
+  .pr-fest.warn{border-color:var(--st-weit)}
+  .pr-ftab .fest-ok{font-weight:700; color:var(--accent); white-space:nowrap}
   .pr-fk h3{margin:0 0 6px; font-size:13px}
   .pr-fk h3 .sub{font-weight:400; color:var(--muted); font-size:12px}
   .pr-ftab td{vertical-align:middle; font-variant-numeric:tabular-nums}
@@ -350,8 +355,8 @@
   </nav>
   <section class="panel" aria-labelledby="h-in">
     <h2 id="h-in">Übersichten einfügen
-      <span class="hint">Im Spiel Übersichten › Gebäude und › Produktion öffnen, Strg+A, kopieren, hier einfügen. Die Eingaben bleiben nur in diesem Browser, auch nach dem Neuladen; „Eingaben löschen“ entfernt sie.</span>
-      <span class="right"><button class="tw" type="button" id="example">Beispiel laden</button> <button class="tw" type="button" id="vergessen">Eingaben löschen</button></span>
+      <span class="hint">Im Spiel Übersichten › Gebäude und › Produktion öffnen, Strg+A, kopieren, hier einfügen. Die Eingaben bleiben nur in diesem Browser, auch nach dem Neuladen; „Eingaben löschen“ entfernt sie. „Stand herunterladen“ speichert alle Eingaben als Datei auf deinem Gerät, „Stand laden“ holt sie zurück.</span>
+      <span class="right"><button class="tw" type="button" id="example">Beispiel laden</button> <button class="tw" type="button" id="stand-speichern">Stand herunterladen</button> <button class="tw" type="button" id="stand-laden">Stand laden</button><input type="file" id="stand-datei" accept=".json,application/json" hidden> <button class="tw" type="button" id="vergessen">Eingaben löschen</button></span>
     </h2>
     <div class="body pr-in">
       <div class="pr-ins">
@@ -565,6 +570,7 @@
         <button type="button" class="tw" id="f-los">Suchen</button>
       </div>
       <p class="pr-mnote" id="fremd-status">Sucht im Gebiet um deine Dörfer plus 8 Felder, je Zahl Flaggendoppler wie im Vergleich. Lädt dafür die Weltdaten der Seite (rund 700 KB) und rechnet etwa eine halbe Minute im Hintergrund.</p>
+      <div class="pr-fest" id="fremd-fest" hidden></div>
       <div id="fremd-body"></div>
     </div>
   </section>
@@ -580,6 +586,7 @@
           <label class="pr-check"><input type="checkbox" id="cmp-routen"> Handelsrouten aus dem Account-Manager einrechnen</label>
           <span class="pr-mnote" id="cmp-routen-hint">so viele Routen und derselbe Abstand wie unter „Handelsrouten im Account-Manager“</span>
         </div>
+        <div class="pr-fest" id="cmp-fest" hidden></div>
         <div id="cmp"></div>
       </div>
     </section>
@@ -676,6 +683,10 @@ const css = name => getComputedStyle(document.documentElement).getPropertyValue(
 let WORLD = Object.assign({}, K.WORLD_DEFAULT);
 let RESULT = null, VIEW = null, STEPS = [], RUN = 0;
 let WAHL_AKTIV = false;                // true: Dennis hat eine andere Aufstellung als die Empfehlung angeklickt (10.14)
+// festgelegtes Prägedorf aus „Nächstes Prägedorf adeln“ (Wunsch Dennis 17.11.2026 02:18 und 02:24):
+// {x, y, name, k, typ, wer, tag, pts, bleibt, bleibtNamen, ersetzt}; WAHL_FEST: seine Spalte ist gewählt, FEST_NEU: gerade festgelegt
+let FEST = null, WAHL_FEST = false, FEST_NEU = false;
+let LADE_HINWEIS = "";              // „Stand … geladen“ vor der nächsten Statuszeile
 const OFF = new Set();                 // ausgeschlossene Dörfer, Schlüssel "x|y"
 
 /* ---------- Bedienelemente ---------- */
@@ -789,17 +800,23 @@ const MERK = "karte259.praegen.eingaben.v1";
 const merkFelder = () => [...document.querySelectorAll("main input[id], main select[id], main textarea[id]")].filter(e => e.type !== "radio" && e.type !== "file");
 var merkTimer = null;                    // var: Klicks auf die Berechnung können schon vor dieser Zeile wirken
 // gemerkt wird nur nach eigenen Eingaben (input, change, Wahl der Berechnung, ausgeschlossene Dörfer), nicht beim Laden
+function standDaten() {
+  const d = {mode: MODE, off: [...OFF], fest: FEST};
+  merkFelder().forEach(e => { d[e.id] = e.type === "checkbox" ? e.checked : e.value; });
+  return d;
+}
 function merken() {
-  try {
-    const d = {mode: MODE, off: [...OFF]};
-    merkFelder().forEach(e => { d[e.id] = e.type === "checkbox" ? e.checked : e.value; });
-    localStorage.setItem(MERK, JSON.stringify(d));
-  } catch (e) { /* ohne Speicher: nichts merken */ }
+  try { localStorage.setItem(MERK, JSON.stringify(standDaten())); } catch (e) { /* ohne Speicher: nichts merken */ }
 }
 function merkenSpaeter() { clearTimeout(merkTimer); merkTimer = setTimeout(merken, 400); }
 function eingabenLaden() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(MERK) || "null"); } catch (e) { d = null; }
+  return eingabenAnwenden(d);
+}
+const festGueltig = f => !!f && typeof f === "object" && Number.isInteger(f.x) && Number.isInteger(f.y) && Array.isArray(f.bleibt)
+  && f.bleibt.every(b => Array.isArray(b) && b.length === 2 && b.every(Number.isInteger));
+function eingabenAnwenden(d) {
   if (!d || typeof d !== "object") return null;
   merkFelder().forEach(e => {
     if (!(e.id in d)) return;
@@ -807,6 +824,9 @@ function eingabenLaden() {
     else e.value = String(d[e.id]);
   });
   if (Array.isArray(d.off)) d.off.forEach(k => OFF.add(String(k)));
+  // festgelegtes Prägedorf (17.11.2026): bleibt gemerkt, seine Spalte wird nach dem Laden gewählt
+  FEST = festGueltig(d.fest) ? d.fest : null;
+  FEST_NEU = !!FEST;
   return d.mode === "max" ? "max" : "pct";
 }
 function eingabenLoeschen() {
@@ -817,6 +837,7 @@ function eingabenLoeschen() {
     else e.value = e.defaultValue;
   });
   OFF.clear();
+  FEST = null; WAHL_FEST = false;
   LAGER = K.parseLager("");
   lagerStatus();
   SITZ = null; UMWEGE = null;
@@ -827,6 +848,45 @@ function eingabenLoeschen() {
   try { localStorage.removeItem(MERK); } catch (e) { /* nichts gespeichert */ }
 }
 $("vergessen").addEventListener("click", eingabenLoeschen);
+
+/* Stand herunterladen und laden (Wunsch Dennis 17.11.2026 02:21): alle Eingaben wie beim Merken (Übersichten,
+   Lagerstand, Einstellungen, Berechnung, ausgeschlossene Dörfer, festgelegtes Prägedorf, Schalter) als JSON-Datei
+   auf dem eigenen Gerät; nichts geht an einen Server. Laden ersetzt alle Eingaben und rechnet neu. */
+const STAND_FORMAT = "karte259-praegerechner";
+$("stand-speichern").addEventListener("click", () => {
+  const jetzt = new Date(), z = n => String(n).padStart(2, "0");
+  const name = "praegerechner-stand-" + jetzt.getFullYear() + "-" + z(jetzt.getMonth() + 1) + "-" + z(jetzt.getDate()) + "-" + z(jetzt.getHours()) + z(jetzt.getMinutes()) + ".json";
+  const inhalt = JSON.stringify({format: STAND_FORMAT, version: 1, gespeichert: jetzt.toISOString(), eingaben: standDaten()}, null, 1);
+  const url = URL.createObjectURL(new Blob([inhalt], {type: "application/json"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  $("status").textContent = "Stand gespeichert als " + name + ".";
+});
+$("stand-laden").addEventListener("click", () => $("stand-datei").click());
+$("stand-datei").addEventListener("change", async () => {
+  const f = $("stand-datei").files[0], st = $("status");
+  $("stand-datei").value = "";
+  if (!f) return;
+  let d = null;
+  try { d = JSON.parse(await f.text()); } catch (e) { d = null; }
+  if (!d || d.format !== STAND_FORMAT || !d.eingaben || typeof d.eingaben !== "object") {
+    st.textContent = "Die Datei ist kein Stand des Prägerechners. Bitte eine mit „Stand herunterladen“ gespeicherte Datei wählen.";
+    st.classList.add("err");
+    return;
+  }
+  eingabenLoeschen();                                    // erst alles auf den Anfang, dann den Stand übernehmen
+  const m = eingabenAnwenden(d.eingaben);
+  LAGER = K.parseLager($("lager").value);
+  lagerStatus();
+  $("cmp-iv").value = $("interval").value;
+  setMode(m || "pct");
+  pctPakete();
+  gainZustand();
+  merken();
+  const wann = d.gespeichert ? new Date(d.gespeichert) : null;
+  LADE_HINWEIS = "Stand " + (wann && !isNaN(wann) ? "vom " + wann.toLocaleString("de-DE", {dateStyle: "short", timeStyle: "short"}) + " " : "") + "geladen.";
+});
 document.querySelector("main").addEventListener("input", merkenSpaeter);
 document.querySelector("main").addEventListener("change", merkenSpaeter);
 const GEMERKT = eingabenLaden();          // Lagerstand dazu am Ende des Skripts, wenn LAGER angelegt ist
@@ -884,11 +944,13 @@ function run() {
   const auto = K.prodFactorFrom(parsed.villages, parsed.prodSum, WORLD.speed);
   if (inp.prodFactor == null) inp.prodFactor = auto || 1;
   const P = K.params(inp, WORLD);
+  if (FEST) P.fest = {x: FEST.x, y: FEST.y, name: FEST.name, bleibt: FEST.bleibt};     // 17.11.2026
   const ah = parsed.villages.filter(v => v.b.snob >= 1).length;
   st.textContent = parsed.villages.length + " Dörfer erkannt, " + ah + " mit Adelshof"
     + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "") + (nLager ? ", " + nLager + " mit Lagerstand" : "")
     + (inp.production ? " · Produktion × " + nf2.format(inp.prodFactor)
        + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
+  if (LADE_HINWEIS) { st.textContent = LADE_HINWEIS + " " + st.textContent; LADE_HINWEIS = ""; }
   if (!villages.length) { ["p-rec", "p-vorab", "p-routen", "p-umwege", "p-fremd", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
 
   const passive = parsed.villages.filter(v => OFF.has(v.x + "|" + v.y));
@@ -939,6 +1001,10 @@ function show(token, R, villages, parsed) {
   const v = K.wahlNach(WAHL_AKTIV ? VIEW : null, R, WAHL_AKTIV);
   if (WAHL_AKTIV && v !== VIEW) WAHL_AKTIV = false;
   VIEW = v;
+  // festgelegtes Prägedorf (17.11.2026): nach dem Festlegen und solange seine Spalte gewählt ist, zeigt die Seite sie
+  if (R.fest && (FEST_NEU || WAHL_FEST)) { VIEW = R.fest.col; WAHL_AKTIV = true; WAHL_FEST = true; }
+  else WAHL_FEST = false;
+  FEST_NEU = false;
   STEPS = [];
   ["p-rec", "p-vorab", "p-routen", "p-fremd", "p-more"].forEach(id => $(id).hidden = false);
   $("p-umwege").hidden = !UMWEGE_SICHTBAR;                      // inaktiv bis Supportfreigabe
@@ -952,6 +1018,7 @@ function show(token, R, villages, parsed) {
   renderArrival();
   renderFreq();
   renderAssumptions();
+  renderFest();
   nachrechnen();
 
   // Klickfrequenz-Leiter in kleinen Schritten, damit die Seite bedienbar bleibt
@@ -959,7 +1026,7 @@ function show(token, R, villages, parsed) {
   let k = 0;
   const step = () => {
     if (token !== RUN) return;
-    STEPS.push(K.ladderStep(villages, RESULT.P, K.LADDER[k++], RESULT.configs.length));
+    STEPS.push(K.ladderStep(villages, RESULT.P, K.LADDER[k++], nNormal()));
     renderFreq();
     if (k < K.LADDER.length) setTimeout(step, 0);
     else { $("freq-hint").textContent = "Anteil der Paket-Rohstoffe, der rechtzeitig ankommt, je Klickabstand"; renderRecommendation(); renderCompare(); }
@@ -978,10 +1045,11 @@ function gewaehlt() {
   const pk = R.pkg ? (rec ? R.pkg : x && x.pkg) : null, z = R.zeitplan ? (rec ? R.zeitplan : x && x.zeitplan) : null;
   return {k, rec, a: aufstellung(k), pk: pk || null, z: z || null, laedt: !rec && !x && !!(R.pkg || R.zeitplan)};
 }
-function renderWahl() { renderRecommendation(); renderSchedule(); renderCurve(); renderCompare(); renderView(); renderArrival(); renderFreq(); }
+function renderWahl() { renderRecommendation(); renderSchedule(); renderCurve(); renderCompare(); renderView(); renderArrival(); renderFreq(); renderFest(); }
 function setWahl(k) {
   if (!RESULT || !aufstellung(k)) return;
   WAHL_AKTIV = k !== RESULT.recommend;           // Klick auf die Empfehlung heißt: wieder der Empfehlung folgen
+  WAHL_FEST = istFest(k);
   if (k === VIEW) return;
   VIEW = k; renderWahl(); nachrechnen();
 }
@@ -992,7 +1060,7 @@ function wahlZeile(box, vorsatz) {
   box.hidden = VIEW === R.recommend;
   if (box.hidden) return;
   const t = el("span");                                    // ein Textblock, damit die Abstände der Zeile stimmen
-  t.append(document.createTextNode((vorsatz || "") + "gewählt: "), el("b", null, fdName(VIEW)),
+  t.append(document.createTextNode((vorsatz || "") + "gewählt: "), el("b", null, spName(VIEW)),
     document.createTextNode(" · " + wort + ": " + fdName(R.recommend)));
   box.appendChild(t);
   const b = el("button", "tw small", "zur " + wort); b.type = "button";
@@ -1012,12 +1080,13 @@ function nachrechnen() {
     KCACHE.set(token, k, x || {k});
     if (VIEW === k) renderWahl(); else renderCompare();
   };
-  const direkt = () => setTimeout(() => fertig(K.packagesForK(R.villages, R.Pin, k, R.passive, R.pkg && R.pkg.perK)), 0);
+  const fest = istFest(k);
+  const direkt = () => setTimeout(() => fertig(K.packagesForK(R.villages, R.Pin, k, R.passive, R.pkg && R.pkg.perK, fest)), 0);
   if (typeof Worker === "undefined" || !CORE_URL) return void direkt();
   try { KWORKER = new Worker("praegen-worker.js"); } catch (e) { KWORKER = null; return void direkt(); }
   KWORKER.onmessage = e => { if (e.data.error) { console.error(e.data.error); direkt(); return; } fertig(e.data.R); };
   KWORKER.onerror = ev => { ev.preventDefault(); KWORKER = null; direkt(); };
-  KWORKER.postMessage({core: CORE_URL, token, villages: R.villages, P: R.Pin, passive: R.passive, k, perK: R.pkg && R.pkg.perK});
+  KWORKER.postMessage({core: CORE_URL, token, villages: R.villages, P: R.Pin, passive: R.passive, k, perK: R.pkg && R.pkg.perK, fest});
 }
 
 function aufstellung(n) {
@@ -1026,6 +1095,19 @@ function aufstellung(n) {
 }
 const fdName = n => n + " Flaggendoppler";
 const mitFD = n => n === 1 ? "einem Flaggendoppler" : n + " Flaggendopplern";
+/* Spalten mit festgelegtem Prägedorf (Wunsch Dennis 17.11.2026 02:18 und 02:24): die festgelegte Aufstellung ist die
+   letzte Spalte (RESULT.fest.col), alle anderen Spalten n stehen weiter für n Flaggendoppler */
+const istFest = n => !!(RESULT && RESULT.fest) && n === RESULT.fest.col;
+const nNormal = () => RESULT.fest ? RESULT.fest.col - 1 : RESULT.configs.length;
+const festXY = () => RESULT.fest.x + "|" + RESULT.fest.y;
+const spName = n => istFest(n) ? fdName(RESULT.fest.k) + " mit " + festXY() : fdName(n);
+const spMit = n => istFest(n) ? mitFD(RESULT.fest.k) + " mit " + festXY() : mitFD(n);
+// Eintrag mit eigener Paketzahl je Spalte (nur „maximieren“ mit automatischer Paketzahl)
+function perKOf(n) {
+  const pk = RESULT.pkg;
+  if (!pk || !pk.perK) return null;
+  return istFest(n) ? pk.festK || null : pk.perK[n - 1] || null;
+}
 const plus = v => (v >= 0 ? "+" : "") + nf1.format(Math.round(v * 10) / 10) + " %";
 const joinUnd = list => list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " und " + list[list.length - 1];
 // Diagramme zeigen höchstens vier Aufstellungen: alle, sonst 1, eine weniger als empfohlen, die empfohlene, eine mehr
@@ -1035,8 +1117,8 @@ function shownConfigs() {
   return [...new Set([1, rec - 1, rec, rec + 1, VIEW].filter(k => k >= 1 && k <= n))].sort((a, b) => a - b);
 }
 const linie = k => k === VIEW ? 3.5 : 2;           // gewählte Aufstellung kräftiger (10.12)
-const reiheName = k => fdName(k) + (RESULT.recommend === k ? " (Empfehlung)" : "") + (VIEW === k && RESULT.recommend !== k ? " (gewählt)" : "");
-const seriesColor = (k, pos) => css("--s" + (RESULT.configs.length <= 4 ? k : pos + 1));
+const reiheName = k => spName(k) + (RESULT.recommend === k ? " (Empfehlung)" : "") + (VIEW === k && RESULT.recommend !== k ? " (gewählt)" : "");
+const seriesColor = (k, pos) => css("--s" + (istFest(k) ? 5 : nNormal() <= 4 ? k : Math.min(4, pos + 1)));
 function share90(d) {
   const total = d.curve.reduce((a, c) => a + c[1], 0);
   if (total <= 0) return 0;
@@ -1059,7 +1141,7 @@ function needSmall(n) {
   if (!q) return "";
   return q.kind === "voll" ? "für 100 % rechtzeitig" : "100 % nicht erreichbar, höchstens " + pct0(q.top);
 }
-function siteName(s) { return s.name + " " + coord(s); }
+function siteName(s) { return s.name + " " + coord(s) + (s.neu ? " (festgelegt)" : ""); }
 // Marktstufe eines vorbereiteten Dorfs, mit Ausbau auf die Mindeststufe als „17 → 20“
 function marketText(s) { return s.b.market > s.marketFrom ? s.marketFrom + " → " + s.b.market : String(s.b.market); }
 function engpass(d) {
@@ -1088,7 +1170,7 @@ const anteil = x => x <= 0 ? "0 %" : x < 0.001 ? "unter 0,1 %" : nf1.format(Math
 function mengenVergleich(n) {
   const R = RESULT, pk = R.pkg;
   if (!pk) { const a = aufstellung(n); return a ? K.mengenEinfach(R.src, a.r, R.P) : null; }
-  if (pk.perK) return pk.perK[n - 1] ? pk.perK[n - 1].mengen : null;
+  if (pk.perK) { const o = perKOf(n); return o ? o.mengen : null; }
   const x = n !== R.recommend ? KCACHE.get(RUN, n) : null;
   return x && x.pkg ? x.pkg.detail.mengen : pk.configMengen ? pk.configMengen[n - 1] : null;
 }
@@ -1203,7 +1285,7 @@ function schwelleLink() {
 
 /* ---------- Empfehlung ---------- */
 function renderRecommendation() {
-  const R = RESULT, P = R.P, n = R.recommend, a = aufstellung(n), nxt = R.configs[n], pk = R.pkg;
+  const R = RESULT, P = R.P, n = R.recommend, a = aufstellung(n), nxt = n < nNormal() ? R.configs[n] : null, pk = R.pkg;
   const title = $("rec-title");
   title.replaceChildren();
   const names = joinUnd(a.sites.map(siteName));
@@ -1266,10 +1348,11 @@ function renderRecommendation() {
   if (sel.rec) {
     zeile.className = "pr-sel"; zeile.hidden = false;
     const t = el("span");
-    t.append(document.createTextNode("Kennzahlen für "), el("b", null, fdName(sel.k)), document.createTextNode(P.fdCount ? " · Vorgabe" : " · Empfehlung"));
+    t.append(document.createTextNode("Kennzahlen für "), el("b", null, spName(sel.k)), document.createTextNode(P.fdCount ? " · Vorgabe" : " · Empfehlung"));
     zeile.replaceChildren(t);
   } else { zeile.className = "pr-sel pr-wahl"; wahlZeile(zeile); }
   const notes = [];
+  if (istFest(sel.k)) notes.push("Festgelegtes Prägedorf " + festXY() + " (" + R.fest.name + ") zählt wie in der Suche nur als Empfänger: Adelshof gilt als gebaut, keine eigenen Pakete, keine Produktion. Erst adeln, dann gilt dieser Plan.");
   const gh = grenzeHinweis(spk || sz);
   if (gh) notes.push(gh);
   if (P.minStorage) {
@@ -1536,7 +1619,7 @@ function renderVorab() {
   box.replaceChildren();
   lagerStatus();
   const P = R.P, sel = gewaehlt(), plan = R.pkg ? sel.pk : sel.z, d = plan && plan.detail;
-  $("vorab-hint").textContent = d ? fdName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %"
+  $("vorab-hint").textContent = d ? spName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %"
     + (R.pkg ? "" : " · Zeitplan der Berechnung 1") : "";
   if (!d) { box.appendChild(el("p", "empty", sel.laedt ? "rechnet …" : "Ohne Zeitplan der Pakete gibt es keinen Vorrat zu planen.")); return; }
   const kurs = Math.max(0.1, (+$("vorab-kurs").value || 1000) / 1000);      // Lehm oder Holz je Eisen
@@ -1798,7 +1881,7 @@ function renderRouten() {
   const P = R.P, sel = gewaehlt(), plan = R.pkg ? sel.pk : sel.z, d = plan && plan.detail;
   const fest = Math.round(+$("routen-abstand").value || 0), festMin = fest >= 1 ? Math.min(720, fest) : 0;
   const rt = d && (festMin && d.routen ? routenFest(R, d, festMin) : d.routen);
-  $("routen-hint").textContent = d ? fdName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %" : "";
+  $("routen-hint").textContent = d ? spName(sel.k) + " · " + pakete(R.pkg ? plan.chosen : plan.n) + " zu " + nfG.format(P.pkgSize) + " %" : "";
   if (!rt || !rt.plans.length) { box.appendChild(el("p", "empty", sel.laedt ? "rechnet …" : "Ohne Lieferdörfer gibt es keine Handelsrouten.")); return; }
   const want = +$("routen-max").value || 3, pl = rt.plans[Math.min(want, rt.plans.length) - 1], base = rt.base;
   // Vergleich mit dem Anfordern als Unterschied in Münzen, nicht als Prozent: das Anfordern im Takt der Klicks ist nur der
@@ -1950,7 +2033,7 @@ function renderUmwege() {
   if (!UMWEGE_SICHTBAR) return;
   const box = $("umwege-body"), x = umwegePlan(), R = RESULT;
   box.replaceChildren();
-  $("umwege-hint").textContent = x ? fdName(x.sel.k) + " · " + pakete(x.n) + " zu " + nfG.format(R.P.pkgSize) + " %" : "";
+  $("umwege-hint").textContent = x ? spName(x.sel.k) + " · " + pakete(x.n) + " zu " + nfG.format(R.P.pkgSize) + " %" : "";
   if (!UMWEGE) return;
   if (UMWEGE.token !== RUN || !x || UMWEGE.d !== x.d) {
     box.appendChild(el("p", "empty", "Die Eingaben oder die gewählte Aufstellung haben sich seit der Rechnung geändert. Bitte neu rechnen."));
@@ -2043,7 +2126,7 @@ async function sitzRechnen() {
     if (x >= x0 && x <= x1 && y >= y0 && y <= y1) barbaren.push({x, y, pts: r[2]});
   });
   // künftige Sitzungen: Startbestand statt heutigem Lagerstand (2a gilt für die anstehende Flaggendopplerplanung)
-  const eingabe = {villages: R.villages.map(v => { if (!v.lager) return v; const c = Object.assign({}, v); delete c.lager; return c; }), P: R.Pin, welt: WORLD, vorrat: ein.vorrat, zugang: ein.zugang, tage: ein.tage, ziel: ein.ziel,
+  const eingabe = {villages: R.villages.map(v => { if (!v.lager) return v; const c = Object.assign({}, v); delete c.lager; return c; }), P: Object.assign({}, R.Pin, {fest: null}), welt: WORLD, vorrat: ein.vorrat, zugang: ein.zugang, tage: ein.tage, ziel: ein.ziel,
                    barbaren, muenzen: ein.muenzen, naechstes: ein.naechstes, mMax: 8};
   const token = RUN, schluessel = sitzSchluessel(), start = Date.now();
   st.textContent = "rechnet … 0 %";
@@ -2176,7 +2259,7 @@ async function fremdSuchen() {
   try { FWORKER = new Worker("praegen-worker.js"); } catch (e) { FWORKER = null; }
   const fertig = res => {
     knopf.disabled = false;
-    FREMD = {token, res, opt};
+    FREMD = {token, res, opt, sig: fremdSig(R)};
     st.textContent = "Gesucht unter " + nf.format(res.kandidaten) + " Dörfern in " + nf1.format(Math.round((Date.now() - start) / 100) / 10) + " s"
       + (res.stamm ? "; eigener Stamm: " + res.stamm : "") + ". Fremde Dörfer zählen nur als Empfänger, ohne eigene Pakete.";
     renderFremd();
@@ -2191,11 +2274,59 @@ async function fremdSuchen() {
   FWORKER.postMessage({core: CORE_URL, token, fremd: true, villages: R.villages, P: R.Pin, passive: R.passive, welt, opt});
 }
 $("f-los").addEventListener("click", fremdSuchen);
+// Eingaben, von denen die Suche abhängt; das festgelegte Dorf gehört nicht dazu (die Suche rechnet ohne)
+const fremdSig = R => JSON.stringify([R.villages, Object.assign({}, R.Pin, {fest: null}), R.passive]);
+
+/* Festlegen (Wunsch Dennis 17.11.2026 02:18 und 02:24): ein Dorf aus der Suche wird Prägedorf einer zusätzlichen Spalte
+   im Vergleich, mit genau den Prägedörfern der angeklickten Zeile; die übrigen Spalten bleiben für den Vergleich alt
+   gegen neu. Seine Spalte wird gewählt, damit Kennzahlen, Zeitplan, Lage und Handelsrouten ihr folgen. */
+const festIst = (c, k) => !!FEST && FEST.x === c.x && FEST.y === c.y && FEST.k === k
+  && JSON.stringify(FEST.bleibt) === JSON.stringify(c.bleibtXY || []);
+function festSetzen(c, k) {
+  FEST = {x: c.x, y: c.y, name: c.name, k, typ: c.typ, wer: c.wer || "", tag: c.tag || "", pts: c.pts,
+          bleibt: c.bleibtXY || [], bleibtNamen: c.bleibt || [], ersetzt: c.ersetzt || []};
+  FEST_NEU = true;
+  merkenSpaeter(); schedule();
+  renderFest(); renderFremd();
+}
+function festAufheben() {
+  FEST = null; WAHL_FEST = false;
+  merkenSpaeter(); schedule();
+  renderFest(); renderFremd();
+}
+function renderFest() {
+  ["cmp-fest", "fremd-fest"].forEach(id => {
+    const box = $(id);
+    box.replaceChildren();
+    box.classList.remove("warn");
+    box.hidden = !FEST;
+    if (!FEST) return;
+    const R = RESULT, wer = FEST.typ === "barbar" ? "Barbarendorf" : FEST.typ === "eigen" ? "eigenes Dorf ohne Adelshof"
+      : (FEST.wer || "") + (FEST.tag ? " [" + FEST.tag + "]" : "");
+    const t = el("span");
+    t.append(document.createTextNode("Festgelegtes Prägedorf: "), el("b", null, FEST.name + " (" + FEST.x + "|" + FEST.y + ")"),
+      document.createTextNode((wer ? ", " + wer : "") + (FEST.ersetzt && FEST.ersetzt.length ? ", statt " + FEST.ersetzt.join(", ") : "")
+        + (R && R.fest ? " · im Vergleich als Spalte „" + spName(R.fest.col) + "“" : "")));
+    box.appendChild(t);
+    if (R && R.festFehlt) {
+      box.classList.add("warn");
+      box.appendChild(el("span", null, "Ein Prägedorf, das bleiben soll (" + (FEST.bleibtNamen || []).join(", ") + "), fehlt in der Eingabe oder ist ausgeschlossen. Die Spalte entfällt, bis es wieder dabei ist."));
+    } else if (R && R.fest && VIEW !== R.fest.col) {
+      const b = el("button", "tw small", "Spalte wählen"); b.type = "button";
+      b.addEventListener("click", () => setWahl(R.fest.col));
+      box.appendChild(b);
+    }
+    const auf = el("button", "tw small", "aufheben"); auf.type = "button";
+    auf.title = "Festlegung aufheben, die zusätzliche Spalte entfällt";
+    auf.addEventListener("click", festAufheben);
+    box.appendChild(auf);
+  });
+}
 function renderFremd() {
   const box = $("fremd-body");
   box.replaceChildren();
   if (!FREMD) return;
-  if (FREMD.token !== RUN) { box.appendChild(el("p", "empty", "Die Eingaben haben sich seit der Suche geändert. Bitte neu suchen.")); return; }
+  if (FREMD.token !== RUN && FREMD.sig !== fremdSig(RESULT)) { box.appendChild(el("p", "empty", "Die Eingaben haben sich seit der Suche geändert. Bitte neu suchen.")); return; }
   const typName = {barbar: "Barbarendorf", spieler: "Spieler", stamm: "eigener Stamm", eigen: "eigenes Dorf"};
   FREMD.res.proK.forEach(x => {
     const blk = el("div", "pr-fk"), h = el("h3");
@@ -2214,6 +2345,7 @@ function renderFremd() {
       if (mitBesitzer) cols.push(["Besitzer", "l", true]);
       cols.push(["Punkte", "", true], ["Münzen nach Überlauf", "", true], ["ohne Überlauf", "", true], ["Überlauf", "", true], ["mehr als jetzt", "", true], ["Pakete", "", true]);
       if (x.k > 1) cols.push(["ersetzt", "l", true]);
+      cols.push(["Prägedorf", "", false]);
       const rows = liste.map((c, q) => {
         const dorf = el("span");
         dorf.append(el("b", null, c.x + "|" + c.y), el("span", "sub", c.name));
@@ -2228,6 +2360,14 @@ function renderFremd() {
         z.push([ganz(c.pts), "", c.pts], [ganz(c.coins), "", Math.round(c.coins)], [c.ohne != null ? ganz(c.ohne) : "–", "", Math.round(c.ohne || 0)],
                [anteil(c.ov || 0), "", c.ov || 0], [pl, "", Math.round(plus)], [String(c.n), "", c.n]);
         if (x.k > 1) z.push([c.ersetzt.join(", "), "l", c.ersetzt.join()]);
+        // festlegen (17.11.2026): als zusätzliche Spalte im Vergleich
+        if (festIst(c, x.k)) z.push([el("span", "fest-ok", "festgelegt ✓"), ""]);
+        else {
+          const b = el("button", "tw small", "festlegen"); b.type = "button";
+          b.title = "Als Prägedorf festlegen: zusätzliche Spalte im Vergleich, der Plan oben richtet sich danach";
+          b.addEventListener("click", () => festSetzen(c, x.k));
+          z.push([b, ""]);
+        }
         return z;
       });
       const wrap = el("div");
@@ -2265,14 +2405,14 @@ function grenzeHinweis(x) {
 function renderSchedule() {
   const R = RESULT, P = R.P, sel = gewaehlt(), z = sel.z, pk = sel.pk || z;
   if (sel.laedt) {
-    $("pk-hint").textContent = fdName(sel.k) + " · rechnet …";
-    $("pk-table").replaceChildren(el("p", "empty", "Zeitplan für " + mitFD(sel.k) + " wird gerechnet …"));
+    $("pk-hint").textContent = spName(sel.k) + " · rechnet …";
+    $("pk-table").replaceChildren(el("p", "empty", "Zeitplan für " + spMit(sel.k) + " wird gerechnet …"));
     $("pk-note").replaceChildren();
     return;
   }
   if (!pk) return;
   const d = pk.detail, n = sel.pk ? pk.chosen : z.n;
-  $("pk-hint").textContent = fdName(sel.k) + " · " + pakete(n) + " zu " + nf.format(P.pkgSize) + " %" + (z ? " (= " + nf.format(z.sumPct) + " %)" : "")
+  $("pk-hint").textContent = spName(sel.k) + " · " + pakete(n) + " zu " + nf.format(P.pkgSize) + " %" + (z ? " (= " + nf.format(z.sumPct) + " %)" : "")
     + ", " + nf.format(Math.round(d.coins)) + " Münzen, Überlauf " + pctf(d.overflowShare) + " (höchstens " + nfG.format(P.maxOverflow) + " %)";
   const box = $("pk-table");
   if (!d.rows.length) box.replaceChildren(el("p", "empty", z
@@ -2325,7 +2465,7 @@ function renderSchedule() {
 function renderCurve() {
   if (!RESULT || !RESULT.pkg) return;
   const sel = gewaehlt();
-  if (!sel.pk) { $("pc").replaceChildren(el("p", "empty", "Kurve für " + mitFD(sel.k) + " wird gerechnet …")); $("pc-hint").textContent = fdName(sel.k); return; }
+  if (!sel.pk) { $("pc").replaceChildren(el("p", "empty", "Kurve für " + spMit(sel.k) + " wird gerechnet …")); $("pc-hint").textContent = spName(sel.k); return; }
   const R = RESULT, pk = sel.pk, c = pk.curve, box = $("pc");
   const W = Math.max(300, Math.round(box.clientWidth || 620)), H = W < 500 ? 220 : 250;
   const m = {l: 54, r: 16, t: 14, b: 28};
@@ -2373,7 +2513,7 @@ function vergleichZahlen() {
   const R = RESULT, pk = R.pkg, zp = R.zeitplan;
   return R.configs.map((c, q) => {
     const n = q + 1, x = n !== R.recommend ? KCACHE.get(RUN, n) : null;
-    if (pk && pk.perK) { const o = pk.perK[q]; return o ? {n: o.n, nach: o.coins, ohne: o.ohne, ov: o.ov, haupt: o.coins} : {}; }
+    if (pk && pk.perK) { const o = perKOf(n); return o ? {n: o.n, nach: o.coins, ohne: o.ohne, ov: o.ov, haupt: o.coins} : {}; }
     if (pk) {
       const d = x && x.pkg ? x.pkg.detail : n === R.recommend ? pk.detail : null;
       const nach = d ? d.coins : pk.configCoins[q];
@@ -2394,7 +2534,7 @@ let VGLR = null, VWORKER = null;
 const festAbstand = () => { const f = Math.round(+$("routen-abstand").value || 0); return f >= 1 ? Math.min(720, f) : 0; };
 function vglPos(n) {
   const R = RESULT, pk = R.pkg, x = n !== R.recommend ? KCACHE.get(RUN, n) : null;
-  if (pk && pk.perK) return pk.perK[n - 1] ? pk.perK[n - 1].pos : pk.pos;
+  if (pk && pk.perK) return perKOf(n) ? perKOf(n).pos : pk.pos;
   if (pk) return x && x.pkg ? x.pkg.pos : pk.pos;
   return x && x.zeitplan ? x.zeitplan.pos : R.zeitplan ? R.zeitplan.pos : [];
 }
@@ -2437,6 +2577,9 @@ $("cmp-routen").addEventListener("change", () => { if (RESULT && RESULT.configs)
    Rechtzeitig und nicht rechtzeitig mit Rohstoffmengen, in Berechnung 2 aus dem Gleichschritt (Dennis 1a). */
 function renderCompare() {
   const R = RESULT, box = $("cmp"), ns = R.configs.map((_, i) => i + 1), A = ns.map(aufstellung);
+  // ab fünf Spalten (z. B. mit festgelegtem Prägedorf) über die ganze Breite, sonst ist die neue Spalte abgeschnitten
+  const sec = box.closest("section");
+  sec.classList.toggle("c12", ns.length > 4); sec.classList.toggle("c6", ns.length <= 4);
   box.replaceChildren();
   const ban = el("div", "pr-wahl");
   wahlZeile(ban);
@@ -2454,8 +2597,9 @@ function renderCompare() {
   const wort = R.P.fdCount ? "Vorgabe" : "Empfehlung";
   ns.forEach(n => {
     const h = el("th", kl(n)), b = el("button");
-    b.appendChild(el("span", "nm", fdName(n)));
+    b.appendChild(el("span", "nm", spName(n)));
     if (R.recommend === n) b.appendChild(el("span", "pr-badge", wort + " ✓"));
+    if (istFest(n)) b.appendChild(el("span", "pr-badge", "festgelegt"));
     b.type = "button";
     b.title = VIEW === n ? "gewählt" : "Diese Aufstellung für Kennzahlen, Zeitplan und Lage wählen";
     b.setAttribute("aria-pressed", String(VIEW === n));
@@ -2475,9 +2619,9 @@ function renderCompare() {
     });
     tb.appendChild(tr);
   };
-  const pk = R.pkg, Z = RR ? RR.map(v => ({n: pk && pk.perK && pk.perK[v.k - 1] ? pk.perK[v.k - 1].n : null, nach: v.nach, ohne: v.ohne, ov: v.ov,
+  const pk = R.pkg, Z = RR ? RR.map(v => ({n: perKOf(v.k) ? perKOf(v.k).n : null, nach: v.nach, ohne: v.ohne, ov: v.ov,
                                               einfach: v.einfach, haupt: pk ? v.nach : v.einfach})) : vergleichZahlen();
-  row("Prägedorf", (x, n) => (pk && pk.perK && pk.perK[n - 1] ? pk.perK[n - 1].sites : x.sites).map(siteName).join(" + "));
+  row("Prägedorf", (x, n) => (perKOf(n) ? perKOf(n).sites : x.sites).map(siteName).join(" + "));
   if (RR) {
     row("Handelsrouten", (x, n) => {
       const r = rr(n).routen;
@@ -2514,7 +2658,7 @@ function renderCompare() {
   const mv = RR ? ns.map(n => pk ? rr(n).mengen : rr(n).mengenEinfach) : ns.map(mengenVergleich);
   const dOf = (x, n) => RR ? rr(n).d : x.d;
   // Unterschied zu den anderen Aufstellungen in Münzen (nach Überlauf) und rechtzeitigen Paket-Rohstoffen (17.11.2026)
-  if (ns.length > 1) ns.forEach(m => row("gegenüber " + fdName(m), (x, n) => {
+  if (ns.length > 1) ns.forEach(m => row("gegenüber " + spName(m), (x, n) => {
     if (n === m) return "";
     const f = el("span", "pr-diff"), a = z(n).nach, b = z(m).nach, ra = mv[n - 1] && sum3(mv[n - 1].A), rb = mv[m - 1] && sum3(mv[m - 1].A);
     const dz = (d, basis, wort, fmt) => {
@@ -2529,14 +2673,14 @@ function renderCompare() {
     const m = mv[n - 1];
     if (!m) return "–";
     const f = document.createDocumentFragment();
-    f.append(document.createTextNode(pctf(m.share) + " · "), resAnker(menge(sum3(m.A)), "Rechtzeitig angekommen, " + fdName(n), m.A));
+    f.append(document.createTextNode(pctf(m.share) + " · "), resAnker(menge(sum3(m.A)), "Rechtzeitig angekommen, " + spName(n), m.A));
     return f;
   }, "grp");
   row("nicht rechtzeitig", (x, n) => {
     const m = mv[n - 1];
     if (!m) return "–";
     const f = document.createDocumentFragment(), split = el("span", "rsplit");
-    f.append(document.createTextNode(pctNicht(m.share) + " · "), resAnker(menge(sum3(m.N)), "Nicht rechtzeitig, " + fdName(n), m.N));
+    f.append(document.createTextNode(pctNicht(m.share) + " · "), resAnker(menge(sum3(m.N)), "Nicht rechtzeitig, " + spName(n), m.N));
     m.N.forEach((v, r) => { const z = el("span"); z.append(resMarke(r), document.createTextNode(RES_NAME[r] + " " + menge(v))); split.appendChild(z); });
     f.appendChild(split);
     return f;
@@ -2608,7 +2752,7 @@ function renderView() {
   wahlZeile($("map-wahl"));                               // gleich lautend wie über dem Vergleich (10.14)
   const wort = RESULT.P.fdCount ? "Vorgabe" : "Empfehlung";
   RESULT.configs.forEach((_, i) => {
-    const n = i + 1, rec = n === RESULT.recommend, b = el("button", "tw", fdName(n) + (rec ? " ✓" : ""));
+    const n = i + 1, rec = n === RESULT.recommend, b = el("button", "tw", spName(n) + (rec ? " ✓" : ""));
     b.type = "button";
     b.title = rec ? wort : "Diese Aufstellung wählen";
     b.setAttribute("aria-pressed", String(n === VIEW));
@@ -2697,9 +2841,9 @@ async function kopieren(text) {
 }
 function renderSenders() {
   const R = RESULT, a = aufstellung(VIEW), box = $("send");
-  $("p-send").hidden = VIEW < 2;
+  $("p-send").hidden = a.r.sites.length < 2;            // nach Zahl der Prägedörfer, auch für die festgelegte Spalte
   box.replaceChildren();
-  if (VIEW < 2) return;
+  if (a.r.sites.length < 2) return;
   let n = 0;
   a.r.sites.forEach(si => {
     const site = R.src[si], list = a.d.rows.filter(r => r.site === si && r.i !== si).map(r => R.src[r.i].x + "|" + R.src[r.i].y);
@@ -2717,7 +2861,7 @@ function renderSenders() {
     g.append(head, el("pre", null, list.length ? text : "keine"));
     box.appendChild(g);
   });
-  $("send-hint").textContent = "Aufstellung mit " + mitFD(VIEW) + " · " + n + " Dörfer schicken an " + a.r.sites.length + " Prägedörfer";
+  $("send-hint").textContent = "Aufstellung mit " + spMit(VIEW) + " · " + n + " Dörfer schicken an " + a.r.sites.length + " Prägedörfer";
 }
 function renderVillages() {
   const R = RESULT, a = aufstellung(VIEW), box = $("vil");
@@ -2756,7 +2900,7 @@ function renderVillages() {
   [...t.tBodies[0].rows].forEach(tr => { if (!tr.cells[0].firstChild.checked) tr.classList.add("off"); });
   box.replaceChildren(t);
   const e = engpass(a.d);
-  $("vil-hint").textContent = "Aufstellung mit " + mitFD(VIEW)
+  $("vil-hint").textContent = "Aufstellung mit " + spMit(VIEW)
     + " · " + a.d.rows.filter(r => r.status === "ok").length + " rechtzeitig, " + e.m + " Markt zu klein, " + e.w + " zu weit weg"
     + " · Haken entfernen, um ein Dorf nicht zu berücksichtigen";
   $("reset-off").hidden = !OFF.size;
@@ -2865,7 +3009,7 @@ function renderFreq() {
   const box = $("freq"), P = RESULT.P, W = Math.max(300, Math.round(box.clientWidth || 620)), H = W < 500 ? 220 : 250;
   const m = {l: 44, r: 16, t: 12, b: 28};
   const L = K.LADDER, N = L.length;
-  const series = shownConfigs().map((k, pos) => [k, fdName(k), seriesColor(k, pos)]);
+  const series = shownConfigs().map((k, pos) => [k, spName(k), seriesColor(k, pos)]);
   legend($("freq-legend"), series.map(([k, , color]) => [reiheName(k), color]));
   const {svg, tip, iw, ih} = frame(box, W, H, m);
   svg.setAttribute("aria-label", "Anteil rechtzeitig angekommener Paket-Rohstoffe je Klickabstand");
@@ -2923,7 +3067,7 @@ function renderAssumptions() {
     P.mintLocal ? "Prägen in Lieferdörfern (an): Lieferdörfer mit Adelshof prägen beim Einlösen eines Pakets selbst, was sonst über den Speicher ginge, im Prägeverhältnis und zum Grundpreis (vorsichtig: ohne eigene Flagge und ohne Erlass). Geprägt wird der kleinste Wert über die drei Rohstoffe, der Rest läuft weiter über. Diese Münzen zählen zu den Münzen, der Überlauf sinkt entsprechend, auch für die Überlaufgrenze. Das gilt im Gleichschritt, also in Berechnung 2 und im Zeitplan von Berechnung 1."
       : "Prägen in Lieferdörfern (aus): Überlauf ist verloren, auch in Dörfern mit Adelshof.",
     "Tausch vor dem Start (eigenes Feld): je Dorf ein Vorrat an Lehm und Holz zu Beginn, eingetauscht gegen Eisen. Gesucht wird je Dorf der Vorrat mit den meisten Münzen, bei dem das Dorf nicht mehr überläuft und mindestens 90 % des Vorrats geprägt werden; der Zeitplan der Pakete bleibt. " + (P.ignoreRatio ? "Mit „Verhältnis ignorieren“ ein gemeinsamer Anteil für alle Lieferdörfer ohne Überlauf, dann je Prägedorf. " : "") + "Mit Lagerstand aus der Produktionsübersicht zählt, was schon im Lager liegt; fehlendes Eisen in Stunden Mine aus der Eisenproduktion des Dorfes.",
-    "Nächstes Prägedorf adeln (eigenes Feld, auf Knopfdruck): Kandidaten sind die Dörfer im Gebiet um die eigenen Dörfer plus 8 Felder aus den Weltdaten der Seite, je nach Auswahl Barbarendörfer, Dörfer anderer Spieler, des eigenen Stammes und eigene Dörfer ohne Adelshof. Ein solches Dorf zählt nur als Empfänger: Adelshof gilt als gebaut, keine eigenen Pakete und keine Produktion. Bei einem Flaggendoppler ist es das Prägedorf, sonst ersetzt es eines der Prägedörfer deiner besten Aufstellung. Vorauswahl mit dem Zeitplan der Empfehlung, für die besten Kandidaten wird der Zeitplan neu optimiert, mit der Paketzahl von oben, wenn sie feststeht (immer bei „Rohstoffprozentpunkte vorgeben“), sonst mit der jeweils optimalen.",
+    "Nächstes Prägedorf adeln (eigenes Feld, auf Knopfdruck): Kandidaten sind die Dörfer im Gebiet um die eigenen Dörfer plus 8 Felder aus den Weltdaten der Seite, je nach Auswahl Barbarendörfer, Dörfer anderer Spieler, des eigenen Stammes und eigene Dörfer ohne Adelshof. Ein solches Dorf zählt nur als Empfänger: Adelshof gilt als gebaut, keine eigenen Pakete und keine Produktion. Bei einem Flaggendoppler ist es das Prägedorf, sonst ersetzt es eines der Prägedörfer deiner besten Aufstellung. Vorauswahl mit dem Zeitplan der Empfehlung, für die besten Kandidaten wird der Zeitplan neu optimiert, mit der Paketzahl von oben, wenn sie feststeht (immer bei „Rohstoffprozentpunkte vorgeben“), sonst mit der jeweils optimalen. „festlegen“ nimmt ein Dorf aus der Suche als zusätzliche Spalte in den Vergleich, mit genau den Prägedörfern seiner Zeile und denselben Annahmen (nur Empfänger); die übrigen Spalten und die Empfehlung bleiben, die Seite wählt die neue Spalte.",
     "Handelsrouten (eigenes Feld): statt Anfordern schickt jedes Dorf einer Gruppe alle 1 Minute bis 6 Stunden (eingetragen als Stunden mit Komma, z. B. 0,25 für 15 Minuten) eine feste Menge im Prägeverhältnis an sein Prägedorf, so viel, wie eine bestimmte Zahl Händler trägt. Fehlen Rohstoffe oder Händler, fällt die Lieferung aus. Für 1 bis 8 Routen werden Abstand und Menge je Route und die Zuordnung der Dörfer so gewählt, dass die meisten Münzen herauskommen; der Zeitplan der Pakete bleibt. Mit dem Schalter im Vergleich zählen Routen und Anfordern zusammen: die Routen liefern zuerst, ein Klick im eingestellten Abstand holt mit den freien Händlern den Rest.",
     "Markttausch (nur Obergrenze unter der Rohstoffbilanz, nicht in den Münzen): Der nicht prägbare Überschuss" + (P.ignoreRatio ? " im Prägedorf" : "") + " wird 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf zum Flaggenpreis am Ende der 48 h geprägt. Unsicher, weil Händler den Überschuss bringen müssen und jemand die Angebote annehmen muss.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",

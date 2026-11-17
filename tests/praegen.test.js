@@ -1012,3 +1012,54 @@ test("2a: Lagerstand gleich dem Startbestand rechnet wie der Startbestand, volle
   near(K.startBestand(gemischt[1], P30)[1], 0.3 * gemischt[1].cap, 1e-9);
   assert.deepEqual(K.startBestand(Object.assign({}, gemischt[1], {leer: true}), P30), [0, 0, 0]);
 });
+
+/* ---------- Festgelegtes Prägedorf als zusätzliche Spalte (Wunsch Dennis 17.11.2026 02:18 und 02:24) ---------- */
+function festWelt(v) {
+  const rows = v.map(d => [d.x * 1000 + d.y, 0, 9000, 0, d.name]);
+  const frei = (x, y) => { while (rows.some(r => r[0] === x * 1000 + y)) y++; return x * 1000 + y; };
+  rows.push([frei(640, 622), -1, 300, 0, "Barbarendorf"], [frei(636, 640), -1, 300, 0, "Barbar Nord"]);
+  return {rows, players: [[10, "Ich", 7]], tags: {7: "ICH"}};
+}
+test("17.11.: festgelegtes Prägedorf kommt als letzte Spalte dazu, die übrigen bleiben gleich", () => {
+  const v = konto63(), welt = festWelt(v);
+  for (const mode of ["pct", "max"]) {
+    const P = mode === "pct" ? V5({mode, pkgPct: 150, maxOverflow: 1}) : V5({mode, maxOverflow: 10, optThreshold: 70});
+    const r = K.fremdeSuche(v, P, [], welt, {genau: 2, genauEigen: 0, top: 2});
+    const x = r.proK.find(q => q.k === 2), c = x.top[0];
+    assert.equal(c.bleibtXY.length, 1);
+    const Pf = Object.assign({}, P, {fest: {x: c.x, y: c.y, name: c.name, bleibt: c.bleibtXY}});
+    const R0 = mode === "pct" ? K.planPct(v, P, []) : K.planPackages(v, P, []);
+    const R1 = mode === "pct" ? K.planPct(v, Pf, []) : K.planPackages(v, Pf, []);
+    assert.equal(R1.configs.length, R0.configs.length + 1, mode);
+    assert.deepEqual(R1.fest, {col: R1.configs.length, k: 2, x: c.x, y: c.y, name: c.name});
+    assert.equal(R1.recommend, R0.recommend, "Empfehlung bleibt");
+    R0.configs.forEach((c0, q) => { assert.equal(R1.configs[q].sites.join(), c0.sites.join()); near(R1.configs[q].coins, c0.coins, 1e-6); });
+    const fs = R1.configs[R1.fest.col - 1].sites, neu = R1.src[fs[fs.length - 1]];
+    assert.ok(neu.neu && neu.x === c.x && neu.y === c.y && neu.leer);
+    assert.equal(R1.details.length, R1.configs.length);
+    // nachgerechnet wie eine gewählte Spalte: dieselben Münzen wie in der Suche
+    const nk = K.packagesForK(v, Pf, R1.fest.col, [], R1.pkg && R1.pkg.perK, true);
+    if (mode === "pct") {
+      assert.equal(R1.zeitplan.configCoins.length, R1.configs.length);
+      R0.zeitplan.configCoins.forEach((m, q) => near(R1.zeitplan.configCoins[q], m, 1e-6));
+      near(nk.zeitplan.detail.coins, c.coins, 1e-6);
+    } else {
+      R0.pkg.perK.forEach((o, q) => near(R1.pkg.perK[q].coins, o.coins, 1e-6));
+      assert.ok(R1.pkg.festK && R1.pkg.festK.n === c.n);
+      near(R1.pkg.festK.coins, c.coins, 1e-6);
+      assert.equal(nk.pkg.chosen, R1.pkg.festK.n);
+      near(nk.pkg.detail.coins, R1.pkg.festK.coins, 1e-6);
+    }
+    // Klickfrequenz-Leiter: festgelegte Aufstellung hinter den übrigen
+    const st = K.ladderStep(v, R1.P, 60, R1.fest.col - 1);
+    assert.ok(st.share[R1.fest.col - 1] > 0 && st.share[R1.fest.col - 1] <= 1);
+    // die Suche rechnet ohne festgelegtes Dorf
+    const r2 = K.fremdeSuche(v, Pf, [], welt, {genau: 2, genauEigen: 0, top: 2});
+    assert.deepEqual(r2.proK.map(q => q.top.map(t => Math.round(t.coins))), r.proK.map(q => q.top.map(t => Math.round(t.coins))));
+  }
+  // bleibendes Prägedorf fehlt: keine zusätzliche Spalte, Hinweis
+  const P = V5({mode: "pct", pkgPct: 150});
+  const R = K.plan(v, Object.assign({}, P, {fest: {x: 1, y: 1, name: "x", bleibt: [[1, 2]]}}));
+  assert.equal(R.festFehlt, true);
+  assert.equal(R.configs.length, K.plan(v, P).configs.length);
+});
