@@ -144,8 +144,8 @@ function buildAppbar(current, title) {
     z.addEventListener("click", () => zusatzDialog(bar));
     nav.appendChild(z);
   }
-  /* Design (Wunsch Dennis 17.11.2026 03:02: der Knopf sah aus wie ein weiterer Reiter): eigener Schalter links beim
-     Titel, getrennt von den Reitern, rund statt eckig, mit Beschriftung „Design“ und beiden Fassungen zur Wahl */
+  /* Design (Wunsch Dennis 17.11.2026 03:02: der Knopf sah aus wie ein weiterer Reiter): eigener Schalter oben rechts in
+     der Ecke (Dennis 03:12), getrennt von den Reitern darunter, rund statt eckig, mit Beschriftung „Design“ und beiden Fassungen zur Wahl */
   const dz = el("div", "design-wahl");
   dz.setAttribute("role", "group");
   dz.setAttribute("aria-label", "Design der Seite");
@@ -159,7 +159,7 @@ function buildAppbar(current, title) {
     b.addEventListener("click", () => setTheme(name));
     dz.appendChild(b);
   });
-  w.append(h, world, dz, nav);                            // links beim Titel, getrennt von den Reitern rechts
+  w.append(h, world, dz, nav);                            // erste Zeile Titel und Schalter, darunter die Reiter
   bar.replaceChildren(w);
   initTheme();
 }
