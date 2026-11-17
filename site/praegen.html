@@ -2704,10 +2704,13 @@ function renderCompare() {
   });
   const mv = RR ? ns.map(n => pk ? rr(n).mengen : rr(n).mengenEinfach) : ns.map(mengenVergleich);
   const dOf = (x, n) => RR ? rr(n).d : x.d;
-  // Unterschied zu den anderen Aufstellungen in Münzen (nach Überlauf) und rechtzeitigen Paket-Rohstoffen (17.11.2026)
+  // Unterschied zu den anderen Aufstellungen in Münzen und rechtzeitigen Paket-Rohstoffen (17.11.2026), beide aus derselben
+  // Rechnung wie „Pakete rechtzeitig“: bei „automatisch“ Gleichschritt (Münzen nach Überlauf), bei „vorgeben“ die einfache
+  // Rechnung (bis 17.11.2026 16:20 standen dort Münzen nach Überlauf neben Rohstoffen der einfachen Rechnung, Hinweis Dennis)
+  const mz = q => pk ? q.nach : q.einfach;
   if (ns.length > 1) ns.forEach(m => row("gegenüber " + spName(m), (x, n) => {
     if (n === m) return "";
-    const f = el("span", "pr-diff"), a = z(n).nach, b = z(m).nach, ra = mv[n - 1] && sum3(mv[n - 1].A), rb = mv[m - 1] && sum3(mv[m - 1].A);
+    const f = el("span", "pr-diff"), a = mz(z(n)), b = mz(z(m)), ra = mv[n - 1] && sum3(mv[n - 1].A), rb = mv[m - 1] && sum3(mv[m - 1].A);
     const dz = (d, basis, wort, fmt) => {
       const p = basis > 0 ? (d / basis * 100) : 0;
       return el("span", d > 0.5 ? "up" : d < -0.5 ? "dn" : null, (d >= 0 ? "+" : "−") + fmt(Math.abs(d)) + " " + wort + " (" + (p >= 0 ? "+" : "−") + nf1.format(Math.round(Math.abs(p) * 10) / 10) + " %)");
@@ -2756,7 +2759,10 @@ function renderCompare() {
           : "„Münzen, einfache Rechnung“ und alle Zeilen ab „Pakete rechtzeitig“ stammen aus der einfachen Rechnung mit " + nf.format(R.P.pkgPct)
           + " % Paketen auf einmal ohne Speichergrenze; danach richtet sich die Empfehlung. Münzen nach Überlauf und der Überlauf kommen aus dem Gleichschritt mit dem Zeitplan von "
           + (zp ? paketen(zp.n) : "den Paketen") + " (wie unter „Zeitplan der Pakete“; eine angeklickte Aufstellung mit ihrem eigenen), Münzen ohne Überlauf aus demselben Zeitplan ohne Speichergrenze. ");
-  text("„gegenüber …“ vergleicht die Münzen nach Überlauf und die rechtzeitig angekommenen Paket-Rohstoffe. ");
+  text(pk ? "„gegenüber …“ vergleicht die Münzen nach Überlauf und die rechtzeitig angekommenen Paket-Rohstoffe. "
+          : "„gegenüber …“ vergleicht Münzen und rechtzeitig angekommene Paket-Rohstoffe der einfachen Rechnung, wie die Empfehlung. ");
+  if (R.P.decreeN === 1) text("Rechtzeitig heißt hier: bis zum Ende des Erlasses nach 24 h. Was danach bis 48 h ankommt, wird noch geprägt, nur ohne die 10 % des Erlasses; "
+    + "mehr rechtzeitige Rohstoffe bringen deshalb weniger Münzen, als ihre Menge vermuten lässt. ");
   if (RR) text("Mit Handelsrouten: je Aufstellung die besten Routen wie unter „Handelsrouten im Account-Manager“ (höchstens " + (+$("routen-max").value || 3)
     + ", Abstand " + (festAbstand() ? "fest " + abstand(festAbstand() / 60) : "frei ab 1 Minute") + ", mit dem Zeitplan der Aufstellung); die Dörfer schicken über die Route, "
     + "solange Rohstoffe und Händler reichen, und alle " + ivl(R.P.intervalMin) + " wird zusätzlich angefordert, was übrig ist. Das gilt für alle Zeilen, auch für die einfache Rechnung. "
