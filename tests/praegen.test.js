@@ -886,6 +886,53 @@ test("10.17: Suche unter fremden Dörfern mit Filtern und eigenem Stamm", () => 
   r.proK.filter(x => x.k > 1).forEach(x => x.top.forEach(c => { assert.equal(c.ersetzt.length, 1); assert.equal(c.bleibt.length, x.k - 1); }));
 });
 
+/* ---------- Münzen mit und ohne Überlauf (Wunsch Dennis 17.11.2026) ---------- */
+test("17.11.: Münzen ohne Überlauf: derselbe Zeitplan ohne Speichergrenze", () => {
+  const P = V5({mode: "max", maxOverflow: 100, startPct: 50});
+  const R = K.plan(konto63(), P), sites = R.configs[0].sites, Kc = K.lastClick(P);
+  const viel = K.toCnt([0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4], Kc);                  // läuft sicher über
+  const a = K.lockstep(R.src, P, sites, viel), ohne = K.ohneUeberlauf(R.src, P, sites, viel);
+  assert.ok(a.ov > 0.01, "Testplan soll überlaufen");
+  assert.ok(ohne > a.coins + 1, "ohne Speichergrenze mehr Münzen");
+  const b = K.lockstep(R.src, Object.assign({}, P, {ohneSpeicher: true}), sites, viel);
+  assert.equal(b.ov, 0);
+  // ohne Pakete und ohne Startbestand läuft nichts über: gleich
+  const P0 = V5({mode: "max", startPct: 0, production: false});
+  const R0 = K.plan(konto63(), P0), leer = K.toCnt([], K.lastClick(P0));
+  near(K.ohneUeberlauf(R0.src, P0, R0.configs[0].sites, leer), K.lockstep(R0.src, P0, R0.configs[0].sites, leer).coins, 1e-6);
+});
+
+test("17.11.: Vergleich bekommt je Aufstellung nach und ohne Überlauf (beide Berechnungen)", () => {
+  // Berechnung 1 (vorgeben): alle Aufstellungen mit dem Zeitplan der Empfehlung
+  const P1 = V5({mode: "pct", pkgPct: 240, maxOverflow: 1});
+  const R1 = K.planPct(konto63(), P1, []), z = R1.zeitplan;
+  assert.equal(z.configCoins.length, R1.configs.length);
+  near(z.configCoins[R1.recommend - 1], z.detail.coins, 1e-6);
+  near(z.configOhne[R1.recommend - 1], z.detail.coinsOhne, 1e-6);
+  z.configCoins.forEach((c, q) => { assert.ok(z.configOhne[q] >= c - 1e-6); assert.ok(z.configOv[q] >= 0); });
+  // Berechnung 2 (maximieren, automatisch): je Aufstellung mit eigenem Zeitplan
+  const R2 = K.planPackages(konto63(), V5({mode: "max", maxOverflow: 10, optThreshold: 70}), []);
+  R2.pkg.perK.forEach(o => { assert.ok(o.ohne >= o.coins - 1e-6); assert.ok(o.ov >= 0); assert.equal(o.pos.length, o.n); });
+  assert.equal(R2.pkg.configOhne.length, R2.configs.length);
+});
+
+test("17.11.: Suche nach dem nächsten Prägedorf nimmt bei „vorgeben“ die Paketzahl von oben", () => {
+  const v = konto63(), xy = d => d.x * 1000 + d.y;
+  const rows = v.map(d => [xy(d), 0, 9000, 0, d.name]);
+  rows.push([601 * 1000 + 499, -1, 300, 0, "Barbarendorf"]);
+  const welt = {rows, players: [[10, "Ich", 7]], tags: {7: "ICH"}};
+  const P = V5({mode: "pct", pkgPct: 150, maxOverflow: 1});
+  const r = K.fremdeSuche(v, P, [], welt, {genau: 2, genauEigen: 0, top: 2});
+  assert.equal(r.festN, 5);
+  const R = K.plan(v, P);                                                       // einfache Rechnung wie im Vergleich
+  r.proK.forEach(x => {
+    assert.equal(x.eigen.n, 5);
+    assert.deepEqual(x.eigen.sites, R.configs[x.k - 1].sites.map(i => R.src[i].name), "dieselben Prägedörfer wie im Vergleich");
+    assert.ok(x.eigen.ohne >= x.eigen.coins - 1e-6);
+    x.top.forEach(c => { assert.equal(c.n, 5); assert.ok(c.ohne >= c.coins - 1e-6); });
+  });
+});
+
 // Lieferung über Zwischendörfer (site/praegen-umwege.js, inaktiv bis Supportfreigabe): eigene Testdatei, hier
 // eingebunden, damit der Seitenlauf sie mitprüft
 require("./praegen-umwege.test.js");

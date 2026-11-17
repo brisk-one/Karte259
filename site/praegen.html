@@ -86,6 +86,10 @@
   .pr-cmp .rsplit{display:grid; gap:1px; margin-top:3px; font-size:10.5px; font-weight:400; color:var(--ink-2)}
   @media (max-width:640px){ .pr-cmp .rsplit{display:none} }
   .pr-cmp tr.grp td{border-top:2px solid var(--edge-soft)}
+  .pr-cmp .pr-diff{display:grid; gap:2px}
+  .pr-cmp .pr-diff .up{color:var(--good)}
+  .pr-cmp .pr-diff .dn{color:var(--ink-2)}
+  .pr-cmpopt{margin-bottom:10px; gap:10px; flex-wrap:wrap; align-items:center}
 
   /* Wahl und Empfehlung gleich lautend über Kennzahlen, Vergleich und Lage (10.14) */
   .pr-sel{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:10px 0 0; font-size:12px; color:var(--ink-2)}
@@ -568,7 +572,14 @@
   <div class="grid nur-fd" id="p-more" hidden>
     <section class="panel c6" aria-labelledby="h-cmp">
       <h2 id="h-cmp">Wie viele Flaggendoppler</h2>
-      <div class="body" id="cmp" style="overflow-x:auto"></div>
+      <div class="body" style="overflow-x:auto">
+        <!-- Klickabstand wie oben, hier noch einmal zum Ändern (Wunsch Dennis 17.11.2026 01:52) -->
+        <div class="pr-row pr-cmpopt" id="cmp-opt">
+          <label class="pick"><span>Rohstoffe anfordern</span><select id="cmp-iv" aria-label="Klickfrequenz, dieselbe wie oben"></select></label>
+          <span class="pr-mnote">gleiche Einstellung wie oben, rechnet neu</span>
+        </div>
+        <div id="cmp"></div>
+      </div>
     </section>
 
     <section class="panel c6" aria-labelledby="h-map">
@@ -684,6 +695,11 @@ K.FLAG_PCT.forEach((p, lvl) => {
 $("flag").value = "9";
 K.LADDER.forEach(m => { const o = document.createElement("option"); o.value = m; o.textContent = "alle " + ivl(m); $("interval").appendChild(o); });
 $("interval").value = "60";
+// zweites Feld im Vergleich (17.11.2026): immer gleich wie oben, Änderung dort gilt für die ganze Rechnung
+K.LADDER.forEach(m => { const o = document.createElement("option"); o.value = m; o.textContent = "alle " + ivl(m); $("cmp-iv").appendChild(o); });
+$("cmp-iv").value = $("interval").value;
+$("cmp-iv").addEventListener("change", () => { $("interval").value = $("cmp-iv").value; $("interval").dispatchEvent(new Event("change")); merkenSpaeter(); });
+$("interval").addEventListener("change", () => { $("cmp-iv").value = $("interval").value; });
 // Optional: alle Dörfer rechnen mindestens mit dieser Marktstufe (vorher ausbauen)
 for (let L = 0; L <= 25; L++) {
   const o = document.createElement("option"); o.value = L;
@@ -2180,13 +2196,20 @@ function renderFremd() {
   const typName = {barbar: "Barbarendorf", spieler: "Spieler", stamm: "eigener Stamm", eigen: "eigenes Dorf"};
   FREMD.res.proK.forEach(x => {
     const blk = el("div", "pr-fk"), h = el("h3");
-    h.append(document.createTextNode(fdName(x.k) + " "), el("span", "sub", "· deine beste Aufstellung: " + x.eigen.sites.join(" + ") + ", " + ganz(x.eigen.coins) + " Münzen, " + pakete(x.eigen.n)));
+    // Münzen nach und ohne Überlauf (Wunsch Dennis 17.11.2026), Paketzahl sichtbar
+    h.append(document.createTextNode(fdName(x.k) + " "), el("span", "sub", "· deine beste Aufstellung: " + x.eigen.sites.join(" + ") + ", " + ganz(x.eigen.coins) + " Münzen nach Überlauf"
+      + (x.eigen.ohne != null ? " (" + ganz(x.eigen.ohne) + " ohne Überlauf)" : "") + ", " + pakete(x.eigen.n)));
     blk.appendChild(h);
+    const andere = [...x.top, ...x.eigeneTop].filter(c => c.n !== x.eigen.n).length;
+    blk.appendChild(el("p", "pr-mnote", FREMD.res.festN
+      ? "Alle mit " + paketen(FREMD.res.festN) + " wie oben vorgegeben; „mehr als jetzt“ vergleicht die Münzen nach Überlauf."
+      : "Jede Aufstellung mit ihrer eigenen optimalen Paketzahl (deine: " + pakete(x.eigen.n) + ")" + (andere ? "; ein Teil von „mehr als jetzt“ kommt deshalb aus mehr Paketen" : "")
+        + ". „mehr als jetzt“ vergleicht die Münzen nach Überlauf."));
     const tabelle = (liste, mitBesitzer) => {
       const maxPlus = Math.max(1, ...liste.map(c => c.coins - x.eigen.coins));
       const cols = [["#", "", true], ["Dorf", "l", true]];
       if (mitBesitzer) cols.push(["Besitzer", "l", true]);
-      cols.push(["Punkte", "", true], ["Münzen", "", true], ["mehr als jetzt", "", true], ["Pakete", "", true]);
+      cols.push(["Punkte", "", true], ["Münzen nach Überlauf", "", true], ["ohne Überlauf", "", true], ["Überlauf", "", true], ["mehr als jetzt", "", true], ["Pakete", "", true]);
       if (x.k > 1) cols.push(["ersetzt", "l", true]);
       const rows = liste.map((c, q) => {
         const dorf = el("span");
@@ -2199,7 +2222,8 @@ function renderFremd() {
         pl.appendChild(el("b", null, (plus >= 0 ? "+" : "−") + ganz(Math.abs(plus)) + " · " + (plus >= 0 ? "+" : "−") + nf1.format(Math.round(Math.abs(plus) / x.eigen.coins * 1000) / 10) + " %"));
         const z = [[String(q + 1), "", q + 1], [dorf, "l", c.x * 1000 + c.y]];
         if (mitBesitzer) z.push([wer, "l", typName[c.typ] + c.wer]);
-        z.push([ganz(c.pts), "", c.pts], [ganz(c.coins), "", Math.round(c.coins)], [pl, "", Math.round(plus)], [String(c.n), "", c.n]);
+        z.push([ganz(c.pts), "", c.pts], [ganz(c.coins), "", Math.round(c.coins)], [c.ohne != null ? ganz(c.ohne) : "–", "", Math.round(c.ohne || 0)],
+               [anteil(c.ov || 0), "", c.ov || 0], [pl, "", Math.round(plus)], [String(c.n), "", c.n]);
         if (x.k > 1) z.push([c.ersetzt.join(", "), "l", c.ersetzt.join()]);
         return z;
       });
@@ -2227,6 +2251,7 @@ function renderFremd() {
 /* ---------- Zeitplan der Pakete ---------- */
 const gainTxt = v => Math.round(v * 100) + " %";
 const pakete = n => n === 1 ? "1 Paket" : nf.format(n) + " Pakete";
+const paketen = n => n === 1 ? "1 Paket" : nf.format(n) + " Paketen";             // nach „mit“, „von“
 /* Hinweis, wenn die Überlaufgrenze mit der gewählten Paketzahl nicht erreichbar ist (10.11) */
 function grenzeHinweis(x) {
   const g = x && x.grenze;
@@ -2338,6 +2363,27 @@ function renderCurve() {
   hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
 }
 
+/* Zahlen je Aufstellung für den Vergleich (17.11.2026): nach Überlauf (Gleichschritt), ohne Überlauf (derselbe Zeitplan
+   ohne Speichergrenze), Überlauf, bei „vorgeben“ zusätzlich die einfache Rechnung. haupt: Münzen, nach denen sich die
+   Empfehlung richtet (für die Adelsgeschlechter). Eine nachgerechnete Aufstellung (KCACHE) bringt ihren Zeitplan mit. */
+function vergleichZahlen() {
+  const R = RESULT, pk = R.pkg, zp = R.zeitplan;
+  return R.configs.map((c, q) => {
+    const n = q + 1, x = n !== R.recommend ? KCACHE.get(RUN, n) : null;
+    if (pk && pk.perK) { const o = pk.perK[q]; return o ? {n: o.n, nach: o.coins, ohne: o.ohne, ov: o.ov, haupt: o.coins} : {}; }
+    if (pk) {
+      const d = x && x.pkg ? x.pkg.detail : n === R.recommend ? pk.detail : null;
+      const nach = d ? d.coins : pk.configCoins[q];
+      return {nach, ohne: d ? d.coinsOhne : pk.configOhne && pk.configOhne[q], ov: d ? d.overflowShare : pk.configOv && pk.configOv[q], haupt: nach};
+    }
+    const d = x && x.zeitplan ? x.zeitplan.detail : zp && n === R.recommend ? zp.detail : null;
+    return {einfach: c.coins, haupt: c.coins,
+            nach: d ? d.coins : zp && zp.configCoins ? zp.configCoins[q] : null,
+            ohne: d ? d.coinsOhne : zp && zp.configOhne ? zp.configOhne[q] : null,
+            ov: d ? d.overflowShare : zp && zp.configOv ? zp.configOv[q] : null};
+  });
+}
+
 /* ---------- Vergleich ----------
    10.14: Die gewählte Spalte sieht aus wie der gedrückte Knopf in der Lage, die Empfehlung trägt nur ein Abzeichen.
    Rechtzeitig und nicht rechtzeitig mit Rohstoffmengen, in Berechnung 2 aus dem Gleichschritt (Dennis 1a). */
@@ -2374,25 +2420,24 @@ function renderCompare() {
     });
     tb.appendChild(tr);
   };
-  const pk = R.pkg;
+  const pk = R.pkg, Z = vergleichZahlen();
   row("Prägedorf", (x, n) => (pk && pk.perK && pk.perK[n - 1] ? pk.perK[n - 1].sites : x.sites).map(siteName).join(" + "));
-  // feste Paketzahl: nach der Wahl die Münzen mit dem eigenen Zeitplan dieser Aufstellung (wie ihre Kennzahlen)
-  const cc = (pk ? pk.configCoins : R.configs.map(c => c.coins)).map((v, i) => {
-    const x = pk && i + 1 !== R.recommend ? KCACHE.get(RUN, i + 1) : null;
-    return x && x.pkg ? x.pkg.detail.coins : v; });
-  const pK = pk && pk.perK;
-  if (pK) {
-    // „automatisch“: je Aufstellung die eigene optimale Paketzahl; ohne Wert, wo nicht gerechnet wurde
-    const o = n => pK[n - 1];
-    row("Pakete (optimal)", (x, n) => o(n) ? String(o(n).n) : "–");
-    row("Münzen", (x, n) => o(n) ? nf.format(Math.round(o(n).coins)) : "–");
-    if (adel(0)) row("Neue Adelsgeschlechter", (x, n) => o(n) ? nf.format(adel(o(n).coins).n) : "–");
-    row("mehr als einer weniger", (x, n) => n > 1 && o(n) && o(n - 1) ? plus((o(n).coins / o(n - 1).coins - 1) * 100) : "");
-  } else {
-    row("Münzen", (x, n) => nf.format(Math.round(cc[n - 1])));
-    if (adel(0)) row("Neue Adelsgeschlechter", (x, n) => nf.format(adel(cc[n - 1]).n));
-    row("mehr als einer weniger", (x, n) => n === 1 ? "" : plus((cc[n - 1] / cc[n - 2] - 1) * 100));
-  }
+  const pK = pk && pk.perK, z = n => Z[n - 1], zahl = v => v == null ? "–" : nf.format(Math.round(v));
+  // Münzen mit und ohne Überlauf (Wunsch Dennis 17.11.2026); bei „vorgeben“ zuerst die einfache Rechnung (Grundlage der Empfehlung)
+  if (pK) row("Pakete (optimal)", (x, n) => z(n).n != null ? String(z(n).n) : "–");
+  if (!pk) row("Münzen, einfache Rechnung", (x, n) => zahl(z(n).einfach));
+  row("Münzen nach Überlauf", (x, n) => zahl(z(n).nach), pk ? null : "grp");
+  row("Münzen ohne Überlauf", (x, n) => zahl(z(n).ohne));
+  // was der Überlauf kostet: Unterschied ohne und nach Überlauf; null, wenn die Händler es ohnehin nicht rechtzeitig wegbrächten
+  row("Überlauf", (x, n) => {
+    const q = z(n);
+    if (q.ov == null) return "–";
+    const f = el("span", "pr-diff"), d = q.ohne != null && q.nach != null ? q.ohne - q.nach : null;
+    f.appendChild(el("span", null, anteil(q.ov) + " der Paket-Rohstoffe"));
+    if (q.ov > 0 && d != null) f.appendChild(el("span", "sub", d >= 0.5 ? "kostet " + ganz(d) + " Münzen" : "kostet keine Münzen, die Händler brächten es ohnehin nicht rechtzeitig weg"));
+    return f;
+  });
+  if (adel(0)) row("Neue Adelsgeschlechter", (x, n) => z(n).haupt != null ? nf.format(adel(z(n).haupt).n) : "–");
   // 10.15: Anteil der Münzen aus dem Prägen in Lieferdörfern, nur im Gleichschritt
   if (pk && R.P.mintLocal) row("davon in Lieferdörfern", (x, n) => {
     if (pK) return pK[n - 1] ? nf.format(Math.round(pK[n - 1].lokal || 0)) : "–";
@@ -2401,6 +2446,18 @@ function renderCompare() {
     return v != null ? nf.format(Math.round(v)) : "–";
   });
   const mv = ns.map(mengenVergleich);
+  // Unterschied zu den anderen Aufstellungen in Münzen (nach Überlauf) und rechtzeitigen Paket-Rohstoffen (17.11.2026)
+  if (ns.length > 1) ns.forEach(m => row("gegenüber " + fdName(m), (x, n) => {
+    if (n === m) return "";
+    const f = el("span", "pr-diff"), a = z(n).nach, b = z(m).nach, ra = mv[n - 1] && sum3(mv[n - 1].A), rb = mv[m - 1] && sum3(mv[m - 1].A);
+    const dz = (d, basis, wort, fmt) => {
+      const p = basis > 0 ? (d / basis * 100) : 0;
+      return el("span", d > 0.5 ? "up" : d < -0.5 ? "dn" : null, (d >= 0 ? "+" : "−") + fmt(Math.abs(d)) + " " + wort + " (" + (p >= 0 ? "+" : "−") + nf1.format(Math.round(Math.abs(p) * 10) / 10) + " %)");
+    };
+    if (a != null && b != null) f.appendChild(dz(a - b, b, "Münzen", v => nf.format(Math.round(v))));
+    if (ra != null && rb != null) f.appendChild(dz(ra - rb, rb, "Rohstoffe rechtzeitig", menge));
+    return f;
+  }, m === 1 ? "grp" : null));
   row("Pakete rechtzeitig", (x, n) => {
     const m = mv[n - 1];
     if (!m) return "–";
@@ -2433,10 +2490,15 @@ function renderCompare() {
     p.appendChild(schwelleLink());
     text(" mehr Münzen bringt. ");
   }
-  text(pk ? "„Pakete rechtzeitig“ und „nicht rechtzeitig“ kommen aus dem Gleichschritt mit dem Zeitplan "
-          + (pK ? "jeder Aufstellung" : "von " + pakete(pk.chosen)) + " und zählen die prägbaren Paket-Rohstoffe nach dem Überlauf. "
+  const zp = R.zeitplan;
+  text(pk ? "Münzen nach Überlauf, Überlauf, „Pakete rechtzeitig“ und „nicht rechtzeitig“ kommen aus dem Gleichschritt mit dem Zeitplan "
+          + (pK ? "jeder Aufstellung" : "von " + paketen(pk.chosen)) + "; „nicht rechtzeitig“ zählt die prägbaren Paket-Rohstoffe nach dem Überlauf. "
+          + "Münzen ohne Überlauf: derselbe Zeitplan ohne Speichergrenze, was sonst überläuft, wird mitgeschickt. "
           + "Die Zeilen ab „90 % angekommen“ stammen aus der einfachen Rechnung mit allen Paketen bei 0 h. "
-          : "Alle Zeilen stammen aus der einfachen Rechnung mit " + nf.format(R.P.pkgPct) + " % Paketen auf einmal. ");
+          : "„Münzen, einfache Rechnung“ und alle Zeilen ab „Pakete rechtzeitig“ stammen aus der einfachen Rechnung mit " + nf.format(R.P.pkgPct)
+          + " % Paketen auf einmal ohne Speichergrenze; danach richtet sich die Empfehlung. Münzen nach Überlauf und der Überlauf kommen aus dem Gleichschritt mit dem Zeitplan von "
+          + (zp ? paketen(zp.n) : "den Paketen") + " (wie unter „Zeitplan der Pakete“; eine angeklickte Aufstellung mit ihrem eigenen), Münzen ohne Überlauf aus demselben Zeitplan ohne Speichergrenze. ");
+  text("„gegenüber …“ vergleicht die Münzen nach Überlauf und die rechtzeitig angekommenen Paket-Rohstoffe. ");
   text("Jedes Dorf beliefert das nächstgelegene Prägedorf.");
   p.style.padding = "8px 0 0";
   box.appendChild(p);

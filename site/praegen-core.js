@@ -536,8 +536,10 @@ const COIN = P => [P.coin.wood, P.coin.stone, P.coin.iron];
    kleinste Wert über die drei Rohstoffe, der Rest läuft weiter über. lokal: so geprägte Münzen. */
 const ST = new Float64Array(3), QT = [], QN = [];
 function villageRun(s, tau, P, cnt, M, sink, send, ovClick, acc) {
-  const T = P.interval, C = P.carry, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
-  const add1 = P.pkgSize / 100 * cap, S0 = startBestand(s, P);
+  const T = P.interval, C = P.carry, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron;
+  const add1 = P.pkgSize / 100 * s.cap, S0 = startBestand(s, P);
+  // P.ohneSpeicher (17.11.2026): Pakete und Produktion ohne Speichergrenze, für „Münzen ohne Überlauf“
+  const cap = P.ohneSpeicher ? Infinity : s.cap;
   const p0 = s.prod.wood * T, p1 = s.prod.stone * T, p2 = s.prod.iron * T;
   // 10.16: Vorrat aus dem Tausch vor dem Start (s.vorab = [Holz, Lehm, Eisen] zusätzlich zum Startbestand)
   const vb = s.vorab;
@@ -596,9 +598,9 @@ function villageRun(s, tau, P, cnt, M, sink, send, ovClick, acc) {
    acc (optional, 10.14): arr eigene Pakete und Produktion bis zur Frist, sov Überschuss je Rohstoff, der nach dem
    Prägen über den Speicher geht (meist Holz und Eisen, weil Lehm das Prägen begrenzt). */
 function siteRun(s, P, cnt, bins, acc) {
-  const T = P.interval, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = s.cap;
+  const T = P.interval, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, cap = P.ohneSpeicher ? Infinity : s.cap;
   // s.leer (10.17): fremdes Dorf nur als Empfänger, ohne eigene Pakete und ohne Startbestand
-  const add1 = s.leer ? 0 : P.pkgSize / 100 * cap, S0 = startBestand(s, P);
+  const add1 = s.leer ? 0 : P.pkgSize / 100 * s.cap, S0 = startBestand(s, P);
   const vb = s.vorab;                                                      // 10.16, wie in villageRun
   let w = vb ? Math.min(cap, S0[0] + vb[0]) : S0[0], st = vb ? Math.min(cap, S0[1] + vb[1]) : S0[1], ir = vb ? Math.min(cap, S0[2] + vb[2]) : S0[2];
   let coins = 0, minted = 0, pkgRes = 0;
@@ -1028,6 +1030,9 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
 function fremdeSuche(villages, P0, passive, welt, opt) {
   opt = Object.assign({rand: 8, barbaren: true, spieler: true, stamm: true, eigene: true, maxPts: 0, genau: 12, genauEigen: 3, top: 10}, opt || {});
   const melde = typeof opt.fortschritt === "function" ? opt.fortschritt : () => {};
+  // „Rohstoffprozentpunkte vorgeben“ (17.11.2026): dieselbe Paketzahl wie oben (Prozentpunkte ÷ Paketgröße) und damit
+  // dieselben eigenen Prägedörfer wie im Vergleich; bis dahin optimierte die Suche die Paketzahl selbst
+  if (P0.mode === "pct" && !P0.pkgCount) P0 = Object.assign({}, P0, {pkgCount: Math.max(1, Math.round(P0.pkgPct / P0.pkgSize + 1e-9))});
   const R = planPackages(villages, P0, passive), P = R.P, src = R.src, pk = R.pkg;
   const Kc = lastClick(P), cnt = toCnt(pk.pos, Kc), xy = s => s.x * 1000 + s.y;
   const idx = new Map(src.map((s, i) => [xy(s), i]));
@@ -1056,8 +1061,9 @@ function fremdeSuche(villages, P0, passive, welt, opt) {
   const pseudo = c => ({i: src.length, name: c.name, x: c.x, y: c.y, b: {}, cap: P.ignoreRatio ? storageCap(30) : 0, merchants: 0, snob: true,
                         leer: true, pkg: {wood: 0, stone: 0, iron: 0}, prod: {wood: 0, stone: 0, iron: 0}});
   // eigene Aufstellungen je Zahl Flaggendoppler (wie im Vergleich)
-  const eigen = (pk.perK || R.configs.map((c, q) => ({k: q + 1, n: pk.chosen, coins: pk.configCoins[q], sites: c.sites.map(i => src[i])})))
-    .slice(0, R.configs.length).map(o => ({k: o.k, n: o.n, coins: o.coins, sites: o.sites.map(s => idx.get(xy(s)))}));
+  const eigen = (pk.perK || R.configs.map((c, q) => ({k: q + 1, n: pk.chosen, coins: pk.configCoins[q], ohne: pk.configOhne[q], ov: pk.configOv[q],
+                                                      sites: c.sites.map(i => src[i])})))
+    .slice(0, R.configs.length).map(o => ({k: o.k, n: o.n, coins: o.coins, ohne: o.ohne, ov: o.ov, sites: o.sites.map(s => idx.get(xy(s)))}));
   const schritte = eigen.length * (1 + opt.genau + opt.genauEigen);
   let fertig = 0;
   const proK = eigen.map(e => {
@@ -1073,17 +1079,18 @@ function fremdeSuche(villages, P0, passive, welt, opt) {
     melde(++fertig, schritte);
     // genau nachrechnen: die besten fremden und die besten eigenen Dörfer ohne Adelshof getrennt
     const genau = liste => liste.map(({c, st}) => {
-      const s2 = src.concat([pseudo(c)]), cv = packageCurve(s2, P, st, false), n = P.pkgCount || cv.optimal || 0, z = cv.curve[n];
+      const s2 = src.concat([pseudo(c)]), cv = packageCurve(s2, P, st, false), n = Math.min(P.pkgCount || cv.optimal || 0, cv.curve.length - 1), z = cv.curve[n];
+      const ohne = ohneUeberlauf(s2, P, st, toCnt(z.pos, cv.K));
       melde(++fertig, schritte);
       const bleibt = st.filter(i => i < src.length).map(i => src[i].name);
       const ersetzt = e.k === 1 ? [] : e.sites.filter(i => !st.includes(i)).map(i => src[i].name);
-      return Object.assign({}, c, {coins: z.coins, n, ov: z.ov, ok: z.ok, bleibt, ersetzt});
+      return Object.assign({}, c, {coins: z.coins, ohne, n, ov: z.ov, ok: z.ok, bleibt, ersetzt});
     }).sort((a, b) => b.coins - a.coins || a.pts - b.pts);
     const top = genau(alle.filter(x => x.c.typ !== "eigen").slice(0, opt.genau)).slice(0, opt.top);
     const eigeneTop = genau(alle.filter(x => x.c.typ === "eigen").slice(0, opt.genauEigen));
-    return {k: e.k, eigen: {coins: e.coins, n: e.n, sites: e.sites.map(i => src[i].name)}, top, eigeneTop};
+    return {k: e.k, eigen: {coins: e.coins, ohne: e.ohne, ov: e.ov, n: e.n, sites: e.sites.map(i => src[i].name)}, top, eigeneTop};
   });
-  return {kandidaten: kand.length, stamm: stamm ? (welt.tags[stamm] || "") : "", proK};
+  return {kandidaten: kand.length, stamm: stamm ? (welt.tags[stamm] || "") : "", proK, festN: P0.pkgCount || null};
 }
 
 /* Markttausch als Obergrenze (10.15, Dennis 2a): Der nicht prägbare Überschuss (mit „Verhältnis ignorieren“
@@ -1144,6 +1151,14 @@ function lockstep(src, P, sites, cnt, detail) {
   const ov = pkSum > 0 ? ovSum / pkSum : 0;
   if (out) { out.coins = coins; out.units = units; out.lokal = lokal; out.ov = ov; out.mengen = mengenFertig(m); return out; }
   return {coins, ov, units, lokal};
+}
+
+/* Münzen ohne Überlauf (Wunsch Dennis 17.11.2026): derselbe Zeitplan, aber ohne Speichergrenze; was sonst überläuft,
+   bleibt im Dorf und wird verschickt. Zum Vergleich mit den Münzen nach Überlauf aus lockstep. */
+function ohneUeberlauf(src, P, sites, cnt) {
+  const r = lockstep(src, Object.assign({}, P, {ohneSpeicher: true}), sites, cnt, false);
+  delete src._ls;
+  return r.coins;
 }
 
 /* Höchstwert eines Pakets: Paketgröße × Summe der Speicher, in Münzen zum Flaggenpreis (Flagge verdoppelt). */
@@ -1311,8 +1326,8 @@ function scheduleDetails(src, P, sites, pos, passive) {
   const lokalDorf = [];
   src.forEach((s, i) => { if (r.lokalDorf[i] > EPS) lokalDorf.push({i, coins: r.lokalDorf[i]}); });
   lokalDorf.sort((a, b) => b.coins - a.coins);
-  return {coins: r.coins, units: r.units, lokal: r.lokal, lokalDorf, mengen: r.mengen, vorab, routen, cnt, sites: sites.slice(), rows, overflow: r.overflow, pkgRes: r.pkgRes, limiting, passive: pas,
-          overflowShare: pkgTotal > 0 ? ovTotal / pkgTotal : 0};
+  return {coins: r.coins, coinsOhne: ohneUeberlauf(src, P, sites, cnt), units: r.units, lokal: r.lokal, lokalDorf, mengen: r.mengen, vorab, routen, cnt, sites: sites.slice(), rows,
+          overflow: r.overflow, pkgRes: r.pkgRes, limiting, passive: pas, overflowShare: pkgTotal > 0 ? ovTotal / pkgTotal : 0};
 }
 
 /* Gesamtrechnung v0.5: Prägedörfer aus der statischen Rechnung mit Paketvolumen = Anzahl × Größe, Paketzahl und
@@ -1397,8 +1412,9 @@ function planPackages(villages, P0, passive) {
     detail: scheduleDetails(src, P, sites, pos, prepare(passive || [], P)),
     perK: perK && perK.map(o => {
       // je Aufstellung mit ihrer eigenen Paketzahl und ihrem Zeitplan: Mengen für Vergleich und Begründung (10.14)
-      const pos = o.cv.curve[o.n].pos, d = lockstep(o.R.src, o.R.P, o.sites, toCnt(pos, o.cv.K), true);
-      return {k: o.k, n: o.n, coins: o.coins, units: d.units, lokal: d.lokal, mengen: d.mengen, sites: o.sites.map(i => o.R.src[i])};
+      const pos = o.cv.curve[o.n].pos, c = toCnt(pos, o.cv.K), d = lockstep(o.R.src, o.R.P, o.sites, c, true);
+      return {k: o.k, n: o.n, coins: o.coins, ohne: ohneUeberlauf(o.R.src, o.R.P, o.sites, c), ov: d.ov, pos,
+              units: d.units, lokal: d.lokal, mengen: d.mengen, sites: o.sites.map(i => o.R.src[i])};
     })});
   // feste Paketzahl: alle Aufstellungen mit demselben Zeitplan
   const cfg = R.configs.map(c => lockstep(src, P, c.sites, toCnt(pos, cv.K), true));
@@ -1406,6 +1422,8 @@ function planPackages(villages, P0, passive) {
   R.pkg.configUnits = cfg.map(d => d.units);
   R.pkg.configMengen = cfg.map(d => d.mengen);
   R.pkg.configLokal = cfg.map(d => d.lokal);
+  R.pkg.configOv = cfg.map(d => d.ov);
+  R.pkg.configOhne = R.configs.map(c => ohneUeberlauf(src, P, c.sites, toCnt(pos, cv.K)));
   if (R.src) delete R.src._ls;
   return R;
 }
@@ -1446,6 +1464,16 @@ function planPct(villages, P0, passive, sitesWahl, R0) {
   const chosen = Math.min(N, cv.curve.length - 1), pos = cv.curve[chosen].pos;
   R.zeitplan = {n: chosen, size: P0.pkgSize, sumPct: chosen * P0.pkgSize, pct: P0.pkgPct, pos, grid: m,
                 grenze: grenzeInfo(cv, chosen, P), detail: scheduleDetails(R.src, P, sites, pos, prepare(passive || [], P))};
+  // Vergleich (17.11.2026): jede Aufstellung mit diesem Zeitplan, nach und ohne Überlauf; eine nachgerechnete
+  // Aufstellung (packagesForK) bringt ihren eigenen Zeitplan mit
+  if (!sitesWahl) {
+    const c = toCnt(pos, cv.K), cfg = R.configs.map(x => lockstep(R.src, P, x.sites, c, true));
+    R.zeitplan.configCoins = cfg.map(d => d.coins);
+    R.zeitplan.configOv = cfg.map(d => d.ov);
+    R.zeitplan.configMengen = cfg.map(d => d.mengen);
+    R.zeitplan.configOhne = R.configs.map(x => ohneUeberlauf(R.src, P, x.sites, c));
+    delete R.src._ls;
+  }
   return R;
 }
 
@@ -1493,7 +1521,7 @@ function aufstellungsCache() {
 const api = {adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
-             MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, packageValue, lastUsefulClick,
+             MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,
              mengenNeu, mengenDorf, mengenFertig, mengenEinfach, rohstoffeAus, tauschObergrenze, vorabTausch, lagerTausch, parseLager, routeRun, routeMenge, routenPlan, ROUTE_DT, fremdeSuche, startBestand};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
