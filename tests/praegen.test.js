@@ -1086,3 +1086,26 @@ test("17.11.: Suche mit warmem Start: gleiche Münzen wie die ganze Paketkurve, 
   const teile = [1, 2].map(k => K.fremdeSuche(v, P, [], welt, Object.assign({basis, nurK: [k]}, o)));
   assert.deepEqual(teile.flatMap(t => kurz(t)), kurz(r2).filter(([k]) => k <= 2));
 });
+
+/* ---------- Höchstens 250 Handelsrouten (Hinweis Dennis 17.11.2026 14:27) ---------- */
+test("17.11.: Handelsrouten höchstens für die Grenze an Dörfern, die übrigen werden angefordert", () => {
+  const v = konto63(), P = V5({mode: "pct", pkgPct: 150, maxOverflow: 1, fdCount: 1});
+  const R = K.planPct(v, P, []), sites = R.configs[0].sites, cnt = K.toCnt(R.zeitplan.pos, K.lastClick(R.P));
+  const ohne = K.routenPlan(R.src, R.P, sites, cnt, 3, [5 / 60]);
+  assert.equal(ohne.grenze, 0, "62 Lieferdörfer liegen unter 250");
+  assert.equal(K.ROUTEN_DOERFER, 250);
+  const L = 20, Pg = Object.assign({}, R.P, {routenDoerfer: L});
+  const mit = K.routenPlan(R.src, Pg, sites, cnt, 3, [5 / 60]);
+  assert.equal(mit.grenze, L);
+  assert.equal(mit.lieferdoerfer, R.src.length - 1);
+  mit.plans.forEach((pl, q) => {
+    const dorf = pl.routes.flatMap(r => r.dorf);
+    assert.ok(dorf.length <= L && pl.mitRoute === dorf.length, "höchstens " + L + " Dörfer mit Route");
+    assert.equal(new Set(dorf).size, dorf.length);
+    assert.ok(pl.coins >= mit.base - 1e-6, "nie weniger als Anfordern");
+    if (q) assert.ok(pl.coins >= mit.plans[q - 1].coins - 1e-6);
+  });
+  // die gewählten Dörfer: größter Gewinn gegenüber dem Anfordern; ein anderes Dorf statt eines gewählten bringt nicht mehr
+  const pl = mit.plans[mit.plans.length - 1];
+  assert.ok(pl.coins > mit.base, "Routen für die Dörfer, die beim Anfordern nicht hinterherkommen, bringen mehr");
+});

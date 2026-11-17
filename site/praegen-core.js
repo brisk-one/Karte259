@@ -989,7 +989,13 @@ const ROUTE_N = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 70, 80
 /* Beste Routen für 1 bis rMax Routen. Je Lieferdorf, Abstand und Händlerzahl die Münzen aus den Lieferungen
    (Dörfer rechnen im Prägeverhältnis unabhängig voneinander); eine Route ist (Prägedorf, Abstand, Händlerzahl),
    jedes Dorf kommt in die Route seines Prägedorfs, die ihm am meisten bringt. Auswahl je Routenzahl gierig, dann
-   Tausch einzelner Routen, solange es besser wird. */
+   Tausch einzelner Routen, solange es besser wird.
+   Höchstens 250 Handelsrouten im Account-Manager (Hinweis Dennis 17.11.2026 14:27), also höchstens 250 Lieferdörfer
+   mit Route (P.routenDoerfer, sonst ROUTEN_DOERFER). Bis dahin wie bisher (1c: Routen ersetzen das Anfordern).
+   Gibt es mehr Lieferdörfer, werden die übrigen weiter angefordert (im Takt der Klicks), und eine Route bekommen
+   die Dörfer, denen sie gegenüber dem Anfordern am meisten bringt: Wert = Anfordern aller Lieferdörfer plus die
+   größten positiven Gewinne (Route minus Anfordern) von höchstens 250 Dörfern. */
+const ROUTEN_DOERFER = 250;
 function routenPlan(src, P, sites, cnt, rMax, nurDt) {
   const base = lockstep(src, P, sites, cnt, false), {site, tau} = src._ls;
   const cands = [];
@@ -998,10 +1004,19 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
   const val = new Map(), ovv = new Map(), info = new Map(), gesch = new Map();
   let ov0 = 0, pkSum = 0, eigen = 0;
   for (const j of sites) { const r = siteRun(src[j], P, cnt, null); eigen += r.coins; pkSum += r.pkgRes; }
-  const leer = new Map();
+  const leer = new Map(), L = P.routenDoerfer || ROUTEN_DOERFER, grenze = lief.length > L;
+  // grenze: mehr Lieferdörfer als Routen möglich, die übrigen werden angefordert (Münzen und Überlauf beim Anfordern)
+  const klick = new Float64Array(src.length), klickOv = new Float64Array(src.length);
   for (const i of lief) {
     const r0 = villageRun(src[i], tau[i], P, cnt, 0, null, false);              // ohne Route: nur Pakete, kein Versand
     leer.set(i, r0.overflow); ov0 += r0.overflow; pkSum += r0.pkgRes;
+    if (grenze) {
+      let m = 0;
+      const rk = villageRun(src[i], tau[i], P, cnt, src[i].merchants, (ta, a0, a1, a2) => {
+        m += Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron) / (1 - reduction(ta, P));
+      }, true);
+      klick[i] = m + (rk.lokal || 0); klickOv[i] = rk.overflow;
+    }
     const v = new Float64Array(cands.length), o = new Float64Array(cands.length), sk = new Int32Array(cands.length), sn = new Int32Array(cands.length);
     cands.forEach((c, ci) => {
       if (c.site !== site[i] || c.n > src[i].merchants) { v[ci] = -1; return; }
@@ -1013,7 +1028,25 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
     });
     val.set(i, v); ovv.set(i, o); info.set(i, sk); gesch.set(i, sn);
   }
-  const wert = sel => { let s = 0; for (const i of lief) { const v = val.get(i); let b = 0; for (const ci of sel) if (v[ci] > b) b = v[ci]; s += b; } return s; };
+  let klickSumme = 0;
+  if (grenze) for (const i of lief) klickSumme += klick[i];
+  const gew = new Float64Array(lief.length);
+  // Gewinn je Dorf gegenüber dem Anfordern; mit Grenze zählen nur die L größten positiven
+  const besteRoute = (i, sel) => { const v = val.get(i); let b = 0, bq = -1; sel.forEach((ci, q) => { if (v[ci] > b) { b = v[ci]; bq = q; } }); return [b, bq]; };
+  const wert = sel => {
+    if (!grenze) { let s = 0; for (const i of lief) { const v = val.get(i); let b = 0; for (const ci of sel) if (v[ci] > b) b = v[ci]; s += b; } return s; }
+    lief.forEach((i, q) => { const v = val.get(i); let b = 0; for (const ci of sel) if (v[ci] > b) b = v[ci]; gew[q] = Math.max(0, b - klick[i]); });
+    const g = gew.slice().sort();
+    let s = klickSumme;
+    for (let q = g.length - 1; q >= Math.max(0, g.length - L) && g[q] > 0; q--) s += g[q];
+    return s;
+  };
+  // mit Grenze: die L Dörfer mit dem größten Gewinn
+  const mitRoute = sel => {
+    if (!grenze) return null;
+    return new Set(lief.map(i => [i, besteRoute(i, sel)[0] - klick[i]]).filter(([, g]) => g > 0)
+      .sort((a, b) => b[1] - a[1]).slice(0, L).map(([i]) => i));
+  };
   const out = [];
   let sel = [];
   for (let R = 1; R <= rMax; R++) {
@@ -1036,10 +1069,11 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
     // Ergebnis für R Routen: Dörfer den Routen zuordnen
     // sent: Lieferungen, die in der Rechnung tatsächlich abgehen (alle Dörfer der Route zusammen; 4a, Dennis 12.11.2026)
     const routes = sel.map(ci => ({...cands[ci], dorf: [], coins: 0, skipped: 0, sends: 0, sent: 0}));
+    const mit = mitRoute(sel);
     let ov = 0;
     for (const i of lief) {
-      const v = val.get(i); let b = 0, bq = -1;
-      sel.forEach((ci, q) => { if (v[ci] > b) { b = v[ci]; bq = q; } });
+      const [b, bq] = besteRoute(i, sel);
+      if (mit && !mit.has(i)) { ov += klickOv[i]; continue; }                // mit Grenze: wird angefordert
       if (bq < 0) { ov += leer.get(i); continue; }
       const ci = sel[bq];
       routes[bq].dorf.push(i); routes[bq].coins += b; routes[bq].skipped += info.get(i)[ci]; routes[bq].sent += gesch.get(i)[ci]; ov += ovv.get(i)[ci];
@@ -1047,9 +1081,11 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
     routes.forEach(r => { r.sends = Math.max(0, Math.floor((P.window - 1e-9) / r.dt) + 1); });
     routes.sort((x, y) => y.coins - x.coins);
     const ohne = lief.filter(i => !routes.some(r => r.dorf.includes(i)));
-    out.push({R, coins: eigen + bw, ov: pkSum > 0 ? ov / pkSum : 0, routes: routes.filter(r => r.dorf.length), ohne});
+    out.push({R, coins: eigen + bw, ov: pkSum > 0 ? ov / pkSum : 0, routes: routes.filter(r => r.dorf.length), ohne,
+              mitRoute: lief.length - ohne.length});
   }
-  return {base: base.coins, baseOv: base.ov, eigen, plans: out};
+  // grenze: Zahl der Lieferdörfer über der Grenze, ohne Route werden sie angefordert
+  return {base: base.coins, baseOv: base.ov, eigen, plans: out, grenze: grenze ? L : 0, lieferdoerfer: lief.length};
 }
 
 /* ---------- Handelsrouten und Anfordern zusammen (Wunsch Dennis 17.11.2026) ----------
@@ -1850,7 +1886,7 @@ function aufstellungsCache() {
           has: (s, k) => { pruef(s); return m.has(k); }, size: () => m.size};
 }
 
-const api = {anpassenWarm, festAufstellung, festDorf, adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
+const api = {ROUTEN_DOERFER, anpassenWarm, festAufstellung, festDorf, adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, routeKlickRun, lockstepRouten, simulateRoute, vergleichRouten, noetigMitRouten, packageValue, lastUsefulClick,
