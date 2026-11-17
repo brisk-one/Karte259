@@ -1063,3 +1063,26 @@ test("17.11.: festgelegtes Prägedorf kommt als letzte Spalte dazu, die übrigen
   assert.equal(R.festFehlt, true);
   assert.equal(R.configs.length, K.plan(v, P).configs.length);
 });
+
+/* ---------- Schnellere Suche (Dennis 17.11.2026 02:45) ---------- */
+test("17.11.: Suche mit warmem Start: gleiche Münzen wie die ganze Paketkurve, Basis der Seite, Aufteilung je Zahl", () => {
+  const v = konto63(), welt = festWelt(v);
+  const P = V5({mode: "pct", pkgPct: 150, maxOverflow: 1}), Pn = Object.assign({}, P, {pkgCount: 5});
+  // warmer Start gegen ganze Kurve für ein fremdes Dorf als einziges Prägedorf
+  const R = K.planPct(v, P, []), src = K.prepare(v, Pn), s2 = src.concat([K.festDorf({fest: {x: 640, y: 622, name: "B"}, ignoreRatio: false}, src.length)]);
+  const st = [src.length], w = K.anpassenWarm(s2, Pn, st, R.zeitplan.pos, false), cv = K.packageCurve(s2, Pn, st, false);
+  assert.equal(w.n, 5);
+  assert.ok(w.coins >= cv.curve[5].coins * 0.995, w.coins + " zu weit unter " + cv.curve[5].coins);
+  assert.ok(w.ohne >= w.coins - 1e-6);
+  // mit der Rechnung der Seite als Basis dieselben Ergebnisse wie ohne
+  const xy = s => [s.x, s.y];
+  const basis = {pos: R.zeitplan.pos, eigen: R.configs.map((c, q) => ({k: q + 1, n: R.zeitplan.n, pos: R.zeitplan.pos, sites: c.sites.map(i => xy(R.src[i])), vgl: R.zeitplan.configCoins[q]}))};
+  const o = {genau: 2, genauEigen: 0, top: 2};
+  const r1 = K.fremdeSuche(v, P, [], welt, o), r2 = K.fremdeSuche(v, P, [], welt, Object.assign({basis}, o));
+  const kurz = r => r.proK.map(x => [x.k, Math.round(x.eigen.coins), x.top.map(c => c.x + "|" + c.y + ":" + Math.round(c.coins))]);
+  assert.deepEqual(kurz(r2), kurz(r1));
+  r2.proK.forEach(x => { near(x.eigen.vgl, R.zeitplan.configCoins[x.k - 1], 1e-6); assert.ok(x.eigen.coins >= x.eigen.vgl - 1e-6, "eigener Zeitplan nicht schlechter"); });
+  // je Zahl Flaggendoppler getrennt (mehrere Worker): zusammen dasselbe
+  const teile = [1, 2].map(k => K.fremdeSuche(v, P, [], welt, Object.assign({basis, nurK: [k]}, o)));
+  assert.deepEqual(teile.flatMap(t => kurz(t)), kurz(r2).filter(([k]) => k <= 2));
+});

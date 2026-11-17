@@ -1267,9 +1267,69 @@ function noetigMitRouten(stufen) {
    Barbarendörfer, Dörfer anderer Spieler, Dörfer des eigenen Stammes (die man sich schenken lassen kann) und eigene
    Dörfer ohne Adelshof, je nach opt. Ein fremdes Dorf zählt nur als Empfänger: Adelshof gebaut, keine eigenen Pakete,
    keine Produktion (vorsichtig). Je Zahl Flaggendoppler k: bei k = 1 ist der Kandidat das Prägedorf, sonst ersetzt
-   er eines der k eigenen Prägedörfer der besten eigenen Aufstellung. Vorfilter mit dem Zeitplan der Empfehlung,
-   danach für die besten opt.genau Kandidaten Zeitplan und Paketzahl neu optimiert wie im Rechner.
-   welt: {rows: [[x*1000+y, Spielerzeile, Punkte, Bonus, Name]], players: [[id, Name, Stamm-ID]], tags: {Stamm-ID: Kürzel}} */
+   er eines der k eigenen Prägedörfer der besten eigenen Aufstellung. Vorfilter mit dem Zeitplan der eigenen
+   Aufstellung, danach für die besten opt.genau Kandidaten der Zeitplan neu angepasst.
+   Schneller seit 17.11.2026 (Dennis 02:45: Suche dauerte Minuten): Die Zeit steckte nicht im Vorfilter (alle
+   Kandidaten, wenige Sekunden), sondern in der ganzen Paketkurve je genau gerechnetem Kandidaten (6 bis 15 s) und in
+   der Gesamtrechnung vorab. Jetzt: Zeitplan der eigenen Aufstellung als warmer Start, nur verschoben (bei fester
+   Paketzahl dieselben Münzen wie die ganze Kurve, gemessen an Dennis' 109 Dörfern), bei automatischer Paketzahl
+   von der eigenen Zahl aus Paket für Paket hoch oder runter; die Seite gibt ihre Rechnung als opt.basis mit.
+   Die eigene Aufstellung wird genauso nachgerechnet, damit „mehr als jetzt“ fair vergleicht.
+   welt: {rows: [[x*1000+y, Spielerzeile, Punkte, Bonus, Name]], players: [[id, Name, Stamm-ID]], tags: {Stamm-ID: Kürzel}}
+   opt.basis (optional): {pos, eigen: [{k, n, pos, sites: [[x, y], …], vgl}]} aus der Rechnung der Seite; vgl = Münzen der
+   Spalte im Vergleich. opt.nurK: nur diese Zahlen Flaggendoppler (für mehrere Worker). */
+function anpassenWarm(src, P, sites, pos0, auto) {
+  const Kc = lastClick(P), maxPer = maxPerClick(P), evalFn = c => lockstep(src, P, sites, c);
+  const fix = pos => improveSchedule(pos, evalFn, Kc, maxPer, 8, P, false);
+  let cur = fix(pos0);
+  if (auto) {
+    // wie „optimal“ in packageCurve: ein weiteres Paket zählt, solange es zulässig bleibt und mindestens
+    // optThreshold % des Höchstwerts eines Pakets bringt; von der eigenen Paketzahl aus hoch, sonst runter
+    const value = packageValue(src, P), thr = P.optThreshold / 100 - 1e-9, limit = Math.min(N_MAX, maxPer * (Kc + 1));
+    const gain = (a, b) => (a.coins - b.coins) / value;
+    const plusEins = pos => {
+      const c = toCnt(pos, Kc);
+      let w = null;
+      for (let k = 0; k <= Kc; k++) {
+        if (c[k] >= maxPer) continue;
+        c[k]++; const v = evalFn(c); c[k]--;
+        if (!w || besser(v, w, P, 0)) w = {pos: pos.concat([k]), coins: v.coins, ov: v.ov};
+      }
+      return w;
+    };
+    const minusEins = pos => {
+      let w = null;
+      new Set(pos).forEach(k => {
+        const q = pos.slice(); q.splice(q.indexOf(k), 1);
+        const v = evalFn(toCnt(q, Kc));
+        if (!w || besser(v, w, P, 0)) w = {pos: q, coins: v.coins, ov: v.ov};
+      });
+      return w;
+    };
+    // liegt das Optimum weiter weg als zwei Pakete, ist die ganze Kurve schneller und genauer
+    let hoch = false, schritte = 0, weit = false;
+    while (cur.pos.length < limit) {
+      const w = plusEins(cur.pos);
+      if (!w) break;
+      const up = fix(w.pos);
+      if (!zulaessig(up, P) || gain(up, cur) < thr) break;
+      cur = up; hoch = true;
+      if (++schritte > 2) { weit = true; break; }
+    }
+    while (!hoch && cur.pos.length > 0) {
+      const down = fix(minusEins(cur.pos).pos);
+      if (zulaessig(cur, P) && gain(cur, down) >= thr) break;
+      cur = down;
+      if (++schritte > 2) { weit = true; break; }
+    }
+    if (weit) {
+      const cv = packageCurve(src, P, sites, false), z = cv.curve[Math.min(cv.optimal || 0, cv.curve.length - 1)];
+      if (besser(z, cur, P, 0) || z.pos.length !== cur.pos.length) cur = {pos: z.pos, coins: z.coins, ov: z.ov};
+    }
+  }
+  const pos = cur.pos.slice().sort((a, b) => a - b);
+  return {n: pos.length, pos, coins: cur.coins, ov: cur.ov, ok: zulaessig(cur, P), ohne: ohneUeberlauf(src, P, sites, toCnt(pos, Kc))};
+}
 function fremdeSuche(villages, P0, passive, welt, opt) {
   opt = Object.assign({rand: 8, barbaren: true, spieler: true, stamm: true, eigene: true, maxPts: 0, genau: 12, genauEigen: 3, top: 10}, opt || {});
   const melde = typeof opt.fortschritt === "function" ? opt.fortschritt : () => {};
@@ -1277,9 +1337,22 @@ function fremdeSuche(villages, P0, passive, welt, opt) {
   // dieselben eigenen Prägedörfer wie im Vergleich; bis dahin optimierte die Suche die Paketzahl selbst
   if (P0.mode === "pct" && !P0.pkgCount) P0 = Object.assign({}, P0, {pkgCount: Math.max(1, Math.round(P0.pkgPct / P0.pkgSize + 1e-9))});
   if (P0.fest) P0 = Object.assign({}, P0, {fest: null});                     // gesucht wird ohne festgelegtes Dorf
-  const R = planPackages(villages, P0, passive), P = R.P, src = R.src, pk = R.pkg;
-  const Kc = lastClick(P), cnt = toCnt(pk.pos, Kc), xy = s => s.x * 1000 + s.y;
-  const idx = new Map(src.map((s, i) => [xy(s), i]));
+  const xy = s => s.x * 1000 + s.y;
+  // eigene Aufstellungen je Zahl Flaggendoppler wie im Vergleich: aus der Rechnung der Seite, sonst selbst gerechnet
+  let P = P0, src = prepare(villages, P0), idx = new Map(src.map((s, i) => [xy(s), i])), eigen0 = null;
+  const B = opt.basis;
+  if (B && Array.isArray(B.eigen) && B.eigen.length && B.eigen.every(e => e.sites.every(([x, y]) => idx.has(x * 1000 + y))))
+    eigen0 = B.eigen.map(e => ({k: e.k, n: e.n, pos: e.pos, vgl: e.vgl, sites: e.sites.map(([x, y]) => idx.get(x * 1000 + y))}));
+  else {
+    const R = planPackages(villages, P0, passive), pk = R.pkg;
+    P = R.P; src = R.src; idx = new Map(src.map((s, i) => [xy(s), i]));
+    eigen0 = (pk.perK ? pk.perK.map(o => ({k: o.k, n: o.n, pos: o.pos, vgl: o.coins, sites: o.sites.map(s => idx.get(xy(s)))}))
+                      : R.configs.map((c, q) => ({k: q + 1, n: pk.chosen, pos: pk.pos, vgl: pk.configCoins[q], sites: c.sites})))
+      .slice(0, R.configs.length);
+    delete src._ls;
+  }
+  if (opt.nurK) eigen0 = eigen0.filter(e => opt.nurK.includes(e.k));
+  const auto = !P.pkgCount;
   // eigener Spieler: häufigster Besitzer der eigenen Dörfer; eigener Stamm über players
   const zahl = new Map();
   welt.rows.forEach(r => { if (idx.has(r[0]) && r[1] >= 0) zahl.set(r[1], (zahl.get(r[1]) || 0) + 1); });
@@ -1304,13 +1377,15 @@ function fremdeSuche(villages, P0, passive, welt, opt) {
   });
   const pseudo = c => ({i: src.length, name: c.name, x: c.x, y: c.y, b: {}, cap: P.ignoreRatio ? storageCap(30) : 0, merchants: 0, snob: true,
                         leer: true, pkg: {wood: 0, stone: 0, iron: 0}, prod: {wood: 0, stone: 0, iron: 0}});
-  // eigene Aufstellungen je Zahl Flaggendoppler (wie im Vergleich)
-  const eigen = (pk.perK || R.configs.map((c, q) => ({k: q + 1, n: pk.chosen, coins: pk.configCoins[q], ohne: pk.configOhne[q], ov: pk.configOv[q],
-                                                      sites: c.sites.map(i => src[i])})))
-    .slice(0, R.configs.length).map(o => ({k: o.k, n: o.n, coins: o.coins, ohne: o.ohne, ov: o.ov, sites: o.sites.map(s => idx.get(xy(s)))}));
-  const schritte = eigen.length * (1 + opt.genau + opt.genauEigen);
+  const Kc = lastClick(P);
+  const schritte = eigen0.length * (2 + opt.genau + opt.genauEigen);
   let fertig = 0;
-  const proK = eigen.map(e => {
+  const proK = eigen0.map(e => {
+    // eigene Aufstellung genauso nachgerechnet wie die Kandidaten
+    const eg = anpassenWarm(src, P, e.sites, e.pos, auto);
+    delete src._ls;
+    melde(++fertig, schritte);
+    const cnt = toCnt(e.pos, Kc);
     const alle = kand.map(c => {
       const s2 = src.concat([pseudo(c)]), j = src.length;
       let bc = -1, bst = null;
@@ -1323,16 +1398,15 @@ function fremdeSuche(villages, P0, passive, welt, opt) {
     melde(++fertig, schritte);
     // genau nachrechnen: die besten fremden und die besten eigenen Dörfer ohne Adelshof getrennt
     const genau = liste => liste.map(({c, st}) => {
-      const s2 = src.concat([pseudo(c)]), cv = packageCurve(s2, P, st, false), n = Math.min(P.pkgCount || cv.optimal || 0, cv.curve.length - 1), z = cv.curve[n];
-      const ohne = ohneUeberlauf(s2, P, st, toCnt(z.pos, cv.K));
+      const s2 = src.concat([pseudo(c)]), z = anpassenWarm(s2, P, st, e.pos, auto);
       melde(++fertig, schritte);
       const bleibt = st.filter(i => i < src.length).map(i => src[i].name), bleibtXY = st.filter(i => i < src.length).map(i => [src[i].x, src[i].y]);
       const ersetzt = e.k === 1 ? [] : e.sites.filter(i => !st.includes(i)).map(i => src[i].name);
-      return Object.assign({}, c, {coins: z.coins, ohne, n, ov: z.ov, ok: z.ok, bleibt, bleibtXY, ersetzt});
+      return Object.assign({}, c, {coins: z.coins, ohne: z.ohne, n: z.n, ov: z.ov, ok: z.ok, bleibt, bleibtXY, ersetzt});
     }).sort((a, b) => b.coins - a.coins || a.pts - b.pts);
     const top = genau(alle.filter(x => x.c.typ !== "eigen").slice(0, opt.genau)).slice(0, opt.top);
     const eigeneTop = genau(alle.filter(x => x.c.typ === "eigen").slice(0, opt.genauEigen));
-    return {k: e.k, eigen: {coins: e.coins, ohne: e.ohne, ov: e.ov, n: e.n, sites: e.sites.map(i => src[i].name)}, top, eigeneTop};
+    return {k: e.k, eigen: {coins: eg.coins, ohne: eg.ohne, ov: eg.ov, n: eg.n, vgl: e.vgl, sites: e.sites.map(i => src[i].name)}, top, eigeneTop};
   });
   return {kandidaten: kand.length, stamm: stamm ? (welt.tags[stamm] || "") : "", proK, festN: P0.pkgCount || null};
 }
@@ -1776,7 +1850,7 @@ function aufstellungsCache() {
           has: (s, k) => { pruef(s); return m.has(k); }, size: () => m.size};
 }
 
-const api = {festAufstellung, festDorf, adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
+const api = {anpassenWarm, festAufstellung, festDorf, adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
              WORLD_DEFAULT, K_MAX, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, routeKlickRun, lockstepRouten, simulateRoute, vergleichRouten, noetigMitRouten, packageValue, lastUsefulClick,
