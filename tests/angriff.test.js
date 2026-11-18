@@ -744,6 +744,27 @@ test("Zeitraum je Ziel: Rechner wählt, nie schlechter als alle Ziele in einem Z
   assert.ok(!rf.zeitraumWahl);
 });
 
+test("Häkchen je Abschickzeitraum: Fakes in ihren eigenen Zeiträumen, Offs und AGs in ihren (Dennis 19.11.2026 00:32)", () => {
+  const OA = K.parseFenster("02.11.2026 16:00 bis 20:00").fenster, FK = K.parseFenster("02.11.2026 21:00 bis 23:30").fenster;
+  const inn = (w, ms) => w.some(([a, b]) => ms >= a && ms <= b);
+  const input = szenario({}, {windows: OA, windowsFake: FK});
+  const r = K.plan(input);
+  assert.ok(!r.fehler, r.fehler);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  const fakes = r.items.filter(i => i.kind === "fake"), kern = r.items.filter(i => i.kind !== "fake");
+  assert.ok(fakes.length > 0 && kern.length > 0);
+  fakes.forEach(i => assert.ok(inn(FK, i.sendMs) && !i.ausserhalb, "Fake im Fake-Zeitraum"));
+  kern.forEach(i => assert.ok(inn(OA, i.sendMs) || i.ausserhalb, "Off oder AG im eigenen Zeitraum oder markiert"));
+  // ohne windowsFake wie bisher: alle Zeiträume für alles
+  const alt = szenario({}, {windows: OA.concat(FK)});
+  assert.deepEqual(K.plan(alt).items.map(i => i.sendMs), K.plan(Object.assign({}, alt, {windowsFake: OA.concat(FK)})).items.map(i => i.sendMs));
+  // Zeilen je Art
+  const z = [{vonDatum: "02.11.2026", vonZeit: "16:00", bisDatum: "", bisZeit: "20:00", fake: false}, {vonDatum: "02.11.2026", vonZeit: "21:00", bisDatum: "", bisZeit: "23:30", oa: false}];
+  assert.deepEqual(K.fensterAusZeilen(z, "oa").fenster, OA);
+  assert.deepEqual(K.fensterAusZeilen(z, "fake").fenster, FK);
+  assert.equal(K.fensterAusZeilen(z).fenster.length, 2);
+});
+
 test("Vorschlag andere Ankunft rechnet mit dem Vorschlag, auch wenn die Eingabe Zeiträume als Liste hat (19.11.2026)", () => {
   const A = K.parseAnkunft("03.11.2026 13:00:00:000 bis 14:00:00:000");
   const mitListe = szenario({}, {arrivals: [K.parseAnkunft("03.11.2026 08:00:00:000 bis 09:00:00:000")]});

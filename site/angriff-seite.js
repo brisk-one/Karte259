@@ -43,8 +43,8 @@ const INFO = {
   offZielN: "Offs auf dieses Off-Ziel (1 bis 20). Mehrere landen gestaffelt: die mit der kürzesten Laufzeit zuletzt, die anderen zufällig in der Staffelspanne aus Abschnitt 1 davor, mindestens 30 s auseinander, alle im Ankunftszeitraum. „Angreifer“: nur Offs dieses Spielers, „automatisch“: der Planer wählt die nächsten freien Offs.",
   zmodus: "Automatisch: so viele Ziele wie möglich adeln (AGs plus mindestens eine Clean-Off), dann Clean-Offs bis zum Richtwert, dann Off vor AG möglichst oft, dann kürzeste Laufzeiten; gleichwertige Lösungen per Zufall. Je Angreifer: jedes Ziel bekommt in der Tabelle einen Angreifer, der es adelt; Clean-Offs dürfen von allen kommen.",
   ankunft: "Ein Zeitpunkt (alle Ziele zur selben Zeit, die erste Clean-Off genau darauf) oder ein Zeitraum, über den sich die Angriffe verteilen. Für einen Zeitpunkt nur den Start ausfüllen. Ende ohne Tag: gleicher Tag wie der Start, liegt die Uhrzeit davor, der nächste Tag. Tag und Uhrzeit lassen sich eintippen oder über die Knöpfe neben den Feldern wählen. Für Offs und AGs ist höchstens 1 Stunde zu empfehlen, 1,5 Stunden sind ein Orientierungswert; für Fakes dürfen Zeiträume länger sein, auch über die Nacht (geplant wird nur der Tagesteil). Ankünfte im Nachtbonus werden gemeldet. Nach der Berechnung sucht der Planer gleich lange Zeiträume bis 12 Stunden davor und danach, die besser zu den Abschickzeiträumen passen, nie im Nachtbonus. Angriffe kommen nie im Nachtbonus an: ein Ende um 23:00:00 heißt höchstens 22:59:59, ein Zeitraum, der in die Nacht ragt, wird gekürzt, einer ganz in der Nacht wird abgelehnt. Weitere Zeiträume per Knopf. Je Zeitraum zwei Häkchen: „Offs und AGs“ (ohne AG-Ziele gilt es für die Offs allein) und „Fakes“. Neue Zeiträume haben nur „Fakes“. Fakes verteilt der Planer auf alle Zeiträume mit „Fakes“, je Spieler in den, der zu seinen Abschickzeiten passt. Haben mehrere Zeiträume „Offs und AGs“, wählt der Rechner je Ziel den Zeitraum, in dem es am besten geht (mehr Ziele geadelt, weniger außerhalb der Abschickzeiten, weniger Sitzungen); Clean-Offs kommen immer mit ihrem AG an. Das dauert länger. Ohne Zeitraum mit „Fakes“ enthält der Plan keine Fakes. Für einen reinen Fake-Plan keine AG-Ziele eintragen, nur Fakeziele. Andere Ankunftszeiten schlägt der Planer nur bei einem Zeitraum mit AG-Zielen vor.",
-  fen_je: "An: jeder Angreifer kann eigene Abschickzeiträume bekommen, ohne eigene gelten die gemeinsamen. Aus: für alle gelten die gemeinsamen Zeiträume; eigene bleiben gespeichert und gelten wieder, sobald der Schalter an ist. „Zurücksetzen“ löscht die eigenen Zeiträume eines Angreifers.",
-  fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Jeder Angreifer kann unter „Je Angreifer“ eigene Zeiträume bekommen; sie ersetzen für ihn die gemeinsamen. Die Zeiträume sind ein Wunsch: geht ein Ziel nur mit Abschicken außerhalb, plant der Planer es trotzdem, markiert diese Befehle („außerhalb“, „nachts“) und sagt nach der Berechnung, wie die Zeiträume zu erweitern wären. Fakes kommen nur in Sitzungen, in denen ohnehin abgeschickt wird.",
+  fen_je: "An: jeder Angreifer kann eigene Abschickzeiträume bekommen, ohne eigene gelten die gemeinsamen. Das gilt je Häkchen: hat ein Angreifer eigene Zeiträume nur für Fakes, gelten für seine Offs und AGs die gemeinsamen. Aus: für alle gelten die gemeinsamen Zeiträume; eigene bleiben gespeichert und gelten wieder, sobald der Schalter an ist. „Zurücksetzen“ löscht die eigenen Zeiträume eines Angreifers.",
+  fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Jeder Angreifer kann unter „Je Angreifer“ eigene Zeiträume bekommen; sie ersetzen für ihn die gemeinsamen. Die Zeiträume sind ein Wunsch: geht ein Ziel nur mit Abschicken außerhalb, plant der Planer es trotzdem, markiert diese Befehle („außerhalb“, „nachts“) und sagt nach der Berechnung, wie die Zeiträume zu erweitern wären. Fakes kommen nur in Sitzungen, in denen ohnehin abgeschickt wird. Je Zeitraum zwei Häkchen: „Offs und AGs“ und „Fakes“, ohne Angabe beides. So gibt es Zeiträume nur für Fakes (etwa morgens) oder nur für Offs und AGs. Fakes bleiben dann in den Teilen der Off-Sitzungen, die in einem Zeitraum mit „Fakes“ liegen; trifft keiner, bekommt der Angreifer eine eigene Fake-Sitzung in seinen Fake-Zeiträumen. Ohne Zeitraum mit „Fakes“ schickt ein Angreifer keine Fakes.",
   jeClean: "Gilt nur für diesen Spieler, statt der Einstellung „Clean-Offs je AG-Ziel“ oben. „Höchstens N je Ziel“: von diesem Spieler kommen je AG-Ziel höchstens N Clean-Offs (0: keine), die Zahl je Ziel bleibt beim Wert oben. „N für meine AG-Ziele“: Ziele, auf die dieser Spieler den AG-Train schickt, bekommen N Clean-Offs (mindestens 1). Ohnehin gilt: Clean-Offs kommen möglichst vom Spieler, der den Train schickt, damit er sein Timing selbst in der Hand hat.",
   jeStark: "Gilt nur für diesen Spieler: seine AG-Ziele bekommen ihre Clean-Offs möglichst von ihm selbst, und seine Offs gehen möglichst auf seine eigenen AG-Ziele, auch seine freien Offs. Fremde Offs vor seinen AGs gibt es dann nur, wenn er selbst keine passende Off hat. Das geht vor Abschickzeitraum und Laufzeit-Richtwert, aber nicht vor „Off vor AG“: kann seine eigene Off nur nach seinem AG losgehen, kommt lieber eine fremde, die vorher losgeht. Das Adeln selbst geht ebenfalls vor (fehlt einem Ziel sonst eine Clean-Off, kommt sie doch von einem anderen).",
   planDatei: "„Planung speichern“ lädt eine JSON-Datei herunter mit allem, was du im Planer eingegeben und angepasst hast: Konfiguration, Angreifer mit Truppenübersichten, Häkchen, AG-Zahlen, AG-Pala, Offs an/aus, Zeiträume, Ziele mit Zuordnung, Fakeziele und Fakelisten, gewürfelte Variante. „Planung laden …“ liest so eine Datei (sie bleibt auf deinem Rechner, nichts wird hochgeladen), zeigt, was drin ist, und ersetzt nach Bestätigung die aktuelle Planung; danach „Berechnen“. Weltdaten und die Uhrzeit kommen beim Rechnen frisch dazu, der Plan kann sich deshalb leicht ändern, etwa wenn Abschickzeiten inzwischen vorbei sind oder ein Ziel den Besitzer gewechselt hat. Die Datei enthält die Truppenübersichten der Spieler: nur an Leute geben, die sie sehen dürfen. Ohne Datei merkt sich derselbe Browser die Planung ohnehin, auch nach dem Schließen.",
@@ -129,13 +129,13 @@ function zeitenUebernehmen() {
 /* Mehrere Ankunftszeiträume (v0.6): S.ankListe ist die Quelle, S.ank immer ihr erster (Hauptzeitraum für Offs und AGs). */
 function ankSync() {
   if (!Array.isArray(S.ankListe) || !S.ankListe.length) S.ankListe = [S.ank || leererZeitraum()];
-  S.ankListe.forEach(hakenStandard);
+  S.ankListe.forEach((z, i) => hakenStandard(z, i, "ankunft"));
   S.ank = S.ankListe[0];
 }
 /* Häkchen je Ankunftszeitraum (Dennis 19.11.2026 00:06): „Offs und AGs“ (ohne AG-Ziele die Offs allein) und „Fakes“.
-   Ohne Angabe wie bisher: der erste für Offs und AGs, Fakes in allen. */
-function hakenStandard(z, i) {
-  if (z.oa == null) z.oa = i === 0;
+   Ohne Angabe wie bisher: der erste für Offs und AGs, Fakes in allen. Je Abschickzeitraum (00:32): ohne Angabe beides. */
+function hakenStandard(z, i, art) {
+  if (z.oa == null) z.oa = art === "ankunft" ? i === 0 : true;
   if (z.fake == null) z.fake = true;
 }
 const ankArt = z => z.oa && z.fake ? "Offs und AGs, Fakes" : z.oa ? "Offs und AGs" : z.fake ? "Fakes" : "nicht genutzt, kein Häkchen";
@@ -919,12 +919,12 @@ function zeitraumListe(box, zeilen, fn, opt) {
       zeile.append(kopie, zurueck);
       let hk = null;
       if (opt && opt.haken) {
-        hakenStandard(z, i);
+        hakenStandard(z, i, opt.haken);
         hk = el("div", "ap-haken");
         [["oa", "Offs und AGs"], ["fake", "Fakes"]].forEach(([k, t]) => {
           const lab = el("label"), c = el("input");
           c.type = "checkbox"; c.checked = !!z[k];
-          c.setAttribute("aria-label", t + " in Zeitraum " + (i + 1));
+          c.setAttribute("aria-label", t + " in " + (opt.name || "Zeitraum") + " " + (i + 1));
           c.addEventListener("change", () => { z[k] = c.checked; fn(); });
           lab.append(c, document.createTextNode(" " + t));
           hk.append(lab);
@@ -941,9 +941,19 @@ function zeitraumListe(box, zeilen, fn, opt) {
 }
 function fensterNote(ziel, zeilen, leerText) {
   const f = K.fensterAusZeilen(zeilen);
-  const teile = f.fenster.map(x => K.fmtZeit(x[0]).slice(0, 16) + " bis " + K.fmtZeit(x[1]).slice(0, 16));
-  ziel.replaceChildren(el("span", f.fehler.length ? "ap-warn" : (teile.length ? "ap-ok" : null),
-    f.fehler.length ? f.fehler.join("; ") : (teile.length ? teile.join(" · ") : leerText)));
+  const text = fen => fen.map(x => K.fmtZeit(x[0]).slice(0, 16) + " bis " + K.fmtZeit(x[1]).slice(0, 16)).join(" · ");
+  const teile = text(f.fenster);
+  if (f.fehler.length || !teile || !zeilen.some(z => z.oa === false || z.fake === false)) {
+    ziel.replaceChildren(el("span", f.fehler.length ? "ap-warn" : (teile ? "ap-ok" : null), f.fehler.length ? f.fehler.join("; ") : (teile || leerText)));
+    return;
+  }
+  // Häkchen je Abschickzeitraum (19.11.2026): je Art getrennt
+  ziel.replaceChildren();
+  [["oa", "Offs und AGs"], ["fake", "Fakes"]].forEach(([k, t]) => {
+    const z = text(K.fensterAusZeilen(zeilen, k).fenster), d = el("div");
+    d.append(el("strong", null, t + ": "), el("span", z ? "ap-ok" : "ap-warn", z || (k === "fake" ? "kein Zeitraum, ohne Fakes" : "kein Zeitraum")));
+    ziel.append(d);
+  });
 }
 /* Je Angreifer eigene Zeiträume in Abschnitt 5; ohne eigene gelten die gemeinsamen. */
 function fensterJeTitel(i) {
@@ -970,7 +980,8 @@ function fensterJeBauen() {
     const zurueck = el("button", "tw ap-zurueck", "Zurücksetzen");
     zurueck.type = "button"; zurueck.disabled = !eigen();
     zurueck.addEventListener("click", () => { a.fen = [leererZeitraum()]; fensterJeBauen(); attAnalyse(i); geaendert(true); });
-    zeitraumListe(liste, a.fen, () => { fensterNote(note, a.fen, LEER); zurueck.disabled = !eigen(); attAnalyse(i); fensterJeTitel(i); geaendert(true); });
+    zeitraumListe(liste, a.fen, () => { fensterNote(note, a.fen, LEER); zurueck.disabled = !eigen(); attAnalyse(i); fensterJeTitel(i); geaendert(true); },
+      {haken: "abschick", name: "Angreifer " + (i + 1) + ", Abschickzeitraum"});
     fensterNote(note, a.fen, LEER);
     det.append(sum, liste, note, zurueck);
     if (a.fen.some(z => !K.zeitraumAusFeldern(z).leer)) det.open = true;
@@ -986,8 +997,9 @@ $("fen-je-an").addEventListener("change", e => {
 });
 function zeitFelderBauen() {
   ankSync();
-  zeitraumListe($("ankunft-felder"), S.ankListe, () => { ankSync(); geaendert(true); }, {ms: true, haken: true});
-  zeitraumListe($("fenster-felder"), S.fen, () => { S.atts.forEach((a, i) => attAnalyse(i)); geaendert(true); });
+  zeitraumListe($("ankunft-felder"), S.ankListe, () => { ankSync(); geaendert(true); }, {ms: true, haken: "ankunft"});
+  zeitraumListe($("fenster-felder"), S.fen, () => { S.atts.forEach((a, i) => attAnalyse(i)); geaendert(true); },
+    {haken: "abschick", name: "Abschickzeitraum"});
 }
 function zeitenBauen() {
   ankSync();
@@ -1132,21 +1144,34 @@ function kernInput(cfgExtra) {
   const ank = ankGut.find(a => a.oa) || ankGut[0] || anks[0];
   const fw = K.fensterAusZeilen(S.fen);
   if (fw.fehler.length) fehler.push(fw.fehler.join("; ") + " (Abschnitt 5).");
+  // Häkchen je Abschickzeitraum (Dennis 19.11.2026 00:32): je Art eigene vor gemeinsamen Zeiträumen
+  const fwOA = K.fensterAusZeilen(S.fen, "oa").fenster, fwF = K.fensterAusZeilen(S.fen, "fake").fenster;
+  const mitZielen = S.ziele.length > 0 || S.offZiele.length > 0;
   const attackers = [];
   S.atts.forEach((a, i) => {
     const A = ANALYSE[i];
     if (!A || !A.dorfer.length) return;
     if (A.own && A.own.fehler.length) fehler.push(A.name + ": " + A.own.fehler.join("; ") + " (eigene Abschickzeiträume).");
-    const own = A.own && A.own.fenster.length ? A.own.fenster : null;
-    if (!own && !fw.fenster.length) fehler.push("Kein Abschickzeitraum für " + A.name + " (Abschnitt 5).");
+    const ownOA = S.fenJe ? K.fensterAusZeilen(a.fen, "oa").fenster : [], ownF = S.fenJe ? K.fensterAusZeilen(a.fen, "fake").fenster : [];
+    const own = ownOA.length ? ownOA : null, hatOA = ownOA.length > 0 || fwOA.length > 0, hatF = ownF.length > 0 || fwF.length > 0;
+    const offAG = !a.rollen || a.rollen.off !== false || a.rollen.ag !== false;
+    if (!hatOA && !hatF) fehler.push("Kein Abschickzeitraum für " + A.name + " (Abschnitt 5).");
+    else if (!hatOA && mitZielen && offAG) fehler.push("Kein Abschickzeitraum mit Häkchen „Offs und AGs“ für " + A.name + " (Abschnitt 5).");
+    // ohne Abschickzeitraum mit „Fakes“ schickt der Angreifer keine Fakes
+    const rollen = Object.assign({}, a.rollen, ohneFakes || !hatF ? {fake: false} : {});
     // Off-Dörfer aus der Liste gelten unabhängig von der Dorfauswahl
-    attackers.push({id: i, name: A.name, points: A.points || 0, rollen: ohneFakes ? Object.assign({}, a.rollen, {fake: false}) : a.rollen, auswahl: A.aus ? A.aus.keys.concat(A.dorfer.filter(d => d.vorlage).map(d => d.xy)) : null, windows: own,
+    attackers.push({id: i, name: A.name, points: A.points || 0, rollen, auswahl: A.aus ? A.aus.keys.concat(A.dorfer.filter(d => d.vorlage).map(d => d.xy)) : null, windows: own,
+      windowsFake: ownF.length ? ownF : null,
       cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax, eigeneStark: !!a.eigeneStark, fakeSoll: a.fakeSoll || null,
       fakeMax: a.fakeMax != null ? a.fakeMax : null,
       villages: A.dorfer.map(d => Object.assign({id: d.id, name: d.name, x: d.x, y: d.y, pts: d.pts, units: d.units,
                                     nobles: agZahl(a, d), useOff: offEingeplant(a, d), pala: !d.vorlage && !!(a.pala && a.pala[d.xy])}, d.vorlage ? {vorlage: true} : {}))});
   });
   if (!attackers.length) fehler.push("Kein Angreifer mit Truppenübersicht oder Off-Dorfliste (Abschnitt 2).");
+  // Teilnahme (Dennis 19.11.2026 00:33: keine Offs, weil bei allen Angreifern „Offs“ aus war)
+  const teil = rolle => attackers.some(x => !x.rollen || x.rollen[rolle] !== false);
+  if (attackers.length && S.ziele.length && !teil("ag")) fehler.push("AG-Ziele, aber kein Angreifer nimmt mit AGs teil (Abschnitt 2, „nimmt teil mit“).");
+  if (attackers.length && S.offZiele.length && !teil("off")) fehler.push("Off-Ziele, aber kein Angreifer nimmt mit Offs teil (Abschnitt 2, „nimmt teil mit“).");
   if (!IDS) fehler.push("Dorf-IDs fehlen (dorf_ids.json), ohne sie gibt es keinen Export.");
   const zielDorf = xy => { const d = dorf(xy); return d ? {id: d.id, x: d.x, y: d.y, owner: d.p, name: d.name} : null; };
   const agTargets = S.ziele.map(z => Object.assign(zielDorf(z.xy) || {}, {assignee: S.zmodus === "je" ? z.assignee : null})).filter(t => t.id != null);
@@ -1176,7 +1201,7 @@ function kernInput(cfgExtra) {
   // reiner Fake-Plan (v0.6): ohne AG-Ziele reicht ein Fakeziel
   if (!S.ziele.length && !offTargets.length && !fakeTargets.length && !extraFakeTargets.length) fehler.push("Keine AG-, Off- oder Fakeziele (Abschnitt 3).");
   return {fehler, input: {world: W, cfg: Object.assign({}, S.cfg, {seed: S.seed}, cfgExtra || {}, ohneFakes ? {fakes_per_village: 0, extra_fakes: false} : {}), attackers, agTargets, offTargets, fakeTargets,
-          extraFakeTargets, arrival: ank, arrivals: ankGut, windows: fw.fenster, now: Date.now()}};
+          extraFakeTargets, arrival: ank, arrivals: ankGut, windows: fwOA, windowsFake: fwF, now: Date.now()}};
 }
 function rechnen() {
   const {fehler, input} = kernInput();

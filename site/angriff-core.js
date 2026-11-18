@@ -304,12 +304,13 @@ function zeitraumAusFeldern(f, punktErlaubt) {
   return {from, to};
 }
 /** Abschickzeiträume aus Feldzeilen; ganz leere Zeilen zählen nicht. */
-function fensterAusZeilen(zeilen) {
+/** art "oa" oder "fake" (Häkchen je Abschickzeitraum, Dennis 19.11.2026 00:32): nur Zeilen ohne Häkchen-Aus für diese Art. */
+function fensterAusZeilen(zeilen, art) {
   const out = [], fehler = [];
   (zeilen || []).forEach((z, i) => {
     const r = zeitraumAusFeldern(z, false);
     if (r.fehler) fehler.push("Zeitraum " + (i + 1) + ": " + r.fehler);
-    else if (!r.leer) out.push([r.from, r.to]);
+    else if (!r.leer && (!art || z[art] !== false)) out.push([r.from, r.to]);
   });
   return {fenster: ivNorm(out), fehler};
 }
@@ -743,16 +744,22 @@ function planKern(input) {
   const ab = input.now != null ? [[input.now + 60000, Number.MAX_SAFE_INTEGER]] : [[0, Number.MAX_SAFE_INTEGER]];
   const palaOhne = [], palaGanz = !["zwei", "einzeln"].includes(cfg.train_form);
   (input.attackers || []).forEach(a => {
-    const wunsch = ivIntersect(ivNorm(a.windows && a.windows.length ? a.windows : (input.windows || [])), ab);
+    const roh = a.windows && a.windows.length ? a.windows : (input.windows || []);
+    const wunsch = ivIntersect(ivNorm(roh), ab);
     // „wunsch“: die Zeiträume sind Wunsch, harte Grenze ist nur „nicht vor jetzt“ (Dennis 2a, 21:26)
     const fenster = streng ? wunsch : ab;
+    // Häkchen je Abschickzeitraum (Dennis 19.11.2026 00:32): Zeiträume für Fakes, je Art eigene vor gemeinsamen; ohne
+    // Angabe die für Offs und AGs (wie bisher). fakeGetrennt: Fakes nur in den Teilen der Off-Sitzungen, die dazu passen
+    const rohF = a.windowsFake && a.windowsFake.length ? a.windowsFake : input.windowsFake != null ? input.windowsFake : roh;
+    const wunschF = ivIntersect(ivNorm(rohF), ab), fensterF = streng ? wunschF : ab;
+    const fakeGetrennt = JSON.stringify(wunschF) !== JSON.stringify(wunsch);
     // Je Spieler (Dennis 03.11.2026 15:12): Clean-Offs „beitrag“ (höchstens N je Ziel von diesem Spieler, 2b) oder
     // „eigene“ (N Clean-Offs für Ziele mit seinem AG-Train, 2a); Fakes „dorf“ (höchstens N je eigenem Dorf, 3a) oder
     // „ziel“ (N Fakes je Fakeziel von diesem Spieler, zusätzlich zu denen der übrigen, 3b). Ohne Angabe gilt die Konfig.
     const zahl = (x, max) => x == null || x === "" || isNaN(+x) ? null : Math.max(0, Math.min(max, Math.round(+x)));
     const cleanModus = ["beitrag", "eigene"].includes(a.cleanModus) ? a.cleanModus : null;
     const fakeModus = ["dorf", "ziel"].includes(a.fakeModus) ? a.fakeModus : null;
-    att.set(a.id, {id: a.id, name: a.name, points: a.points || 0, fenster, wunsch,
+    att.set(a.id, {id: a.id, name: a.name, points: a.points || 0, fenster, wunsch, fensterF, wunschF, fakeGetrennt,
       cleanModus: cleanModus && zahl(a.cleanN, 3) != null ? cleanModus : null, cleanN: zahl(a.cleanN, 3),
       fakeModus: fakeModus && zahl(a.fakeN, 20) != null ? fakeModus : null, fakeN: zahl(a.fakeN, 20),
       rammenMax: zahl(a.rammenMax, 1000) != null ? zahl(a.rammenMax, 1000) : 1,       // Rammen je Fake höchstens (Dennis 10.11.2026)
@@ -861,7 +868,7 @@ function planKern(input) {
   // Fakes dürfen in jeden Ankunftszeitraum mit Häkchen „Fakes“ (v0.6, 19.11.2026); mit einem Zeitraum genau wie bisher
   const sendIvFake = travelMs => ANK.length > 1 ? ivNorm(ANK.map(a => [a.from - travelMs, a.to - travelMs])) : [[ANK[0].from - travelMs, ANK[0].to - travelMs]];
   const tsetFake = (v, travelMs) => ANK.length > 1
-    ? ivNorm([].concat(...ANK.map(a => zeitBasis(a, att.get(v.att).fenster, travelMs, 0)))) : zeitBasis(ANK[0], att.get(v.att).fenster, travelMs, 0);
+    ? ivNorm([].concat(...ANK.map(a => zeitBasis(a, att.get(v.att).fensterF, travelMs, 0)))) : zeitBasis(ANK[0], att.get(v.att).fensterF, travelMs, 0);
   const nachtIv = iv => istNacht(world, iv[0]) && istNacht(world, iv[1]) && istNacht(world, (iv[0] + iv[1]) / 2);
   const anker = new Map();
   const zeitKosten = (v, travelMs, offset, t) => {
@@ -1229,7 +1236,9 @@ function planKern(input) {
         offZielOffs.set(t.id, neu);
       const n = offZielOffs.get(t.id).length;
       if (n < t.soll) warnings.push({art: "offziel", ziel: t.id, text: "Off-Ziel " + t.x + "|" + t.y + ": " + n + " statt " + t.soll + (t.soll === 1 ? " Off" : " Offs") +
-        (t.assignee != null ? " (nur von " + att.get(t.assignee).name + ")" : "") + ", keine weitere freie Off, die zu Abschickzeitraum und Ankunft passt"});
+        (t.assignee != null ? " (nur von " + att.get(t.assignee).name + ")" : "") + (offPool
+          ? ", keine weitere freie Off, die zu Abschickzeitraum und Ankunft passt"
+          : ", kein Dorf als Off verfügbar (Teilnahme „Offs“ oder Off-Auswahl in Abschnitt 2)")});
     });
   }
 
@@ -1394,7 +1403,12 @@ function planKern(input) {
     const vb = kernBloecke();
     const vz = zeitenPlanen(vb, Object.assign({}, zeitCtx, {warnings: [], nurKern: true, schnell: !!input._schnell}));
     vorgabe = new Map(vb.filter(b => b.T != null).map(b => [b.key, b.T]));
-    vz.sitzungen.forEach((s, a) => { if (s.length) fakeFenster.set(a, ivNorm(s.map(([x, y]) => [x - FAKE_RAND_MS, y + FAKE_RAND_MS]))); });
+    vz.sitzungen.forEach((s, a) => {
+      if (!s.length) return;
+      let f = ivNorm(s.map(([x, y]) => [x - FAKE_RAND_MS, y + FAKE_RAND_MS]));
+      if (att.get(a).fakeGetrennt) f = ivIntersect(f, att.get(a).wunschF);   // Fakes nur, wo ihre Zeiträume die Sitzung treffen
+      if (f.length) fakeFenster.set(a, f);
+    });
     vz.sitzungen.forEach(s => s.forEach(([x]) => { if (x < T0) T0 = x; }));
   }
 
@@ -1454,11 +1468,12 @@ function planKern(input) {
   };
   // dichtester Punkt in den Abschickzeiträumen gegen den dichtesten überhaupt; außerhalb zählt halb, wie bisher (10.11.2026,
   // Dennis 1a: sonst landete die Sitzung bei langen Ankunftszeiträumen jetzt mitten in der Nacht vor den Zeiträumen)
-  const punktWahl = (ivs, w) => {
+  // innenVor (eigene Abschickzeiträume für Fakes, 19.11.2026): liegt dort überhaupt ein Fake, gilt der Punkt darin
+  const punktWahl = (ivs, w, innenVor) => {
     const drin = w.length ? [].concat(...ivs.map(iv => ivIntersect([iv], w))) : [];
     const zahl = p => p == null ? 0 : ivs.filter(([x, y]) => x <= p && p <= y).length * (!w.length || ivHas(w, p) ? 1 : 0.5);
     const pIn = drin.length ? dichtesterPunkt(drin, w) : null, pAll = dichtesterPunkt(ivs, w);
-    const p = zahl(pIn) >= zahl(pAll) ? pIn : pAll;
+    const p = (innenVor && zahl(pIn) > 0) || zahl(pIn) >= zahl(pAll) ? pIn : pAll;
     return {p, n: zahl(p)};
   };
   // eine Stunde um den Punkt, ganz in den Zeitraum mit dem Punkt geschoben (der Punkt bleibt drin), nicht vor jetzt
@@ -1471,8 +1486,8 @@ function planKern(input) {
     return f;
   };
   const fakeSitzung = a => {
-    const w = att.get(a).wunsch;
-    const wahl = ANK.map((an, i) => Object.assign({i}, punktWahl(fakeIvs(a, an), w)));
+    const w = att.get(a).wunschF;
+    const wahl = ANK.map((an, i) => Object.assign({i}, punktWahl(fakeIvs(a, an), w, att.get(a).fakeGetrennt)));
     const max = Math.max(...wahl.map(x => x.n));
     if (!(max > 0)) return [];
     const best = wahl.filter(x => x.n >= max * 0.9).sort((x, y) => fensterLast[x.i] - fensterLast[y.i] || y.n - x.n || x.i - y.i)[0];
@@ -1496,7 +1511,7 @@ function planKern(input) {
     if (!fakeFrueh.has(a)) {
       let f = [];
       if (vorlaufMs && T0 < Infinity) {
-        const w = att.get(a).wunsch;
+        const w = att.get(a).wunschF;
         const bereich0 = vorSpanne ? [[T0 - vorBis * 3600000, T0 - vorVon * 3600000]] : [[T0 - vorVon * 3600000 - VORLAUF_TOL_MS, T0 - vorVon * 3600000 + VORLAUF_TOL_MS]];
         const bereich = !w.length ? bereich0
           : ivIntersect([[bereich0[0][0] - (vorSpanne ? VORLAUF_TOL_MS : 0), Math.min(T0, bereich0[0][1] + (vorSpanne ? VORLAUF_TOL_MS : 0))]], w);
@@ -1533,7 +1548,7 @@ function planKern(input) {
   const fakeExtra = new Map(), fakeExtraListe = new Map();
   const extraFenster = a => {
     if (!fakeExtra.has(a)) {
-      const f = [], w = att.get(a).wunsch;
+      const f = [], w = att.get(a).wunschF;
       if (!streng && w.length) {
         if (!fakeFenster.has(a) && !fakeAnker.has(a)) fakeAnker.set(a, fakeSitzung(a));
         const belegt = ivNorm((fakeFenster.get(a) || fakeAnker.get(a) || []).concat(vorlaufMs ? fruehFenster(a) : []));
@@ -1780,7 +1795,7 @@ function planKern(input) {
     }).length;
     if (nah) z.naechst = {felder: Math.round(nah.d * 10) / 10, laufzeitMs: travelS(world, "ram", nah.d) * 1000, spaetestens: ankEnde - travelS(world, "ram", nah.d) * 1000};
     if (z.zeit && z.zeit === z.faehig) {
-      const w = a.wunsch.length ? a.wunsch : a.fenster;
+      const w = a.wunschF.length ? a.wunschF : a.fensterF;
       warnings.push({art: "fakezeit", att: a.id, text: a.name + ": kein Fakeziel passt zeitlich. Das nächste ist " + String(z.naechst.felder).replace(".", ",") + " Felder entfernt (" +
         (Math.round(z.naechst.laufzeitMs / 360000) / 10).toLocaleString("de-DE") + " h mit Rammen), Abschick dafür spätestens " + fmtZeit(z.naechst.spaetestens).slice(0, 16) +
         (w.length ? "; Abschickzeitraum " + w.map(([x, y]) => fmtZeit(x).slice(0, 16) + " bis " + fmtZeit(y).slice(11, 16)).join(", ") : "") +
@@ -1980,7 +1995,7 @@ function planKern(input) {
   items.forEach(it => {
     if (istNacht(world, it.arrivalMs)) it.nacht = true;
     // Abschickzeit außerhalb der Wunschzeiträume und nachts (v0.5): markiert, damit der Spieler es sieht
-    const w = att.get(it.att).wunsch;
+    const w = it.kind === "fake" ? att.get(it.att).wunschF : att.get(it.att).wunsch;
     if (w.length && !ivHas(w, it.sendMs)) it.ausserhalb = true;
     if (istNacht(world, it.sendMs)) it.nachtSenden = true;
     // Laufzeit über dem Richtwert (Dennis 11.11.2026): Offs mit ihrem Wert, AGs (auch mit der Off im Train) mit dem der AGs
@@ -2107,7 +2122,10 @@ function zeitenPlanen(blocks, ctx) {
     fen.forEach(a => {
       let x = [[a.from, a.to]];
       // zusätzliche Offs (streng) nur in den Abschickzeiträumen des Spielers
-      b.items.forEach(it => { const g = att.get(it.att); x = ivIntersect(x, zeitBasis(a, it.streng && g.wunsch.length ? g.wunsch : g.fenster, it.travelMs, it.offset)); });
+      b.items.forEach(it => {
+        const g = att.get(it.att), fk = it.kind === "fake" && g.wunschF, gw = fk ? g.wunschF : g.wunsch, gf = fk ? g.fensterF : g.fenster;
+        x = ivIntersect(x, zeitBasis(a, it.streng && gw.length ? gw : gf, it.travelMs, it.offset));
+      });
       s = s.concat(x);
     });
     b.tset = fen.length > 1 ? ivNorm(s) : s;
@@ -2267,8 +2285,13 @@ function zeitenPlanen(blocks, ctx) {
     const extraVon = a => (ctx.fakeExtra && ctx.fakeExtra.get(a)) || [];          // zusätzliche Fake-Sitzungen (13.11.2026)
     // übrige Fakes nur in den Sitzungen (mit Rand); die frühe Sitzung gehört den Vorlauf-Fakes (Dennis 13.11.2026)
     const erlaubt = a => {
-      const s = sitzungen.get(a);
-      if (s && s.length) return ivNorm(s.map(([x, y]) => [x - FAKE_RAND_MS, y + FAKE_RAND_MS]));
+      const s = sitzungen.get(a), g = att.get(a);
+      if (s && s.length) {
+        const f = ivNorm(s.map(([x, y]) => [x - FAKE_RAND_MS, y + FAKE_RAND_MS]));
+        if (!g || !g.fakeGetrennt) return f;
+        const fw = ivIntersect(f, g.wunschF);                // eigene Zeiträume für Fakes (19.11.2026)
+        if (fw.length) return fw;
+      }
       if (ctx.streng) return [[0, Number.MAX_SAFE_INTEGER]];
       const fa = ctx.fakeAnker && ctx.fakeAnker.get(a);
       return fa && fa.length ? ivNorm(fa) : [[0, Number.MAX_SAFE_INTEGER]];
@@ -2283,7 +2306,7 @@ function zeitenPlanen(blocks, ctx) {
       const tsh = ivShift(b.tset, x.rel), frueh = ivIntersect(tsh, fruehVon(x.att)), normal = ivIntersect(tsh, erlaubt(x.att));
       const extraS = ivIntersect(tsh, extraVon(x.att));
       const versuche = b.frueh ? [frueh, normal, extraS] : [normal, extraS, frueh];
-      const wunsch = ctx.streng ? [] : att.get(x.att).wunsch;
+      const wunsch = ctx.streng ? [] : (att.get(x.att).wunschF || att.get(x.att).wunsch);
       const spanne = arr.length ? [arr[0], arr[arr.length - 1]] : null;
       let bestS = null, bestW = -Infinity, bereich = [];
       const pruef = c => {
@@ -2452,6 +2475,8 @@ function pruefePlan(res, input) {
   const AZ = t => (t && res.ankZiel && res.ankZiel[t.id]) || A0;
   const drin = (a, ms) => ms >= a.from && ms <= a.to + (a.from === a.to ? 10000 : 0);
   const fenster = new Map((input.attackers || []).map(a => [a.id, ivNorm(a.windows && a.windows.length ? a.windows : (input.windows || []))]));
+  const fensterF = new Map((input.attackers || []).map(a => [a.id, a.windowsFake && a.windowsFake.length ? ivNorm(a.windowsFake)
+    : input.windowsFake != null ? ivNorm(input.windowsFake) : fenster.get(a.id)]));
   const gap = cfg.min_send_gap_s * 1000;
   // Einheiten je Dorf
   const verbrauch = new Map();
@@ -2462,7 +2487,8 @@ function pruefePlan(res, input) {
     if (it.kind === "fake" ? !ANK.some(a => drin(a, it.arrivalMs)) : !drin(A, it.arrivalMs) && !vorFest) v.push("Ankunft außerhalb des Zeitraums: " + it.v.id + " → " + it.t.id);
     if (istNacht(world, it.arrivalMs)) v.push("Ankunft im Nachtbonus: " + it.v.id + " → " + it.t.id);
     // v0.5: Zeiträume sind Wunsch, Befehle außerhalb müssen markiert sein; „streng“: nie außerhalb
-    if (!ivHas(fenster.get(it.att) || [], it.sendMs) && (cfg.zeitraeume === "streng" || !it.ausserhalb) && (fenster.get(it.att) || []).length)
+    const fw = (it.kind === "fake" ? fensterF : fenster).get(it.att) || [];
+    if (!ivHas(fw, it.sendMs) && (cfg.zeitraeume === "streng" || !it.ausserhalb) && fw.length)
       v.push("Abschickzeit außerhalb der Fenster ohne Markierung: " + it.v.id + " → " + it.t.id);
     if (input.now != null && it.sendMs < input.now) v.push("Abschickzeit vor der Berechnung: " + it.v.id);
     // feste AG-Laufzeit-Grenze (Dennis 12.11.2026, 7 h): nie länger
