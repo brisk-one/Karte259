@@ -698,6 +698,60 @@ test("v0.6: gemischter Plan mit zwei Zeiträumen: Offs und AGs im ersten, Fakes 
   assert.deepEqual(K.pruefePlan(rl, lang), []);
 });
 
+// Häkchen je Ankunftszeitraum (Dennis 19.11.2026 00:06, Antworten 1c und 2b): „Offs und AGs“ und „Fakes“ je Zeitraum,
+// bei mehreren Zeiträumen für Offs und AGs wählt der Rechner je Ziel
+const zr = (text, oa, fake) => Object.assign(K.parseAnkunft(text), {oa, fake});
+test("Häkchen je Zeitraum: Offs und AGs nur in Zeiträumen mit „Offs und AGs“, Fakes nur in denen mit „Fakes“", () => {
+  const W1 = zr("03.11.2026 08:00:00:000 bis 09:00:00:000", false, true), W2 = zr("03.11.2026 08:30:00:000 bis 09:30:00:000", true, false);
+  const input = szenario({}, {arrivals: [W1, W2]});
+  const r = K.plan(input);
+  assert.ok(!r.fehler, r.fehler);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  const kern = r.items.filter(i => i.kind !== "fake"), fakes = r.items.filter(i => i.kind === "fake");
+  assert.ok(kern.length && fakes.length);
+  kern.forEach(i => assert.ok(i.arrivalMs >= W2.from - 16 * 60000 && i.arrivalMs <= W2.to + 10000, "Off oder AG in Zeitraum 2"));
+  assert.ok(kern.some(i => i.arrivalMs > W1.to), "Offs und AGs nicht auf Zeitraum 1 beschränkt");
+  fakes.forEach(i => assert.ok(i.arrivalMs >= W1.from && i.arrivalMs <= W1.to, "Fake in Zeitraum 1"));
+  Object.values(r.ankZiel).forEach(a => assert.equal(a.nr, 2));
+  // ohne Häkchen „Offs und AGs“ bei AG-Zielen: klare Meldung
+  const ohne = K.plan(szenario({}, {arrivals: [Object.assign({}, W1, {oa: false})]}));
+  assert.match(ohne.fehler, /Offs und AGs angekreuzt/);
+  // ohne Angabe wie bisher: der erste für Offs und AGs, Fakes überall
+  assert.deepEqual(K.ankunftsListe({arrivals: [W1, W2].map(a => ({from: a.from, to: a.to}))}).map(a => [a.nr, a.oa, a.fake]), [[1, true, true], [2, false, true]]);
+});
+
+test("Zeitraum je Ziel: Rechner wählt, nie schlechter als alle Ziele in einem Zeitraum; Vorgabe je Ziel gilt", () => {
+  const W1 = zr("03.11.2026 08:00:00:000 bis 09:00:00:000", true, true), W2 = zr("03.11.2026 13:00:00:000 bis 14:00:00:000", true, true);
+  const input = szenario({}, {arrivals: [W1, W2]});
+  const r = K.plan(input);
+  assert.ok(!r.fehler, r.fehler);
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  assert.ok(r.zeitraumWahl && r.zeitraumWahl.laeufe >= 3, "Suche gelaufen");
+  const ids = input.agTargets.map(t => t.id);
+  ids.forEach(id => assert.ok([1, 2].includes(r.ankZiel[id].nr)));
+  // je Ziel alle Offs und AGs im selben Zeitraum
+  ids.forEach(id => {
+    const a = r.ankZiel[id];
+    r.items.filter(i => i.kind !== "fake" && i.t.id === id).forEach(i => assert.ok(i.arrivalMs >= a.from - 16 * 60000 && i.arrivalMs <= a.to + 10000));
+  });
+  const wert = z => K.plan(Object.assign({}, input, {zielAnk: Object.fromEntries(ids.map(id => [id, z]))})).bewertung;
+  [0, 1].forEach(z => assert.ok(!K.besser(wert(z), r.bewertung, "standard"), "alle in Zeitraum " + (z + 1) + " nicht besser"));
+  // Vorgabe je Ziel (zielAnk) wird eingehalten
+  const fest = Object.assign({}, input, {zielAnk: {901: 1, 902: 0, 903: 1, 904: 0}});
+  const rf = K.plan(fest);
+  assert.deepEqual(K.pruefePlan(rf, fest), []);
+  assert.deepEqual(ids.map(id => rf.ankZiel[id].nr), [2, 1, 2, 1]);
+  assert.ok(!rf.zeitraumWahl);
+});
+
+test("Vorschlag andere Ankunft rechnet mit dem Vorschlag, auch wenn die Eingabe Zeiträume als Liste hat (19.11.2026)", () => {
+  const A = K.parseAnkunft("03.11.2026 13:00:00:000 bis 14:00:00:000");
+  const mitListe = szenario({}, {arrivals: [K.parseAnkunft("03.11.2026 08:00:00:000 bis 09:00:00:000")]});
+  const ohneListe = szenario({});
+  assert.deepEqual(K.bewerteAnkunft(mitListe, A), K.bewerteAnkunft(ohneListe, A));
+  assert.notDeepEqual(K.bewerteAnkunft(mitListe, A), K.bewerteAnkunft(mitListe, mitListe.arrivals[0]));
+});
+
 test("Stammesmitglieder: eigene Zahl je Zieldorf, nachrangig, von Hand gewählte auch unter der Moral-Schwelle (Dennis 10.11.2026)", () => {
   const extra = manuell => [{id: 950, x: 470, y: 506, owner: 950, ownerPoints: 1000, ownerDays: 100, manuell},
                             {id: 951, x: 468, y: 506, owner: 951, ownerPoints: 400000, ownerDays: 100}];

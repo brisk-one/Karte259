@@ -601,10 +601,17 @@ function begleitschutz(av, bh, pop) {
 }
 
 /* ---------- Plan ---------- */
-/** Ankunftszeiträume (v0.6, Dennis 09.11.2026): input.arrivals [{from, to}, …] oder wie bisher input.arrival. Der erste
-    ist der Hauptzeitraum für Offs und AGs; Fakes verteilt der Rechner auf alle (Dennis 1a, reine Fake-Pläne). */
+/** Ankunftszeiträume (v0.6, Dennis 09.11.2026): input.arrivals [{from, to, oa, fake}, …] oder wie bisher input.arrival.
+    Häkchen je Zeitraum (Dennis 19.11.2026 00:06): oa = Offs und AGs dürfen dort ankommen (ohne AG-Ziele die Offs allein),
+    fake = Fakes. Ohne Angabe wie bis v1.x: der erste für Offs und AGs, Fakes in allen. nr: Nummer des Zeitraums (ab 1). */
 function ankunftsListe(input) {
-  return (input.arrivals && input.arrivals.length ? input.arrivals : [input.arrival]).filter(Boolean);
+  return (input.arrivals && input.arrivals.length ? input.arrivals : [input.arrival]).filter(Boolean).map((a, i) =>
+    Object.assign({}, a, {nr: a.nr != null ? a.nr : i + 1, oa: a.oa != null ? !!a.oa : i === 0, fake: a.fake != null ? !!a.fake : true}));
+}
+/** Tagesteile der Zeiträume mit Häkchen „Offs und AGs“, in Zeitfolge; jeder Teil trägt die Nummer seines Zeitraums. */
+function oaTeile(input, world) {
+  const w = input.world || world || makeWorld();
+  return [].concat(...ankunftsListe(input).filter(a => a.oa).map(a => tagesTeile(w, a).map(x => Object.assign(x, {nr: a.nr}))));
 }
 /** Ankünfte nie im Nachtbonus (Dennis 10.11.2026): die Tagesteile eines Ankunftszeitraums. „bis 23:00:00“ heißt
     höchstens 22:59:59.999 und gilt nicht als Kürzung. Leere Liste, wenn nichts übrig bleibt (Zeitpunkt oder Zeitraum ganz
@@ -633,8 +640,73 @@ function nachtGekuerzt(a, teile) {
  *          agTargets:[{id, x, y, owner, name, assignee}], offTargets:[{id, x, y, owner, name, n, assignee}], fakeTargets:[{id, x, y, owner}],
  *          extraFakeTargets:[{id, x, y, owner, ownerPoints, ownerDays}], arrival:{from, to}, windows:[[from, to]], now}
  * Zeiten in Unix-Millisekunden. useOff: Dorf als Off verplanen (Standard: Off nach Richtwert).
+ * Mehrere Tagesteile mit Häkchen „Offs und AGs“ (Dennis 19.11.2026, 1c): der Rechner wählt je AG- und Off-Ziel den Teil, in
+ * dem es ankommt (zeitraumWahl). input.zielAnk {Ziel-ID: Index in oaTeile} legt das fest, sonst der erste Teil.
  */
 function plan(input) {
+  if (input.zielAnk) return planKern(input);
+  const OA = oaTeile(input);
+  const ids = (input.agTargets || []).map(t => t.id).concat((input.offTargets || []).map(t => t.id));
+  if (OA.length < 2 || !ids.length) return planKern(input);
+  return zeitraumWahl(input, OA, ids);
+}
+/** Wert eines Plans für die Zeitraumwahl: bewertung, Off-Ziele zählen anteilig wie geadelte Ziele. */
+function wahlWert(r) {
+  if (!r || r.fehler) return null;
+  const oz = (r.offZiele || []).reduce((n, z) => n + (z.soll ? Math.min(z.ist, z.soll) / z.soll : 0), 0);
+  return Object.assign({}, r.bewertung, {geadelt: r.bewertung.geadelt + oz});
+}
+/** Wert eines Ziels in einem Plan (gleiche Rangfolge wie besser). */
+function zielWert(r, id) {
+  if (!r || r.fehler) return null;
+  const z = r.ziele.find(x => x.id === id), oz = (r.offZiele || []).find(x => x.id === id);
+  const its = r.items.filter(it => it.kind !== "fake" && it.t && it.t.id === id), vorg = new Map();
+  its.forEach(it => { const k = it.att + ":" + it.aktion; if (!vorg.has(k)) vorg.set(k, it); });
+  const v = [...vorg.values()];
+  return {geadelt: z ? (z.geadelt ? 1 : 0) : oz && oz.soll ? Math.min(oz.ist, oz.soll) / oz.soll : 0,
+          aussen: v.filter(it => it.ausserhalb).length, nachtAussen: v.filter(it => it.ausserhalb && it.nachtSenden).length, sitzungen: 0, dauerMin: 0};
+}
+/** Zeitraum je Ziel suchen (Dennis 19.11.2026, 1c): erst je Teil alle Ziele dort, dann je Ziel der Teil, in dem es am besten
+    abschneidet, dann einzelne Ziele umsetzen, solange der ganze Plan besser wird (bewertung: geadelt, außerhalb, nachts,
+    Sitzungen). Bewertet wird ohne Fakes mit schneller Zeitsuche; Zeitbudget input._suchMs (Standard 8 s). */
+function zeitraumWahl(input, OA, ids) {
+  const t0 = Date.now(), budget = input._suchMs != null ? input._suchMs : 8000, rf = (input.cfg || {}).zeit_rangfolge;
+  const schnell = Object.assign({}, input, {cfg: Object.assign({}, input.cfg, {fakes_per_village: 0, extra_fakes: false}),
+    fakeTargets: [], extraFakeTargets: [], _schnell: true});
+  const alle = j => Object.fromEntries(ids.map(id => [id, j]));
+  let laeufe = 0;
+  const lauf = z => { laeufe++; return planKern(Object.assign({}, schnell, {zielAnk: z})); };
+  const besserW = (a, b) => a && (!b || besser(a, b, rf));
+  const proTeil = OA.map((a, j) => lauf(alle(j)));
+  let zuord = {};
+  ids.forEach(id => {
+    let bj = 0, bw = null;
+    proTeil.forEach((r, j) => { const w = zielWert(r, id); if (w && (bw == null || besser(w, bw, rf))) { bw = w; bj = j; } });
+    zuord[id] = bj;
+  });
+  let bestW = wahlWert(lauf(zuord));
+  proTeil.forEach((r, j) => { const w = wahlWert(r); if (besserW(w, bestW)) { bestW = w; zuord = alle(j); } });
+  let abbruch = false;
+  for (let runde = 0, besserGefunden = true; besserGefunden && runde < 3 && !abbruch; runde++) {
+    besserGefunden = false;
+    for (const id of ids) {
+      for (let j = 0; j < OA.length; j++) {
+        if (j === zuord[id]) continue;
+        if (Date.now() - t0 > budget) { abbruch = true; break; }
+        const z = Object.assign({}, zuord, {[id]: j}), w = wahlWert(lauf(z));
+        if (besserW(w, bestW)) { bestW = w; zuord = z; besserGefunden = true; }
+      }
+      if (abbruch) break;
+    }
+  }
+  const res = planKern(Object.assign({}, input, {zielAnk: zuord}));
+  if (!res.fehler) {
+    res.zeitraumWahl = {laeufe, ms: Date.now() - t0, abbruch};
+    if (abbruch) res.warnings.push({art: "zeitraumwahl", text: "Zeitraum je Ziel: Suche nach " + Math.round(budget / 1000) + " s beendet, der Plan ist gut, aber vielleicht nicht der beste"});
+  }
+  return res;
+}
+function planKern(input) {
   const world = input.world || makeWorld();
   const cfg = Object.assign({}, CFG_DEFAULT, input.cfg);
   const pop = world.pop, rng = mulberry32(cfg.seed | 0 || 1);
@@ -645,17 +717,25 @@ function plan(input) {
   if (!EIN.length || EIN.some(a => !(a.to >= a.from))) return {fehler: "Ankunft fehlt oder ist ungültig"};
   // nie im Nachtbonus ankommen (Dennis 10.11.2026): je Zeitraum die Tagesteile; der erste Tagesteil des ersten Zeitraums
   // ist der Hauptzeitraum für Offs und AGs, Fakes dürfen in jeden Teil
-  const TEILE = EIN.map(a => tagesTeile(world, a)), ANK = [].concat(...TEILE), A = ANK[0];
+  const TEILE = EIN.map(a => tagesTeile(world, a).map(x => Object.assign(x, {nr: a.nr})));
   const nachtText = world.night ? " (" + world.night.start_hour + " bis " + world.night.end_hour + " Uhr)" : "";
   const leer = TEILE.findIndex(t => !t.length);
   if (leer >= 0) return {fehler: "Ankunft" + (EIN.length > 1 ? "szeitraum " + (leer + 1) : "") + " liegt ganz im Nachtbonus" + nachtText + ", dort darf nichts ankommen"};
   const teilText = t => t.map(x => fmtZeit(x.from).slice(0, 19) + " bis " + fmtZeit(x.to).slice(fmtZeit(x.from).slice(0, 10) === fmtZeit(x.to).slice(0, 10) ? 11 : 0, 19)).join(" und ");
+  // Häkchen je Zeitraum (Dennis 19.11.2026): OA Teile für Offs und AGs, ANK Teile für Fakes. Ziel-ID → Teil (zeitraumWahl)
+  const OA = [].concat(...TEILE.filter((t, i) => EIN[i].oa)), FK = [].concat(...TEILE.filter((t, i) => EIN[i].fake));
+  if (((input.agTargets || []).length || (input.offTargets || []).length) && !OA.length) return {fehler: "Kein Ankunftszeitraum für Offs und AGs angekreuzt"};
+  const ANK = FK.length ? FK : OA.length ? OA : [].concat(...TEILE), A = OA.length ? OA[0] : ANK[0];
+  const zielAnk = new Map();
+  Object.keys(input.zielAnk || {}).forEach(id => { const a = OA[input.zielAnk[id]]; if (a) zielAnk.set(String(id), a); });
+  const AZ = t => (t && zielAnk.get(String(t.id))) || A;
   EIN.forEach((a, i) => { if (nachtGekuerzt(a, TEILE[i])) warnings.push({art: "nacht", text: "Ankunftszeitraum " + (EIN.length > 1 ? (i + 1) + " " : "") + "ragt in den Nachtbonus" + nachtText + ", geplant nur " + teilText(TEILE[i])}); });
   const streng = cfg.zeitraeume === "streng";
   const R = RANGFOLGE[cfg.zeit_rangfolge] || RANGFOLGE.standard;
   // Orientierung für Offs und AGs (Dennis 10.11.2026: keine feste Grenze, für Fakes sind lange Zeiträume sinnvoll)
-  if ((input.agTargets || []).length && A.to - A.from > ANKUNFT_RAT_MS)
-    warnings.push({art: "ankunft", text: "Ankunftszeitraum für Offs und AGs über " + (A.to - A.from > ANKUNFT_MAX_MS ? "1,5 Stunden (Orientierungswert)" : "1 Stunde")});
+  const oaLang = Math.max(0, ...OA.map(a => a.to - a.from));
+  if ((input.agTargets || []).length && oaLang > ANKUNFT_RAT_MS)
+    warnings.push({art: "ankunft", text: "Ankunftszeitraum für Offs und AGs über " + (oaLang > ANKUNFT_MAX_MS ? "1,5 Stunden (Orientierungswert)" : "1 Stunde")});
 
   // Dörfer der Angreifer mit Laufzeitdaten
   const att = new Map(), villages = [];
@@ -699,10 +779,10 @@ function plan(input) {
     });
   });
   const vById = new Map(villages.map(v => [v.id, v]));
-  const ankunft = [[A.from, A.to]];
+  const ankunftVon = t => { const a = AZ(t); return [[a.from, a.to]]; };
   // Zulässige Blockbeginne T für einen Befehl dieses Dorfes (Laufzeit in ms, Abstand zum Blockbeginn): Abschickzeit im
   // Fenster und Ankunft im Zeitraum; bei einem festen Zeitpunkt liegt nur der Blockbeginn darauf (zeitBasis).
-  const tset = (v, travelMs, offset) => zeitBasis(A, att.get(v.att).fenster, travelMs, offset || 0);
+  const tset = (v, travelMs, offset, t) => zeitBasis(AZ(t), att.get(v.att).fenster, travelMs, offset || 0);
   const offsetErstesAG = (nClean) => (nClean - 1) * cfg.gap_clean_ms + cfg.gap_off_ag_ms;
   // Offs vor dem AG staffeln (Dennis 13.11.2026 15:40, Frage 1b): drei Clean-Offs in derselben Sekunde sind zu auffällig. Die
   // Clean-Off, die als letzte abgeschickt wird (kürzeste Laufzeit), bleibt direkt vor dem Train; die anderen landen zufällig
@@ -711,26 +791,32 @@ function plan(input) {
   // ist der Zeitraum kurz, wird die Spanne enger (höchstens 60 % des Zeitraums). Passt eine Off so nicht mehr in die
   // Abschickzeiträume ihres Spielers, rückt sie näher (60 %, 30 %), sonst bleibt sie mit allen folgenden in der Sekunde des
   // Trains. Eigener Zufall je Ziel und Off, die übrige Planung bleibt gleich.
-  const staffelSpanne = (() => {
+  const staffelJe = new Map();
+  const staffelVon = A => {
+    if (!staffelJe.has(A)) staffelJe.set(A, staffelRechnen(A));
+    return staffelJe.get(A);
+  };
+  function staffelRechnen(A) {
     let lo = Math.max(0, +cfg.off_staffel_min || 0) * 60000, hi = Math.max(0, +cfg.off_staffel_max || 0) * 60000;
     if (hi < lo) hi = lo;
     if (A && A.from === A.to) { let frei = 0; while (frei < hi && !istNacht(world, A.from - frei - 60000)) frei += 60000; hi = Math.min(hi, frei); }
     else if (A) hi = Math.min(hi, 0.6 * (A.to - A.from));
     lo = Math.min(lo, hi / 2);
     return hi >= 60000 ? [lo, hi] : null;
-  })();
+  }
   const rngS = mulberry32(((cfg.seed | 0) || 1) * 104729 + 7), staffelU = new Map();
   const STAFFEL_ABSTAND_MS = 30000;   // gestaffelte Offs untereinander mindestens 30 s auseinander, sonst wirken sie abgestimmt
   // basis: Ankunftszeiten, zu denen der Block passen muss (AG-Ziel: die AGs; Off-Ziel: der Ankunftszeitraum)
   const cleanOffsets = (t, offs, zielSet) => {
     const basis = offs.map((o, i) => i * cfg.gap_clean_ms), n = offs.length;
-    if (!staffelSpanne || n < 2) return basis;
-    const [lo, hi] = staffelSpanne;
+    const spanne = staffelVon(AZ(t));
+    if (!spanne || n < 2) return basis;
+    const [lo, hi] = spanne;
     const zufall = offs.slice(0, n - 1).map(o => { const k = t.id + ":" + o.id; if (!staffelU.has(k)) staffelU.set(k, [rngS(), rngS()]); return staffelU.get(k); });
     const vorlauf = zufall.map(z => lo + z[0] * (hi - lo)).sort((a, b) => b - a);   // erste Off (meiste Rammen) am weitesten vor
     const setFuer = (o, off) => {
       const trMs = travelS(world, "ram", dist(o, t)) * 1000, a0 = att.get(o.att);
-      return o.zusatz && o.zusatzStreng ? zeitBasis(A, a0.wunsch.length ? a0.wunsch : a0.fenster, trMs, off) : tset(o, trMs, off);
+      return o.zusatz && o.zusatzStreng ? zeitBasis(AZ(t), a0.wunsch.length ? a0.wunsch : a0.fenster, trMs, off) : tset(o, trMs, off, t);
     };
     // Off der Train-Sekunde: kürzeste Laufzeit; die übrigen in ihrer Reihenfolge davor, in der Sekunde je gap_clean_ms
     let letzte = n - 1;
@@ -771,16 +857,16 @@ function plan(input) {
   const knappOffs = offPool < ziele.length * clean;
 
   /* ---- Zeitlage (v0.5): Abschick-Intervall eines Befehls, Lage zu den Wunschzeiträumen, Ankerzeit je Angreifer ---- */
-  const sendIv = (travelMs, offset) => [A.from + (offset || 0) - travelMs, A.to + (offset || 0) - travelMs];
-  // Fakes dürfen in jeden Ankunftszeitraum (v0.6); mit einem Zeitraum genau wie bisher
-  const sendIvFake = travelMs => ANK.length > 1 ? ivNorm(ANK.map(a => [a.from - travelMs, a.to - travelMs])) : [sendIv(travelMs, 0)];
+  const sendIv = (travelMs, offset, t) => { const a = AZ(t); return [a.from + (offset || 0) - travelMs, a.to + (offset || 0) - travelMs]; };
+  // Fakes dürfen in jeden Ankunftszeitraum mit Häkchen „Fakes“ (v0.6, 19.11.2026); mit einem Zeitraum genau wie bisher
+  const sendIvFake = travelMs => ANK.length > 1 ? ivNorm(ANK.map(a => [a.from - travelMs, a.to - travelMs])) : [[ANK[0].from - travelMs, ANK[0].to - travelMs]];
   const tsetFake = (v, travelMs) => ANK.length > 1
-    ? ivNorm([].concat(...ANK.map(a => zeitBasis(a, att.get(v.att).fenster, travelMs, 0)))) : tset(v, travelMs, 0);
+    ? ivNorm([].concat(...ANK.map(a => zeitBasis(a, att.get(v.att).fenster, travelMs, 0)))) : zeitBasis(ANK[0], att.get(v.att).fenster, travelMs, 0);
   const nachtIv = iv => istNacht(world, iv[0]) && istNacht(world, iv[1]) && istNacht(world, (iv[0] + iv[1]) / 2);
   const anker = new Map();
-  const zeitKosten = (v, travelMs, offset) => {
+  const zeitKosten = (v, travelMs, offset, t) => {
     if (streng) return 0;
-    const iv = sendIv(travelMs, offset), d = ivAbstand(att.get(v.att).wunsch, iv);
+    const iv = sendIv(travelMs, offset, t), d = ivAbstand(att.get(v.att).wunsch, iv);
     let c = d > 0 ? R.ausFlow + d / 60000 * R.ausFlowMin : 0;
     if (d > 0 && nachtIv(iv)) c *= R.nacht;
     const an = anker.get(v.att);
@@ -788,9 +874,9 @@ function plan(input) {
     return c;
   };
   // Rangfolge „nachtruhe“: nachts außerhalb der Zeiträume nur, wenn es nicht anders geht; sonst fällt das Ziel weg
-  const gesperrt = (v, travelMs, offset) => {
+  const gesperrt = (v, travelMs, offset, t) => {
     if (streng || !R.nachtSperre) return false;
-    const iv = sendIv(travelMs, offset);
+    const iv = sendIv(travelMs, offset, t);
     return ivAbstand(att.get(v.att).wunsch, iv) > 0 && nachtIv(iv);
   };
   // Laufzeit-Richtwerte (Dennis 11.11.2026, 2.1a und 2.2a): darüber nur, wenn sonst ein Ziel weniger geadelt würde oder die
@@ -810,8 +896,8 @@ function plan(input) {
       zl.forEach(t => {
         if (t.assignee != null && t.assignee !== v.att) return;
         const d = dist(v, t);
-        if (!nurOffs && v.nobles > 0 && v.rolleAG && d <= world.snob_max_dist + 1e-9 && !(agFest && travelS(world, "snob", d) > maxAgS)) ag.push(sendIv(travelS(world, "snob", d) * 1000, offsetErstesAG(clean)));
-        if (v.offHier) off.push(sendIv(travelS(world, "ram", d) * 1000, 0));
+        if (!nurOffs && v.nobles > 0 && v.rolleAG && d <= world.snob_max_dist + 1e-9 && !(agFest && travelS(world, "snob", d) > maxAgS)) ag.push(sendIv(travelS(world, "snob", d) * 1000, offsetErstesAG(clean), t));
+        if (v.offHier) off.push(sendIv(travelS(world, "ram", d) * 1000, 0, t));
       });
     });
     return dichtesterPunkt(ag.length ? ag : off, a.wunsch);
@@ -826,10 +912,9 @@ function plan(input) {
     travelS(world, "snob", dist(b.v, t)) - travelS(world, "snob", dist(a.v, t)) || a.v.id - b.v.id);
   // gemeinsame Blockbeginne der AGs eines Ziels
   const agJoint = (t, gruppen, nClean) => {
-    let s = ankunft, off = offsetErstesAG(nClean);
-    if (A.from === A.to) s = [[A.from, A.to]];
+    let s = ankunftVon(t), off = offsetErstesAG(nClean);
     ordne(t, gruppen).forEach(g => {
-      s = ivIntersect(s, tset(g.v, travelS(world, "snob", dist(g.v, t)) * 1000, off));
+      s = ivIntersect(s, tset(g.v, travelS(world, "snob", dist(g.v, t)) * 1000, off, t));
       off += (g.n - 1) * world.attack_gap_ms + cfg.gap_ag_ms;
     });
     return s;
@@ -862,11 +947,11 @@ function plan(input) {
         if (d > world.snob_max_dist + 1e-9) return;
         const tr = travelS(world, "snob", d);
         if (agFest && tr > maxAgS) return;                                   // AG-Laufzeit über der festen Grenze
-        if (!tset(v, tr * 1000, offsetErstesAG(clean)).length) return;
-        if (gesperrt(v, tr * 1000, offsetErstesAG(clean))) return;
+        if (!tset(v, tr * 1000, offsetErstesAG(clean), t).length) return;
+        if (gesperrt(v, tr * 1000, offsetErstesAG(clean), t)) return;
         let cost = form === "ganz" ? tr + rng() * 60 : rng() * 3600 + tr / 10;
         if (knappOffs && v.offHier && form !== "einzeln") cost += 3600;       // Off-Dörfer behalten ihre Off als Clean-Off
-        cost += zeitKosten(v, tr * 1000, offsetErstesAG(clean)) + zuLangKosten(tr, maxAgS);
+        cost += zeitKosten(v, tr * 1000, offsetErstesAG(clean), t) + zuLangKosten(tr, maxAgS);
         kanten.push({e: fl.add(vBase + i, tBase + j, form === "ganz" ? 1 : Math.min(capJeDorf, v.nobles), Math.round(cost)), v, t});
       });
     });
@@ -938,12 +1023,12 @@ function plan(input) {
   const trainIvs = new Map();
   zielListe.forEach(t => trains.get(t.id).forEach(g => {
     if (!trainIvs.has(g.v.att)) trainIvs.set(g.v.att, []);
-    trainIvs.get(g.v.att).push(sendIv(travelS(world, "snob", dist(g.v, t)) * 1000, offsetErstesAG(clean)));
+    trainIvs.get(g.v.att).push(sendIv(travelS(world, "snob", dist(g.v, t)) * 1000, offsetErstesAG(clean), t));
   }));
   // Anker neu: aus den Abschickzeiten der zugeteilten Trains, ohne Trains aus den Offs zu den verbliebenen Zielen
   if (!streng) att.forEach(a => {
     const ivs = [];
-    zielListe.forEach(t => trains.get(t.id).forEach(g => { if (g.v.att === a.id) ivs.push(sendIv(travelS(world, "snob", dist(g.v, t)) * 1000, offsetErstesAG(clean))); }));
+    zielListe.forEach(t => trains.get(t.id).forEach(g => { if (g.v.att === a.id) ivs.push(sendIv(travelS(world, "snob", dist(g.v, t)) * 1000, offsetErstesAG(clean), t)); }));
     const p = ivs.length ? dichtesterPunkt(ivs, a.wunsch) : ankerAus(a, true, zielListe);
     if (p != null) anker.set(a.id, p); else anker.delete(a.id);
   });
@@ -953,9 +1038,9 @@ function plan(input) {
   const cleanOffs = new Map(zielListe.map(t => [t.id, []]));
   // Ankunftszeiten der AGs eines Ziels (für die Prüfung, ob eine Clean-Off dazu passt)
   const agSet = (t, nClean) => {
-    let s = ankunft, off = offsetErstesAG(nClean);
+    let s = ankunftVon(t), off = offsetErstesAG(nClean);
     trains.get(t.id).forEach(g => {
-      s = ivIntersect(s, tset(g.v, travelS(world, "snob", dist(g.v, t)) * 1000, off));
+      s = ivIntersect(s, tset(g.v, travelS(world, "snob", dist(g.v, t)) * 1000, off, t));
       off += (g.n - 1) * world.attack_gap_ms + cfg.gap_ag_ms;
     });
     return s;
@@ -981,7 +1066,7 @@ function plan(input) {
     // Zeitraum schafft, und diese Off geht auf ein anderes Ziel
     if (!streng) {
       const w = att.get(o.att).wunsch, tr = travelS(world, "ram", dist(o, t)) * 1000;
-      if (w.length && ivAbstand(w, sendIv(tr, pos * cfg.gap_clean_ms)) === 0 && !ivIntersect(agSet(t, nClean), zeitBasis(A, w, tr, pos * cfg.gap_clean_ms)).length) c += R.ausFlow;
+      if (w.length && ivAbstand(w, sendIv(tr, pos * cfg.gap_clean_ms, t)) === 0 && !ivIntersect(agSet(t, nClean), zeitBasis(AZ(t), w, tr, pos * cfg.gap_clean_ms)).length) c += R.ausFlow;
     }
     if (cfg.off_first && !offZuerst(o, t, pos, nClean)) c += R.offZuerst;
     // Clean-Offs möglichst vom Spieler, der den Train schickt: dann timt er alles selbst (Dennis 15:00, niedrige Priorität:
@@ -990,11 +1075,11 @@ function plan(input) {
       c += cfg.clean_eigene === "nachrang" ? R.fremdNach : R.fremdVor;
       if (starkBetroffen(o, t)) c += R.stark;
     }
-    c += zeitKosten(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms);
+    c += zeitKosten(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms, t);
     // Bündeln: Abstand der Abschickzeit zu den Trains desselben Spielers, egal für welches Ziel. Bis 03.11. zählte nur der
     // Train dieses Ziels; das schob Clean-Offs zu fremden Spielern, ohne eine Sitzung zu sparen.
     if (!streng && trainIvs.has(o.att)) {
-      const iv = sendIv(travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms);
+      const iv = sendIv(travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms, t);
       const d = Math.min(...trainIvs.get(o.att).map(x => ivAbstand([x], iv)));
       c += Math.min(R.kopplungMax, Math.max(0, d - SITZUNG_PAUSE_MS) / 60000 * R.anker);
     }
@@ -1003,15 +1088,15 @@ function plan(input) {
   const passt = (o, t, pos, nClean, basis) => {
     const ao = att.get(o.att);
     if (ao.cleanModus === "beitrag" && (cleanOffs.get(t.id) || []).filter(x => x.att === o.att).length >= ao.cleanN) return false;
-    if (gesperrt(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms)) return false;
+    if (gesperrt(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms, t)) return false;
     // Rangfolge „sitzungen“: weitere Clean-Offs nur, wenn sie in die Sitzung des Angreifers passen
     if (pos > 0 && R.fuellNurAnker && !streng && anker.has(o.att) &&
-        ivAbstand([sendIv(travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms)], anker.get(o.att)) > ANKER_RAND_MS) return false;
+        ivAbstand([sendIv(travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms, t)], anker.get(o.att)) > ANKER_RAND_MS) return false;
     const rel = {att: o.att, rel: pos * cfg.gap_clean_ms - travelS(world, "ram", dist(o, t)) * 1000};
     const vorhanden = agAktionen(t, trains.get(t.id), nClean).concat((cleanOffs.get(t.id) || []).map((x, i) =>
       ({att: x.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(x, t)) * 1000})));
     if (kollidiert(rel, vorhanden)) return false;
-    const s = tset(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms);
+    const s = tset(o, travelS(world, "ram", dist(o, t)) * 1000, pos * cfg.gap_clean_ms, t);
     return ivIntersect(basis || agSet(t, nClean), s).length > 0;
   };
 
@@ -1054,7 +1139,7 @@ function plan(input) {
         const liste = cleanOffs.get(t.id);
         if (liste.length !== pos || pos >= richtwert(t)) return;
         let basis = agSet(t, pos + 1);
-        liste.forEach((o, i) => { basis = ivIntersect(basis, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms)); });
+        liste.forEach((o, i) => { basis = ivIntersect(basis, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms, t)); });
         let best = null, bc = Infinity;
         cleanPool().forEach(o => {
           if (!passt(o, t, pos, pos + 1, basis)) return;
@@ -1103,16 +1188,16 @@ function plan(input) {
   const offZielPasst = (o, t, pos, basis) => {
     if (t.assignee != null && o.att !== t.assignee) return false;
     const tr = travelS(world, "ram", dist(o, t)) * 1000;
-    if (gesperrt(o, tr, pos * cfg.gap_clean_ms)) return false;
+    if (gesperrt(o, tr, pos * cfg.gap_clean_ms, t)) return false;
     const vorhanden = offZielOffs.get(t.id).map((x, i) => ({att: x.att, rel: i * cfg.gap_clean_ms - travelS(world, "ram", dist(x, t)) * 1000}));
     if (kollidiert({att: o.att, rel: pos * cfg.gap_clean_ms - tr}, vorhanden)) return false;
-    return ivIntersect(basis, tset(o, tr, pos * cfg.gap_clean_ms)).length > 0;
+    return ivIntersect(basis, tset(o, tr, pos * cfg.gap_clean_ms, t)).length > 0;
   };
   const offZielKosten = (o, t, pos) => {
     const trS = travelS(world, "ram", dist(o, t));
-    return Math.round(trS + rng() * 60 + zuLangKosten(trS, maxOffS) + zeitKosten(o, trS * 1000, pos * cfg.gap_clean_ms));
+    return Math.round(trS + rng() * 60 + zuLangKosten(trS, maxOffS) + zeitKosten(o, trS * 1000, pos * cfg.gap_clean_ms, t));
   };
-  const offZielBasis = t => offZielOffs.get(t.id).reduce((b, o, i) => ivIntersect(b, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms)), ankunft);
+  const offZielBasis = t => offZielOffs.get(t.id).reduce((b, o, i) => ivIntersect(b, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms, t)), ankunftVon(t));
   if (offZielListe.length) {
     // erste Off je Ziel: so viele Ziele wie möglich (Fluss), dann reihum bis zur Zahl je Ziel
     const pool = cleanPool();
@@ -1120,7 +1205,7 @@ function plan(input) {
     pool.forEach((o, i) => fl.add(Q, oBase + i, 1, 0));
     offZielListe.forEach((t, j) => {
       fl.add(tBase + j, Z, 1, 0);
-      pool.forEach((o, i) => { if (offZielPasst(o, t, 0, ankunft)) kanten.push({e: fl.add(oBase + i, tBase + j, 1, offZielKosten(o, t, 0)), o, t}); });
+      pool.forEach((o, i) => { if (offZielPasst(o, t, 0, ankunftVon(t))) kanten.push({e: fl.add(oBase + i, tBase + j, 1, offZielKosten(o, t, 0)), o, t}); });
     });
     fl.run(Q, Z);
     kanten.forEach(({e, o, t}) => { if (e.flow > 0) { offZielOffs.get(t.id).push(o); o.verplant = true; } });
@@ -1140,7 +1225,7 @@ function plan(input) {
     offZielListe.forEach(t => {
       const liste = offZielOffs.get(t.id);
       const neu = liste.slice().sort((p, q) => ((q.units && q.units.ram) || 0) - ((p.units && p.units.ram) || 0));
-      if (neu.some((o, i) => o !== liste[i]) && neu.reduce((b, o, i) => ivIntersect(b, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms)), ankunft).length)
+      if (neu.some((o, i) => o !== liste[i]) && neu.reduce((b, o, i) => ivIntersect(b, tset(o, travelS(world, "ram", dist(o, t)) * 1000, i * cfg.gap_clean_ms, t)), ankunftVon(t)).length)
         offZielOffs.set(t.id, neu);
       const n = offZielOffs.get(t.id).length;
       if (n < t.soll) warnings.push({art: "offziel", ziel: t.id, text: "Off-Ziel " + t.x + "|" + t.y + ": " + n + " statt " + t.soll + (t.soll === 1 ? " Off" : " Offs") +
@@ -1159,7 +1244,7 @@ function plan(input) {
       fakeZiele.forEach(t => {
         if (!frei.has(t.id)) return;
         const tr = travelS(world, "ram", dist(o, t));
-        if (tr > maxOffS || !tset(o, tr * 1000, 0).length) return;      // übrige Offs nie über dem Laufzeit-Richtwert
+        if (tr > maxOffS || !tset(o, tr * 1000, 0, t).length) return;      // übrige Offs nie über dem Laufzeit-Richtwert
         if (tr < bc) { bc = tr; best = t; }
       });
       if (best) { frei.delete(best.id); o.verplant = true; restZiele.push({o, t: best}); }
@@ -1174,13 +1259,13 @@ function plan(input) {
   const zusatzModus = cfg.uebrige_auf_ag === false || cfg.uebrige_auf_ag === "aus" ? "aus"
     : ["sitzung", "erzwingen"].includes(cfg.uebrige_auf_ag) ? cfg.uebrige_auf_ag : "alle";
   // Blockbeginne, an denen eine Off im Abschickzeitraum ihres Spielers losgeht
-  const imZeitraum = (o, trS, pos) => { const a0 = att.get(o.att); return zeitBasis(A, a0.wunsch.length ? a0.wunsch : a0.fenster, trS * 1000, pos * cfg.gap_clean_ms); };
+  const imZeitraum = (o, trS, pos, t) => { const a0 = att.get(o.att); return zeitBasis(AZ(t), a0.wunsch.length ? a0.wunsch : a0.fenster, trS * 1000, pos * cfg.gap_clean_ms); };
   // gemeinsame Blockbeginne von AGs und Clean-Offs eines Ziels; zusätzliche Offs im Zeitraum behalten ihren Zeitraum
   const offBasis = (t, liste, nClean) => {
     let basis = agSet(t, nClean);
     for (let i = 0; i < liste.length && basis.length; i++) {
       const o = liste[i], trS = travelS(world, "ram", dist(o, t));
-      basis = ivIntersect(basis, o.zusatz && o.zusatzStreng ? imZeitraum(o, trS, i) : tset(o, trS * 1000, i * cfg.gap_clean_ms));
+      basis = ivIntersect(basis, o.zusatz && o.zusatzStreng ? imZeitraum(o, trS, i, t) : tset(o, trS * 1000, i * cfg.gap_clean_ms, t));
     }
     return basis;
   };
@@ -1190,7 +1275,7 @@ function plan(input) {
     if (lauf && trS > maxOffS) return null;
     const basis = offBasis(t, liste, pos + 1);
     if (!basis.length) return null;
-    const imZ = ivIntersect(basis, imZeitraum(o, trS, pos));
+    const imZ = ivIntersect(basis, imZeitraum(o, trS, pos, t));
     if (fenster && !imZ.length) return null;
     return passt(o, t, pos, pos + 1, imZ.length ? imZ : basis) ? {imZ: imZ.length > 0} : null;
   };
@@ -1297,12 +1382,12 @@ function plan(input) {
     offZielListe.forEach(t => {
       const liste = offZielOffs.get(t.id);
       if (!liste.length) return;
-      const offsets = cleanOffsets(t, liste, ankunft);
+      const offsets = cleanOffsets(t, liste, ankunftVon(t));
       out.push({art: "offziel", key: "offziel:" + t.id, ziel: t, items: liste.map((o, i) => offIt(o, t, offsets[i], "offziel"))});
     });
     return out;
   };
-  const zeitCtx = {A, ANK, att, gapMs: cfg.min_send_gap_s * 1000, zielMs: (cfg.send_gap_target_s || 0) * 1000, rng, world, R, streng, anker, seed: cfg.seed | 0 || 1};
+  const zeitCtx = {A, ANK, OA, AZ, att, gapMs: cfg.min_send_gap_s * 1000, zielMs: (cfg.send_gap_target_s || 0) * 1000, rng, world, R, streng, anker, seed: cfg.seed | 0 || 1};
   let vorgabe = null, T0 = Infinity;         // T0: erster Off- oder AG-Abschick des Plans (vorläufig), Bezug des Fake-Vorlaufs
   const fakeFenster = new Map();             // Angreifer → Abschickzeiten, in denen seine Fakes liegen dürfen
   if (!streng) {
@@ -1796,7 +1881,7 @@ function plan(input) {
   offZielListe.forEach(t => {
     const liste = offZielOffs.get(t.id);
     if (!liste.length) return;
-    const offsets = cleanOffsets(t, liste, ankunft);
+    const offsets = cleanOffsets(t, liste, ankunftVon(t));
     blocks.push({art: "offziel", key: "offziel:" + t.id, ziel: t, items: liste.map((o, i) => {
       const u = offEinheiten(o);
       return item("offziel", o, t, u, langsamste(u, world), offsets[i], ++aktionNr);
@@ -1883,7 +1968,7 @@ function plan(input) {
       // Grund (Dennis 22:00, „wenn möglich immer“): gibt es überhaupt eine Off, die früh genug losgehen kann?
       const n = offs.length, basis = agSet(t, n);
       const kann = villages.some(o => o.offHier && !offImTrain.has(o.id) && offZuerst(o, t, 0, n) &&
-        ivIntersect(basis, tset(o, travelS(world, "ram", dist(o, t)) * 1000, 0)).length);
+        ivIntersect(basis, tset(o, travelS(world, "ram", dist(o, t)) * 1000, 0, t)).length);
       warnings.push({art: "reihenfolge", ziel: t.id, text: "Ziel " + t.x + "|" + t.y + ": " + (d >= 0
         ? "erster AG geht " + dauerText(d) + " vor der Clean-Off los" : "Clean-Off geht nur " + dauerText(-d) + " vor dem ersten AG los (Vorlauf " + dauerText(lead) + ")") +
         (!kann ? "; keine Off läuft lang genug, um vor dem AG loszugehen" : "; die Offs, die vorher losgehen könnten, sind für andere Ziele nötig")});
@@ -1937,7 +2022,10 @@ function plan(input) {
           fakeAufstocken: fakeAufstocken.map(x => ({att: x.a.id, soll: x.soll, ist: x.ist, vorher: x.vorher, grund: x.grund})),
           fakeReduziert: fakeReduziert.map(x => ({att: x.a.id, max: x.max, vorher: x.vorher, ist: x.ist})),
           fakeDoerfer: Object.fromEntries([...fakeDoerfer].map(([a, z]) => [a, z])),
-          bewertung: bewertung(items, zielInfo, att, world)};
+          bewertung: bewertung(items, zielInfo, att, world),
+          // Ankunftsteil je AG- und Off-Ziel (Häkchen je Zeitraum, 19.11.2026): {Ziel-ID: {from, to, nr}}
+          ankZiel: Object.fromEntries(zielInfo.map(z => z.id).concat(offZielInfo.map(z => z.id)).map(id => { const a = AZ({id}); return [id, {from: a.from, to: a.to, nr: a.nr}]; })),
+          oaTeile: OA.map(a => ({from: a.from, to: a.to, nr: a.nr}))};
 }
 
 function addUnits(a, b) { const o = Object.assign({}, a); Object.keys(b).forEach(u => { o[u] = (o[u] || 0) + b[u]; }); return o; }
@@ -2010,10 +2098,11 @@ function zeitenPlanen(blocks, ctx) {
   const {A, att, gapMs, rng, warnings, world} = ctx;
   const R = ctx.R || RANGFOLGE.standard;
   const zielMs = Math.max(gapMs, ctx.zielMs || 0);
-  const fest = A.from === A.to;
+  // fest: alle Zeiträume für Offs und AGs sind Zeitpunkte (Häkchen je Zeitraum, 19.11.2026: je Ziel ein eigener Teil)
+  const fest = (ctx.OA && ctx.OA.length ? ctx.OA : [A]).every(a => a.from === a.to);
   blocks.forEach(b => {
-    // Fakes in jedem Ankunftszeitraum (v0.6), Offs und AGs im ersten
-    const fen = b.art === "fake" && ctx.ANK && ctx.ANK.length > 1 ? ctx.ANK : [A];
+    // Fakes in jedem Ankunftszeitraum mit Häkchen „Fakes“ (v0.6), Offs und AGs im Teil ihres Ziels (19.11.2026)
+    const fen = b.art === "fake" ? (ctx.ANK && ctx.ANK.length ? ctx.ANK : [A]) : [ctx.AZ ? ctx.AZ(b.ziel) : A];
     let s = [];
     fen.forEach(a => {
       let x = [[a.from, a.to]];
@@ -2316,7 +2405,8 @@ function besser(a, b, rangfolge) {
 /** Bewertung eines anderen Ankunftszeitraums: Plan nur mit Offs und AGs, schnelle Zeitsuche. null bei Fehler. */
 function bewerteAnkunft(input, A) {
   const cfg = Object.assign({}, input.cfg, {fakes_per_village: 0, extra_fakes: false});
-  const r = plan(Object.assign({}, input, {arrival: A, cfg, fakeTargets: [], extraFakeTargets: [], _schnell: true}));
+  // arrivals ersetzen (19.11.2026): sonst rechnete der Vorschlag mit dem eingegebenen Zeitraum statt mit A
+  const r = plan(Object.assign({}, input, {arrival: A, arrivals: [{from: A.from, to: A.to, oa: true, fake: true}], zielAnk: null, cfg, fakeTargets: [], extraFakeTargets: [], _schnell: true}));
   return r.fehler ? null : r.bewertung;
 }
 /** Andere Ankunftszeiträume gleicher Länge für den Vorschlag: 15-Minuten-Schritte bis 12 h vor und nach der Eingabe,
@@ -2355,7 +2445,11 @@ function pruefePlan(res, input) {
   const world = input.world || makeWorld();
   const cfg = Object.assign({}, CFG_DEFAULT, input.cfg);
   const v = [];
-  const ANK = [].concat(...ankunftsListe(input).map(a => tagesTeile(world, a))), A = ANK[0];
+  // Häkchen je Zeitraum (19.11.2026): Fakes in den Teilen mit „Fakes“, Offs und AGs im Teil ihres Ziels (res.ankZiel)
+  const EIN = ankunftsListe(input), teile = a => tagesTeile(world, a);
+  const OA = [].concat(...EIN.filter(a => a.oa).map(teile)), FK = [].concat(...EIN.filter(a => a.fake).map(teile));
+  const ANK = FK.length ? FK : OA, A0 = OA.length ? OA[0] : ANK[0];
+  const AZ = t => (t && res.ankZiel && res.ankZiel[t.id]) || A0;
   const drin = (a, ms) => ms >= a.from && ms <= a.to + (a.from === a.to ? 10000 : 0);
   const fenster = new Map((input.attackers || []).map(a => [a.id, ivNorm(a.windows && a.windows.length ? a.windows : (input.windows || []))]));
   const gap = cfg.min_send_gap_s * 1000;
@@ -2363,6 +2457,7 @@ function pruefePlan(res, input) {
   const verbrauch = new Map();
   res.items.forEach(it => {
     // fester Zeitpunkt: gestaffelte Clean-Offs landen vorher (off_staffel_max)
+    const A = AZ(it.t);
     const vorFest = (it.kind === "clean" || it.kind === "offziel") && A.from === A.to && it.arrivalMs <= A.to && it.arrivalMs >= A.from - ((+cfg.off_staffel_max || 0) + 1) * 60000;
     if (it.kind === "fake" ? !ANK.some(a => drin(a, it.arrivalMs)) : !drin(A, it.arrivalMs) && !vorFest) v.push("Ankunft außerhalb des Zeitraums: " + it.v.id + " → " + it.t.id);
     if (istNacht(world, it.arrivalMs)) v.push("Ankunft im Nachtbonus: " + it.v.id + " → " + it.t.id);
@@ -3159,7 +3254,7 @@ const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEF
              zeitraumAusFeldern, fensterAusZeilen, istNacht, ivNorm, ivIntersect, ivShift, ivHas,
              parseOverview, offInfo, classify, fakeAus, begleitschutz, plan, pruefePlan, toDSU, toWB, exportAuswahl, parseKoordListe,
              travelS, dist, popOf, langsamste, ivAbstand, sitzungenAus, dichtesterPunkt, besser, ankunftKandidaten, bewerteAnkunft, zeitHinweise,
-             RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, tagesTeile, nachtGekuerzt,
+             RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, oaTeile, tagesTeile, nachtGekuerzt,
              mulberry32, Fluss, parsePlan, importArt, importDSU, importWB, planPruefen, fakesNachImport, nachAbschick,
              parseBefehle, befehleAbgleichen, agsAngleichen, offsZeitenNeu, VORLAGE_ALLE, VORLAGE_EXPORT, vorlageEinheiten, zuegeBuendeln, AG_TRAIN_NOTIZ,
              begleitAufstocken, BEGLEIT_EINHEITEN, ankunftEingabe, laufArt, LAUF_OFF_MIN_BH};

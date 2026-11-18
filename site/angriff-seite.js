@@ -42,7 +42,7 @@ const INFO = {
   zart: "AG-Ziele bekommen AGs, Clean-Offs und Fakes. Off-Ziele bekommen nur Offs, so viele wie in ihrer Zeile steht (Standard 1), mehrere gestaffelt wie die Clean-Offs vor einem AG (zufällig in der Staffelspanne, die letzte mit der kürzesten Laufzeit), selbst keine Fakes; sie sind für reine Off-Pläne gedacht, mit AG-Zielen bekommen erst die AG-Ziele ihre Clean-Offs. Fakeziele bekommen nur Fakes, gleichrangig mit den Pflichtzielen; ein reiner Fake-Plan braucht nur Fakeziele. Bei allen drei zählen die Besitzer als Zielspieler: ihre übrigen Dörfer werden Pflicht-Fakeziele, ihre Stammesmitglieder stehen in Abschnitt 6 zur Wahl. Ein Dorf steht nur in einer der Listen.",
   offZielN: "Offs auf dieses Off-Ziel (1 bis 20). Mehrere landen gestaffelt: die mit der kürzesten Laufzeit zuletzt, die anderen zufällig in der Staffelspanne aus Abschnitt 1 davor, mindestens 30 s auseinander, alle im Ankunftszeitraum. „Angreifer“: nur Offs dieses Spielers, „automatisch“: der Planer wählt die nächsten freien Offs.",
   zmodus: "Automatisch: so viele Ziele wie möglich adeln (AGs plus mindestens eine Clean-Off), dann Clean-Offs bis zum Richtwert, dann Off vor AG möglichst oft, dann kürzeste Laufzeiten; gleichwertige Lösungen per Zufall. Je Angreifer: jedes Ziel bekommt in der Tabelle einen Angreifer, der es adelt; Clean-Offs dürfen von allen kommen.",
-  ankunft: "Ein Zeitpunkt (alle Ziele zur selben Zeit, die erste Clean-Off genau darauf) oder ein Zeitraum, über den sich die Angriffe verteilen. Für einen Zeitpunkt nur den Start ausfüllen. Ende ohne Tag: gleicher Tag wie der Start, liegt die Uhrzeit davor, der nächste Tag. Tag und Uhrzeit lassen sich eintippen oder über die Knöpfe neben den Feldern wählen. Für Offs und AGs ist höchstens 1 Stunde zu empfehlen, 1,5 Stunden sind ein Orientierungswert; für Fakes dürfen Zeiträume länger sein, auch über die Nacht (geplant wird nur der Tagesteil). Ankünfte im Nachtbonus werden gemeldet. Nach der Berechnung sucht der Planer gleich lange Zeiträume bis 12 Stunden davor und danach, die besser zu den Abschickzeiträumen passen, nie im Nachtbonus. Angriffe kommen nie im Nachtbonus an: ein Ende um 23:00:00 heißt höchstens 22:59:59, ein Zeitraum, der in die Nacht ragt, wird gekürzt, einer ganz in der Nacht wird abgelehnt. Weitere Zeiträume per Knopf (v0.6): Offs und AGs kommen im ersten an, Fakes verteilt der Planer auf alle, je Spieler in den Zeitraum, der zu seinen Abschickzeiten passt. Für einen reinen Fake-Plan keine AG-Ziele eintragen, nur Fakeziele. Andere Ankunftszeiten schlägt der Planer nur bei einem Zeitraum mit AG-Zielen vor.",
+  ankunft: "Ein Zeitpunkt (alle Ziele zur selben Zeit, die erste Clean-Off genau darauf) oder ein Zeitraum, über den sich die Angriffe verteilen. Für einen Zeitpunkt nur den Start ausfüllen. Ende ohne Tag: gleicher Tag wie der Start, liegt die Uhrzeit davor, der nächste Tag. Tag und Uhrzeit lassen sich eintippen oder über die Knöpfe neben den Feldern wählen. Für Offs und AGs ist höchstens 1 Stunde zu empfehlen, 1,5 Stunden sind ein Orientierungswert; für Fakes dürfen Zeiträume länger sein, auch über die Nacht (geplant wird nur der Tagesteil). Ankünfte im Nachtbonus werden gemeldet. Nach der Berechnung sucht der Planer gleich lange Zeiträume bis 12 Stunden davor und danach, die besser zu den Abschickzeiträumen passen, nie im Nachtbonus. Angriffe kommen nie im Nachtbonus an: ein Ende um 23:00:00 heißt höchstens 22:59:59, ein Zeitraum, der in die Nacht ragt, wird gekürzt, einer ganz in der Nacht wird abgelehnt. Weitere Zeiträume per Knopf. Je Zeitraum zwei Häkchen: „Offs und AGs“ (ohne AG-Ziele gilt es für die Offs allein) und „Fakes“. Neue Zeiträume haben nur „Fakes“. Fakes verteilt der Planer auf alle Zeiträume mit „Fakes“, je Spieler in den, der zu seinen Abschickzeiten passt. Haben mehrere Zeiträume „Offs und AGs“, wählt der Rechner je Ziel den Zeitraum, in dem es am besten geht (mehr Ziele geadelt, weniger außerhalb der Abschickzeiten, weniger Sitzungen); Clean-Offs kommen immer mit ihrem AG an. Das dauert länger. Ohne Zeitraum mit „Fakes“ enthält der Plan keine Fakes. Für einen reinen Fake-Plan keine AG-Ziele eintragen, nur Fakeziele. Andere Ankunftszeiten schlägt der Planer nur bei einem Zeitraum mit AG-Zielen vor.",
   fen_je: "An: jeder Angreifer kann eigene Abschickzeiträume bekommen, ohne eigene gelten die gemeinsamen. Aus: für alle gelten die gemeinsamen Zeiträume; eigene bleiben gespeichert und gelten wieder, sobald der Schalter an ist. „Zurücksetzen“ löscht die eigenen Zeiträume eines Angreifers.",
   fenster: "Wann abgeschickt werden kann, auf die Minute. Ein Zeitraum über Mitternacht ist erlaubt (Start 22:00, Ende 01:00, Tag beim Ende leer). Weitere Zeiträume kommen über den Knopf dazu. Jeder Angreifer kann unter „Je Angreifer“ eigene Zeiträume bekommen; sie ersetzen für ihn die gemeinsamen. Die Zeiträume sind ein Wunsch: geht ein Ziel nur mit Abschicken außerhalb, plant der Planer es trotzdem, markiert diese Befehle („außerhalb“, „nachts“) und sagt nach der Berechnung, wie die Zeiträume zu erweitern wären. Fakes kommen nur in Sitzungen, in denen ohnehin abgeschickt wird.",
   jeClean: "Gilt nur für diesen Spieler, statt der Einstellung „Clean-Offs je AG-Ziel“ oben. „Höchstens N je Ziel“: von diesem Spieler kommen je AG-Ziel höchstens N Clean-Offs (0: keine), die Zahl je Ziel bleibt beim Wert oben. „N für meine AG-Ziele“: Ziele, auf die dieser Spieler den AG-Train schickt, bekommen N Clean-Offs (mindestens 1). Ohnehin gilt: Clean-Offs kommen möglichst vom Spieler, der den Train schickt, damit er sein Timing selbst in der Hand hat.",
@@ -129,8 +129,16 @@ function zeitenUebernehmen() {
 /* Mehrere Ankunftszeiträume (v0.6): S.ankListe ist die Quelle, S.ank immer ihr erster (Hauptzeitraum für Offs und AGs). */
 function ankSync() {
   if (!Array.isArray(S.ankListe) || !S.ankListe.length) S.ankListe = [S.ank || leererZeitraum()];
+  S.ankListe.forEach(hakenStandard);
   S.ank = S.ankListe[0];
 }
+/* Häkchen je Ankunftszeitraum (Dennis 19.11.2026 00:06): „Offs und AGs“ (ohne AG-Ziele die Offs allein) und „Fakes“.
+   Ohne Angabe wie bisher: der erste für Offs und AGs, Fakes in allen. */
+function hakenStandard(z, i) {
+  if (z.oa == null) z.oa = i === 0;
+  if (z.fake == null) z.fake = true;
+}
+const ankArt = z => z.oa && z.fake ? "Offs und AGs, Fakes" : z.oa ? "Offs und AGs" : z.fake ? "Fakes" : "nicht genutzt, kein Häkchen";
 function laden() {
   try {
     const s = JSON.parse(localStorage.getItem(SPEICHER) || "null");
@@ -909,7 +917,21 @@ function zeitraumListe(box, zeilen, fn, opt) {
       const zurueck = knopf("zurücksetzen", () => { popZu(); Object.assign(z, leererZeitraum()); zeichnen(); fn(); }, "tw ap-zurueck-z");
       zurueck.title = "Diesen Zeitraum leeren";
       zeile.append(kopie, zurueck);
+      let hk = null;
+      if (opt && opt.haken) {
+        hakenStandard(z, i);
+        hk = el("div", "ap-haken");
+        [["oa", "Offs und AGs"], ["fake", "Fakes"]].forEach(([k, t]) => {
+          const lab = el("label"), c = el("input");
+          c.type = "checkbox"; c.checked = !!z[k];
+          c.setAttribute("aria-label", t + " in Zeitraum " + (i + 1));
+          c.addEventListener("change", () => { z[k] = c.checked; fn(); });
+          lab.append(c, document.createTextNode(" " + t));
+          hk.append(lab);
+        });
+      }
       if (zeilen.length > 1) zeile.append(knopf("entfernen", () => { popZu(); zeilen.splice(i, 1); zeichnen(); fn(); }, "tw"));
+      if (hk) zeile.append(hk);                    // Häkchen in eigener Zeile unter Feldern und Knöpfen
       liste.append(zeile);
     });
     liste.append(knopf("Weiteren Zeitraum hinzufügen", () => { popZu(); zeilen.push(leererZeitraum()); zeichnen(); fn(); }, "tw"));
@@ -964,19 +986,20 @@ $("fen-je-an").addEventListener("change", e => {
 });
 function zeitFelderBauen() {
   ankSync();
-  zeitraumListe($("ankunft-felder"), S.ankListe, () => { ankSync(); geaendert(true); }, {ms: true});
+  zeitraumListe($("ankunft-felder"), S.ankListe, () => { ankSync(); geaendert(true); }, {ms: true, haken: true});
   zeitraumListe($("fenster-felder"), S.fen, () => { S.atts.forEach((a, i) => attAnalyse(i)); geaendert(true); });
 }
 function zeitenBauen() {
   ankSync();
-  const n = $("ankunft-note"), liste = S.ankListe.map(z => K.zeitraumAusFeldern(z, true));
+  const n = $("ankunft-note"), liste = S.ankListe.map((z, i) => Object.assign(K.zeitraumAusFeldern(z, true), {nr: i + 1, oa: !!z.oa, fake: !!z.fake}));
   const belegt = liste.filter(a => !a.leer), mehr = belegt.length > 1;
   if (!belegt.length) n.replaceChildren(el("span", null, "Noch keine Ankunft."));
   else {
     n.replaceChildren();
-    belegt.forEach((a, i) => {
-      const z = el("div");
-      if (mehr) z.append(el("strong", null, (i === 0 ? "1 (Offs und AGs, Fakes)" : (i + 1) + " (Fakes)") + ": "));
+    belegt.forEach(a => {
+      const z = el("div"), i = a.nr - 1;
+      // Nummer wie die Zeile oben, Art aus den Häkchen (19.11.2026)
+      if (mehr || !(a.oa && a.fake)) z.append(el("strong", a.oa || a.fake ? null : "ap-warn", a.nr + " (" + ankArt(a) + "): "));
       if (a.fehler) z.append(el("span", "ap-warn", a.fehler));
       else {
         const t = a.from === a.to ? "Zeitpunkt " + K.fmtZeit(a.from, true)
@@ -990,11 +1013,15 @@ function zeitenBauen() {
         else if (gek) z.append(el("div", "ap-alarm", "Achtung: ragt in den " + nb() + ". Angriffe kommen nie im Nachtbonus an, geplant wird nur " + teile.map(tt).join(" und ") + "."));
         else if (teile[0].to < a.to) z.append(el("span", "ap-note", " · letzte Ankunft " + K.fmtZeit(teile[0].to).slice(11, 19) + ", ab " + W.night.start_hour + " Uhr Nachtbonus"));
         // Länge nur als Orientierung für Offs und AGs (Dennis 10.11.2026), für Fakes sind lange Zeiträume sinnvoll
-        if (i === 0 && S.ziele.length && a.to - a.from > K.ANKUNFT_RAT_MS)
+        if (a.oa && S.ziele.length && a.to - a.from > K.ANKUNFT_RAT_MS)
           z.append(el("span", "ap-note", " · für Offs und AGs empfohlen höchstens 1 Stunde" + (a.to - a.from > K.ANKUNFT_MAX_MS ? ", 1,5 Stunden als Orientierung überschritten" : "")));
       }
       n.append(z);
     });
+    const gut = belegt.filter(a => !a.fehler), oa = gut.filter(a => a.oa).length;
+    if ((S.ziele.length || S.offZiele.length) && !oa) n.append(el("div", "ap-alarm", "Kein Zeitraum mit Häkchen „Offs und AGs“: so ist nichts planbar."));
+    else if (oa > 1 && (S.ziele.length || S.offZiele.length)) n.append(el("div", "ap-note", "Offs und AGs in " + oa + " Zeiträumen: der Rechner wählt je Ziel den Zeitraum, die Berechnung dauert dadurch länger."));
+    if (gut.length && !gut.some(a => a.fake)) n.append(el("div", "ap-note", "Kein Zeitraum mit Häkchen „Fakes“: der Plan enthält keine Fakes."));
   }
   fensterNote($("fenster-note"), S.fen, "Noch kein Zeitraum.");
 }
@@ -1096,9 +1123,13 @@ let ERG = null;
 function kernInput(cfgExtra) {
   const fehler = [];
   ankSync();
-  const anks = S.ankListe.map(z => K.zeitraumAusFeldern(z, true)), ankGut = anks.filter(a => !a.leer && !a.fehler);
+  // Häkchen je Zeitraum (19.11.2026): Zeiträume ohne Häkchen zählen nicht
+  const anks = S.ankListe.map((z, i) => Object.assign(K.zeitraumAusFeldern(z, true), {nr: i + 1, oa: !!z.oa, fake: !!z.fake}));
+  const ankGut = anks.filter(a => !a.leer && !a.fehler && (a.oa || a.fake));
   if (!ankGut.length || anks.some(a => !a.leer && a.fehler)) fehler.push("Ankunft fehlt oder ist ungültig (Abschnitt 4).");
-  const ank = ankGut[0] || anks[0];
+  else if ((S.ziele.length || S.offZiele.length) && !ankGut.some(a => a.oa)) fehler.push("Kein Ankunftszeitraum mit Häkchen „Offs und AGs“ (Abschnitt 4).");
+  const ohneFakes = ankGut.length > 0 && !ankGut.some(a => a.fake);
+  const ank = ankGut.find(a => a.oa) || ankGut[0] || anks[0];
   const fw = K.fensterAusZeilen(S.fen);
   if (fw.fehler.length) fehler.push(fw.fehler.join("; ") + " (Abschnitt 5).");
   const attackers = [];
@@ -1109,7 +1140,7 @@ function kernInput(cfgExtra) {
     const own = A.own && A.own.fenster.length ? A.own.fenster : null;
     if (!own && !fw.fenster.length) fehler.push("Kein Abschickzeitraum für " + A.name + " (Abschnitt 5).");
     // Off-Dörfer aus der Liste gelten unabhängig von der Dorfauswahl
-    attackers.push({id: i, name: A.name, points: A.points || 0, rollen: a.rollen, auswahl: A.aus ? A.aus.keys.concat(A.dorfer.filter(d => d.vorlage).map(d => d.xy)) : null, windows: own,
+    attackers.push({id: i, name: A.name, points: A.points || 0, rollen: ohneFakes ? Object.assign({}, a.rollen, {fake: false}) : a.rollen, auswahl: A.aus ? A.aus.keys.concat(A.dorfer.filter(d => d.vorlage).map(d => d.xy)) : null, windows: own,
       cleanModus: a.cleanModus || null, cleanN: a.cleanN, fakeModus: a.fakeModus || null, fakeN: a.fakeN, rammenMax: a.rammenMax, eigeneStark: !!a.eigeneStark, fakeSoll: a.fakeSoll || null,
       fakeMax: a.fakeMax != null ? a.fakeMax : null,
       villages: A.dorfer.map(d => Object.assign({id: d.id, name: d.name, x: d.x, y: d.y, pts: d.pts, units: d.units,
@@ -1140,9 +1171,11 @@ function kernInput(cfgExtra) {
       });
     });
   }
+  // kein Zeitraum mit Häkchen „Fakes“: Plan ohne Fakes (19.11.2026)
+  if (ohneFakes) { fakeTargets.length = 0; extraFakeTargets.length = 0; }
   // reiner Fake-Plan (v0.6): ohne AG-Ziele reicht ein Fakeziel
   if (!S.ziele.length && !offTargets.length && !fakeTargets.length && !extraFakeTargets.length) fehler.push("Keine AG-, Off- oder Fakeziele (Abschnitt 3).");
-  return {fehler, input: {world: W, cfg: Object.assign({}, S.cfg, {seed: S.seed}, cfgExtra || {}), attackers, agTargets, offTargets, fakeTargets,
+  return {fehler, input: {world: W, cfg: Object.assign({}, S.cfg, {seed: S.seed}, cfgExtra || {}, ohneFakes ? {fakes_per_village: 0, extra_fakes: false} : {}), attackers, agTargets, offTargets, fakeTargets,
           extraFakeTargets, arrival: ank, arrivals: ankGut, windows: fw.fenster, now: Date.now()}};
 }
 function rechnen() {
@@ -1228,19 +1261,28 @@ function zeigen() {
   box.append(sitzungenBox(r));
   const vb = el("div", "ap-vorschlag"); vb.id = "vorschlag";
   box.append(vb);
-  // Ziele
+  // Ziele; Zeitraum je Ziel, wenn Offs und AGs mehrere Zeiträume haben (19.11.2026)
+  const zrMehr = (r.oaTeile || []).length > 1;
+  const zrText = id => { const a = r.ankZiel && r.ankZiel[id]; return a ? "Zeitraum " + a.nr + " (" + K.fmtZeit(a.from).slice(0, 16) + (a.to > a.from ? " bis " + K.fmtZeit(a.to).slice(11, 16) : "") + ")" : ""; };
+  if (zrMehr) {
+    const je = new Map();
+    Object.entries(r.ankZiel || {}).forEach(([id, a]) => je.set(a.nr, (je.get(a.nr) || 0) + 1));
+    const p = el("p", "ap-note", "Ankunft je Ziel" + (r.zeitraumWahl ? " (vom Rechner gewählt, " + r.zeitraumWahl.laeufe + " Probeläufe, " + nf.format(Math.round(r.zeitraumWahl.ms / 100) / 10) + " s)" : "") + ": " +
+      [...je].sort((x, y) => x[0] - y[0]).map(([nr, n]) => "Zeitraum " + nr + ": " + n + (n === 1 ? " Ziel" : " Ziele")).join(" · "));
+    box.append(p);
+  }
   const zrows = r.ziele.map(z => {
     const d = dorf(z.x * 1000 + z.y);
     return [[koord(z.x * 1000 + z.y), "num", z.x * 1000 + z.y], [d ? spielerName(d.p) : ""], [z.geadelt ? "geadelt" : "nicht", z.geadelt ? "up" : "down"],
             [z.geadelt ? String(z.clean) + (z.zusatz ? " (davon " + z.zusatz + " zusätzlich)" : "") : "", "num", z.geadelt ? z.clean : -1], [z.geadelt ? String(z.ags) : "", "num", z.geadelt ? z.ags : -1],
             [z.geadelt ? K.fmtZeit(z.T, true) : "", "num", z.T || 0], [z.geadelt ? (z.offZuerst ? "ja" : "nein") : "", z.geadelt && !z.offZuerst ? "down" : ""],
-            [z.grund || ""]];
+            [z.grund || ""]].concat(zrMehr ? [[zrText(z.id)]] : []);
   });
   const zsec = el("div"), zsc = el("div");
   zsc.style.overflowX = "auto";                     // am Handy waagrecht scrollen statt abschneiden
   // alle Spalten sortierbar (Dennis 13.11.2026 09:13)
   zsc.append(table([["Ziel", "num", true], ["Besitzer", null, "text"], ["Ergebnis", null, "text"], ["Clean-Offs", "num", true], ["AGs", "num", true],
-    ["Erste Clean-Off kommt an", "num", true], ["Off vor AG abgeschickt", null, "text"], ["Grund", null, "text"]], zrows));
+    ["Erste Clean-Off kommt an", "num", true], ["Off vor AG abgeschickt", null, "text"], ["Grund", null, "text"]].concat(zrMehr ? [["Ankunft", null, "text"]] : []), zrows));
   zsec.append(el("h3", null, "AG-Ziele"), zsc);
   box.append(zsec);
   // Export
@@ -1737,6 +1779,11 @@ document.querySelectorAll('input[name="zart"]').forEach(r => r.addEventListener(
 $("fake-karte").addEventListener("click", () => zurKarte("fake"));
 document.querySelectorAll('input[name="zmodus"]').forEach(r => r.addEventListener("change", () => { S.zmodus = r.value; geaendert(); }));
 $("fake-text").addEventListener("input", () => { S.fakeText = $("fake-text").value; geaendert(true); });
-$("calc").addEventListener("click", () => { S.wahlKnapp = null; rechnen(); });
+$("calc").addEventListener("click", () => {
+  S.wahlKnapp = null;
+  // Zeitraum je Ziel suchen dauert (19.11.2026): erst den Hinweis zeigen, dann rechnen
+  if (S.ankListe.filter(z => z.oa).length > 1) { $("calc-hint").textContent = "rechnet, Zeitraum je Ziel wird gesucht …"; setTimeout(rechnen, 30); }
+  else rechnen();
+});
 $("reroll").addEventListener("click", () => { S.seed = (S.seed % 100000) + 1; S.wahlKnapp = null; speichern(); rechnen(); });
 document.querySelectorAll(".ap-help[data-help]").forEach(h => { if (!h.textContent) h.textContent = INFO[h.dataset.help] || ""; });
