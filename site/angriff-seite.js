@@ -99,7 +99,7 @@ const FELDER = [
 const leererZeitraum = () => ({vonDatum: "", vonZeit: "", bisDatum: "", bisZeit: ""});
 const neuerAngreifer = () => ({text: "", rollen: {off: true, ag: true, fake: true}, auswahlText: "", fen: [leererZeitraum()], nobles: {}, useOff: {},
                                cleanModus: "", cleanN: "", fakeModus: "", fakeN: "", rammenMax: "", eigeneStark: false, pala: {}, offListe: ""});
-let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], offZiele: [], fakeHaupt: [], zart: "ag", zmodus: "auto",
+let S = {cfg: Object.assign({}, K.CFG_DEFAULT), seed: 1, atts: [neuerAngreifer()], ziele: [], offZiele: [], fakeHaupt: [], fakeN: {}, zart: "ag", zmodus: "auto",
          ank: leererZeitraum(), ankListe: [], fen: [leererZeitraum()], fakeAus: [], fakeText: "", extraAus: [], extraEin: [], wahlKnapp: null, hilfe: false};
 /* Gespeicherte Stände aus der Zeit der Textfelder (ankunft, fenster, fensterText) in die getrennten Felder übernehmen. */
 function zeilenAusFenster(text) {
@@ -139,6 +139,7 @@ function laden() {
       S.cfg = Object.assign({}, K.CFG_DEFAULT, s.S.cfg);
       if (!S.atts.length) S.atts = [neuerAngreifer()];
       if (!Array.isArray(S.offZiele)) S.offZiele = [];
+      if (!S.fakeN || typeof S.fakeN !== "object" || Array.isArray(S.fakeN)) S.fakeN = {};
       zeitenUebernehmen();
     }
   } catch (e) { /* ohne Speicher nur für diesen Besuch */ }
@@ -581,12 +582,42 @@ function zieleHinzu(keys, quelle, art) {
     (verschoben ? ", davon " + verschoben + " aus " + (art === "off" ? "den Fakezielen" : "den Off- und Fakezielen") : "") + (schonAg ? ", " + schonAg + " schon AG-Ziel" : "") +
     (schonOff ? ", " + schonOff + " schon Off-Ziel" : "") + (unbekannt ? ", " + unbekannt + " nicht in den Weltdaten" : "");
 }
+/* Über der Spalte „Offs“ bzw. „Fakes“ die Zahl für alle Dörfer oder alle Dörfer eines Besitzers setzen (Dennis 18.11.2026 23:47). */
+function sammelZeile(box, was, keys, setzen, start, min, aus) {
+  box.replaceChildren();
+  if (!keys.length) return;
+  const n = el("input", "ap-n"); n.type = "number"; n.min = min; n.max = 20; n.value = start; n.style.width = "4em";
+  n.setAttribute("aria-label", was + " je Dorf für alle");
+  const sel = el("select"); sel.setAttribute("aria-label", "Besitzer");
+  sel.append(Object.assign(el("option", null, "alle Besitzer"), {value: ""}));
+  const je = new Map();
+  keys.forEach(k => { const d = dorf(k); if (d) je.set(d.p, (je.get(d.p) || 0) + 1); });
+  if (je.size > 1) [...je].sort((a, b) => b[1] - a[1]).forEach(([p, c]) => sel.append(Object.assign(el("option", null, spielerName(p) + " (" + c + ")"), {value: String(p)})));
+  sel.hidden = je.size < 2;
+  const b = el("button", "tw", "setzen"); b.type = "button"; b.disabled = !!aus;
+  b.title = aus || was + " je Dorf für alle Dörfer der Liste (oder des gewählten Besitzers) setzen";
+  b.addEventListener("click", () => {
+    const v = Math.max(min, Math.min(20, Math.round(+n.value || 0))), p = sel.value === "" ? null : +sel.value;
+    setzen(keys.filter(k => { const d = dorf(k); return p == null || (d && d.p === p); }), v);
+    geaendert();
+  });
+  box.append(el("span", "ap-note", was + " je Dorf"), n, sel, b);
+}
+/** Ergebnis der letzten Rechnung je Ziel (Koordinate): Zahl der Befehle einer Art. */
+const imPlan = kind => {
+  if (!ERG || !ERG.a) return null;
+  const r = ERG.b && S.wahlKnapp === "weniger_ziele" ? ERG.b : ERG.a, m = new Map();
+  r.items.forEach(it => { if (it.kind === kind) { const k = it.t.x * 1000 + it.t.y; m.set(k, (m.get(k) || 0) + 1); } });
+  return m;
+};
 /** Off-Ziele (Dennis 14.11.2026 00:33): Zahl der Offs je Ziel (1b) und Zuordnung zu einem Angreifer. */
 function offZieleBauen() {
   const box = $("offziel-tab");
   $("offziel-zahl").textContent = S.offZiele.length ? S.offZiele.length + " Dörfer, " + S.offZiele.reduce((n, z) => n + (z.n || 1), 0) + " Offs" : "";
   $("offziel-leer").hidden = !S.offZiele.length;
+  sammelZeile($("offziel-alle"), "Offs", S.offZiele.map(z => z.xy), (ks, v) => { const s0 = new Set(ks); S.offZiele.forEach(z => { if (s0.has(z.xy)) z.n = v; }); }, 2, 1);
   if (!S.offZiele.length) { box.replaceChildren(el("p", "ap-note", "Keine Off-Ziele. Oben „Off-Ziele“ wählen und Dörfer hinzufügen.")); return; }
+  const plan = imPlan("offziel");
   const offDorfer = [];
   ANALYSE.forEach((A, i) => { if (A && S.atts[i] && S.atts[i].rollen.off !== false) A.dorfer.forEach(d => { if (offEingeplant(S.atts[i], d)) offDorfer.push(d); }); });
   const rows = S.offZiele.map((z, n) => {
@@ -602,28 +633,44 @@ function offZieleBauen() {
     sel.addEventListener("change", () => { z.assignee = sel.value === "" ? null : +sel.value; geaendert(true); });
     const x = el("button", "tw", "×"); x.type = "button"; x.title = "entfernen";
     x.addEventListener("click", () => { S.offZiele.splice(n, 1); geaendert(); });
-    if (!d) return [[koord(z.xy), "num"], ["nicht in den Weltdaten"], [""], ["–", "num", 0], ["–", "num", null], [zahl, null, z.n || 1], [sel], [x]];
+    const ip = plan ? (plan.get(z.xy) || 0) : null;
+    const ipZelle = [ip == null ? "–" : String(ip), "num" + (ip != null && ip < (z.n || 1) ? " ap-warn" : ""), ip];
+    if (!d) return [[koord(z.xy), "num"], ["nicht in den Weltdaten"], [""], ["–", "num", 0], ["–", "num", null], [zahl, null, z.n || 1], ipZelle, [sel], [x]];
     return [[koord(z.xy), "num"], [d.name], [spielerName(d.p)], [nf.format(d.pts), "num", d.pts], [nah == null ? "–" : nf1.format(nah), "num", nah],
-            [zahl, null, z.n || 1], [sel], [x]];
+            [zahl, null, z.n || 1], ipZelle, [sel], [x]];
   });
   const sc = el("div", "ap-scroll");
-  sc.append(table([["Koord.", "num"], ["Dorf"], ["Besitzer"], ["Punkte", "num", true], ["Nächstes Off-Dorf (Felder)", "num", true], ["Offs", null, true], ["Angreifer"], [""]], rows));
+  sc.append(table([["Koord.", "num"], ["Dorf"], ["Besitzer"], ["Punkte", "num", true], ["Nächstes Off-Dorf (Felder)", "num", true], ["Offs", null, true], ["im Plan", "num", true], ["Angreifer"], [""]], rows));
   tabelleErsetzen(box, sc);
 }
+/* Fakes je Fakeziel (Dennis 18.11.2026 23:47): Spalte „Fakes“ mit der gewünschten Zahl je Dorf (Standard: „Fakes je Zieldorf“ aus
+   Abschnitt 1), darüber für alle setzen; „im Plan“ zeigt die Zahl der letzten Rechnung. Gilt für „je Fakeziel“, nicht für „je
+   eigenem Dorf“. */
+const fakeZahl = k => S.fakeN[k] != null ? S.fakeN[k] : (S.cfg.fakes_per_village != null ? S.cfg.fakes_per_village : 2);
 function fakeZieleBauen() {
   const box = $("fakeziel-tab");
-  $("fakeziel-zahl").textContent = S.fakeHaupt.length ? S.fakeHaupt.length + " Dörfer" : "";
+  const herkunft = S.cfg.fake_modus === "herkunft";
+  $("fakeziel-zahl").textContent = S.fakeHaupt.length ? S.fakeHaupt.length + " Dörfer" + (herkunft ? "" : ", " + S.fakeHaupt.reduce((s0, k) => s0 + fakeZahl(k), 0) + " Fakes") : "";
   $("fakeziel-leer").hidden = !S.fakeHaupt.length;
+  const ausText = herkunft ? "Fakes sind in Abschnitt 1 je eigenem Dorf eingestellt; die Zahl je Fakeziel gilt nur bei „je Fakeziel“." : "";
+  sammelZeile($("fakeziel-alle"), "Fakes", S.fakeHaupt.slice(), (ks, v) => { ks.forEach(k => { S.fakeN[k] = v; }); }, fakeZahl(S.fakeHaupt[0]), 0, ausText);
   if (!S.fakeHaupt.length) { box.replaceChildren(el("p", "ap-note", "Keine Fakeziele. Oben „Fakeziele“ wählen und Dörfer hinzufügen.")); return; }
+  const plan = imPlan("fake");
   const rows = S.fakeHaupt.map((k, n) => {
     const d = dorf(k);
     const x = el("button", "tw", "×"); x.type = "button"; x.title = "entfernen";
-    x.addEventListener("click", () => { S.fakeHaupt.splice(n, 1); geaendert(); });
-    return d ? [[koord(k), "num"], [d.name], [spielerName(d.p)], [nf.format(d.pts), "num", d.pts], [x]]
-             : [[koord(k), "num"], ["nicht in den Weltdaten"], [""], ["", "num", 0], [x]];
+    x.addEventListener("click", () => { S.fakeHaupt.splice(n, 1); delete S.fakeN[k]; geaendert(); });
+    const zahl = el("input", "ap-n"); zahl.type = "number"; zahl.min = 0; zahl.max = 20; zahl.value = fakeZahl(k); zahl.disabled = herkunft;
+    zahl.setAttribute("aria-label", "Fakes auf " + koord(k)); if (herkunft) zahl.title = ausText;
+    zahl.addEventListener("input", () => { const v = parseInt(zahl.value, 10); if (isNaN(v)) return; S.fakeN[k] = Math.max(0, Math.min(20, v));
+      $("fakeziel-zahl").textContent = S.fakeHaupt.length + " Dörfer, " + S.fakeHaupt.reduce((s0, q) => s0 + fakeZahl(q), 0) + " Fakes"; geaendert(true); });
+    const ip = plan ? (plan.get(k) || 0) : null;
+    const ipZelle = [ip == null ? "–" : String(ip), "num" + (ip != null && !herkunft && ip < fakeZahl(k) ? " ap-warn" : ""), ip];
+    return d ? [[koord(k), "num"], [d.name], [spielerName(d.p)], [nf.format(d.pts), "num", d.pts], [zahl, null, fakeZahl(k)], ipZelle, [x]]
+             : [[koord(k), "num"], ["nicht in den Weltdaten"], [""], ["", "num", 0], [zahl, null, fakeZahl(k)], ipZelle, [x]];
   });
   const sc = el("div", "ap-scroll");
-  sc.append(table([["Koord.", "num"], ["Dorf"], ["Besitzer"], ["Punkte", "num", true], [""]], rows));
+  sc.append(table([["Koord.", "num"], ["Dorf"], ["Besitzer"], ["Punkte", "num", true], ["Fakes", null, true], ["im Plan", "num", true], [""]], rows));
   tabelleErsetzen(box, sc);
 }
 function zieleBauen() {
@@ -962,7 +1009,7 @@ function extraKandidaten() {
   P.rows.forEach((r, p) => {
     if (!stamm.has(r[pIdx.ally]) || zs.has(p) || eigene.has(p)) return;
     const tage = JOIN ? JOIN[p] : null;
-    out.push({p, name: r[pIdx.name], points: r[pIdx.points], dorfer: (dorfVon.get(p) || []).length,
+    out.push({p, name: r[pIdx.name], stamm: ALLY.get(r[pIdx.ally]) || ("Stamm " + r[pIdx.ally]), points: r[pIdx.points], dorfer: (dorfVon.get(p) || []).length,
               mStark: K.moral(W.moral, maxA, r[pIdx.points], tage), mSchwach: K.moral(W.moral, minA, r[pIdx.points], tage), tage});
   });
   return out.sort((a, b) => b.points - a.points);
@@ -1007,12 +1054,15 @@ function fakesBauen() {
     });
     const pct = v => Math.round(v * 100) + " %";
     const name = ok ? m.name : m.name + (ein.has(m.p) ? " (von Hand, unter der Schwelle)" : " (unter der Schwelle)");
-    return [[c], [name], [nf.format(m.points), "num", m.points], [nf.format(m.dorfer), "num", m.dorfer],
+    return [[c], [name], [m.stamm], [nf.format(m.points), "num", m.points], [nf.format(m.dorfer), "num", m.dorfer],
             [pct(m.mStark), "num", m.mStark], [pct(m.mSchwach), "num", m.mSchwach]];
   });
   const sc = el("div", "ap-scroll");
-  sc.append(table([["Fake"], ["Mitglied"], ["Punkte", "num", true], ["Dörfer", "num", true], ["Moral stärkster Angreifer", "num", true],
+  sc.append(table([["Fake"], ["Mitglied"], ["Stamm", null, true], ["Punkte", "num", true], ["Dörfer", "num", true], ["Moral stärkster Angreifer", "num", true],
                    ["Moral schwächster Angreifer", "num", true]], rows));
+  // Stämme der Zielspieler mit Zahl der Mitglieder (Dennis 18.11.2026 23:48: Zielspieler aus zwei Stämmen)
+  const jeStamm = new Map(); kand.forEach(m => jeStamm.set(m.stamm, (jeStamm.get(m.stamm) || 0) + 1));
+  const stammZeile = el("p", "ap-note", "Mitglieder aus " + [...jeStamm].map(([t, c]) => t + " (" + c + ")").join(", ") + ".");
   // eigene Zahl je Zieldorf für Stammesmitglieder, nachrangig zu Pflicht- und weiteren Fakezielen (Dennis 10.11.2026)
   const n = el("input"); n.type = "number"; n.min = "0"; n.max = "20"; n.className = "ap-n"; n.style.width = "4em";
   n.value = String(S.cfg.extra_fakes_per_village != null ? S.cfg.extra_fakes_per_village : 1);
@@ -1022,7 +1072,7 @@ function fakesBauen() {
   zeile.append(el("span", null, "Fakes je Zieldorf bei Stammesmitgliedern"), n, infoKnopf("extra_n"));
   ex.replaceChildren(zeile, hilfeFeld("extra_n"),
     el("p", "ap-note", "Mitglieder unter der Moral-Schwelle (" + Math.round(S.cfg.moral_threshold * 100) + " %) gegen alle Angreifer sind nicht vorausgewählt. " +
-      "Wählst du sie von Hand, fakt jeder Angreifer ihre Dörfer, ohne Moral-Prüfung. Übrige Mitglieder fakt der Rechner nur von Angreifern, gegen die die Schwelle gilt."), sc);
+      "Wählst du sie von Hand, fakt jeder Angreifer ihre Dörfer, ohne Moral-Prüfung. Übrige Mitglieder fakt der Rechner nur von Angreifern, gegen die die Schwelle gilt."), stammZeile, sc);
 }
 
 /* ---------- 7. Berechnung ---------- */
@@ -1057,7 +1107,7 @@ function kernInput(cfgExtra) {
     .map(z => Object.assign(zielDorf(z.xy), {n: z.n || 1, assignee: z.assignee != null && z.assignee < S.atts.length ? z.assignee : null}));
   // AG- und Off-Ziele bekommen keine Fakes aus den Listen
   const agSet = new Set(S.ziele.map(z => z.xy).concat(S.offZiele.map(z => z.xy)));
-  const fakeTargets = S.fakeHaupt.filter(k => !agSet.has(k) && dorf(k)).map(zielDorf)
+  const fakeTargets = S.fakeHaupt.filter(k => !agSet.has(k) && dorf(k)).map(k => Object.assign(zielDorf(k), S.fakeN[k] != null ? {n: S.fakeN[k]} : {}))
     .concat(pflichtZiele().filter(x => !x.aus).map(x => zielDorf(x.xy)));
   const schon = new Set(fakeTargets.map(t => t.x * 1000 + t.y));
   K.parseKoordListe(S.fakeText).keys.forEach(k => { if (!agSet.has(k) && !schon.has(k) && dorf(k)) { fakeTargets.push(zielDorf(k)); schon.add(k); } });
@@ -1095,6 +1145,7 @@ function rechnen() {
   ERG = {a, b, input, ms: Math.round(performance.now() - t0)};
   if (!b) S.wahlKnapp = null;
   zeigen();
+  offZieleBauen(); fakeZieleBauen();          // Spalte „im Plan“
 }
 const KURZ = {spear: "Speer", sword: "Schwert", axe: "Axt", archer: "Bogen", spy: "Späher", light: "LKav", marcher: "BBogen",
               heavy: "SKav", ram: "Ramme", catapult: "Kata", knight: "Paladin", snob: "AG"};

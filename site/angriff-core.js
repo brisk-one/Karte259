@@ -1524,7 +1524,8 @@ function plan(input) {
       // Topf je Fakeziel: die Spieler mit „ziel“ je eigener Topf mit ihrer Zahl, alle übrigen zusammen die Zahl der Konfig
       const topf = v => { const a = att.get(v.att); return a.fakeModus === "ziel" ? "s" + a.id : "alle"; };
       // Stammesmitglieder nachrangig mit eigener Zahl je Zieldorf (Dennis 10.11.2026)
-      const soll0 = k => k === "alle" ? (herkunft ? 0 : istExtra ? cfg.extra_fakes_per_village : cfg.fakes_per_village)
+      // eigene Zahl je Fakeziel (t.n, Dennis 18.11.2026 23:47) statt „Fakes je Zieldorf“
+      const soll0 = k => k === "alle" ? (herkunft ? 0 : istExtra ? cfg.extra_fakes_per_village : (t.n != null ? t.n : cfg.fakes_per_village))
         : istExtra ? Math.min(att.get(+k.slice(1)).fakeN, cfg.extra_fakes_per_village) : att.get(+k.slice(1)).fakeN;
       const soll = k => grenze != null ? Math.min(grenze, soll0(k)) : soll0(k);
       const hat = new Map();
@@ -1702,11 +1703,13 @@ function plan(input) {
     }
   });
   // Fakes je Dorf ist Richtwert (Dennis 21:04): eine Sammelzeile statt einer Warnung je Ziel
-  let fakeSoll = 0;
-  if (!herkunft && fakeQuellen.some(v => att.get(v.att).fakeModus !== "ziel")) fakeSoll += cfg.fakes_per_village;
-  att.forEach(a => { if (a.fakeModus === "ziel" && fakeQuellen.some(v => v.att === a.id)) fakeSoll += a.fakeN; });
-  const fakeUnter = fakeZiele.filter(t => fakes.filter(f => f.t.id === t.id).length < fakeSoll).length;
-  if (fakeUnter && fakeSoll > 0) warnings.push({art: "fake", text: fakeUnter + " von " + fakeZiele.length + " Fakezielen unter dem Richtwert von " + fakeSoll + " Fakes"});
+  let topfSoll = 0;
+  const gemeinsam = !herkunft && fakeQuellen.some(v => att.get(v.att).fakeModus !== "ziel");
+  att.forEach(a => { if (a.fakeModus === "ziel" && fakeQuellen.some(v => v.att === a.id)) topfSoll += a.fakeN; });
+  const sollT = t => (gemeinsam ? (t.n != null ? t.n : cfg.fakes_per_village) : 0) + topfSoll;
+  const fakeUnter = fakeZiele.filter(t => sollT(t) > 0 && fakes.filter(f => f.t.id === t.id).length < sollT(t)).length;
+  const eigeneZahl = fakeZiele.some(t => t.n != null);
+  if (fakeUnter) warnings.push({art: "fake", text: fakeUnter + " von " + fakeZiele.length + " Fakezielen unter " + (eigeneZahl ? "ihrer gewünschten Zahl" : "dem Richtwert von " + sollT({}) + " Fakes")});
   // von Hand gewählte Stammesmitglieder ganz ohne Fake: Hinweis (sonst sind fehlende Fakes bei Mitgliedern kein Hinweis wert)
   const manuell = new Set(extra.filter(t => t.manuell).map(t => t.owner)), mitFake = new Set(fakes.filter(f => f.extra && f.t.manuell).map(f => f.t.owner));
   const ohne = [...manuell].filter(o => !mitFake.has(o)).length;

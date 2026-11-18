@@ -1609,3 +1609,14 @@ test("AG-Trains als ein Befehl mit allen AGs, Befehlsübersicht ordnet die einze
   assert.equal(ab.ohnePlan.length, 0);
   assert.equal(plan[0].gesendet, z.arrivalMs + 5000);
 });
+
+test("Fakes je Fakeziel: eigene Zahl je Dorf statt „Fakes je Zieldorf“, 0 heißt keine Fakes (Dennis 18.11.2026 23:47)", () => {
+  const input = szenario({fakes_per_village: 1});
+  input.fakeTargets = input.fakeTargets.map((t, i) => i === 0 ? Object.assign({}, t, {n: 3}) : i === 1 ? Object.assign({}, t, {n: 0}) : t);
+  const r = K.plan(input);
+  const auf = id => r.items.filter(i => i.kind === "fake" && i.t.id === id).length;
+  assert.equal(auf(input.fakeTargets[0].id), 3, "eigene Zahl 3");
+  assert.equal(auf(input.fakeTargets[1].id), 0, "0 heißt keine Fakes");
+  assert.ok(auf(input.fakeTargets[2].id) <= 1, "übrige nach Fakes je Zieldorf");
+  assert.deepEqual(K.pruefePlan(r, input), []);
+});
