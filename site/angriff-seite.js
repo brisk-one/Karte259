@@ -603,6 +603,20 @@ function sammelZeile(box, was, keys, setzen, start, min, aus) {
   });
   box.append(el("span", "ap-note", was + " je Dorf"), n, sel, b);
 }
+/* Einzelne Spieler aus der Liste entfernen (Dennis 18.11.2026 23:52): je Besitzer ein Knopf „Name (Dörfer) ×“. */
+function spielerZeile(box, keys, entfernen) {
+  box.replaceChildren();
+  const je = new Map();
+  keys.forEach(k => { const d = dorf(k); if (d) je.set(d.p, (je.get(d.p) || 0) + 1); });
+  if (!je.size) return;
+  box.append(el("span", "ap-note", "Spieler entfernen:"));
+  [...je].sort((a, b) => b[1] - a[1]).forEach(([p, c]) => {
+    const name = spielerName(p), b = el("button", "tw", name + " (" + c + ") ×"); b.type = "button";
+    b.title = "Alle " + c + " Dörfer von " + name + " aus dieser Liste entfernen";
+    b.addEventListener("click", () => { entfernen(new Set(keys.filter(k => { const d = dorf(k); return d && d.p === p; }))); geaendert(); });
+    box.append(b);
+  });
+}
 /** Ergebnis der letzten Rechnung je Ziel (Koordinate): Zahl der Befehle einer Art. */
 const imPlan = kind => {
   if (!ERG || !ERG.a) return null;
@@ -616,6 +630,7 @@ function offZieleBauen() {
   $("offziel-zahl").textContent = S.offZiele.length ? S.offZiele.length + " Dörfer, " + S.offZiele.reduce((n, z) => n + (z.n || 1), 0) + " Offs" : "";
   $("offziel-leer").hidden = !S.offZiele.length;
   sammelZeile($("offziel-alle"), "Offs", S.offZiele.map(z => z.xy), (ks, v) => { const s0 = new Set(ks); S.offZiele.forEach(z => { if (s0.has(z.xy)) z.n = v; }); }, 2, 1);
+  spielerZeile($("offziel-spieler"), S.offZiele.map(z => z.xy), weg => { S.offZiele = S.offZiele.filter(z => !weg.has(z.xy)); });
   if (!S.offZiele.length) { box.replaceChildren(el("p", "ap-note", "Keine Off-Ziele. Oben „Off-Ziele“ wählen und Dörfer hinzufügen.")); return; }
   const plan = imPlan("offziel");
   const offDorfer = [];
@@ -654,6 +669,7 @@ function fakeZieleBauen() {
   $("fakeziel-leer").hidden = !S.fakeHaupt.length;
   const ausText = herkunft ? "Fakes sind in Abschnitt 1 je eigenem Dorf eingestellt; die Zahl je Fakeziel gilt nur bei „je Fakeziel“." : "";
   sammelZeile($("fakeziel-alle"), "Fakes", S.fakeHaupt.slice(), (ks, v) => { ks.forEach(k => { S.fakeN[k] = v; }); }, fakeZahl(S.fakeHaupt[0]), 0, ausText);
+  spielerZeile($("fakeziel-spieler"), S.fakeHaupt.slice(), weg => { S.fakeHaupt = S.fakeHaupt.filter(k => !weg.has(k)); weg.forEach(k => { delete S.fakeN[k]; }); });
   if (!S.fakeHaupt.length) { box.replaceChildren(el("p", "ap-note", "Keine Fakeziele. Oben „Fakeziele“ wählen und Dörfer hinzufügen.")); return; }
   const plan = imPlan("fake");
   const rows = S.fakeHaupt.map((k, n) => {
