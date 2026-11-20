@@ -443,6 +443,8 @@
         <div class="pr-row">
           <label class="pick"><span>Rohstoffe anfordern</span><select id="interval" aria-label="Klickfrequenz"></select></label>
         </div>
+        <!-- Handelsrouten immer einrechnen, auch in der Suche (Wunsch Dennis 20.11.2026 18:08 und 18:34) -->
+        <label class="pr-check" style="display:flex"><input type="checkbox" id="routen-ein" checked> Handelsrouten aus dem Account-Manager einrechnen (auch bei der Wahl der Prägedörfer)</label>
         <div class="pr-row">
           <label class="pick"><span>Marktplatz mindestens</span><select id="minmarket" aria-label="Mindeststufe Marktplatz für alle Dörfer"></select></label>
         </div>
@@ -631,8 +633,7 @@
         <div class="pr-row pr-cmpopt" id="cmp-opt">
           <label class="pick"><span>Rohstoffe anfordern</span><select id="cmp-iv" aria-label="Klickfrequenz, dieselbe wie oben"></select></label>
           <span class="pr-mnote">gleiche Einstellung wie oben, rechnet neu</span>
-          <label class="pr-check"><input type="checkbox" id="cmp-routen"> Handelsrouten aus dem Account-Manager einrechnen</label>
-          <span class="pr-mnote" id="cmp-routen-hint">so viele Routen und derselbe Abstand wie unter „Handelsrouten im Account-Manager“</span>
+          <span class="pr-mnote" id="cmp-routen-hint">mit Handelsrouten (oben eingestellt): so viele Routen und derselbe Abstand wie unter „Handelsrouten im Account-Manager“</span>
         </div>
         <div class="pr-fest" id="cmp-fest" hidden></div>
         <div id="cmp"></div>
@@ -863,6 +864,7 @@ function inputs() {
           merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, flagLevels: [+$("flag").value].concat(flaggenExtra()),
           intervalMin: +$("interval").value,
           production: $("prod").checked, prodFactor: pf > 0 ? pf : null, boni: boniLesen(), minGainPct: +$("gain").value || 0,
+          routen: $("routen-ein").checked,
           minMarket: +$("minmarket").value || 0,
           minPerField: mpf > 0 && Math.abs(mpf - WORLD.base_min_per_field / WORLD.speed) > 1e-6 ? mpf : null};
 }
@@ -910,7 +912,7 @@ function pctPakete() {
 }
 ["pkgpct", "pkgsize"].forEach(id => $(id).addEventListener("input", pctPakete));
 ["paste", "maxov", "pkgpct", "pkgsize", "start", "mpf", "pfac", "gain", "thr"].forEach(id => $(id).addEventListener("input", schedule));
-["flag", "interval", "minmarket", "minstorage", "pkgcount", "fdcount", "bonus", "decree", "ignoreratio", "mintlocal", "prod"].forEach(id => $(id).addEventListener("change", schedule));
+["flag", "interval", "minmarket", "minstorage", "pkgcount", "fdcount", "bonus", "decree", "ignoreratio", "mintlocal", "prod", "routen-ein"].forEach(id => $(id).addEventListener("change", schedule));
 /* Schwelle gilt nicht, wenn die Zahl der Flaggendoppler vorgegeben ist (nur bei „maximieren“) */
 function gainZustand() {
   const aus = MODE === "max" && +$("fdcount").value > 0;
@@ -1096,6 +1098,7 @@ $("example").addEventListener("click", () => {
 
 /* ---------- Rechnen ---------- */
 function run() {
+  $("cmp-routen-hint").hidden = !$("routen-ein").checked;                // Hinweis im Vergleich wie der Schalter oben
   const token = ++RUN;
   const parsed = K.parseOverview($("paste").value);
   const prob = $("problems");
@@ -1486,7 +1489,7 @@ function renderRecommendation() {
   title.appendChild(sub);
   $("rec-hint").textContent = (P.fdCount ? fdName(P.fdCount) + " vorgegeben · " : "") + (pk ? pakete(pk.chosen) + " zu " + P.pkgSize + " %" : nf.format(P.pkgPct) + " % Pakete") + " · " + flaggenKurz(P) + " · Klick alle " + ivl(P.intervalMin)
     + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.minStorage ? " · Speicher mind. " + P.minStorage : "")
-    + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decreeN ? " · Erlass " + P.decreeN + "×" : "") + (P.ignoreRatio ? " · Verhältnis ignoriert" : "") + (P.mintLocal ? " · Prägen in Lieferdörfern" : "");
+    + (P.merchantBonus ? " · Händlerbonus" : "") + (P.routen ? " · mit Handelsrouten" : "") + (P.decreeN ? " · Erlass " + P.decreeN + "×" : "") + (P.ignoreRatio ? " · Verhältnis ignoriert" : "") + (P.mintLocal ? " · Prägen in Lieferdörfern" : "");
 
   // Begründung der Empfehlung; Mehrertrag zusätzlich in Rohstoffen, die Schwelle als Verweis auf ihr Feld (10.14)
   const why = $("rec-why");
@@ -2777,7 +2780,7 @@ function vglPos(n) {
 }
 function routenVergleich() {
   const R = RESULT;
-  if (!$("cmp-routen").checked || !R || !R.configs) return null;
+  if (!$("routen-ein").checked || !R || !R.configs) return null;
   const want = +$("routen-max").value || 3, fest = festAbstand();
   const configs = R.configs.map((c, q) => ({k: q + 1, sites: c.sites, pos: vglPos(q + 1)}));
   const key = RUN + "|" + want + "|" + fest + "|" + configs.map(c => c.pos.join(",")).join(";");
@@ -2806,8 +2809,8 @@ function needTextRouten(stufen) {
   return q.min === Infinity ? "100 % nicht erreichbar, Anfordern bringt kaum mehr (höchstens " + pct0(q.top) + ")"
     : "100 % nicht erreichbar, zusätzlich alle " + ivl(q.min) + " anfordern bringt fast alles (höchstens " + pct0(q.top) + ")";
 }
-$("cmp-routen").addEventListener("change", () => { if (RESULT && RESULT.configs) renderCompare(); });
-["routen-max", "routen-abstand"].forEach(id => $(id).addEventListener(id === "routen-max" ? "change" : "input", () => { if (RESULT && RESULT.configs && $("cmp-routen").checked) renderCompare(); }));
+$("routen-ein").addEventListener("change", () => { $("cmp-routen-hint").hidden = !$("routen-ein").checked; });
+["routen-max", "routen-abstand"].forEach(id => $(id).addEventListener(id === "routen-max" ? "change" : "input", () => { if (RESULT && RESULT.configs && $("routen-ein").checked) renderCompare(); }));
 
 /* ---------- Vergleich ----------
    10.14: Die gewählte Spalte sieht aus wie der gedrückte Knopf in der Lage, die Empfehlung trägt nur ein Abzeichen.
@@ -3318,6 +3321,7 @@ function renderAssumptions() {
     "Münzpreis: " + (P.flagMulti ? "je Prägedorf seine Flagge, " + P.flagLevels.map(l => "Stufe " + l + " verdoppelt −" + 2 * K.FLAG_PCT[l] + " %").join(", ")
       + "; die stärkste bekommt das Prägedorf mit den meisten Münzen (beste Zuordnung aus der einfachen Rechnung), weitere Prägedörfer die schwächste"
       : "Flagge Stufe " + P.flagLevel + " verdoppelt −" + 2 * K.FLAG_PCT[P.flagLevel] + " %") + (P.decreeN === 2 ? ", alle 48 h zusätzlich −10 % durch zwei Erlasse hintereinander" : P.decree ? ", in den ersten 24 h zusätzlich −10 % durch den Erlass (die Werte addieren sich)" : "") + ". Geprägt wird, was bis zum Ende der 48 h ankommt (Dauermünzprägen).",
+    P.routen ? "Handelsrouten: Schon bei der Wahl der Prägedörfer und der Zahl der Flaggendoppler bekommt jedes Lieferdorf eine Dauerroute (alle Händler, Abstand ab Hin- und Rückweg) und wird zusätzlich im eingestellten Abstand angefordert; die Route zählt nur, wenn sie mehr bringt, höchstens für " + ganz(K.ROUTEN_DOERFER) + " Dörfer. Im Testkonto lag das 0,1 bis 0,8 % über der genauen Rechnung. Vergleich und Abschnitt Handelsrouten rechnen mit den gewählten Routen genau; Zeitplan und Kennzahlen des Gleichschritts noch ohne Routen." : "Handelsrouten: ausgeschaltet, gerechnet wird nur mit Anfordern.",
     "„Pakete rechtzeitig“ zählt die Paket-Rohstoffe, die " + (P.decreeN === 1 ? "innerhalb der 24 h des Erlasses" : "innerhalb der 48 h") + " ankommen. Die laufende Produktion wird nach den Paketen verschickt und zählt nur bei den Münzen.",
     "Jedes Prägedorf braucht einen Adelshof, einen Flaggendoppler und eine Münzkosten-Flagge; ohne weitere Flaggen nimmt der Rechner für alle dieselbe Stufe an. Bis zwei Prägedörfer prüft er jede Kombination, ab drei sucht er mit Startaufstellungen und Tauschen. Das findet sehr gute, aber nicht garantiert die beste Aufstellung.",
     "„Markt zu klein“: Das Dorf schafft seinen Anteil mit der genannten Marktstufe rechtzeitig. „zu weit weg oder zu selten geklickt“: auch Markt 25 reicht bei diesem Klickabstand nicht.",

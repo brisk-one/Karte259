@@ -1202,3 +1202,24 @@ test("20.11.: Produktionsbonus accountweit, zeitlich begrenzt, addiert sich auf 
   // ungültige Boni fallen weg
   assert.equal(Pa({boni: [{pct: 0, h: 24}, {pct: 30, h: 0}]}).boni.length, 0);
 });
+
+test("20.11.: Handelsrouten schon in der Suche: Dauerroute je Lieferdorf, höchstens routenDoerfer Dörfer (Dennis 18:08, 18:34)", () => {
+  const v = dreiHaufen();
+  const basis = {mode: "pct", pkgPct: 300, decreeN: 1, intervalMin: 120, merchantBonus: true, production: true, flagLevel: 8, minGainPct: 0};
+  const Pa = x => K.params(Object.assign({}, basis, x), WELT);
+  const ohne = K.plan(v, Pa({})), mit = K.plan(v, Pa({routen: true}));
+  assert.equal(Pa({}).routen, false);
+  // Routen nur, wo sie mehr bringen: nie weniger Münzen
+  ohne.configs.forEach((c, q) => { const pl = new K.Planner(K.prepare(v, Pa({routen: true})), Pa({routen: true})); assert.ok(pl.evaluate(c.sites).coins >= c.coins - 1e-6); });
+  assert.ok(mit.configs[0].coins > ohne.configs[0].coins + 1e-6, "Routen bringen hier mehr");
+  // Dorftabelle (details) und Suche zählen gleich
+  mit.configs.forEach((c, q) => near(mit.details[q].rows.reduce((t, r) => t + r.coins, 0), c.coins, 1e-6));
+  assert.ok(mit.details[0].rows.some(r => r.route));
+  // Grenze je Dorf: höchstens 3 Lieferdörfer mit Route
+  const P3 = Pa({routen: true}); P3.routenDoerfer = 3;
+  const pl3 = new K.Planner(K.prepare(v, P3), P3), e3 = pl3.evaluate(mit.configs[0].sites);
+  assert.ok(e3.mitRoute.size <= 3 && e3.coins <= mit.configs[0].coins + 1e-6 && e3.coins >= ohne.configs[0].coins - 1e-6);
+  // mit verschiedenen Flaggen nimmt der Gleichschritt dieselbe Zuordnung wie die Suche
+  const Pf = Pa({routen: true, flagLevels: [8, 7]}), rf = K.plan(v, Pf);
+  if (rf.configs[1]) assert.deepEqual(K.mitFlaggen(K.prepare(v, Pf), Pf, rf.configs[1].sites).siteFlag, rf.configs[1].siteFlag);
+});

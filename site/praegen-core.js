@@ -141,6 +141,9 @@ function params(input, world) {
     // Flaggen je Prägedorf (Wunsch Dennis 20.11.2026 18:04, 9a): Liste der Stufen, stärkste zuerst; die stärkste bekommt
     // das Prägedorf mit den meisten Münzen (flaggenZuordnung), weitere Prägedörfer die letzte der Liste (10a)
     flagLevels: null, flagMulti: false,
+    // Handelsrouten schon in der Suche (Wunsch Dennis 20.11.2026 18:08 und 18:34: immer automatisch einrechnen): je
+    // Lieferdorf eine Dauerroute (alle Händler, Abstand ab Hin- und Rückweg) plus Anfordern, höchstens routenDoerfer Dörfer
+    routen: !!input.routen,
     intervalMin: Math.max(1, +input.intervalMin || 60),
     production: input.production !== false,
     prodFactor: +input.prodFactor > 0 ? +input.prodFactor : 1,
@@ -255,13 +258,30 @@ function mitFlaggen(src, P, sites) {
     // einem Prägedorf unterscheiden
     let proDorf = SIM_EINHEITEN.get(basis);
     if (!proDorf) { proDorf = new WeakMap(); SIM_EINHEITEN.set(basis, proDorf); }
-    src.forEach((s, i) => {
+    const lauf = src.map((s, i) => {
       const j = nearestSite(src, i, sites), tau = i === j ? 0 : travelHours(s, src[j], basis);
       let t = proDorf.get(s);
       if (!t) { t = new Map(); proDorf.set(s, t); }
       let r = t.get(tau);
-      if (!r) { const q = simulate(s, tau, basis, basis.window); r = [q.u1, q.u2]; t.set(tau, r); }
-      u1[pos.get(j)] += r[0]; u2[pos.get(j)] += r[1];
+      if (!r) {
+        const q = simulate(s, tau, basis, basis.window);
+        r = {u1: q.u1, u2: q.u2, route: null};
+        // mit Handelsrouten wie Planner.get und Planner.mitRoute, damit Suche und Zeitplan dieselbe Zuordnung nehmen
+        const ro = basis.routen ? dauerRoute(s, tau, basis) : null;
+        if (ro) { const z = simulateRoute(s, tau, basis, basis.window, null, ro, basis.interval); if (z.coins > q.coins + 1e-9) r.route = {u1: z.u1, u2: z.u2, gain: z.coins - q.coins}; }
+        t.set(tau, r);
+      }
+      return {i, j, r};
+    });
+    let mit = null;
+    if (basis.routen) {
+      const g = lauf.filter(x => x.r.route).map(x => [x.i, x.r.route.gain]), L = basis.routenDoerfer || ROUTEN_DOERFER;
+      if (g.length > L) { g.sort((a, b) => b[1] - a[1] || a[0] - b[0]); g.length = L; }
+      mit = new Set(g.map(x => x[0]));
+    }
+    lauf.forEach(({i, j, r}) => {
+      const x = mit && mit.has(i) ? r.route : r;
+      u1[pos.get(j)] += x.u1; u2[pos.get(j)] += x.u2;
     });
     e = {basis, siteFlag: flaggenZuordnung(sites, u1, u2, basis).siteFlag, P: null};
     m.set(key, e);
@@ -384,6 +404,12 @@ Planner.prototype.get = function (i, c) {
   if (!r) {
     const tau = i === c ? 0 : travelHours(this.src[i], this.src[c], this.P);
     r = simulate(this.src[i], tau, this.P, this.P.window);
+    // mit Handelsrouten: dieselbe Rechnung mit Dauerroute plus Anfordern; genommen wird sie, wenn sie mehr bringt
+    const ro = this.P.routen ? dauerRoute(this.src[i], tau, this.P) : null;
+    if (ro) {
+      const q = simulateRoute(this.src[i], tau, this.P, this.P.window, null, ro, this.P.interval);
+      if (q.coins > r.coins + 1e-9) { r = Object.assign({}, r); r.route = q; r.gain = q.coins - r.coins; }
+    }
     this.cache.set(key, r);
   }
   return r;
@@ -397,8 +423,9 @@ Planner.prototype.assign = function (i, sites) {
 Planner.prototype.evaluate = function (sites) {
   let coins = 0, minted = 0, pkg = 0, inTime = 0, doneAt = 0, spread = 0;
   const multi = this.P.flagMulti, u1 = multi ? sites.map(() => 0) : null, u2 = multi ? sites.map(() => 0) : null;
+  const mit = this.P.routen ? this.mitRoute(sites) : null;
   for (let i = 0; i < this.n; i++) {
-    const c = this.assign(i, sites), r = this.get(i, c);
+    const c = this.assign(i, sites), r0 = this.get(i, c), r = mit && mit.has(i) ? r0.route : r0;
     coins += r.coins; minted += r.minted; pkg += r.pkgUnits; inTime += r.inTime; spread += r.pkgUnits * r.tau;
     if (r.doneAt > doneAt) doneAt = r.doneAt;
     if (multi) { const q = sites.indexOf(c); u1[q] += r.u1; u2[q] += r.u2; }
@@ -406,8 +433,27 @@ Planner.prototype.evaluate = function (sites) {
   // verschiedene Flaggen: Münzen je Prägedorf mit der besten Zuordnung (sonst wie bisher, alle mit P.flagLevel)
   let siteFlag = null;
   if (multi) { const z = flaggenZuordnung(sites, u1, u2, this.P); coins = z.coins; siteFlag = z.siteFlag; }
-  return {sites, coins, minted, pkg, inTime, share: pkg > EPS ? inTime / pkg : 1, doneAt, spread, siteFlag};
+  return {sites, coins, minted, pkg, inTime, share: pkg > EPS ? inTime / pkg : 1, doneAt, spread, siteFlag, mitRoute: mit};
 };
+/* Lieferdörfer mit Route: alle, denen die Dauerroute mehr bringt als Anfordern, bei mehr als routenDoerfer (250, je Dorf
+   gezählt) die mit dem größten Gewinn (wie routenPlan). */
+Planner.prototype.mitRoute = function (sites) {
+  const L = this.P.routenDoerfer || ROUTEN_DOERFER, g = [];
+  for (let i = 0; i < this.n; i++) { const r = this.get(i, this.assign(i, sites)); if (r.route) g.push([i, r.gain]); }
+  if (g.length > L) { g.sort((a, b) => b[1] - a[1] || a[0] - b[0]); g.length = L; }
+  return new Set(g.map(x => x[0]));
+};
+/* Dauerroute eines Lieferdorfs für die Suche: alle Händler (größte Stufe der Routenliste), Abstand ab Hin- und Rückweg,
+   damit die Händler zur nächsten Lieferung zurück sind. Im Testkonto (650 Dörfer) 0,1 bis 0,8 % über der genauen
+   Routenrechnung mit drei gemeinsamen Routen. */
+function dauerRoute(s, tau, P) {
+  if (!(tau > 0) || !(s.merchants > 0)) return null;
+  let n = 0;
+  for (const x of ROUTE_N) if (x <= s.merchants) n = x;
+  if (!n) return null;
+  const dt = ROUTE_DT.find(d => d >= 2 * tau - 1e-9) || ROUTE_DT[ROUTE_DT.length - 1];
+  return {a: routeMenge(n, P), dt};
+}
 // Reihenfolge: mehr Münzen, dann mehr Paketmenge rechtzeitig, dann früher fertig, dann kürzere Wege
 function better(a, b) {
   const tol = 1e-7 * Math.max(1, Math.abs(b.coins));
@@ -518,14 +564,17 @@ function details(src, P, sites, planner) {
   const rows = [], curve = [];
   let doneAt = 0;
   P = mitFlaggen(src, P, sites);
+  const mit = P.routen ? planner.mitRoute(sites) : null;                // Lieferdörfer mit Handelsroute (20.11.2026)
   for (const s of src) {
     const site = planner.assign(s.i, sites), tau = s.i === site ? 0 : travelHours(s, src[site], P);
-    const r = simulate(s, tau, siteP(P, site), LONG_HORIZON, null, true);
+    const ro = mit && mit.has(s.i) ? dauerRoute(s, tau, P) : null;
+    const lauf = (h, M, keep) => ro ? simulateRoute(s, tau, siteP(P, site), h, M, ro, P.interval) : simulate(s, tau, siteP(P, site), h, M, keep);
+    const r = lauf(LONG_HORIZON, null, true);
     let status = "ok", need = null;
     if (r.inTime < r.pkgUnits - 1e-7) {
       status = "weit";
       for (let L = s.b.market + 1; L <= 25; L++) {
-        const q = simulate(s, tau, P, P.window, Math.round(merchantsAt(L) * (s.mFaktor || 1)));
+        const q = lauf(P.window, Math.round(merchantsAt(L) * (s.mFaktor || 1)));
         if (q.inTime >= q.pkgUnits - 1e-7) { status = "markt"; need = L; break; }
       }
     }
@@ -533,7 +582,7 @@ function details(src, P, sites, planner) {
     if (r.doneAt > doneAt) doneAt = r.doneAt;
     rows.push({i: s.i, site, tau, dist: s.i === site ? 0 : dist(s, src[site]), merchants: s.merchants,
                pkgUnits: r.pkgUnits, inTime: r.inTime, coins: r.coins, doneAt: r.doneAt, status, need,
-               trips: r.arrivals.length});
+               trips: r.arrivals.length, route: !!ro});
   }
   curve.sort((a, b) => a[0] - b[0]);
   return {rows, curve, doneAt};
@@ -1336,14 +1385,14 @@ function simulateRoute(s, tau, P, horizon, merchants, route, klickT) {
   const pkgUnits = avail();
   const a = route ? route.a : null, dt = route ? route.dt : Infinity, need = a ? Math.ceil((a[0] + a[1] + a[2]) / C - 1e-7) : 0;
   const aU = a ? (P.ignoreRatio ? (a[0] + a[1] + a[2]) / P.unitRes : Math.min(a[0] / cw, a[1] / cs, a[2] / ci)) : 0;
-  let shipped = 0, coins = 0, inTime = 0, doneAt = pkgUnits <= EPS ? 0 : Infinity, tLast = 0, j = 0, m = 0, busy = 0, qh = 0;
+  let shipped = 0, coins = 0, inTime = 0, doneAt = pkgUnits <= EPS ? 0 : Infinity, tLast = 0, j = 0, m = 0, busy = 0, qh = 0, minted = 0, u1 = 0, u2 = 0;
   const qT = [], qN = [], arrivals = [];
   const tau0 = tau === 0;
   const ab = (t, units) => {
     const ta = t + tau, pkgPart = Math.max(0, Math.min(units, pkgUnits - shipped));
     shipped += units;
     if (pkgPart > 0 && doneAt === Infinity && shipped >= pkgUnits - 1e-7) doneAt = ta;
-    if (ta <= P.window + EPS) coins += units / (1 - reduction(ta, P));
+    if (ta <= P.window + EPS) { coins += units / (1 - reduction(ta, P)); minted += units; if (imErlass(ta, P)) u1 += units; else u2 += units; }
     if (pkgPart > 0 && ta <= P.deadline + EPS) inTime += pkgPart;
     if (pkgPart > 0) arrivals.push([ta, pkgPart]);
   };
@@ -1378,7 +1427,7 @@ function simulateRoute(s, tau, P, horizon, merchants, route, klickT) {
     else { x[0] -= units * cw; x[1] -= units * cs; x[2] -= units * ci; }
     ab(t, units);
   }
-  return {tau, pkgUnits, inTime, coins, doneAt, arrivals};
+  return {tau, pkgUnits, inTime, coins, doneAt, arrivals, minted, u1, u2, shipped};
 }
 
 /* Vergleich mit Handelsrouten für eine Aufstellung (17.11.2026). Routen wie im Abschnitt „Handelsrouten“: routenPlan
