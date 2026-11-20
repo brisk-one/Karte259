@@ -1139,3 +1139,41 @@ test("17.11.: Vergleich rechnet immer mindestens bis 3 Flaggendoppler, Empfehlun
   assert.ok(R.pkg.perK.length >= 3);
   assert.equal(R.recommend, 1);
 });
+
+test("20.11.: Flaggen je Prägedorf: gleiche Flaggen wie bisher, verschiedene mit bester Zuordnung (Dennis 9a, 10a)", () => {
+  const v = dreiHaufen();
+  const basis = {pkgPct: 300, decreeN: 1, intervalMin: 60, merchantBonus: true, production: true, minGainPct: 0};
+  const Pa = x => K.params(Object.assign({}, basis, x), WELT);
+  const P8 = Pa({flagLevel: 8}), P7 = Pa({flagLevel: 7}), P88 = Pa({flagLevels: [8, 8]}), P87 = Pa({flagLevels: [7, 8]});
+  // gleiche Flaggen: genau wie bisher
+  assert.equal(P88.flagMulti, false);
+  const a = K.plan(v, P8), b = K.plan(v, P88);
+  a.configs.forEach((c, q) => near(b.configs[q].coins, c.coins, 1e-9));
+  // 23 % und 22 %: stärkste zuerst, Zuordnung je Aufstellung
+  assert.deepEqual(P87.flagLevels, [8, 7]);
+  assert.ok(P87.flagMulti);
+  const r = K.plan(v, P87);
+  near(r.configs[0].coins, a.configs[0].coins, 1e-9);                 // ein Prägedorf: die stärkste Flagge
+  const c2 = r.configs[1], src = K.prepare(v, P87);
+  assert.equal(Object.keys(c2.siteFlag).length, 2);
+  const e = lv => new K.Planner(src, lv).evaluate(c2.sites).coins;
+  const e87 = new K.Planner(src, P87).evaluate(c2.sites);
+  assert.ok(e(P7) < e87.coins - 1e-6 && e87.coins < e(P8) - 1e-6);
+  // von Hand: Einheiten je Prägedorf bis Ende Erlass und danach, Münzen mit der Flagge des Dorfes; vertauscht weniger
+  const pl = new K.Planner(src, P87), u1 = [0, 0], u2 = [0, 0];
+  src.forEach((s, i) => { const j = pl.assign(i, c2.sites), q = c2.sites.indexOf(j), x = pl.get(i, j); u1[q] += x.u1; u2[q] += x.u2; });
+  const lv = c2.sites.map(j => e87.siteFlag[j]);
+  near(K.flaggenMuenzen(u1[0], u2[0], lv[0], P87) + K.flaggenMuenzen(u1[1], u2[1], lv[1], P87), e87.coins, 1e-6);
+  assert.ok(K.flaggenMuenzen(u1[0], u2[0], lv[1], P87) + K.flaggenMuenzen(u1[1], u2[1], lv[0], P87) <= e87.coins + 1e-9);
+  const gross = u1[0] + u2[0] >= u1[1] + u2[1] ? 0 : 1;
+  assert.equal(lv[gross], 8);
+  // einfache Rechnung je Dorf (details) und Gleichschritt nehmen dieselbe Zuordnung
+  near(r.details[1].rows.reduce((t, x) => t + x.coins, 0), e87.coins, 1e-6);
+  const cnt = K.toCnt([0, 0, 0, 1, 2], K.lastClick(P87));
+  const g = P => { const s = K.prepare(v, P); return K.lockstep(s, P, c2.sites, cnt, false).coins; };
+  const g87 = g(P87);
+  assert.ok(g(P7) < g87 - 1e-6 && g87 < g(P8) - 1e-6);
+  // 10a: mehr Prägedörfer als Flaggen, die übrigen mit der letzten
+  assert.deepEqual(K.flaggenFuer(3, P87), [8, 7, 7]);
+  if (r.configs[2]) assert.deepEqual(Object.values(r.configs[2].siteFlag).sort(), [7, 7, 8]);
+});

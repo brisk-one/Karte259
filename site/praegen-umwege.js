@@ -248,6 +248,7 @@ function plane(E) {
    von anderen Dörfern geschätzt als Zufluss), anfragen (Zieldörfer je Klick: Mittel, höchstens, Klicks mit
    Versand). */
 function start(src, P, sites, cnt, opt) {
+  if (Core.mitFlaggen) P = Core.mitFlaggen(src, P, sites);               // Flaggen je Prägedorf (20.11.2026)
   opt = opt || {};
   const politik = opt.politik === "umwege" ? "umwege" : "direkt";
   const fenster = opt.fenster != null ? +opt.fenster : 8, kNb = opt.kNb || 30, maxZiele = opt.maxZiele || 0;
@@ -280,7 +281,7 @@ function start(src, P, sites, cnt, opt) {
     z.busy += used; z.rueck.push([t + 2 * tau, used]);
     z.w -= a0; z.st -= a1; z.ir -= a2;
     if (j === site[i]) {
-      if (ta <= P.window + EPS) { const u = a0 / cw; coins += u / (1 - Core.reduction(ta, P)); units += u; }
+      if (ta <= P.window + EPS) { const u = a0 / cw; coins += u / (1 - Core.reduction(ta, Core.siteP ? Core.siteP(P, j) : P)); units += u; }
     } else { Z[j].an.push([ta, a0, a1, a2]); anZwischen += amt; }
   }
 
@@ -357,7 +358,7 @@ function start(src, P, sites, cnt, opt) {
 
   function ergebnis() {
     let c = coins, u = units, liegen = 0;
-    for (const j of sites) { const r = Core.siteRun(src[j], P, cnt, null); c += r.coins; u += r.minted; }
+    for (const j of sites) { const r = Core.siteRun(src[j], Core.siteP ? Core.siteP(P, j) : P, cnt, null); c += r.coins; u += r.minted; }
     for (const z of Z) if (z) for (const a of z.an) liegen += a[1] + a[2] + a[3];
     const summe = anfragen.reduce((a, v) => a + v, 0);
     return {politik, coins: c + lokal, units: u + lokal, lokal, anZwischen, verloren, liegenZwischen: liegen,

@@ -138,6 +138,9 @@ function params(input, world) {
     decreeN: input.decreeN != null ? Math.max(0, Math.min(2, input.decreeN | 0)) : (input.decree ? 1 : 0),
     merchantBonus: !!input.merchantBonus,
     flagLevel: Math.max(0, Math.min(9, input.flagLevel | 0)),
+    // Flaggen je Prägedorf (Wunsch Dennis 20.11.2026 18:04, 9a): Liste der Stufen, stärkste zuerst; die stärkste bekommt
+    // das Prägedorf mit den meisten Münzen (flaggenZuordnung), weitere Prägedörfer die letzte der Liste (10a)
+    flagLevels: null, flagMulti: false,
     intervalMin: Math.max(1, +input.intervalMin || 60),
     production: input.production !== false,
     prodFactor: +input.prodFactor > 0 ? +input.prodFactor : 1,
@@ -169,6 +172,9 @@ function params(input, world) {
     window: DOUBLER_HOURS,
   };
   if (input.minPerField > 0) P.minPerField = +input.minPerField / bonus;   // Feld „ohne Bonus“ überschreibt
+  const fl = (Array.isArray(input.flagLevels) && input.flagLevels.length ? input.flagLevels : [P.flagLevel])
+    .map(l => Math.max(0, Math.min(9, l | 0))).sort((a, b) => b - a);
+  P.flagLevels = fl; P.flagLevel = fl[0]; P.flagMulti = new Set(fl).size > 1;
   P.interval = P.intervalMin / 60;
   P.decree = P.decreeN > 0;
   P.decreeHours = DECREE_HOURS * P.decreeN;
@@ -180,6 +186,83 @@ function params(input, world) {
 const reduction = (t, P) => Math.min(0.95, 2 * FLAG_PCT[P.flagLevel] / 100
                                            + (P.decree && t <= P.decreeHours + EPS ? DECREE_PCT / 100 : 0));
 const coinPrice = (t, P) => P.unitRes * (1 - reduction(t, P));
+
+/* ---------- Flaggen je Prägedorf (Wunsch Dennis 20.11.2026 18:04, 9a und 10a) ----------
+   Der Münzpreis hängt nur von der Ankunftszeit (Erlass bis P.decreeHours) und der Flagge des Prägedorfs ab; was geprägt
+   wird, hängt nicht vom Preis ab. Je Prägedorf genügen deshalb zwei Summen: Münzeinheiten bis zum Ende des Erlasses
+   (u1) und danach bis zum Ende der 48 h (u2). Daraus die Münzen für jede Flagge, und die beste Zuordnung der Flaggen.
+   P.siteFlag {Dorfindex: Stufe} hält die Zuordnung einer Aufstellung; siteP(P, j) ist P mit der Flagge von j. */
+const imErlass = (t, P) => P.decree && t <= P.decreeHours + EPS;
+function flaggenMuenzen(u1, u2, lvl, P) {
+  const f = 2 * FLAG_PCT[lvl] / 100;
+  return u1 / (1 - Math.min(0.95, f + (P.decree ? DECREE_PCT / 100 : 0))) + u2 / (1 - Math.min(0.95, f));
+}
+// Flaggen für k Prägedörfer: die stärksten k der Liste, fehlende mit der letzten aufgefüllt (10a)
+function flaggenFuer(k, P) {
+  const fl = P.flagLevels || [P.flagLevel], out = [];
+  for (let q = 0; q < k; q++) out.push(fl[Math.min(q, fl.length - 1)]);
+  return out;
+}
+// beste Zuordnung: bis 7 Prägedörfer alle Reihenfolgen, darüber nach Größe (meiste Einheiten die stärkste Flagge)
+function flaggenZuordnung(sites, u1, u2, P) {
+  const fl = flaggenFuer(sites.length, P), wert = (perm) => perm.reduce((s, lvl, q) => s + flaggenMuenzen(u1[q], u2[q], lvl, P), 0);
+  let best = null, bw = -Infinity;
+  if (sites.length <= 7) {
+    const perm = (rest, akt) => {
+      if (!rest.length) { const w = wert(akt); if (w > bw + 1e-9) { bw = w; best = akt.slice(); } return; }
+      const gesehen = new Set();
+      rest.forEach((l, q) => { if (gesehen.has(l)) return; gesehen.add(l); akt.push(l); perm(rest.slice(0, q).concat(rest.slice(q + 1)), akt); akt.pop(); });
+    };
+    perm(fl, []);
+  } else {
+    const ord = sites.map((_, q) => q).sort((a, b) => (u1[b] + u2[b]) - (u1[a] + u2[a]));
+    best = new Array(sites.length); ord.forEach((q, r) => { best[q] = fl[r]; }); bw = wert(best);
+  }
+  const siteFlag = {};
+  sites.forEach((j, q) => { siteFlag[j] = best[q]; });
+  return {siteFlag, coins: bw};
+}
+const P_SITE = new WeakMap();
+function siteP(P, j) {
+  const lvl = P.siteFlag ? P.siteFlag[j] : null;
+  if (lvl == null || lvl === P.flagLevel) return P;
+  let m = P_SITE.get(P);
+  if (!m) { m = new Map(); P_SITE.set(P, m); }
+  let q = m.get(lvl);
+  if (!q) { q = Object.assign({}, P, {flagLevel: lvl}); m.set(lvl, q); }
+  return q;
+}
+/* Zuordnung für eine Aufstellung aus der einfachen Rechnung (wie Planner.evaluate, damit Suche und Zeitplan dieselbe
+   Zuordnung nehmen). Ohne verschiedene Flaggen bleibt P unverändert, die Rechnung also genau wie bisher. */
+const MIT_FLAGGEN = new WeakMap(), SIM_EINHEITEN = new WeakMap();
+function mitFlaggen(src, P, sites) {
+  if (!P.flagMulti || !sites || !sites.length) return P;
+  const key = sites.join(",");
+  if (P.siteFlag && P.siteFlagKey === key) return P;
+  const basis = P.flagBasis || P;
+  let m = MIT_FLAGGEN.get(src);
+  if (!m) { m = new Map(); MIT_FLAGGEN.set(src, m); }
+  let e = m.get(key);
+  if (!e || e.basis !== basis) {
+    const u1 = sites.map(() => 0), u2 = sites.map(() => 0), pos = new Map(sites.map((j, q) => [j, q]));
+    // je Dorf und Laufzeit gemerkt: die Suche „Nächstes Prägedorf adeln“ rechnet viele Aufstellungen, die sich nur in
+    // einem Prägedorf unterscheiden
+    let proDorf = SIM_EINHEITEN.get(basis);
+    if (!proDorf) { proDorf = new WeakMap(); SIM_EINHEITEN.set(basis, proDorf); }
+    src.forEach((s, i) => {
+      const j = nearestSite(src, i, sites), tau = i === j ? 0 : travelHours(s, src[j], basis);
+      let t = proDorf.get(s);
+      if (!t) { t = new Map(); proDorf.set(s, t); }
+      let r = t.get(tau);
+      if (!r) { const q = simulate(s, tau, basis, basis.window); r = [q.u1, q.u2]; t.set(tau, r); }
+      u1[pos.get(j)] += r[0]; u2[pos.get(j)] += r[1];
+    });
+    e = {basis, siteFlag: flaggenZuordnung(sites, u1, u2, basis).siteFlag, P: null};
+    m.set(key, e);
+  }
+  if (!e.P || e.P.flagBasisFrom !== P) e.P = Object.assign({}, P, {siteFlag: e.siteFlag, siteFlagKey: key, flagBasis: basis, flagBasisFrom: P});
+  return e.P;
+}
 
 /* ---------- Dörfer vorbereiten ----------
    Mit P.minMarket rechnet jedes Dorf mindestens mit dieser Marktstufe (Ausbau vor dem Start, Wunsch Dennis
@@ -233,7 +316,7 @@ function simulate(s, tau, P, horizon, merchants, keepArrivals) {
   // Mit P.ignoreRatio schicken die Händler alles, was im Dorf liegt; gerechnet in Rohstoffen / Münzpreis
   const avail = () => P.ignoreRatio ? (pw + ps + pi) / P.unitRes : Math.min(pw / cw, ps / cs, pi / ci);
   const pkgUnits = avail();
-  let shipped = 0, coins = 0, minted = 0, inTime = 0, doneAt = pkgUnits <= EPS ? 0 : Infinity, lastArrival = 0;
+  let shipped = 0, coins = 0, minted = 0, inTime = 0, doneAt = pkgUnits <= EPS ? 0 : Infinity, lastArrival = 0, u1 = 0, u2 = 0;
   const qT = [], qN = [];
   let qh = 0, busy = 0;
   const arrivals = keepArrivals ? [] : null;
@@ -259,14 +342,14 @@ function simulate(s, tau, P, horizon, merchants, keepArrivals) {
       const ta = t + tau, pkgPart = Math.max(0, Math.min(units, pkgUnits - shipped));
       shipped += units;
       if (pkgPart > 0 && doneAt === Infinity && shipped >= pkgUnits - 1e-7) doneAt = ta;
-      if (ta <= P.window + EPS) { coins += units / (1 - reduction(ta, P)); minted += units; }
+      if (ta <= P.window + EPS) { coins += units / (1 - reduction(ta, P)); minted += units; if (imErlass(ta, P)) u1 += units; else u2 += units; }
       if (pkgPart > 0 && ta <= P.deadline + EPS) inTime += pkgPart;
       if (ta > lastArrival) lastArrival = ta;
       if (arrivals) arrivals.push([ta, pkgPart, units]);
     }
     if (t >= P.window && shipped >= pkgUnits - 1e-7) break;   // Pakete weg, Prägezeit vorbei
   }
-  return {tau, pkgUnits, inTime, coins, minted, doneAt, shipped, arrivals};
+  return {tau, pkgUnits, inTime, coins, minted, doneAt, shipped, arrivals, u1, u2};
 }
 
 /* ---------- Standortsuche ---------- */
@@ -291,12 +374,17 @@ Planner.prototype.assign = function (i, sites) {
 };
 Planner.prototype.evaluate = function (sites) {
   let coins = 0, minted = 0, pkg = 0, inTime = 0, doneAt = 0, spread = 0;
+  const multi = this.P.flagMulti, u1 = multi ? sites.map(() => 0) : null, u2 = multi ? sites.map(() => 0) : null;
   for (let i = 0; i < this.n; i++) {
-    const r = this.get(i, this.assign(i, sites));
+    const c = this.assign(i, sites), r = this.get(i, c);
     coins += r.coins; minted += r.minted; pkg += r.pkgUnits; inTime += r.inTime; spread += r.pkgUnits * r.tau;
     if (r.doneAt > doneAt) doneAt = r.doneAt;
+    if (multi) { const q = sites.indexOf(c); u1[q] += r.u1; u2[q] += r.u2; }
   }
-  return {sites, coins, minted, pkg, inTime, share: pkg > EPS ? inTime / pkg : 1, doneAt, spread};
+  // verschiedene Flaggen: Münzen je Prägedorf mit der besten Zuordnung (sonst wie bisher, alle mit P.flagLevel)
+  let siteFlag = null;
+  if (multi) { const z = flaggenZuordnung(sites, u1, u2, this.P); coins = z.coins; siteFlag = z.siteFlag; }
+  return {sites, coins, minted, pkg, inTime, share: pkg > EPS ? inTime / pkg : 1, doneAt, spread, siteFlag};
 };
 // Reihenfolge: mehr Münzen, dann mehr Paketmenge rechtzeitig, dann früher fertig, dann kürzere Wege
 function better(a, b) {
@@ -407,9 +495,10 @@ Planner.prototype.bestK = function (cands, k, prevSites) {
 function details(src, P, sites, planner) {
   const rows = [], curve = [];
   let doneAt = 0;
+  P = mitFlaggen(src, P, sites);
   for (const s of src) {
     const site = planner.assign(s.i, sites), tau = s.i === site ? 0 : travelHours(s, src[site], P);
-    const r = simulate(s, tau, P, LONG_HORIZON, null, true);
+    const r = simulate(s, tau, siteP(P, site), LONG_HORIZON, null, true);
     let status = "ok", need = null;
     if (r.inTime < r.pkgUnits - 1e-7) {
       status = "weit";
@@ -783,11 +872,12 @@ function poolWahl(src, P, sites, cnt, kand, punkte, setze, all, maxEval) {
    Ergebnis: dorf [{i, vorab: [Holz, Lehm, 0], plus}], coins0/1, units0/1, rest0/1 (liegen gebliebene Rohstoffe
    je Rohstoff vor und nach dem Tausch), ov0/1. */
 function vorabTausch(src, P, sites, cnt) {
+  P = mitFlaggen(src, P, sites);
   const base = lockstep(src, P, sites, cnt, true), {site, tau} = src._ls, isSite = new Set(sites);
-  const sink = acc => (ta, a0) => { acc.c += a0 / P.coin.wood / (1 - reduction(ta, P)); acc.u += a0 / P.coin.wood; };
+  const sink = (acc, Pz) => (ta, a0) => { acc.c += a0 / P.coin.wood / (1 - reduction(ta, Pz)); acc.u += a0 / P.coin.wood; };
   const one = i => {
-    if (isSite.has(i)) { const r = siteRun(src[i], P, cnt, null); return {c: r.coins, ov: 0, u: r.minted}; }
-    const acc = {c: 0, u: 0}, r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, sink(acc), true, null, null);
+    if (isSite.has(i)) { const r = siteRun(src[i], siteP(P, i), cnt, null); return {c: r.coins, ov: 0, u: r.minted}; }
+    const acc = {c: 0, u: 0}, r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, sink(acc, siteP(P, site[i])), true, null, null);
     return {c: acc.c + r.lokal, ov: r.overflow, u: acc.u + r.lokal};
   };
   const all = () => { const r = lockstep(src, P, sites, cnt, false); return {c: r.coins, ov: r.ov, u: r.units}; };
@@ -849,6 +939,7 @@ function vorabTausch(src, P, sites, cnt) {
    holz, plus, site, jetzt: [Holz, Lehm, Eisen], nach}], coins0, coins1, ov0, ov1, jetzt, nach (Summen über die Dörfer
    mit Lagerstand), mitLager, ohneLager, zuWenig (Eisen unter einer Händlerlast), ohneNutzen}. */
 function lagerTausch(src, P, sites, cnt, lager, kurs) {
+  P = mitFlaggen(src, P, sites);
   const unit = P.carryMarkt || P.carry / (P.merchantBonus ? 1.5 : 1);
   const pro = Math.max(1, Math.round(unit * (kurs > 0 ? kurs : 1))), isSite = new Set(sites);
   const X = src.map(s => {
@@ -863,11 +954,11 @@ function lagerTausch(src, P, sites, cnt, lager, kurs) {
   };
   try {
     src.forEach((s, i) => { if (X[i]) setze(i, 0, 0); else s.vorab = null; });
-    const base = lockstep(src, P, sites, cnt, true), {tau} = src._ls;
-    const sink = acc => (ta, a0) => { acc.c += a0 / P.coin.wood / (1 - reduction(ta, P)); acc.u += a0 / P.coin.wood; };
+    const base = lockstep(src, P, sites, cnt, true), {tau, site} = src._ls;
+    const sink = (acc, Pz) => (ta, a0) => { acc.c += a0 / P.coin.wood / (1 - reduction(ta, Pz)); acc.u += a0 / P.coin.wood; };
     const one = i => {
-      if (isSite.has(i)) { const r = siteRun(src[i], P, cnt, null); return {c: r.coins, ov: 0, u: r.minted}; }
-      const acc = {c: 0, u: 0}, r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, sink(acc), true, null, null);
+      if (isSite.has(i)) { const r = siteRun(src[i], siteP(P, i), cnt, null); return {c: r.coins, ov: 0, u: r.minted}; }
+      const acc = {c: 0, u: 0}, r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, sink(acc, siteP(P, site[i])), true, null, null);
       return {c: acc.c + r.lokal, ov: r.overflow, u: acc.u + r.lokal};
     };
     const all = () => { const r = lockstep(src, P, sites, cnt, false); return {c: r.coins, ov: r.ov, u: r.units}; };
@@ -1001,23 +1092,25 @@ const ROUTE_N = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 70, 80
    größten positiven Gewinne (Route minus Anfordern) von höchstens 250 Dörfern. */
 const ROUTEN_DOERFER = 250;
 function routenPlan(src, P, sites, cnt, rMax, nurDt) {
+  P = mitFlaggen(src, P, sites);
   const base = lockstep(src, P, sites, cnt, false), {site, tau} = src._ls;
   const cands = [];
   for (const j of sites) for (const dt of (nurDt || ROUTE_DT)) for (const n of ROUTE_N) cands.push({site: j, dt, n, a: routeMenge(n, P)});
   const lief = src.map((_, i) => i).filter(i => site[i] !== i);
   const val = new Map(), ovv = new Map(), info = new Map(), gesch = new Map();
   let ov0 = 0, pkSum = 0, eigen = 0;
-  for (const j of sites) { const r = siteRun(src[j], P, cnt, null); eigen += r.coins; pkSum += r.pkgRes; }
+  for (const j of sites) { const r = siteRun(src[j], siteP(P, j), cnt, null); eigen += r.coins; pkSum += r.pkgRes; }
   const leer = new Map(), L = P.routenDoerfer || ROUTEN_DOERFER, grenze = lief.length > L;
   // grenze: mehr Lieferdörfer als Routen möglich, die übrigen werden angefordert (Münzen und Überlauf beim Anfordern)
   const klick = new Float64Array(src.length), klickOv = new Float64Array(src.length);
   for (const i of lief) {
     const r0 = villageRun(src[i], tau[i], P, cnt, 0, null, false);              // ohne Route: nur Pakete, kein Versand
     leer.set(i, r0.overflow); ov0 += r0.overflow; pkSum += r0.pkgRes;
+    const Pz = siteP(P, site[i]);                                              // Flagge des Prägedorfs
     if (grenze) {
       let m = 0;
       const rk = villageRun(src[i], tau[i], P, cnt, src[i].merchants, (ta, a0, a1, a2) => {
-        m += Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron) / (1 - reduction(ta, P));
+        m += Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron) / (1 - reduction(ta, Pz));
       }, true);
       klick[i] = m + (rk.lokal || 0); klickOv[i] = rk.overflow;
     }
@@ -1026,7 +1119,7 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
       if (c.site !== site[i] || c.n > src[i].merchants) { v[ci] = -1; return; }
       let coins = 0;
       const r = routeRun(src[i], tau[i], P, cnt, c.a, c.dt, (ta, a0, a1, a2) => {
-        if (ta <= P.window + EPS) coins += Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron) / (1 - reduction(ta, P));
+        if (ta <= P.window + EPS) coins += Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron) / (1 - reduction(ta, Pz));
       });
       v[ci] = coins; o[ci] = r.overflow; sk[ci] = r.skipped; sn[ci] = r.sent;
     });
@@ -1167,19 +1260,21 @@ function routeKlickRun(s, tau, P, cnt, route, klickT, sink, acc) {
 
 /* Ganzes Konto wie lockstep, je Lieferdorf mit seiner Route (routeOf[i] oder null) und Klicks alle klickT Stunden. */
 function lockstepRouten(src, P, sites, cnt, routeOf, klickT, detail) {
+  P = mitFlaggen(src, P, sites);
   const n = src.length, K = cnt.length, site = src.map((_, i) => nearestSite(src, i, sites));
   const tau = src.map((s, i) => site[i] === i ? 0 : travelHours(s, src[site[i]], P));
   const m = detail ? mengenNeu() : null;
   let coins = 0, units = 0, ovSum = 0, pkSum = 0, viaRoute = 0, viaKlick = 0;
   const bins = P.ignoreRatio ? new Map(sites.map(j => [j, new Array(K + 1)])) : null;
-  let cur = null;
-  const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, P)); units += a0 / P.coin.wood; };
+  let cur = null, Pz = P;                                                    // Pz: P mit der Flagge des Prägedorfs
+  const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, Pz)); units += a0 / P.coin.wood; };
   // Route im Prägeverhältnis: geprägt wird nach dem knappsten Rohstoff (Menge auf 100 abgerundet)
-  const sinkRoute = (ta, a0, a1, a2) => { const u = Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron); coins += u / (1 - reduction(ta, P)); units += u; };
+  const sinkRoute = (ta, a0, a1, a2) => { const u = Math.min(a0 / P.coin.wood, a1 / P.coin.stone, a2 / P.coin.iron); coins += u / (1 - reduction(ta, Pz)); units += u; };
   const sinkBin = (ta, a0, a1, a2) => { const k = Math.min(K, Math.floor(ta / P.interval + EPS)); (cur[k] || (cur[k] = [])).push(ta, a0, a1, a2); };
   for (let i = 0; i < n; i++) {
     if (site[i] === i) continue;
     if (bins) cur = bins.get(site[i]);
+    Pz = siteP(P, site[i]);
     const acc = m ? {ov: [0, 0, 0], arr: [0, 0, 0]} : null;
     const r = routeKlickRun(src[i], tau[i], P, cnt, routeOf[i] || null, klickT, bins ? sinkBin : routeOf[i] ? sinkRoute : sinkRatio, acc);
     ovSum += r.overflow; pkSum += r.pkgRes; viaRoute += r.viaRoute; viaKlick += r.viaKlick;
@@ -1187,7 +1282,7 @@ function lockstepRouten(src, P, sites, cnt, routeOf, klickT, detail) {
   }
   for (const j of sites) {
     const acc = m ? {arr: [0, 0, 0], sov: m.sov} : null;
-    const r = siteRun(src[j], P, cnt, bins ? bins.get(j) : null, acc);
+    const r = siteRun(src[j], siteP(P, j), cnt, bins ? bins.get(j) : null, acc);
     coins += r.coins; units += r.minted; pkSum += r.pkgRes;
     if (m) mengenDorf(m, P, r.pkgRes / 3, [0, 0, 0], acc.arr);
   }
@@ -1252,6 +1347,7 @@ function simulateRoute(s, tau, P, horizon, merchants, route, klickT) {
    mit Routen (Münzen, Ankunft, Engpass je Dorf) und die nötige Klickfrequenz zusätzlich zu den Routen
    (stufen: Anteil rechtzeitig je Klickabstand der Leiter, Infinity = ohne Anfordern). */
 function vergleichRouten(src, P, sites, pos, rMax, nurDt, leiter) {
+  P = mitFlaggen(src, P, sites);
   const cnt = toCnt(pos || [], lastClick(P));
   const rp = routenPlan(src, P, sites, cnt, rMax, nurDt);
   delete src._ls;
@@ -1266,7 +1362,7 @@ function vergleichRouten(src, P, sites, pos, rMax, nurDt, leiter) {
   const rows = [], curve = [];
   let doneAt = 0, einfach = 0, pkg = 0, inTime = 0;
   src.forEach((s, i) => {
-    const tau = tauOf(i), r = simulateRoute(s, tau, P, LONG_HORIZON, null, routeOf[i], P.interval);
+    const tau = tauOf(i), r = simulateRoute(s, tau, siteP(P, site[i]), LONG_HORIZON, null, routeOf[i], P.interval);
     let status = "ok";
     if (r.inTime < r.pkgUnits - 1e-7) {
       status = "weit";
@@ -1471,6 +1567,7 @@ function nearestSite(src, i, sites) {
    ganz geprägt, die Münzen werden deshalb direkt beim Versand gezählt. Mit ignoreRatio sammelt das Prägedorf
    die Lieferungen und prägt nach dem knappsten Rohstoff. detail: Überlauf je Dorf und je Klick. */
 function lockstep(src, P, sites, cnt, detail) {
+  P = mitFlaggen(src, P, sites);
   const n = src.length, K = cnt.length;
   const key = sites.join(",");
   if (!src._ls || src._ls.key !== key || src._ls.P !== P) {
@@ -1482,8 +1579,8 @@ function lockstep(src, P, sites, cnt, detail) {
   const m = detail ? mengenNeu() : null;
   let coins = 0, units = 0, ovSum = 0, pkSum = 0, lokal = 0;
   const bins = P.ignoreRatio ? new Map(sites.map(j => [j, new Array(K + 1)])) : null;
-  let cur = null;
-  const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, P)); units += a0 / P.coin.wood; };
+  let cur = null, Pz = P;                                                    // Pz: P mit der Flagge des Prägedorfs
+  const sinkRatio = (ta, a0) => { coins += a0 / P.coin.wood / (1 - reduction(ta, Pz)); units += a0 / P.coin.wood; };
   const sinkBin = (ta, a0, a1, a2) => {
     const k = Math.min(K, Math.floor(ta / P.interval + EPS));
     (cur[k] || (cur[k] = [])).push(ta, a0, a1, a2);
@@ -1491,6 +1588,7 @@ function lockstep(src, P, sites, cnt, detail) {
   for (let i = 0; i < n; i++) {
     if (site[i] === i) continue;
     if (bins) cur = bins.get(site[i]);
+    Pz = siteP(P, site[i]);
     const acc = m ? {ov: [0, 0, 0], arr: [0, 0, 0], lok: [0, 0, 0]} : null;
     const r = villageRun(src[i], tau[i], P, cnt, src[i].merchants, bins ? sinkBin : sinkRatio, true, out && out.ovClick, acc);
     ovSum += r.overflow; pkSum += r.pkgRes;
@@ -1501,7 +1599,7 @@ function lockstep(src, P, sites, cnt, detail) {
   }
   for (const j of sites) {
     const acc = m ? {arr: [0, 0, 0], sov: m.sov} : null;
-    const r = siteRun(src[j], P, cnt, bins ? bins.get(j) : null, acc);
+    const r = siteRun(src[j], siteP(P, j), cnt, bins ? bins.get(j) : null, acc);
     coins += r.coins; units += r.minted; pkSum += r.pkgRes;
     if (out) out.pkgRes[j] = r.pkgRes;
     if (m) mengenDorf(m, P, r.pkgRes / 3, [0, 0, 0], acc.arr);
@@ -1792,7 +1890,8 @@ function planPackages(villages, P0, passive) {
 function perKEintrag(o) {
   const pos = o.cv.curve[o.n].pos, c = toCnt(pos, o.cv.K), d = lockstep(o.R.src, o.R.P, o.sites, c, true);
   const e = {k: o.k, n: o.n, coins: o.coins, ohne: ohneUeberlauf(o.R.src, o.R.P, o.sites, c), ov: d.ov, pos,
-             units: d.units, lokal: d.lokal, mengen: d.mengen, sites: o.sites.map(i => o.R.src[i])};
+             units: d.units, lokal: d.lokal, mengen: d.mengen, sites: o.sites.map(i => o.R.src[i]),
+             siteFlag: mitFlaggen(o.R.src, o.R.P, o.sites).siteFlag || null};         // Flagge je Prägedorf (20.11.2026)
   delete o.R.src._ls;
   return e;
 }
@@ -1895,7 +1994,7 @@ function aufstellungsCache() {
 }
 
 const api = {ROUTEN_DOERFER, anpassenWarm, festAufstellung, festDorf, adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
-             WORLD_DEFAULT, K_MAX, K_MIN, storageCap, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
+             WORLD_DEFAULT, K_MAX, K_MIN, storageCap, mitFlaggen, siteP, flaggenZuordnung, flaggenMuenzen, flaggenFuer, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, routeKlickRun, lockstepRouten, simulateRoute, vergleichRouten, noetigMitRouten, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,

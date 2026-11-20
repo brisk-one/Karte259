@@ -37,6 +37,11 @@
   .pr-mhead{display:flex; gap:6px; align-items:center; font-size:12px; font-weight:700; cursor:pointer}
   .pr-mhead input{accent-color:var(--accent); margin:0}
   .pr-mnote{margin:0; font-size:11px; color:var(--muted); line-height:1.35}
+  /* Flaggen je Prägedorf (Wunsch Dennis 20.11.2026 18:04) */
+  .pr-flaggen{display:contents}
+  .pr-flaggen .pick button{border:0; background:none; color:var(--muted); cursor:pointer; padding:0 4px; font:inherit; line-height:1}
+  .pr-flaggen .pick button:hover{color:var(--ink)}
+  #flag-note{flex-basis:100%}
   /* Einklappbare Abschnitte (Wunsch Dennis 17.11.2026 16:17) */
   .panel>h2.klappbar{cursor:pointer}
   .pr-klapp{flex:none; display:inline-grid; place-items:center; width:20px; height:20px; margin:-3px -6px -3px -5px; padding:0;
@@ -422,8 +427,12 @@
             <span class="pr-mnote" id="gain-note"></span>
           </div>
         </div>
-        <div class="pr-row">
+        <div class="pr-row" id="flag-row">
           <label class="pick"><span>Münzkosten-Flagge</span><select id="flag" aria-label="Stufe der Münzkosten-Flagge"></select></label>
+          <span id="flag-extra" class="pr-flaggen"></span>
+          <button class="tw" type="button" id="flag-add">weitere Flagge</button>
+          <input type="hidden" id="flaggen" value="">
+          <span class="pr-mnote" id="flag-note"></span>
         </div>
         <div class="pr-row">
           <label class="pick"><span>Rohstoffe anfordern</span><select id="interval" aria-label="Klickfrequenz"></select></label>
@@ -711,13 +720,56 @@ for (let L = 0; L <= 30; L++) {
   o.textContent = L ? "Stufe " + L + " (" + nf.format(K.storageCap(L)) + ")" : "wie im Dorf";
   $("minstorage").appendChild(o);
 }
-K.FLAG_PCT.forEach((p, lvl) => {
-  if (!lvl) return;
-  const o = document.createElement("option"); o.value = lvl;
-  o.textContent = "Stufe " + lvl + ": −" + p + " %, verdoppelt −" + 2 * p + " %";
-  $("flag").appendChild(o);
-});
+function flaggenOptionen(sel) {
+  K.FLAG_PCT.forEach((p, lvl) => {
+    if (!lvl) return;
+    const o = document.createElement("option"); o.value = lvl;
+    o.textContent = "Stufe " + lvl + ": −" + p + " %, verdoppelt −" + 2 * p + " %";
+    sel.appendChild(o);
+  });
+}
+flaggenOptionen($("flag"));
 $("flag").value = "9";
+/* Weitere Flaggen (Wunsch Dennis 20.11.2026 18:04, 9a): je Prägedorf eine Flagge; die Stufen der weiteren stehen im
+   versteckten Feld #flaggen („7,7“), damit Merken, Stand speichern und Laden sie wie jedes Feld mitnehmen. Die
+   Zuordnung zu den Prägedörfern macht die Rechnung (stärkste ins Prägedorf mit den meisten Münzen). */
+function flaggenExtra() { return $("flaggen").value.split(",").map(x => +x).filter(x => x >= 1 && x <= 9); }
+function flaggenNotiz() {
+  const n = flaggenExtra().length;
+  $("flag-row").querySelector("label > span").textContent = n ? "1. Flagge" : "Münzkosten-Flagge";
+  $("flag-note").textContent = n ? "Die stärkste Flagge kommt ins Prägedorf mit den meisten Münzen, die nächste ins zweitgrößte; "
+    + "gibt es mehr Prägedörfer als Flaggen, bekommen die übrigen die schwächste. Eine Flagge lässt sich erst nach 24 h umsetzen." : "";
+  $("flag-add").textContent = n ? "noch eine Flagge" : "weitere Flagge";
+  $("flag-add").hidden = n >= 7;
+}
+function flaggenAufbauen() {
+  const box = $("flag-extra");
+  box.textContent = "";
+  flaggenExtra().forEach((lvl, q) => {
+    const l = document.createElement("label"); l.className = "pick";
+    const t = document.createElement("span"); t.textContent = (q + 2) + ". Flagge";
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", "Stufe der " + (q + 2) + ". Münzkosten-Flagge");
+    flaggenOptionen(sel); sel.value = String(lvl);
+    const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", (q + 2) + ". Flagge entfernen");
+    sel.addEventListener("change", () => { const a = flaggenExtra(); a[q] = +sel.value; flaggenSetzen(a); });
+    x.addEventListener("click", () => { const a = flaggenExtra(); a.splice(q, 1); flaggenSetzen(a); });
+    l.append(t, sel, x); box.appendChild(l);
+  });
+  flaggenNotiz();
+}
+function flaggenSetzen(a) {
+  $("flaggen").value = a.join(",");
+  flaggenAufbauen();
+  schedule(); merkenSpaeter();
+}
+flaggenAufbauen();
+$("flag-add").addEventListener("click", () => {
+  const a = flaggenExtra();
+  a.push(a.length ? a[a.length - 1] : +$("flag").value);
+  flaggenSetzen(a);
+  const sels = $("flag-extra").querySelectorAll("select");
+  if (sels.length) sels[sels.length - 1].focus();
+});
 K.LADDER.forEach(m => { const o = document.createElement("option"); o.value = m; o.textContent = "alle " + ivl(m); $("interval").appendChild(o); });
 $("interval").value = "60";
 // zweites Feld im Vergleich (17.11.2026): immer gleich wie oben, Änderung dort gilt für die ganze Rechnung
@@ -739,7 +791,8 @@ function inputs() {
           pkgSize: +$("pkgsize").value || 30, pkgCount: +$("pkgcount").value || null, fdCount: +$("fdcount").value || null, startPct: +$("start").value || 0,
           decreeN: +$("decree").value || 0, minStorage: +$("minstorage").value || 0, ignoreRatio: $("ignoreratio").checked, mintLocal: $("mintlocal").checked,
           optThreshold: +$("thr").value || 90,
-          merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, intervalMin: +$("interval").value,
+          merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, flagLevels: [+$("flag").value].concat(flaggenExtra()),
+          intervalMin: +$("interval").value,
           production: $("prod").checked, prodFactor: pf > 0 ? pf : null, minGainPct: +$("gain").value || 0,
           minMarket: +$("minmarket").value || 0,
           minPerField: mpf > 0 && Math.abs(mpf - WORLD.base_min_per_field / WORLD.speed) > 1e-6 ? mpf : null};
@@ -842,6 +895,7 @@ function eingabenAnwenden(d) {
   // festgelegtes Prägedorf (17.11.2026): bleibt gemerkt, seine Spalte wird nach dem Laden gewählt
   FEST = festGueltig(d.fest) ? d.fest : null;
   FEST_NEU = !!FEST;
+  flaggenAufbauen();                                                           // weitere Flaggen aus #flaggen (20.11.2026)
   return d.mode === "max" ? "max" : "pct";
 }
 function eingabenLoeschen() {
@@ -853,6 +907,7 @@ function eingabenLoeschen() {
   });
   OFF.clear();
   FEST = null; WAHL_FEST = false;
+  flaggenAufbauen();
   LAGER = K.parseLager("");
   lagerStatus();
   SITZ = null; UMWEGE = null;
@@ -1193,6 +1248,17 @@ function needSmall(n) {
   return q.kind === "voll" ? "für 100 % rechtzeitig" : "100 % nicht erreichbar, höchstens " + pct0(q.top);
 }
 function siteName(s) { return s.name + " " + coord(s) + (s.neu ? " (festgelegt)" : ""); }
+// Flaggen (20.11.2026): Kurzform „Flagge Stufe 8“ oder „Flaggen 8, 7“; je Prägedorf die zugeordnete Stufe
+function flaggenKurz(P) { return P.flagMulti ? "Flaggen Stufe " + P.flagLevels.join(", ") : "Flagge Stufe " + P.flagLevel; }
+function flaggenVon(n) {
+  const o = perKOf(n), c = RESULT.configs && RESULT.configs[n - 1];
+  return (o && o.siteFlag) || (c && c.siteFlag) || null;
+}
+// Prägedorf mit seiner Flagge, nur wenn verschiedene Flaggen eingegeben sind
+function siteMitFlagge(s, sf) {
+  const P = RESULT && RESULT.P, l = sf && sf[s.i];
+  return siteName(s) + (P && P.flagMulti && l != null ? " mit Flagge −" + K.FLAG_PCT[l] + " %" : "");
+}
 // Marktstufe eines vorbereiteten Dorfs, mit Ausbau auf die Mindeststufe als „17 → 20“
 function marketText(s) { return s.b.market > s.marketFrom ? s.marketFrom + " → " + s.b.market : String(s.b.market); }
 function engpass(d) {
@@ -1339,7 +1405,7 @@ function renderRecommendation() {
   const R = RESULT, P = R.P, n = R.recommend, a = aufstellung(n), nxt = n < nNormal() ? R.configs[n] : null, pk = R.pkg;
   const title = $("rec-title");
   title.replaceChildren();
-  const names = joinUnd(a.sites.map(siteName));
+  const sfR = flaggenVon(n), names = joinUnd(a.sites.map(s => siteMitFlagge(s, sfR)));
   title.appendChild(document.createTextNode(n === 1 ? "1 Flaggendoppler in " + names : fdName(n) + ": " + names));
   const muenzen = pk ? pk.detail.coins : a.r.coins, ad = adel(muenzen);
   const sub = el("small", null, nf.format(Math.round(muenzen)) + " Münzen in 48 h mit "
@@ -1347,7 +1413,7 @@ function renderRecommendation() {
     + (P.decreeN === 2 ? ", alle 48 h mit Erlass" : P.decree ? ", die ersten 24 h mit Erlass" : "")
     + (ad ? ", zusammen mit dem Vorrat " + nf.format(ad.muenzen) + " Münzen für " + adelZahl(ad) : ""));
   title.appendChild(sub);
-  $("rec-hint").textContent = (P.fdCount ? fdName(P.fdCount) + " vorgegeben · " : "") + (pk ? pakete(pk.chosen) + " zu " + P.pkgSize + " %" : nf.format(P.pkgPct) + " % Pakete") + " · Flagge Stufe " + P.flagLevel + " · Klick alle " + ivl(P.intervalMin)
+  $("rec-hint").textContent = (P.fdCount ? fdName(P.fdCount) + " vorgegeben · " : "") + (pk ? pakete(pk.chosen) + " zu " + P.pkgSize + " %" : nf.format(P.pkgPct) + " % Pakete") + " · " + flaggenKurz(P) + " · Klick alle " + ivl(P.intervalMin)
     + (P.minMarket ? " · Markt mind. " + P.minMarket : "") + (P.minStorage ? " · Speicher mind. " + P.minStorage : "")
     + (P.merchantBonus ? " · Händlerbonus" : "") + (P.decreeN ? " · Erlass " + P.decreeN + "×" : "") + (P.ignoreRatio ? " · Verhältnis ignoriert" : "") + (P.mintLocal ? " · Prägen in Lieferdörfern" : "");
 
@@ -1958,7 +2024,9 @@ function renderRouten() {
   const zum = x => { const d = Math.round(x - base); return d ? " · " + (d > 0 ? "+" : "-") + ganz(Math.abs(d)) + " zum Anfordern" : " · wie Anfordern"; };
   rt.plans.forEach((x, q) => zeile(x.R === 1 ? "1 Route" : x.R + " Routen", x.coins, x === pl ? "on" : null,
     zum(x.coins) + (q ? " (Route " + x.R + ": +" + ganz(x.coins - rt.plans[q - 1].coins) + ")" : "")));
-  zeile("Anfordern", base, "ref", " · Vergleichswert");
+  // Unterschied zur gewählten Zahl Routen in Klammern (Wunsch Dennis 20.11.2026 18:27): „31.612 (−1.000)“
+  const zurWahl = Math.round(base - pl.coins);
+  zeile("Anfordern", base, "ref", (zurWahl ? " (" + (zurWahl < 0 ? "−" : "+") + ganz(Math.abs(zurWahl)) + ")" : " (gleich)") + " · Vergleichswert");
   box.appendChild(kurve);
   // je Route eine Karte mit allem, was im Account-Manager einzutragen ist (3a)
   const grid = el("div", "pr-routen");
@@ -2719,7 +2787,7 @@ function renderCompare() {
   };
   const pk = R.pkg, Z = RR ? RR.map(v => ({n: perKOf(v.k) ? perKOf(v.k).n : null, nach: v.nach, ohne: v.ohne, ov: v.ov,
                                               einfach: v.einfach, haupt: pk ? v.nach : v.einfach})) : vergleichZahlen();
-  row("Prägedorf", (x, n) => (perKOf(n) ? perKOf(n).sites : x.sites).map(siteName).join(" + "));
+  row("Prägedorf", (x, n) => (perKOf(n) ? perKOf(n).sites : x.sites).map(s => siteMitFlagge(s, flaggenVon(n))).join(" + "));
   if (RR) {
     row("Handelsrouten", (x, n) => {
       const r = rr(n).routen;
@@ -3176,9 +3244,11 @@ function renderAssumptions() {
     "Markttausch (nur Obergrenze unter der Rohstoffbilanz, nicht in den Münzen): Der nicht prägbare Überschuss" + (P.ignoreRatio ? " im Prägedorf" : "") + " wird 1:1 gegen den fehlenden Rohstoff getauscht und im Prägedorf zum Flaggenpreis am Ende der 48 h geprägt. Unsicher, weil Händler den Überschuss bringen müssen und jemand die Angebote annehmen muss.",
     "Händler tragen " + nf.format(P.carry) + " Rohstoffe und laufen " + nf.format(Math.round(P.minPerField * 100) / 100) + " Minuten je Feld" + (P.merchantBonus ? " (mit Händlerbonus)" : "") + ", hin und zurück gleich lang. Auf Welt 259 im Spiel geprüft.",
     "Klick auf „Rohstoffe anfordern“ beim Start und dann alle " + ivl(P.intervalMin) + ". Jeder Klick schickt alle freien Händler aller Dörfer los. Jedes Dorf beliefert das nächstgelegene Prägedorf.",
-    "Münzpreis: Flagge Stufe " + P.flagLevel + " verdoppelt −" + 2 * K.FLAG_PCT[P.flagLevel] + " %" + (P.decreeN === 2 ? ", alle 48 h zusätzlich −10 % durch zwei Erlasse hintereinander" : P.decree ? ", in den ersten 24 h zusätzlich −10 % durch den Erlass (die Werte addieren sich)" : "") + ". Geprägt wird, was bis zum Ende der 48 h ankommt (Dauermünzprägen).",
+    "Münzpreis: " + (P.flagMulti ? "je Prägedorf seine Flagge, " + P.flagLevels.map(l => "Stufe " + l + " verdoppelt −" + 2 * K.FLAG_PCT[l] + " %").join(", ")
+      + "; die stärkste bekommt das Prägedorf mit den meisten Münzen (beste Zuordnung aus der einfachen Rechnung), weitere Prägedörfer die schwächste"
+      : "Flagge Stufe " + P.flagLevel + " verdoppelt −" + 2 * K.FLAG_PCT[P.flagLevel] + " %") + (P.decreeN === 2 ? ", alle 48 h zusätzlich −10 % durch zwei Erlasse hintereinander" : P.decree ? ", in den ersten 24 h zusätzlich −10 % durch den Erlass (die Werte addieren sich)" : "") + ". Geprägt wird, was bis zum Ende der 48 h ankommt (Dauermünzprägen).",
     "„Pakete rechtzeitig“ zählt die Paket-Rohstoffe, die " + (P.decreeN === 1 ? "innerhalb der 24 h des Erlasses" : "innerhalb der 48 h") + " ankommen. Die laufende Produktion wird nach den Paketen verschickt und zählt nur bei den Münzen.",
-    "Jedes Prägedorf braucht einen Adelshof, einen Flaggendoppler und eine Münzkosten-Flagge; der Rechner nimmt für alle dieselbe Flaggenstufe an. Bis zwei Prägedörfer prüft er jede Kombination, ab drei sucht er mit Startaufstellungen und Tauschen. Das findet sehr gute, aber nicht garantiert die beste Aufstellung.",
+    "Jedes Prägedorf braucht einen Adelshof, einen Flaggendoppler und eine Münzkosten-Flagge; ohne weitere Flaggen nimmt der Rechner für alle dieselbe Stufe an. Bis zwei Prägedörfer prüft er jede Kombination, ab drei sucht er mit Startaufstellungen und Tauschen. Das findet sehr gute, aber nicht garantiert die beste Aufstellung.",
     "„Markt zu klein“: Das Dorf schafft seinen Anteil mit der genannten Marktstufe rechtzeitig. „zu weit weg oder zu selten geklickt“: auch Markt 25 reicht bei diesem Klickabstand nicht.",
   );
   const c = w.coin;
