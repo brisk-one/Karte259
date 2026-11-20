@@ -292,7 +292,11 @@ function start(src, P, sites, cnt, opt) {
       const z = Z[i];
       if (!z) continue;
       const cap = src[i].cap;
-      if (k > 0) { z.w = Math.min(cap, z.w + z.p[0]); z.st = Math.min(cap, z.st + z.p[1]); z.ir = Math.min(cap, z.ir + z.p[2]); }
+      if (k > 0) {
+        const s = src[i], bo = P.boni && P.boni.length && Core.prodMenge;                // Produktionsbonus (20.11.2026)
+        const p = bo ? [0, 1, 2].map(q => Core.prodMenge(s, q, t - T, t, P)) : z.p;
+        z.w = Math.min(cap, z.w + p[0]); z.st = Math.min(cap, z.st + p[1]); z.ir = Math.min(cap, z.ir + p[2]);
+      }
       if (z.an.length) {
         const rest = [];
         for (const a of z.an) {

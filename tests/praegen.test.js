@@ -350,14 +350,15 @@ test("v0.5: die Schwelle stoppt die Paketzahl", () => {
   assert.equal(fest.pkg.chosen, 5); assert.equal(fest.pkg.pos.length, 5);
 });
 
-test("v0.5: Dörfer ohne Haken bekommen Pakete, ihr Überlauf wird gezeigt, Rechenzeit unter 2 s", () => {
+test("v0.5: Dörfer ohne Haken bekommen Pakete, ihr Überlauf wird gezeigt, Rechenzeit unter 3 s", () => {
   const v = konto63(), off = [dorf("Aus", 640, 610, 3, 24)];
   const t0 = Date.now();
   const R = K.planPackages(v, V5({}), off);
   const ms = Date.now() - t0;
   assert.equal(R.pkg.detail.passive.length, 1);
   assert.ok(R.pkg.detail.passive[0].pkgRes > 0);
-  assert.ok(ms < 2000, "Rechnung dauerte " + ms + " ms");
+  // 3 s statt 2 s (20.11.2026): auf den GitHub-Rechnern schwankt die Zeit stark (17.11. 1,4 s, 20.11. 2,2 s bei gleichem Code)
+  assert.ok(ms < 3000, "Rechnung dauerte " + ms + " ms");
 });
 
 test("v0.5: unter 1 h Klickabstand liegt der Zeitplan auf vollen Stunden des Klickrasters", () => {
@@ -1176,4 +1177,28 @@ test("20.11.: Flaggen je Prägedorf: gleiche Flaggen wie bisher, verschiedene mi
   // 10a: mehr Prägedörfer als Flaggen, die übrigen mit der letzten
   assert.deepEqual(K.flaggenFuer(3, P87), [8, 7, 7]);
   if (r.configs[2]) assert.deepEqual(Object.values(r.configs[2].siteFlag).sort(), [7, 7, 8]);
+});
+
+test("20.11.: Produktionsbonus accountweit, zeitlich begrenzt, addiert sich auf die Grundproduktion (Dennis 12.1b)", () => {
+  const v = dreiHaufen();
+  const basis = {pkgPct: 300, decreeN: 1, intervalMin: 60, merchantBonus: true, production: true, flagLevel: 8, minGainPct: 0};
+  const Pa = x => K.params(Object.assign({}, basis, x), WELT);
+  const ohne = K.plan(v, Pa({prodFactor: 1.2})), lang = K.plan(v, Pa({prodFactor: 1.2, boni: [{pct: 30, res: "all", h: 168}]}));
+  const faktor = K.plan(v, Pa({prodFactor: 1.5}));
+  // 168 h laufen über die ganzen 48 h: wie Produktionsfaktor 1,2 + 0,3
+  lang.configs.forEach((c, q) => near(c.coins, faktor.configs[q].coins, 1e-6));
+  const kurz = K.plan(v, Pa({prodFactor: 1.2, boni: [{pct: 30, res: "all", h: 24}]}));
+  assert.ok(kurz.configs[0].coins > ohne.configs[0].coins + 1e-6 && kurz.configs[0].coins < lang.configs[0].coins - 1e-6);
+  // nur Lehm: mehr als ohne, weniger als alle Rohstoffe
+  const lehm = K.plan(v, Pa({prodFactor: 1.2, boni: [{pct: 10, res: "stone", h: 24}]}));
+  assert.ok(lehm.configs[0].coins > ohne.configs[0].coins + 1e-6 && lehm.configs[0].coins < kurz.configs[0].coins);
+  // Gleichschritt: Produktion je Abstand mit Bonus, 168 h wie Faktor 1,5
+  const cnt = K.toCnt([0, 0, 1, 2, 3], K.lastClick(Pa({})));
+  const g = P => { const s = K.prepare(v, P); return K.lockstep(s, P, lang.configs[1].sites, cnt, false).coins; };
+  near(g(Pa({prodFactor: 1.2, boni: [{pct: 30, res: "all", h: 168}]})), g(Pa({prodFactor: 1.5})), 1e-6);
+  // Menge im Zeitraum: Bonus nur, solange er läuft
+  const P = Pa({prodFactor: 1, boni: [{pct: 30, res: "all", h: 10}]}), s = K.prepare(v, P)[0];
+  near(K.prodMenge(s, 0, 0, 20, P), s.prod.wood * 20 + s.prodRoh[0] * 0.3 * 10, 1e-9);
+  // ungültige Boni fallen weg
+  assert.equal(Pa({boni: [{pct: 0, h: 24}, {pct: 30, h: 0}]}).boni.length, 0);
 });

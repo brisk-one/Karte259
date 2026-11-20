@@ -144,6 +144,12 @@ function params(input, world) {
     intervalMin: Math.max(1, +input.intervalMin || 60),
     production: input.production !== false,
     prodFactor: +input.prodFactor > 0 ? +input.prodFactor : 1,
+    // Produktionsbonus (Wunsch Dennis 20.11.2026 18:09, 12.1b nur accountweit): [{pct, res: "all"|"wood"|"stone"|"iron", h}],
+    // beginnt mit dem Prägen; Annahme: addiert sich auf die Grundproduktion der Minen (ohne Produktionsfaktor)
+    boni: (Array.isArray(input.boni) ? input.boni : []).map(b => {
+      const pct = Math.max(0, Math.min(500, +b.pct || 0)), h = Math.max(0, +b.h || 0), res = ["wood", "stone", "iron"].includes(b.res) ? b.res : "all";
+      return {pct, res, h, f: ["wood", "stone", "iron"].map(r => res === "all" || res === r ? pct / 100 : 0)};
+    }).filter(b => b.pct > 0 && b.h > 0),
     // Schwelle für einen weiteren Flaggendoppler: 6 % (Dennis 17.11.2026 16:46, vorher 10 %)
     minGainPct: Math.max(0, +(input.minGainPct != null ? input.minGainPct : 6)),
     minMarket: Math.max(0, Math.min(25, input.minMarket | 0)),   // 0: Marktstufen wie im Dorf
@@ -292,13 +298,26 @@ function prepare(villages, P) {
     const cap = Math.round(storageCap(storage) * sFaktor);
     const lager = Array.isArray(v.lager) ? v.lager.map(x => Math.min(cap, Math.max(0, +x || 0))) : null;
     const st0 = lager || [0, 1, 2].map(() => cap * P.startPct / 100), pk = cap * P.pkgPct / 100;
-    const prod = {};
-    RES.forEach(r => { prod[r] = P.production ? baseProd(v.b[r]) * P.speed * P.prodFactor : 0; });
+    const prod = {}, prodRoh = [0, 0, 0];
+    RES.forEach((r, q) => { prodRoh[q] = P.production ? baseProd(v.b[r]) * P.speed : 0; prod[r] = prodRoh[q] * P.prodFactor; });
     const from = v.b.market | 0, market = Math.max(from, P.minMarket || 0);
     const b = market > from || storage > storFrom ? Object.assign({}, v.b, {market, storage}) : v.b;
     return {i, name: v.name, x: v.x, y: v.y, b, marketFrom: from, storageFrom: storFrom, cap, merchants: Math.round(merchantsAt(market) * mFaktor),
-            mFaktor, sFaktor, snob: (v.b.snob || 0) >= 1, pkg: {wood: pk + st0[0], stone: pk + st0[1], iron: pk + st0[2]}, prod, lager};
+            mFaktor, sFaktor, snob: (v.b.snob || 0) >= 1, pkg: {wood: pk + st0[0], stone: pk + st0[1], iron: pk + st0[2]}, prod, prodRoh, lager};
   });
+}
+
+/* Produktion von Rohstoff q (0 Holz, 1 Lehm, 2 Eisen) im Zeitraum [t0, t1] (Stunden ab Start), mit den Boni aus P.boni,
+   die ab Start h Stunden laufen (20.11.2026). Ohne Boni einfach Rate mal Dauer. */
+const PROD_KEY = ["wood", "stone", "iron"];
+function prodMenge(s, q, t0, t1, P) {
+  if (t1 <= t0) return 0;
+  let a = s.prod[PROD_KEY[q]] * (t1 - t0);
+  if (P.boni && P.boni.length && s.prodRoh) for (const b of P.boni) {
+    const ue = Math.min(t1, b.h) - Math.max(t0, 0);
+    if (ue > 0 && b.f[q]) a += s.prodRoh[q] * b.f[q] * ue;
+  }
+  return a;
 }
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -320,13 +339,16 @@ function simulate(s, tau, P, horizon, merchants, keepArrivals) {
   const qT = [], qN = [];
   let qh = 0, busy = 0;
   const arrivals = keepArrivals ? [] : null;
-  const prodOn = s.prod.wood + s.prod.stone + s.prod.iron > 0;
+  const prodOn = s.prod.wood + s.prod.stone + s.prod.iron > 0, boni = P.boni && P.boni.length > 0;
   for (let k = 0; ; k++) {
     const t = k * T;
     if (t > horizon + EPS) break;
     if (prodOn) {
       const a = Math.min(t, P.window) - Math.min(lastProd, P.window);
-      if (a > 0) { pw += s.prod.wood * a; ps += s.prod.stone * a; pi += s.prod.iron * a; }
+      if (a > 0) {
+        if (boni) { const t0 = Math.min(lastProd, P.window), t1 = Math.min(t, P.window); pw += prodMenge(s, 0, t0, t1, P); ps += prodMenge(s, 1, t0, t1, P); pi += prodMenge(s, 2, t0, t1, P); }
+        else { pw += s.prod.wood * a; ps += s.prod.stone * a; pi += s.prod.iron * a; }
+      }
       lastProd = t;
     }
     while (qh < qT.length && qT[qh] <= t + EPS) { busy -= qN[qh]; qh++; }
@@ -666,7 +688,8 @@ function villageRun(s, tau, P, cnt, M, sink, send, ovClick, acc) {
   const add1 = P.pkgSize / 100 * s.cap, S0 = startBestand(s, P);
   // P.ohneSpeicher (17.11.2026): Pakete und Produktion ohne Speichergrenze, für „Münzen ohne Überlauf“
   const cap = P.ohneSpeicher ? Infinity : s.cap;
-  const p0 = s.prod.wood * T, p1 = s.prod.stone * T, p2 = s.prod.iron * T;
+  let p0 = s.prod.wood * T, p1 = s.prod.stone * T, p2 = s.prod.iron * T;
+  const boni = P.boni && P.boni.length > 0;                                 // Produktionsbonus: Menge je Abstand neu
   // 10.16: Vorrat aus dem Tausch vor dem Start (s.vorab = [Holz, Lehm, Eisen] zusätzlich zum Startbestand)
   const vb = s.vorab;
   let w = vb ? Math.min(cap, S0[0] + vb[0]) : S0[0], st = vb ? Math.min(cap, S0[1] + vb[1]) : S0[1], ir = vb ? Math.min(cap, S0[2] + vb[2]) : S0[2];
@@ -674,7 +697,10 @@ function villageRun(s, tau, P, cnt, M, sink, send, ovClick, acc) {
   const lok = P.mintLocal && s.snob && send !== false;
   for (let k = 0; k < cnt.length; k++) {
     const t = k * T;
-    if (k > 0) { w = Math.min(cap, w + p0); st = Math.min(cap, st + p1); ir = Math.min(cap, ir + p2); }
+    if (k > 0) {
+      if (boni) { p0 = prodMenge(s, 0, t - T, t, P); p1 = prodMenge(s, 1, t - T, t, P); p2 = prodMenge(s, 2, t - T, t, P); }
+      w = Math.min(cap, w + p0); st = Math.min(cap, st + p1); ir = Math.min(cap, ir + p2);
+    }
     const n = cnt[k];
     if (n) {
       const add = n * add1;
@@ -737,12 +763,15 @@ function siteRun(s, P, cnt, bins, acc) {
     if (st > cap) { if (acc) acc.sov[1] += st - cap; st = cap; }
     if (ir > cap) { if (acc) acc.sov[2] += ir - cap; ir = cap; }
   };
-  const K = cnt.length;
+  const K = cnt.length, boni = P.boni && P.boni.length > 0;
   for (let k = 0; k <= K; k++) {
     if (k < K) {
       const add = cnt[k] * add1;
       pkgRes += 3 * add;
-      const q0 = (k > 0 ? s.prod.wood * T : 0) + add, q1 = (k > 0 ? s.prod.stone * T : 0) + add, q2 = (k > 0 ? s.prod.iron * T : 0) + add;
+      const t = k * T;
+      const q0 = (k > 0 ? (boni ? prodMenge(s, 0, t - T, t, P) : s.prod.wood * T) : 0) + add,
+            q1 = (k > 0 ? (boni ? prodMenge(s, 1, t - T, t, P) : s.prod.stone * T) : 0) + add,
+            q2 = (k > 0 ? (boni ? prodMenge(s, 2, t - T, t, P) : s.prod.iron * T) : 0) + add;
       w += q0; st += q1; ir += q2;
       if (acc && k * T <= P.deadline + EPS) { acc.arr[0] += q0; acc.arr[1] += q1; acc.arr[2] += q2; }
       mint(k * T);
@@ -1039,7 +1068,7 @@ function lagerTausch(src, P, sites, cnt, lager, kurs) {
 function routeRun(s, tau, P, cnt, a, dt, sink) {
   const T = P.interval, C = P.carry, cap = s.cap, M = s.merchants, K = cnt.length;
   const add1 = P.pkgSize / 100 * cap, S0 = startBestand(s, P);
-  const pr = [s.prod.wood, s.prod.stone, s.prod.iron], vb = s.vorab;
+  const pr = [s.prod.wood, s.prod.stone, s.prod.iron], vb = s.vorab, boni = P.boni && P.boni.length > 0;
   const x = [0, 1, 2].map(r => vb ? Math.min(cap, S0[r] + vb[r]) : S0[r]);
   const need = Math.ceil((a[0] + a[1] + a[2]) / C - 1e-7);
   const qT = [], qN = [];
@@ -1049,7 +1078,11 @@ function routeRun(s, tau, P, cnt, a, dt, sink) {
     const t = Math.min(tk, tr);
     if (t === Infinity) break;
     const d = t - tLast;
-    if (d > 0) { for (let r = 0; r < 3; r++) x[r] = Math.min(cap, x[r] + pr[r] * d); tLast = t; }
+    if (d > 0) {
+      if (boni) for (let r = 0; r < 3; r++) x[r] = Math.min(cap, x[r] + prodMenge(s, r, tLast, t, P));
+      else for (let r = 0; r < 3; r++) x[r] = Math.min(cap, x[r] + pr[r] * d);
+      tLast = t;
+    }
     if (tk <= tr) {                                                         // Pakete vor der Lieferung
       const n = cnt[k];
       if (n) {
@@ -1196,7 +1229,7 @@ function routenPlan(src, P, sites, cnt, rMax, nurDt) {
 function routeKlickRun(s, tau, P, cnt, route, klickT, sink, acc) {
   const T = P.interval, C = P.carry, cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, K = cnt.length;
   const add1 = P.pkgSize / 100 * s.cap, cap = P.ohneSpeicher ? Infinity : s.cap, S0 = startBestand(s, P), M = s.merchants;
-  const pr = [s.prod.wood, s.prod.stone, s.prod.iron], vb = s.vorab;
+  const pr = [s.prod.wood, s.prod.stone, s.prod.iron], vb = s.vorab, boni = P.boni && P.boni.length > 0;
   const x = [0, 1, 2].map(r => vb ? Math.min(cap, S0[r] + vb[r]) : S0[r]);
   const a = route ? route.a : null, dt = route ? route.dt : Infinity, need = a ? Math.ceil((a[0] + a[1] + a[2]) / C - 1e-7) : 0;
   const tKlickEnde = lastClick(P) * T + EPS;
@@ -1213,7 +1246,11 @@ function routeKlickRun(s, tau, P, cnt, route, klickT, sink, acc) {
     const t = Math.min(tk, tr, tc);
     if (t === Infinity) break;
     const d = t - tLast;
-    if (d > 0) { for (let r = 0; r < 3; r++) x[r] = Math.min(cap, x[r] + pr[r] * d); tLast = t; }
+    if (d > 0) {
+      if (boni) for (let r = 0; r < 3; r++) x[r] = Math.min(cap, x[r] + prodMenge(s, r, tLast, t, P));
+      else for (let r = 0; r < 3; r++) x[r] = Math.min(cap, x[r] + pr[r] * d);
+      tLast = t;
+    }
     if (tk <= t + EPS && tk === t) {                                           // Pakete zuerst
       const n = cnt[k];
       if (n) {
@@ -1294,7 +1331,7 @@ function lockstepRouten(src, P, sites, cnt, routeOf, klickT, detail) {
 function simulateRoute(s, tau, P, horizon, merchants, route, klickT) {
   const cw = P.coin.wood, cs = P.coin.stone, ci = P.coin.iron, C = P.carry;
   const M = merchants != null ? merchants : s.merchants;
-  const x = [s.pkg.wood, s.pkg.stone, s.pkg.iron], pr = [s.prod.wood, s.prod.stone, s.prod.iron];
+  const x = [s.pkg.wood, s.pkg.stone, s.pkg.iron], pr = [s.prod.wood, s.prod.stone, s.prod.iron], boni = P.boni && P.boni.length > 0;
   const avail = () => P.ignoreRatio ? (x[0] + x[1] + x[2]) / P.unitRes : Math.min(x[0] / cw, x[1] / cs, x[2] / ci);
   const pkgUnits = avail();
   const a = route ? route.a : null, dt = route ? route.dt : Infinity, need = a ? Math.ceil((a[0] + a[1] + a[2]) / C - 1e-7) : 0;
@@ -1316,7 +1353,10 @@ function simulateRoute(s, tau, P, horizon, merchants, route, klickT) {
     if (t === Infinity || t > horizon + EPS) break;
     if (tLast >= P.window && t > tLast && shipped >= pkgUnits - 1e-7) break;   // Pakete weg, Prägezeit vorbei (wie simulate)
     const d = Math.min(t, P.window) - Math.min(tLast, P.window);
-    if (d > 0) for (let r = 0; r < 3; r++) x[r] += pr[r] * d;
+    if (d > 0) {
+      if (boni) for (let r = 0; r < 3; r++) x[r] += prodMenge(s, r, Math.min(tLast, P.window), Math.min(t, P.window), P);
+      else for (let r = 0; r < 3; r++) x[r] += pr[r] * d;
+    }
     tLast = t;
     while (qh < qT.length && qT[qh] <= t + EPS) { busy -= qN[qh]; qh++; }
     if (tr === t) {
@@ -1994,7 +2034,7 @@ function aufstellungsCache() {
 }
 
 const api = {ROUTEN_DOERFER, anpassenWarm, festAufstellung, festDorf, adelsgeschlechter, zulaessig, besser, grenzeInfo, planPct, packagesForK, wahlNach, aufstellungsCache, RES, MERCHANTS, STORAGE, FLAG_PCT, DOUBLER_HOURS, DECREE_HOURS, DECREE_PCT, LADDER, LONG_HORIZON,
-             WORLD_DEFAULT, K_MAX, K_MIN, storageCap, mitFlaggen, siteP, flaggenZuordnung, flaggenMuenzen, flaggenFuer, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
+             WORLD_DEFAULT, K_MAX, K_MIN, storageCap, prodMenge, mitFlaggen, siteP, flaggenZuordnung, flaggenMuenzen, flaggenFuer, merchantsAt, baseProd, parseOverview, prodFactorFrom, params, reduction,
              coinPrice, prepare, dist, travelHours, simulate, Planner, details, plan, ladderStep, requiredInterval,
              MAX_PER_CLICK, N_MAX, maxPerClick, lastClick, villageRun, siteRun, lockstep, ohneUeberlauf, routeKlickRun, lockstepRouten, simulateRoute, vergleichRouten, noetigMitRouten, packageValue, lastUsefulClick,
              toCnt, evenSchedule, improveSchedule, packageCurve, scheduleDetails, coarse, refine, bestForK, planPackages,

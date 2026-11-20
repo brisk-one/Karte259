@@ -64,6 +64,12 @@
   .pr-adv .pr-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px 18px; margin-top:8px}
   .pr-adv label{display:grid; gap:3px}
   .pr-adv .note{color:var(--muted); font-size:11px}
+  /* Produktionsbonus (Wunsch Dennis 20.11.2026 18:09) */
+  .pr-boni{grid-column:1/-1; display:grid; gap:5px; justify-items:start}
+  .pr-boni .pr-bz{display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+  .pr-boni .pr-bz input{width:64px}
+  .pr-boni .pr-bz button{border:0; background:none; color:var(--muted); cursor:pointer; padding:0 4px; font:inherit}
+  .pr-boni .pr-bz button:hover{color:var(--ink)}
   .pr-status{grid-column:1/-1; margin:0; font-size:12px; color:var(--ink-2)}
   .pr-status.err{color:var(--bad); font-weight:700}
   .pr-problems{grid-column:1/-1; margin:0; padding-left:18px; font-size:11.5px; color:var(--bad)}
@@ -472,6 +478,27 @@
           <label class="pr-check" style="display:flex"><input type="checkbox" id="prod" checked> Laufende Produktion der 48 h einrechnen</label>
           <label>Produktionsfaktor <input type="number" id="pfac" min="0.5" max="3" step="0.01" placeholder="automatisch">
             <span class="note">leer: aus der Σ-Zeile der Übersicht, sonst 1,0 (nur Minenstufen)</span></label>
+          <div class="pr-boni" id="pboni-box">
+            <span>Produktionsbonus im ganzen Account, ab Start des Prägens</span>
+            <div id="pboni-liste"></div>
+            <select id="pboni-neu" aria-label="Produktionsbonus hinzufügen">
+              <option value="">Bonus hinzufügen …</option>
+              <optgroup label="Kriegsanstrengung, alle Dörfer">
+                <option value="30|all|24">+30 % alle Rohstoffe, 24 h</option>
+                <option value="30|all|48">+30 % alle Rohstoffe, 48 h</option>
+                <option value="30|all|72">+30 % alle Rohstoffe, 72 h</option>
+                <option value="30|all|168">+30 % alle Rohstoffe, 7 Tage</option>
+              </optgroup>
+              <optgroup label="Stammesfähigkeit Überstunden">
+                <option value="10|wood|24">+10 % Holz, 24 h</option>
+                <option value="10|stone|24">+10 % Lehm, 24 h</option>
+                <option value="10|iron|24">+10 % Eisen, 24 h</option>
+              </optgroup>
+              <option value="10|all|24">eigener Bonus …</option>
+            </select>
+            <input type="hidden" id="pboni" value="">
+            <span class="note">Läuft der Bonus beim Kopieren der Übersicht schon, steckt er im automatischen Produktionsfaktor schon drin. Annahme: Boni addieren sich auf die Grundproduktion der Minen.</span>
+          </div>
           <label>Startbestand in % des Speichers (Dörfer ohne Lagerstand) <input type="number" id="start" min="0" max="100" step="1" value="0">
             <span class="note">Rohstoffe, die beim Start schon in den Dörfern liegen</span></label>
           <label>Händler: Minuten je Feld ohne Bonus <input type="number" id="mpf" min="0.5" max="20" step="0.01">
@@ -762,6 +789,48 @@ function flaggenSetzen(a) {
   flaggenAufbauen();
   schedule(); merkenSpaeter();
 }
+/* Produktionsbonus (Wunsch Dennis 20.11.2026 18:09, 12.1b): Liste im versteckten Feld #pboni als JSON
+   [{pct, res, h}], jede Zeile bearbeitbar; Vorlagen aus der Auswahl. */
+const BONI_RES = [["all", "alle Rohstoffe"], ["wood", "Holz"], ["stone", "Lehm"], ["iron", "Eisen"]];
+function boniLesen() {
+  let a = [];
+  try { a = JSON.parse($("pboni").value || "[]"); } catch (e) { a = []; }
+  return Array.isArray(a) ? a.filter(b => b && +b.pct > 0 && +b.h > 0).map(b => ({pct: +b.pct, res: BONI_RES.some(r => r[0] === b.res) ? b.res : "all", h: +b.h})) : [];
+}
+function boniSetzen(a, neuRechnen) {
+  $("pboni").value = a.length ? JSON.stringify(a) : "";
+  boniAufbauen();
+  if (neuRechnen) { schedule(); merkenSpaeter(); }
+}
+function boniAufbauen() {
+  const box = $("pboni-liste");
+  box.textContent = "";
+  boniLesen().forEach((b, q) => {
+    const z = el("div", "pr-bz");
+    const pct = document.createElement("input"); pct.type = "number"; pct.min = "1"; pct.max = "500"; pct.step = "1"; pct.value = b.pct;
+    pct.setAttribute("aria-label", "Bonus " + (q + 1) + " in Prozent");
+    const res = document.createElement("select"); res.setAttribute("aria-label", "Bonus " + (q + 1) + ": Rohstoff");
+    BONI_RES.forEach(([v, t]) => { const o = document.createElement("option"); o.value = v; o.textContent = t; res.appendChild(o); });
+    res.value = b.res;
+    const h = document.createElement("input"); h.type = "number"; h.min = "1"; h.max = "720"; h.step = "1"; h.value = b.h;
+    h.setAttribute("aria-label", "Bonus " + (q + 1) + ": Dauer in Stunden");
+    const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", "Bonus " + (q + 1) + " entfernen");
+    const neu = () => { const a = boniLesen(); a[q] = {pct: +pct.value || 0, res: res.value, h: +h.value || 0}; $("pboni").value = JSON.stringify(a); schedule(); merkenSpaeter(); };
+    pct.addEventListener("input", neu); h.addEventListener("input", neu); res.addEventListener("change", neu);
+    x.addEventListener("click", () => { const a = boniLesen(); a.splice(q, 1); boniSetzen(a, true); });
+    z.append(el("span", null, "+"), pct, el("span", null, "% auf"), res, el("span", null, "für"), h, el("span", null, "h"), x);
+    box.appendChild(z);
+  });
+}
+$("pboni-neu").addEventListener("change", () => {
+  const v = $("pboni-neu").value;
+  if (!v) return;
+  const [pct, res, h] = v.split("|");
+  const a = boniLesen(); a.push({pct: +pct, res, h: +h});
+  $("pboni-neu").value = "";
+  boniSetzen(a, true);
+});
+boniAufbauen();
 flaggenAufbauen();
 $("flag-add").addEventListener("click", () => {
   const a = flaggenExtra();
@@ -793,7 +862,7 @@ function inputs() {
           optThreshold: +$("thr").value || 90,
           merchantBonus: $("bonus").checked, flagLevel: +$("flag").value, flagLevels: [+$("flag").value].concat(flaggenExtra()),
           intervalMin: +$("interval").value,
-          production: $("prod").checked, prodFactor: pf > 0 ? pf : null, minGainPct: +$("gain").value || 0,
+          production: $("prod").checked, prodFactor: pf > 0 ? pf : null, boni: boniLesen(), minGainPct: +$("gain").value || 0,
           minMarket: +$("minmarket").value || 0,
           minPerField: mpf > 0 && Math.abs(mpf - WORLD.base_min_per_field / WORLD.speed) > 1e-6 ? mpf : null};
 }
@@ -896,6 +965,7 @@ function eingabenAnwenden(d) {
   FEST = festGueltig(d.fest) ? d.fest : null;
   FEST_NEU = !!FEST;
   flaggenAufbauen();                                                           // weitere Flaggen aus #flaggen (20.11.2026)
+  boniAufbauen();                                                              // Produktionsbonus aus #pboni (20.11.2026)
   return d.mode === "max" ? "max" : "pct";
 }
 function eingabenLoeschen() {
@@ -907,7 +977,7 @@ function eingabenLoeschen() {
   });
   OFF.clear();
   FEST = null; WAHL_FEST = false;
-  flaggenAufbauen();
+  flaggenAufbauen(); boniAufbauen();
   LAGER = K.parseLager("");
   lagerStatus();
   SITZ = null; UMWEGE = null;
@@ -1055,7 +1125,8 @@ function run() {
   st.textContent = parsed.villages.length + " Dörfer erkannt, " + ah + " mit Adelshof"
     + (OFF.size ? ", " + OFF.size + " ausgeschlossen" : "") + (nLager ? ", " + nLager + " mit Lagerstand" : "")
     + (inp.production ? " · Produktion × " + nf2.format(inp.prodFactor)
-       + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)") : " · ohne Produktion");
+       + ($("pfac").value ? " (eigene Angabe)" : auto ? " (aus der Σ-Zeile geeicht)" : " (nur Minenstufen)")
+       + (inp.boni.length ? " · Bonus " + inp.boni.map(b => "+" + b.pct + " % " + BONI_RES.find(r => r[0] === b.res)[1] + " " + b.h + " h").join(", ") : "") : " · ohne Produktion");
   if (LADE_HINWEIS) { st.textContent = LADE_HINWEIS + " " + st.textContent; LADE_HINWEIS = ""; }
   if (!villages.length) { ["p-rec", "p-vorab", "p-routen", "p-umwege", "p-fremd", "p-more"].forEach(id => $(id).hidden = true); RESULT = null; return; }
 
