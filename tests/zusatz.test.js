@@ -63,3 +63,14 @@ test("deff.html: Reiter „Deffplaner“ (Dennis 14.11.2026 04:46) gesperrt wie 
   for (const f of ["deff-core.js", "deff-seite.js"]) assert.ok(fs.existsSync(path.join(SITE, f)), f);
   assert.match(fs.readFileSync(path.join(SITE, "app.js"), "utf8"), /\["deff\.html", "Deffplaner", "deff", true\]/);
 });
+
+test("namen.html: Reiter „Dorfnamen“ (Dennis 21.11.2026) gesperrt wie der Planer, Skripte erst nach dem Freischalten", () => {
+  const h = fs.readFileSync(path.join(SITE, "namen.html"), "utf8");
+  assert.match(h, /id="zusatz-sperre"/);
+  assert.match(h, /<main class="wrap" id="seite" hidden>/);
+  assert.ok(!/<script src="namen-(core|daten|seite)\.js">/.test(h), "kein direktes Laden vor der Prüfung");
+  assert.match(h, /\["namen-core\.js", "namen-daten\.js", "namen-seite\.js"\]/);
+  assert.match(h, /zusatzEntschluesseln\(z\.k, d\.pruef\) === ZUSATZ_PRUEF/);
+  for (const f of ["namen-core.js", "namen-daten.js", "namen-seite.js"]) assert.ok(fs.existsSync(path.join(SITE, f)), f);
+  assert.match(fs.readFileSync(path.join(SITE, "app.js"), "utf8"), /\["namen\.html", "Dorfnamen", "namen", true\]/);
+});

@@ -202,6 +202,10 @@ jobs:
         if: steps.welche.outputs.deff != 'false'
         run: node --test tests/deff.test.js
 
+      - name: Tests Dorfnamen
+        if: steps.welche.outputs.namen != 'false'
+        run: node --test tests/namen.test.js
+
       - name: Seite bauen
         run: python3 -m collector.build_site --out _site
 

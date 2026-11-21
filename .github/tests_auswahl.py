@@ -21,7 +21,8 @@ import sys
 BEREICHE = {
     "praegen": r"^(site/praegen|tests/praegen)",
     "angriff": r"^(site/angriff-core\.js|tests/angriff\.test\.js)",
-    "zusatz": r"^(site/(zusatz\.json|app\.js|angriff\.html|aufstocken\.html|deff\.html)|tools/zusatz|tests/zusatz)",
+    "zusatz": r"^(site/(zusatz\.json|app\.js|angriff\.html|aufstocken\.html|deff\.html|namen\.html)|tools/zusatz|tests/zusatz)",
+    "namen": r"^(site/namen|tests/namen)",
     "truppen": r"^(site/truppen|tests/truppen)",
     "sortieren": r"^(site/angriff-core\.js|site/sortieren|tests/sortieren)",
     "begleit": r"^(site/angriff-core\.js|site/aufstocken|tests/begleit)",
@@ -35,6 +36,7 @@ BEFEHL = {
     "zusatz": "node --test tests/zusatz.test.js",
     "truppen": "node --test tests/truppen.test.js",
     "sortieren": "node --test tests/sortieren.test.js",
+    "namen": "node --test tests/namen.test.js",
     "begleit": "node --test tests/begleit.test.js",
     "deff": "node --test tests/deff.test.js",
 }

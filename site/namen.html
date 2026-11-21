@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="de" data-theme="classic">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dorfnamen · Welt 259</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23416729'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  .na-in{display:grid; gap:9px}
+  .na-in textarea{width:100%; min-height:110px; resize:vertical; font:12px/1.4 ui-monospace,Consolas,monospace;
+    color:var(--ink); background:var(--field); border:1px solid var(--edge); border-radius:var(--radius); padding:6px 8px;
+    box-sizing:border-box}
+  .na-note{margin:0; font-size:11.5px; line-height:1.5; color:var(--ink-2); max-width:110ch}
+  .na-status{margin:0; font-size:12px; font-weight:700}
+  .na-status.err{color:var(--bad)}
+  .na-status .warn{display:block; font-weight:400; color:var(--ink-2)}
+  /* Nummernkasten: was als Nächstes vergeben wird, groß und jederzeit von Hand änderbar */
+  .na-nr{display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px}
+  .na-nr .gross{font:700 22px/1 ui-monospace,Consolas,monospace; color:var(--ink); letter-spacing:.02em}
+  .na-nr input{width:6em; font:inherit; font-size:13px; padding:3px 7px; color:var(--ink); background:var(--field);
+    border:1px solid var(--edge); border-radius:var(--radius); text-align:right}
+  .na-nr label{display:inline-flex; align-items:center; gap:6px; font-size:12px}
+  .na-warn{margin:0; font-size:12px; line-height:1.6; color:var(--ink-2)}
+  .na-warn b{color:var(--bad)}
+  .na-warn ul{margin:3px 0 0; padding-left:18px}
+  /* Werkzeugleiste über der Namensliste */
+  .na-tools{display:flex; flex-wrap:wrap; gap:7px 14px; align-items:center; font-size:12px}
+  .na-tools input[type=search]{flex:1 1 180px; min-width:150px; font:inherit; padding:4px 8px; color:var(--ink);
+    background:var(--field); border:1px solid var(--edge); border-radius:var(--radius)}
+  .na-tools select{font:inherit; font-size:12px; padding:3px 6px; color:var(--ink); background:var(--field);
+    border:1px solid var(--edge); border-radius:var(--radius); max-width:16em}
+  .na-tools label{display:inline-flex; align-items:center; gap:6px}
+  /* Namensliste: je Zeile der Name und rechts die beiden Kopierknöpfe */
+  .na-kat{margin:0 0 4px; font-size:12px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--ink-2)}
+  .na-grp{margin:7px 0 3px; font-size:11.5px; font-weight:700; color:var(--muted)}
+  .na-liste{display:grid; gap:2px; grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+  .na-zeile{display:flex; align-items:center; gap:6px; padding:2px 4px 2px 7px; border:1px solid transparent;
+    border-radius:var(--radius); min-width:0}
+  .na-zeile:hover{background:var(--panel-2); border-color:var(--edge)}
+  .na-zeile .nm{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px}
+  .na-zeile .len{font:11px/1 ui-monospace,Consolas,monospace; color:var(--muted); flex:0 0 auto}
+  .na-zeile.weg .nm{color:var(--muted); text-decoration:line-through}
+  .na-zeile.weg .vg{font:11px/1 ui-monospace,Consolas,monospace; color:var(--muted); flex:0 0 auto}
+  .na-kop{flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; width:26px; height:22px;
+    padding:0; cursor:pointer; color:var(--ink-2); background:var(--panel-2); border:1px solid var(--edge);
+    border-radius:var(--radius)}
+  .na-kop:hover{color:var(--ink); border-color:var(--edge-strong,var(--edge))}
+  .na-kop svg{width:13px; height:13px; display:block}
+  .na-kop.nr{font:700 10px/1 ui-monospace,Consolas,monospace; width:auto; padding:0 6px}
+  .na-kop.ok{color:var(--good); border-color:var(--good)}
+  .na-leer{margin:0; font-size:12px; color:var(--muted)}
+  .na-zahl{font-size:11.5px; color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+
+<div class="wrap" id="zusatz-sperre"><section class="panel"><h2>Dorfnamen</h2>
+  <div class="body"><p class="empty" id="zusatz-msg">Lade …</p></div></section></div>
+<main class="wrap" id="seite" hidden>
+  <section class="panel" aria-labelledby="h-nr">
+    <h2 id="h-nr">Nummerierung
+      <span class="hint">Liest aus deiner Dorfliste, wo du zuletzt nummeriert hast. Alles bleibt in diesem Browser.</span>
+      <span class="right"><button class="tw" type="button" id="vergessen">Vergebene zurücksetzen</button></span>
+    </h2>
+    <div class="body na-in">
+      <textarea id="paste" spellcheck="false" aria-label="Dorfliste" aria-describedby="status"
+        placeholder="[001] Shoppington D.C. (631|601) K66&#10;[002] Michael Pay (632|602) K66&#10;[155] Herr der Flaggendoppler (633|603) K66&#10;Barbarendorf (634|604) K66"></textarea>
+      <p class="na-note">Im Spiel Übersichten › Dörfer (oder die Truppenübersicht, Ansicht „Alle“), Strg+A, kopieren,
+        hier einfügen. Erkannt wird jede Zeile mit Koordinaten; die Nummer zählt nur, wenn sie wie
+        <code>[155]</code> vorne steht. Dörfer ohne solche Nummer gelten als noch nicht benannt.</p>
+      <p class="na-status" id="status" aria-live="polite"></p>
+      <div class="na-nr">
+        <span class="gross" id="nr-gross">[001]</span>
+        <label>nächste Nummer <input type="number" id="nr" min="1" step="1" inputmode="numeric"></label>
+        <label><input type="checkbox" id="auto" checked> nach dem Kopieren hochzählen</label>
+      </div>
+      <div class="na-warn" id="warn"></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-liste">
+    <h2 id="h-liste">Namen <span class="hint" id="zahl"></span></h2>
+    <div class="body">
+      <div class="na-tools">
+        <input type="search" id="suche" placeholder="Suchen, z. B. Kriegskasse" aria-label="Namen durchsuchen">
+        <label>Kategorie <select id="kat"><option value="">alle</option></select></label>
+        <label><input type="checkbox" id="verstecken"> vergebene ausblenden</label>
+      </div>
+      <div id="liste" style="margin-top:9px"></div>
+    </div>
+  </section>
+
+  <footer>Namensvorrat für die eigenen Dörfer, mit der nächsten freien Nummer davor.
+    Die eingefügte Dorfliste und die vergebenen Namen bleiben in diesem Browser.
+    <button class="tw" type="button" id="zusatz-sperren" title="Entfernt den gespeicherten Schlüssel, die Reiter verschwinden">Zusatzfunktionen in diesem Browser sperren</button></footer>
+</main>
+
+<script src="app.js"></script>
+<script>
+/* Passwortschutz wie bei den anderen Zusatzseiten: die Skripte starten erst nach dem Freischalten, damit der
+   Namensvorrat und die eigene Dorfliste nicht öffentlich auf der Seite stehen. */
+buildAppbar("namen", "Dorfnamen");
+(async function () {
+  const msg = $("zusatz-msg"), z = zusatzSchluessel();
+  let ok = false;
+  if (z) {
+    try { const d = await zusatzDatei(); ok = d.salt === z.salt && await zusatzEntschluesseln(z.k, d.pruef) === ZUSATZ_PRUEF; }
+    catch (e) { ok = false; }
+  }
+  if (!ok) {
+    if (z) { zusatzSperren(); buildAppbar("namen", "Dorfnamen"); }
+    msg.textContent = z ? "Das Passwort hat sich geändert. Bitte oben neu freischalten." : "Gesperrt. Oben „Zusatzfunktionen freischalten“ und das Passwort eingeben.";
+    return;
+  }
+  $("zusatz-sperre").remove();
+  $("seite").hidden = false;
+  for (const src of ["namen-core.js", "namen-daten.js", "namen-seite.js"])
+    await new Promise((fertig, fehl) => { const s = document.createElement("script"); s.src = src; s.onload = fertig; s.onerror = fehl; document.body.appendChild(s); });
+})();
+</script>
+</body>
+</html>
