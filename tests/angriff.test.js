@@ -663,6 +663,35 @@ test("v0.6: reiner Fake-Plan über zwei Ankunftszeiträume, Spieler verteilt, al
   });
 });
 
+test("Ankunft „jeden Tag“: nur die Uhrzeit zählt, je Tag ein Zeitraum, nur für Fakes (Dennis 22.11.2026 16:02)", () => {
+  const tg = Object.assign(K.taeglichAusFeldern({vonZeit: "08:00", bisZeit: "12:00"}), {fake: true});
+  const input = reinerFakePlan({});
+  input.arrivals = [tg];
+  const tage = K.ankunftsListe(input);   // heute 08 bis 12 Uhr ist schon vorbei, Abschicken bis 23:30 plus Laufzeit: 03.11.
+  assert.deepEqual(tage.map(a => K.fmtZeit(a.from).slice(0, 10)), ["03.11.2026"]);
+  // früher am Tag und längere Abschickzeiten: ein Zeitraum je Tag bis Abschickende plus längste Laufzeit
+  const lang = Object.assign({}, input, {now: Date.UTC(2026, 10, 2, 5, 0), windows: K.parseFenster("02.11.2026 08:00 bis 04.11.2026 20:00").fenster});
+  assert.deepEqual(K.ankunftsListe(lang).map(a => K.fmtZeit(a.from).slice(0, 10)), ["02.11.2026", "03.11.2026", "04.11.2026", "05.11.2026"]);
+  assert.ok(tage.every(a => a.taeglich && !a.oa && a.fake && a.nr === 1));
+  assert.ok(tage.every(a => K.fmtZeit(a.from).slice(11, 16) === "08:00" && K.fmtZeit(a.to).slice(11, 16) === "12:00"));
+  const r = K.plan(input);
+  assert.ok(!r.fehler, r.fehler);
+  assert.ok(r.items.length > 0 && r.items.every(i => i.kind === "fake"));
+  assert.deepEqual(K.pruefePlan(r, input), []);
+  r.items.forEach(i => { const h = K.fmtZeit(i.arrivalMs).slice(11, 19); assert.ok(h >= "08:00:00" && h <= "12:00:00", "Ankunft " + h); });
+  // über Mitternacht und Nachtbonus: ein Hinweis, nicht einer je Tag
+  const nacht = Object.assign({}, input, {arrivals: [Object.assign(K.taeglichAusFeldern({vonZeit: "20:00", bisZeit: "02:00"}), {fake: true})]});
+  const t2 = K.taeglichAm(nacht.arrivals[0], input.now, 0);
+  assert.equal(t2.to - t2.from, 6 * 3600000);
+  const rn = K.plan(nacht);
+  assert.ok(!rn.fehler, rn.fehler);
+  assert.equal(rn.warnings.filter(w => w.art === "nacht").length, 1);
+  assert.match(rn.warnings.find(w => w.art === "nacht").text, /jeden Tag 20:00:00 bis 22:59:59/);
+  // mit AG-Zielen reicht „jeden Tag“ nicht: Offs und AGs brauchen einen Zeitraum mit Tag
+  const mitAG = szenario({}, {arrivals: [tg]});
+  assert.match(K.plan(mitAG).fehler, /Offs und AGs angekreuzt/);
+});
+
 test("v0.6: Fakes je Herkunftsdorf: höchstens N je Dorf, nie zweimal dasselbe Ziel, Ziele gleichmäßig", () => {
   const input = reinerFakePlan({});
   const r = K.plan(input);

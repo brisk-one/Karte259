@@ -606,8 +606,55 @@ function begleitschutz(av, bh, pop) {
     Häkchen je Zeitraum (Dennis 19.11.2026 00:06): oa = Offs und AGs dürfen dort ankommen (ohne AG-Ziele die Offs allein),
     fake = Fakes. Ohne Angabe wie bis v1.x: der erste für Offs und AGs, Fakes in allen. nr: Nummer des Zeitraums (ab 1). */
 function ankunftsListe(input) {
-  return (input.arrivals && input.arrivals.length ? input.arrivals : [input.arrival]).filter(Boolean).map((a, i) =>
-    Object.assign({}, a, {nr: a.nr != null ? a.nr : i + 1, oa: a.oa != null ? !!a.oa : i === 0, fake: a.fake != null ? !!a.fake : true}));
+  const out = [];
+  (input.arrivals && input.arrivals.length ? input.arrivals : [input.arrival]).filter(Boolean).forEach((a, i) => {
+    const nr = a.nr != null ? a.nr : i + 1, fake = a.fake != null ? !!a.fake : true;
+    // „jeden Tag“ (Dennis 22.11.2026 16:02): nur Uhrzeiten, je Tag ein Zeitraum, nur für Fakes
+    if (a.taeglich) { taeglichTage(input, a).forEach(x => out.push(Object.assign(x, {nr, oa: false, fake, taeglich: true, vonMs: a.vonMs, bisMs: a.bisMs}))); return; }
+    out.push(Object.assign({}, a, {nr, oa: a.oa != null ? !!a.oa : i === 0, fake}));
+  });
+  return out;
+}
+/** Ankunft „jeden Tag“ (Dennis 22.11.2026 16:02, Fakepläne: nur die Uhrzeit zählt): Felder ohne Tag → {taeglich, vonMs, bisMs}
+    in Millisekunden ab Mitternacht Serverzeit. Ende vor dem Start: über Mitternacht; ohne Ende: Zeitpunkt je Tag. */
+function taeglichAusFeldern(f) {
+  const w = k => String((f && f[k]) || "").trim(), vz = w("vonZeit"), bz = w("bisZeit");
+  if (!vz && !bz) return {leer: true};
+  if (!vz) return {fehler: "Startzeit fehlt"};
+  const a = parseUhrzeit(vz), b = bz ? parseUhrzeit(bz) : a;
+  if (!a) return {fehler: "Uhrzeit nicht erkannt: " + vz};
+  if (!b) return {fehler: "Uhrzeit nicht erkannt: " + bz};
+  const ms = t => ((t.h * 60 + t.mi) * 60 + t.s) * 1000 + t.ms;
+  return {taeglich: true, vonMs: ms(a), bisMs: ms(b)};
+}
+/** Eine Feldzeile der Ankunft lesen, mit „jeden Tag“. */
+function zeitraumAusZeile(z, punktErlaubt) {
+  return z && z.taeglich ? taeglichAusFeldern(z) : zeitraumAusFeldern(z, punktErlaubt);
+}
+/** Zeitraum „jeden Tag“ am Tag k nach dem Serverzeit-Tag von ms. */
+function taeglichAm(a, ms, k) {
+  const p = berlinParts(ms), hms = x => [Math.floor(x / 3600000), Math.floor(x / 60000) % 60, Math.floor(x / 1000) % 60, x % 1000];
+  const from = berlinToUtc(p.y, p.mo, p.d + (k || 0), ...hms(a.vonMs));
+  return {from, to: berlinToUtc(p.y, p.mo, p.d + (k || 0) + (a.bisMs < a.vonMs ? 1 : 0), ...hms(a.bisMs))};
+}
+const TAEGLICH_MAX_TAGE = 21;
+/** Tage für „jeden Tag“: ab heute bis zum Ende des letzten Abschickzeitraums plus der längsten Fake-Laufzeit
+    (Rammen, weiteste Strecke Dorf → Ziel), höchstens 21 Tage; ohne Abschickzeitraum 7 Tage. Vergangene Tage entfallen. */
+function taeglichTage(input, a) {
+  const w = input.world || makeWorld(), jetzt = input.now || Date.now();
+  const fen = [].concat(input.windowsFake || [], input.windows || [], ...(input.attackers || []).map(x => (x.windowsFake || []).concat(x.windows || [])));
+  let ende = fen.length ? Math.max(jetzt, ...fen.map(f => f[1])) : jetzt + 7 * 86400000;
+  const ziele = [].concat(input.fakeTargets || [], input.extraFakeTargets || [], input.agTargets || [], input.offTargets || []);
+  let maxD = 0;
+  (input.attackers || []).forEach(x => (x.villages || []).forEach(v => ziele.forEach(t => { const d = dist(v, t); if (d > maxD) maxD = d; })));
+  ende += travelS(w, "ram", maxD) * 1000;
+  const out = [];
+  for (let k = 0; k < TAEGLICH_MAX_TAGE; k++) {
+    const t = taeglichAm(a, jetzt, k);
+    if (t.from > ende) break;
+    if (t.to >= jetzt) out.push(t);
+  }
+  return out;
 }
 /** Tagesteile der Zeiträume mit Häkchen „Offs und AGs“, in Zeitfolge; jeder Teil trägt die Nummer seines Zeitraums. */
 function oaTeile(input, world) {
@@ -721,7 +768,7 @@ function planKern(input) {
   const TEILE = EIN.map(a => tagesTeile(world, a).map(x => Object.assign(x, {nr: a.nr})));
   const nachtText = world.night ? " (" + world.night.start_hour + " bis " + world.night.end_hour + " Uhr)" : "";
   const leer = TEILE.findIndex(t => !t.length);
-  if (leer >= 0) return {fehler: "Ankunft" + (EIN.length > 1 ? "szeitraum " + (leer + 1) : "") + " liegt ganz im Nachtbonus" + nachtText + ", dort darf nichts ankommen"};
+  if (leer >= 0) return {fehler: "Ankunft" + (EIN.length > 1 ? "szeitraum " + EIN[leer].nr + (EIN[leer].taeglich ? " (jeden Tag)" : "") : "") + " liegt ganz im Nachtbonus" + nachtText + ", dort darf nichts ankommen"};
   const teilText = t => t.map(x => fmtZeit(x.from).slice(0, 19) + " bis " + fmtZeit(x.to).slice(fmtZeit(x.from).slice(0, 10) === fmtZeit(x.to).slice(0, 10) ? 11 : 0, 19)).join(" und ");
   // Häkchen je Zeitraum (Dennis 19.11.2026): OA Teile für Offs und AGs, ANK Teile für Fakes. Ziel-ID → Teil (zeitraumWahl)
   const OA = [].concat(...TEILE.filter((t, i) => EIN[i].oa)), FK = [].concat(...TEILE.filter((t, i) => EIN[i].fake));
@@ -730,7 +777,13 @@ function planKern(input) {
   const zielAnk = new Map();
   Object.keys(input.zielAnk || {}).forEach(id => { const a = OA[input.zielAnk[id]]; if (a) zielAnk.set(String(id), a); });
   const AZ = t => (t && zielAnk.get(String(t.id))) || A;
-  EIN.forEach((a, i) => { if (nachtGekuerzt(a, TEILE[i])) warnings.push({art: "nacht", text: "Ankunftszeitraum " + (EIN.length > 1 ? (i + 1) + " " : "") + "ragt in den Nachtbonus" + nachtText + ", geplant nur " + teilText(TEILE[i])}); });
+  const nachtNr = new Set();
+  EIN.forEach((a, i) => {
+    if (!nachtGekuerzt(a, TEILE[i]) || nachtNr.has(a.nr)) return;
+    nachtNr.add(a.nr);
+    const geplant = a.taeglich ? "jeden Tag " + TEILE[i].map(x => fmtZeit(x.from).slice(11, 19) + " bis " + fmtZeit(x.to).slice(11, 19)).join(" und ") : teilText(TEILE[i]);
+    warnings.push({art: "nacht", text: "Ankunftszeitraum " + (EIN.length > 1 ? a.nr + " " : "") + "ragt in den Nachtbonus" + nachtText + ", geplant nur " + geplant});
+  });
   const streng = cfg.zeitraeume === "streng";
   const R = RANGFOLGE[cfg.zeit_rangfolge] || RANGFOLGE.standard;
   // Orientierung für Offs und AGs (Dennis 10.11.2026: keine feste Grenze, für Fakes sind lange Zeiträume sinnvoll)
@@ -3277,7 +3330,7 @@ function offsZeitenNeu(items, opt) {
 
 const api = {UNITS, OVERVIEW_COLUMNS, POP, SPEED, DSU_TYPE, KIND_NAME, WORLD_DEFAULT, CFG_DEFAULT, makeWorld, erfolgsChance, moral,
              berlinToUtc, berlinParts, fmtZeit, parseAnkunft, parseFenster, parseDatum, parseUhrzeit, fmtDatum, fmtUhrzeit,
-             zeitraumAusFeldern, fensterAusZeilen, istNacht, ivNorm, ivIntersect, ivShift, ivHas,
+             zeitraumAusFeldern, zeitraumAusZeile, taeglichAusFeldern, taeglichAm, TAEGLICH_MAX_TAGE, fensterAusZeilen, istNacht, ivNorm, ivIntersect, ivShift, ivHas,
              parseOverview, offInfo, classify, fakeAus, begleitschutz, plan, pruefePlan, toDSU, toWB, exportAuswahl, parseKoordListe,
              travelS, dist, popOf, langsamste, ivAbstand, sitzungenAus, dichtesterPunkt, besser, ankunftKandidaten, bewerteAnkunft, zeitHinweise,
              RANGFOLGE, SITZUNG_PAUSE_MS, ANKUNFT_MAX_MS, ANKUNFT_RAT_MS, ankunftsListe, oaTeile, tagesTeile, nachtGekuerzt,
