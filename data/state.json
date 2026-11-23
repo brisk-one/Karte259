@@ -1,61 +1,61 @@
 {
  "building_info_checked_utc": "2026-11-18T14:55:01+00:00",
- "conquer_last_ts": 1795392893,
+ "conquer_last_ts": 1795397464,
  "counts": {
   "allies": 377,
-  "conquers_total": 68016,
-  "players": 3670,
-  "villages": 49678
+  "conquers_total": 68045,
+  "players": 3671,
+  "villages": 49680
  },
- "data_last_modified": "Mon, 23 Nov 2026 00:32:54 GMT",
+ "data_last_modified": "Mon, 23 Nov 2026 01:15:23 GMT",
  "files": {
   "ally": {
-   "bytes": 8716,
-   "fetched_utc": "2026-11-23T00:55:01+00:00",
-   "last_modified": "Mon, 23 Nov 2026 00:15:22 GMT",
-   "sha1": "809a4a6eaf728b1f043bb1b677b764a28238bb9a"
+   "bytes": 8703,
+   "fetched_utc": "2026-11-23T01:55:00+00:00",
+   "last_modified": "Mon, 23 Nov 2026 01:06:03 GMT",
+   "sha1": "1719e9d637ab275b532999509b330625d15693e0"
   },
   "conquer": {
-   "bytes": 689472,
-   "fetched_utc": "2026-11-23T00:55:01+00:00",
-   "last_modified": "Mon, 23 Nov 2026 00:15:22 GMT",
-   "sha1": "ce1fe485fbcf26a3c606c8c650a8e0f3b85292cb"
+   "bytes": 689750,
+   "fetched_utc": "2026-11-23T01:55:00+00:00",
+   "last_modified": "Mon, 23 Nov 2026 01:32:54 GMT",
+   "sha1": "1149f91b69968099ee0e1d279768735f4c9b9e59"
   },
   "kill_all": {
    "bytes": 30960,
-   "fetched_utc": "2026-11-23T00:55:01+00:00",
-   "last_modified": "Mon, 23 Nov 2026 00:06:03 GMT",
-   "sha1": "db583a41036d172b2b954857c0437bca7a401f52"
+   "fetched_utc": "2026-11-23T01:55:00+00:00",
+   "last_modified": "Mon, 23 Nov 2026 01:15:23 GMT",
+   "sha1": "fa900f57147f90e898700ea8f2eb7b9fc7d409c4"
   },
   "kill_att": {
    "bytes": 21778,
-   "fetched_utc": "2026-11-23T00:55:01+00:00",
-   "last_modified": "Mon, 23 Nov 2026 00:15:22 GMT",
-   "sha1": "56a28027a3d641b48bf524b17d15461a10599f97"
+   "fetched_utc": "2026-11-23T01:55:00+00:00",
+   "last_modified": "Mon, 23 Nov 2026 01:06:04 GMT",
+   "sha1": "63fc40518698047419f33923727529617dc26a8e"
   },
   "kill_def": {
    "bytes": 29753,
-   "fetched_utc": "2026-11-23T00:55:01+00:00",
-   "last_modified": "Mon, 23 Nov 2026 00:06:03 GMT",
-   "sha1": "ed2738a7842739b3b9ed040e0a54abd71432f6cb"
+   "fetched_utc": "2026-11-23T01:55:00+00:00",
+   "last_modified": "Mon, 23 Nov 2026 01:15:23 GMT",
+   "sha1": "4306a5e0658f68a956999ae0d789bd3d83b9d9ef"
   },
   "kill_sup": {
    "bytes": 13650,
-   "fetched_utc": "2026-11-23T00:55:01+00:00",
-   "last_modified": "Mon, 23 Nov 2026 00:32:55 GMT",
-   "sha1": "655a4ecc59e907b192f920d218459ed59388629b"
+   "fetched_utc": "2026-11-23T01:55:00+00:00",
+   "last_modified": "Mon, 23 Nov 2026 01:06:04 GMT",
+   "sha1": "c879adcf01c37d42ca19b768160794c4cec8ce47"
   },
   "player": {
-   "bytes": 65897,
-   "fetched_utc": "2026-11-23T00:55:01+00:00",
-   "last_modified": "Mon, 23 Nov 2026 00:32:54 GMT",
-   "sha1": "7391a89336a8360cf57f590b65cdfd1a4d19dbb4"
+   "bytes": 65938,
+   "fetched_utc": "2026-11-23T01:55:00+00:00",
+   "last_modified": "Mon, 23 Nov 2026 01:15:23 GMT",
+   "sha1": "6771b826c10a5e79f1bbfa632f7e4e006f1b2570"
   },
   "village": {
-   "bytes": 742672,
-   "fetched_utc": "2026-11-23T00:55:01+00:00",
-   "last_modified": "Mon, 23 Nov 2026 00:06:03 GMT",
-   "sha1": "878fe52f5156d91ff98b952f9a26f7bdfa5e02d2"
+   "bytes": 742815,
+   "fetched_utc": "2026-11-23T01:55:00+00:00",
+   "last_modified": "Mon, 23 Nov 2026 01:15:23 GMT",
+   "sha1": "f17da13558b7e31f7d8f2c96f97577c457fbbdc2"
   }
  },
  "history_since_utc": "2026-09-11T18:49:35+00:00",
@@ -68,7 +68,7 @@
   ],
   "last_deep_scrape_utc": "2026-11-22T23:55:01+00:00",
   "last_deep_try_utc": "2026-11-22T23:55:01+00:00",
-  "last_full_scrape_utc": "2026-11-22T23:55:01+00:00",
+  "last_full_scrape_utc": "2026-11-23T01:55:00+00:00",
   "page_param": null,
   "page_size": 25,
   "profil_probe_saved": true,
@@ -79,7 +79,7 @@
    "kill_def": "a64fb609dbd4398bb0c5b37cc6b8b05fdc54ff08",
    "kill_sup": "90e00100cae78ac9aae9be9d272e23bac032222d",
    "loot_res": "b23fb8b431c3d752a58ae808a65941b2cc11019d",
-   "loot_vil": "0e7919b97a6f3984989cf65e20444d540e223a3a",
+   "loot_vil": "969405a34c822ae9d8f124277e34bdd2039bb635",
    "scavenge": "ffa7cb9b0d083cd4cbf275393a69a0217ae611af"
   }
  },
