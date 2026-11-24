@@ -133,3 +133,25 @@ test("Vorrat erkennt eigene Dörfer am Namen", () => {
   assert.equal(s.doerfer[1].ausVorrat, false);
   assert.ok(N.vorratSet(DATEN).size > 1000);
 });
+
+test("Namen aus der Dorfliste gelten als vergeben (Dennis 24.11.2026)", () => {
+  const text = [
+    zeile("[001] Payris", 631, 601),
+    zeile("[002] shoponn", 632, 602),           // klein geschrieben: zählt trotzdem
+    zeile("Buycelona", 633, 603),               // Name aus dem Vorrat, Dorf noch ohne Nummer
+    zeile("[004] Irgendein Fremdname", 634, 604),
+    zeile("Barbarendorf", 635, 605)
+  ].join("\n");
+  const s = N.stand(text, DATEN);
+  const v = N.vergebenAusListe(s.doerfer, DATEN);
+  assert.equal(v["Payris"], 1);
+  assert.equal(v["Shoponn"], 2, "Treffer unabhängig von Groß- und Kleinschreibung, Vorratsschreibweise als Schlüssel");
+  assert.equal(v["Buycelona"], null, "im Spiel, aber ohne Nummer");
+  assert.ok(!("Barbarendorf" in v));
+  assert.equal(Object.keys(v).length, 3);
+});
+
+test("Leere Liste vergibt nichts", () => {
+  assert.deepEqual(N.vergebenAusListe([], DATEN), {});
+  assert.deepEqual(N.vergebenAusListe(N.stand("").doerfer, DATEN), {});
+});

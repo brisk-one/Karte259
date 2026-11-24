@@ -117,6 +117,25 @@ function stand(text, daten) {
 }
 
 /**
+ * Namen aus dem Vorrat, die laut Dorfliste schon im Spiel stehen (Dennis 24.11.2026: die sollen nicht noch einmal
+ * vorgeschlagen werden). Vergleich ohne Groß- und Kleinschreibung, Nummer des Dorfs als Wert; null heißt: Name
+ * vergeben, Dorf aber noch ohne Nummer.
+ * @param {Array} doerfer aus leseDoerfer/stand
+ * @param {Array} daten Namensvorrat
+ * @returns {Object} Name aus dem Vorrat -> Nummer oder null
+ */
+function vergebenAusListe(doerfer, daten) {
+  const nachKlein = new Map();
+  (daten || []).forEach(k => (k.gruppen || []).forEach(g => (g.n || []).forEach(n => nachKlein.set(String(n).toLowerCase(), n))));
+  const t = {};
+  (doerfer || []).forEach(d => {
+    const treffer = nachKlein.get(String(d.name || "").toLowerCase());
+    if (treffer && !(treffer in t)) t[treffer] = d.nummer != null ? d.nummer : null;
+  });
+  return t;
+}
+
+/**
  * Nächste freie Nummer ab einem Startwert, die weder vergeben noch in dieser Sitzung schon ausgegeben ist.
  * @param {number} start erster Kandidat
  * @param {Set|Array} belegt bereits vergebene Nummern
@@ -129,7 +148,7 @@ function naechsteFreie(start, belegt) {
 }
 
 const api = {KOORD, NUMMER, nummerVon, ohneNummer, formatNummer, mitNummer, leseDoerfer, vorratSet, stand,
-             naechsteFreie};
+             vergebenAusListe, naechsteFreie};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.NamenCore = api;
 })(typeof window !== "undefined" ? window : globalThis);

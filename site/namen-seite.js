@@ -2,15 +2,27 @@
    Ablauf: Dorfliste einfügen -> die Seite liest, wo die Nummerierung aufgehört hat -> Klick auf das Kopiersymbol
    legt „[156] Fluch der Kriegskasse“ in die Zwischenablage, merkt den Namen als vergeben und zählt hoch.
    Der zweite Knopf kopiert denselben Namen ohne Nummer.
-   Gespeichert wird nur im localStorage dieses Browsers: eingefügte Liste, nächste Nummer, vergebene Namen. */
+   Vergeben ist ein Name aus zwei Gründen (Dennis 24.11.2026): er steht als Dorfname in der eingefügten Liste, oder
+   er wurde hier kopiert. Die Liste ist die verlässlichere Quelle, weil sie den echten Stand im Spiel zeigt; sie wird
+   bei jedem Einlesen neu ausgewertet, während die kopierten im localStorage bleiben.
+   Gespeichert wird nur im localStorage dieses Browsers: eingefügte Liste, nächste Nummer, kopierte Namen. */
 (function () {
 "use strict";
 const C = window.NamenCore, DATEN = window.NAMEN_DATEN;
 const SPEICHER = "k259-namen";
 const KOPIE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="9" rx="1.2"/><path d="M10.5 3.5h-6a1 1 0 0 0-1 1v7"/></svg>';
 
-let S = {text: "", nr: 1, stellen: 3, vergeben: {}};     // vergeben: Name -> Nummer
+let S = {text: "", nr: 1, stellen: 3, vergeben: {}};     // vergeben: hier kopierter Name -> Nummer
 let stand = null;
+let ausListe = {};                                       // Name aus dem Vorrat -> Nummer des Dorfs im Spiel
+
+/** Ist der Name vergeben, und mit welcher Nummer? null, wenn frei. */
+function vergebenMit(name) {
+  if (ausListe[name] != null) return ausListe[name];
+  if (S.vergeben[name] != null) return S.vergeben[name];
+  return null;
+}
+const istVergeben = name => vergebenMit(name) !== null;
 
 /* ---------- Speicher ---------- */
 function laden() {
@@ -35,6 +47,9 @@ function belegteNummern() {
   return b;
 }
 
+/** Namen aus dem Vorrat, die laut eingefügter Dorfliste schon im Spiel stehen. */
+const trefferAusListe = () => stand ? C.vergebenAusListe(stand.doerfer, DATEN) : {};
+
 function nummerAnzeigen() {
   $("nr-gross").textContent = C.formatNummer(S.nr, S.stellen);
   const feld = $("nr");
@@ -49,10 +64,13 @@ function einlesen(text, still) {
   if (!stand.anzahl) {
     st.textContent = text.trim() ? "Keine Dorfzeilen erkannt. Erwartet wird eine Liste mit Koordinaten wie (631|601)." : "";
     if (text.trim()) st.className = "na-status err";
-  } else {
-    const n = stand.nummeriert.length;
+  }
+  ausListe = trefferAusListe();
+  if (stand.anzahl) {
+    const n = stand.nummeriert.length, tr = Object.keys(ausListe).length;
     st.textContent = stand.anzahl + (stand.anzahl === 1 ? " Dorf" : " Dörfer") + " gelesen, " + n + " nummeriert" +
-      (stand.hoechste ? ", höchste " + C.formatNummer(stand.hoechste, stand.stellen) : "") + ".";
+      (stand.hoechste ? ", höchste " + C.formatNummer(stand.hoechste, stand.stellen) : "") + ". " +
+      (tr ? tr + (tr === 1 ? " Name" : " Namen") + " aus der Liste gelten als vergeben." : "Kein Name aus dem Vorrat in der Liste gefunden.");
   }
   if (stand.anzahl && !still) {                           // Vorschlag übernehmen, Handeingabe nicht überschreiben
     S.stellen = stand.stellen;
@@ -111,7 +129,7 @@ function zeichnen() {
     const block = document.createDocumentFragment();
     let inKat = 0;
     kat.gruppen.forEach(g => {
-      const namen = g.n.filter(n => treffer(n, suche) && !(verstecken && S.vergeben[n] != null));
+      const namen = g.n.filter(n => treffer(n, suche) && !(verstecken && istVergeben(n)));
       if (!namen.length) return;
       if (g.g) {
         const h = el("p", "na-grp", g.g);
@@ -128,20 +146,26 @@ function zeichnen() {
     wrap.appendChild(block);
     gezeigt += inKat;
   });
-  Object.keys(S.vergeben).forEach(() => { frei++; });
-  $("zahl").textContent = gezeigt + " von " + gesamt + " angezeigt, " + frei + " vergeben";
+  const alleVergeben = new Set(Object.keys(ausListe).concat(Object.keys(S.vergeben)));
+  frei = alleVergeben.size;
+  const ausL = Object.keys(ausListe).length;
+  $("zahl").textContent = gezeigt + " von " + gesamt + " angezeigt, " + frei + " vergeben" +
+    (ausL ? " (" + ausL + " aus deiner Dorfliste)" : "");
   if (!gezeigt) wrap.appendChild(el("p", "na-leer", "Kein Name passt zur Suche."));
 }
 
 function zeile(name) {
   const z = el("div", "na-zeile");
-  const vergeben = S.vergeben[name] != null;
+  const nr = vergebenMit(name), vergeben = nr !== null;
   if (vergeben) z.classList.add("weg");
   const nm = el("span", "nm", name);
   nm.title = name;
   z.appendChild(nm);
   if (vergeben) {
-    z.appendChild(el("span", "vg", C.formatNummer(S.vergeben[name], S.stellen)));
+    // aus der Liste erkannte Dörfer ohne Nummer: Name steht im Spiel, trägt aber noch keine Nummer
+    const vg = el("span", "vg", nr == null ? "im Spiel" : C.formatNummer(nr, S.stellen));
+    vg.title = ausListe[name] !== undefined ? "Steht so in deiner eingefügten Dorfliste" : "Hier kopiert";
+    z.appendChild(vg);
   } else {
     z.appendChild(el("span", "len", name.length));
   }
@@ -221,8 +245,14 @@ $("suche").addEventListener("input", zeichnen);
 $("kat").addEventListener("change", zeichnen);
 $("verstecken").addEventListener("change", zeichnen);
 $("vergessen").addEventListener("click", () => {
-  if (!Object.keys(S.vergeben).length) return;
-  if (!confirm("Alle " + Object.keys(S.vergeben).length + " als vergeben markierten Namen wieder freigeben?")) return;
+  const n = Object.keys(S.vergeben).length;
+  if (!n) {
+    alert(Object.keys(ausListe).length
+      ? "Hier wurde noch kein Name kopiert. Die als vergeben markierten stammen aus deiner Dorfliste und verschwinden erst, wenn du die Liste oben änderst."
+      : "Hier wurde noch kein Name kopiert.");
+    return;
+  }
+  if (!confirm("Die " + n + " hier kopierten Namen wieder freigeben? Namen aus deiner Dorfliste bleiben vergeben.")) return;
   S.vergeben = {};
   zeichnen();
   sichern();
