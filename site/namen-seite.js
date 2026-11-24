@@ -16,10 +16,10 @@ let S = {text: "", nr: 1, stellen: 3, vergeben: {}};     // vergeben: hier kopie
 let stand = null;
 let ausListe = {};                                       // Name aus dem Vorrat -> Nummer des Dorfs im Spiel
 
-/** Ist der Name vergeben, und mit welcher Nummer? null, wenn frei. */
+/** Vergeben? Ergebnis {nummer, dorf, genau} aus der Dorfliste, {nummer} vom Kopieren, oder null. */
 function vergebenMit(name) {
-  if (ausListe[name] != null) return ausListe[name];
-  if (S.vergeben[name] != null) return S.vergeben[name];
+  if (ausListe[name]) return ausListe[name];
+  if (S.vergeben[name] != null) return {nummer: S.vergeben[name], dorf: null, genau: true};
   return null;
 }
 const istVergeben = name => vergebenMit(name) !== null;
@@ -67,10 +67,13 @@ function einlesen(text, still) {
   }
   ausListe = trefferAusListe();
   if (stand.anzahl) {
-    const n = stand.nummeriert.length, tr = Object.keys(ausListe).length;
+    const n = stand.nummeriert.length, schl = Object.keys(ausListe), tr = schl.length;
+    const aehnlich = schl.filter(k => !ausListe[k].genau).length;
     st.textContent = stand.anzahl + (stand.anzahl === 1 ? " Dorf" : " Dörfer") + " gelesen, " + n + " nummeriert" +
       (stand.hoechste ? ", höchste " + C.formatNummer(stand.hoechste, stand.stellen) : "") + ". " +
-      (tr ? tr + (tr === 1 ? " Name" : " Namen") + " aus der Liste gelten als vergeben." : "Kein Name aus dem Vorrat in der Liste gefunden.");
+      (tr ? tr + (tr === 1 ? " Name" : " Namen") + " aus der Liste " + (tr === 1 ? "gilt" : "gelten") + " als vergeben" +
+            (aehnlich ? ", davon " + aehnlich + " über eine ähnliche Schreibweise" : "") + "."
+          : "Kein Name aus dem Vorrat in der Liste gefunden.");
   }
   if (stand.anzahl && !still) {                           // Vorschlag übernehmen, Handeingabe nicht überschreiben
     S.stellen = stand.stellen;
@@ -156,15 +159,16 @@ function zeichnen() {
 
 function zeile(name) {
   const z = el("div", "na-zeile");
-  const nr = vergebenMit(name), vergeben = nr !== null;
+  const v = vergebenMit(name), vergeben = v !== null;
   if (vergeben) z.classList.add("weg");
   const nm = el("span", "nm", name);
   nm.title = name;
   z.appendChild(nm);
   if (vergeben) {
     // aus der Liste erkannte Dörfer ohne Nummer: Name steht im Spiel, trägt aber noch keine Nummer
-    const vg = el("span", "vg", nr == null ? "im Spiel" : C.formatNummer(nr, S.stellen));
-    vg.title = ausListe[name] !== undefined ? "Steht so in deiner eingefügten Dorfliste" : "Hier kopiert";
+    const vg = el("span", "vg", (v.genau ? "" : "≈ ") + (v.nummer == null ? "im Spiel" : C.formatNummer(v.nummer, S.stellen)));
+    vg.title = v.dorf ? (v.genau ? "Steht so in deiner Dorfliste: " : "Ähnlich zu deinem Dorf: ") + v.dorf : "Hier kopiert";
+    if (!v.genau) vg.classList.add("aehnlich");
     z.appendChild(vg);
   } else {
     z.appendChild(el("span", "len", name.length));
@@ -232,7 +236,11 @@ $("paste").value = S.text;
 if (S.text) einlesen(S.text, true);                       // gespeicherte Handeingabe der Nummer behalten
 else { nummerAnzeigen(); zeichnen(); }
 
-$("paste").addEventListener("input", () => einlesen($("paste").value, false));
+let tippTimer = null;                                    // Vergleich erst, wenn das Tippen kurz ruht
+$("paste").addEventListener("input", () => {
+  clearTimeout(tippTimer);
+  tippTimer = setTimeout(() => einlesen($("paste").value, false), 150);
+});
 $("nr").addEventListener("input", () => {
   const v = Math.max(1, Math.round(+$("nr").value) || 1);
   S.nr = v;

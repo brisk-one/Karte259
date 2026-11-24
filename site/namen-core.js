@@ -116,21 +116,77 @@ function stand(text, daten) {
           anzahl: doerfer.length};
 }
 
+/* Namensvergleich (Dennis 24.11.2026): Sein Dorf „[123] Rumpelshoppchen“ wurde nicht als vergeben erkannt, weil der
+   Vorrat „Rumpelshopzchen“ enthält. Beim Umbenennen im Spiel verrutscht ein Buchstabe, oder er wandelt den Namen
+   leicht ab. Darum wird zweistufig verglichen:
+   1. genau, auf der normalisierten Form (klein, ohne Satz- und Sonderzeichen, einfache Leerzeichen),
+   2. sonst ähnlich, über die Editierdistanz, mit einer Schwelle nach Namenslänge.
+   Ein ähnlicher Treffer zählt nur, wenn genau ein Vorratsname so nah liegt. Liegen zwei gleich nah (im Vorrat gibt
+   es Paare wie Kaufpino/Kaufmino), bleibt der Name frei, statt den falschen zu streichen. */
+
+/** Vergleichsform: klein, ohne Satzzeichen, einfache Leerzeichen. */
+function normName(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9äöüß ]+/g, "").replace(/\s+/g, " ").trim();
+}
+
+/** Erlaubte Editierdistanz für einen Namen dieser Länge: 1 bis 3 Zeichen. */
+const aehnlichSchwelle = laenge => Math.min(3, Math.max(1, Math.floor(laenge / 7)));
+
+/** Editierdistanz (Levenshtein), bricht ab, sobald die Grenze überschritten ist. */
+function distanz(a, b, grenze) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m || !n) return m || n;
+  if (grenze != null && Math.abs(m - n) > grenze) return grenze + 1;
+  let prev = Array.from({length: n + 1}, (_, j) => j);
+  const cur = new Array(n + 1);
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    let zeilenMin = cur[0];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1));
+      if (cur[j] < zeilenMin) zeilenMin = cur[j];
+    }
+    if (grenze != null && zeilenMin > grenze) return grenze + 1;
+    for (let j = 0; j <= n; j++) prev[j] = cur[j];
+  }
+  return prev[n];
+}
+
 /**
  * Namen aus dem Vorrat, die laut Dorfliste schon im Spiel stehen (Dennis 24.11.2026: die sollen nicht noch einmal
- * vorgeschlagen werden). Vergleich ohne Groß- und Kleinschreibung, Nummer des Dorfs als Wert; null heißt: Name
- * vergeben, Dorf aber noch ohne Nummer.
+ * vorgeschlagen werden). Erkennt auch leicht abgewandelte Schreibweisen, siehe oben.
  * @param {Array} doerfer aus leseDoerfer/stand
  * @param {Array} daten Namensvorrat
- * @returns {Object} Name aus dem Vorrat -> Nummer oder null
+ * @returns {Object} Name aus dem Vorrat -> {nummer, dorf, genau}; nummer ist null, wenn das Dorf keine trägt
  */
 function vergebenAusListe(doerfer, daten) {
-  const nachKlein = new Map();
-  (daten || []).forEach(k => (k.gruppen || []).forEach(g => (g.n || []).forEach(n => nachKlein.set(String(n).toLowerCase(), n))));
+  const vorrat = [];
+  (daten || []).forEach(k => (k.gruppen || []).forEach(g => (g.n || []).forEach(n => vorrat.push({name: n, norm: normName(n)}))));
+  const nachNorm = new Map();
+  vorrat.forEach(v => { if (!nachNorm.has(v.norm)) nachNorm.set(v.norm, v.name); });
   const t = {};
+  const setzen = (name, d, genau) => { if (!(name in t)) t[name] = {nummer: d.nummer != null ? d.nummer : null, dorf: d.roh, genau}; };
+  const offen = [];
   (doerfer || []).forEach(d => {
-    const treffer = nachKlein.get(String(d.name || "").toLowerCase());
-    if (treffer && !(treffer in t)) t[treffer] = d.nummer != null ? d.nummer : null;
+    const n = normName(d.name);
+    if (!n) return;
+    const genau = nachNorm.get(n);
+    if (genau) setzen(genau, d, true);
+    else offen.push({d, n});
+  });
+  // zweite Stufe: ähnliche Schreibweise, nur wenn genau ein Vorratsname so nah liegt
+  offen.forEach(({d, n}) => {
+    const grenze = aehnlichSchwelle(n.length);
+    let beste = null, besteD = grenze + 1, mehrdeutig = false;
+    vorrat.forEach(v => {
+      if (Math.abs(v.norm.length - n.length) > grenze) return;
+      const dist = distanz(n, v.norm, grenze);
+      if (dist > grenze) return;
+      if (dist < besteD) { besteD = dist; beste = v.name; mehrdeutig = false; }
+      else if (dist === besteD && v.name !== beste) mehrdeutig = true;
+    });
+    if (beste && !mehrdeutig) setzen(beste, d, false);
   });
   return t;
 }
@@ -148,7 +204,7 @@ function naechsteFreie(start, belegt) {
 }
 
 const api = {KOORD, NUMMER, nummerVon, ohneNummer, formatNummer, mitNummer, leseDoerfer, vorratSet, stand,
-             vergebenAusListe, naechsteFreie};
+             normName, aehnlichSchwelle, distanz, vergebenAusListe, naechsteFreie};
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.NamenCore = api;
 })(typeof window !== "undefined" ? window : globalThis);

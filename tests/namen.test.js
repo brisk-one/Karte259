@@ -144,9 +144,10 @@ test("Namen aus der Dorfliste gelten als vergeben (Dennis 24.11.2026)", () => {
   ].join("\n");
   const s = N.stand(text, DATEN);
   const v = N.vergebenAusListe(s.doerfer, DATEN);
-  assert.equal(v["Payris"], 1);
-  assert.equal(v["Shoponn"], 2, "Treffer unabhängig von Groß- und Kleinschreibung, Vorratsschreibweise als Schlüssel");
-  assert.equal(v["Buycelona"], null, "im Spiel, aber ohne Nummer");
+  assert.equal(v["Payris"].nummer, 1);
+  assert.equal(v["Shoponn"].nummer, 2, "Treffer unabhängig von Groß- und Kleinschreibung, Vorratsschreibweise als Schlüssel");
+  assert.equal(v["Buycelona"].nummer, null, "im Spiel, aber ohne Nummer");
+  assert.ok(v["Payris"].genau && v["Shoponn"].genau);
   assert.ok(!("Barbarendorf" in v));
   assert.equal(Object.keys(v).length, 3);
 });
@@ -154,4 +155,66 @@ test("Namen aus der Dorfliste gelten als vergeben (Dennis 24.11.2026)", () => {
 test("Leere Liste vergibt nichts", () => {
   assert.deepEqual(N.vergebenAusListe([], DATEN), {});
   assert.deepEqual(N.vergebenAusListe(N.stand("").doerfer, DATEN), {});
+});
+
+test("Leicht abgewandelte Dorfnamen gelten als vergeben (Dennis 24.11.2026)", () => {
+  // sein echter Fall: Dorf „[123] Rumpelshoppchen“, im Vorrat steht „Rumpelshopzchen“
+  const v = N.vergebenAusListe(N.stand(zeile("[123] Rumpelshoppchen", 617, 608)).doerfer, DATEN);
+  assert.ok(v["Rumpelshopzchen"], "ein Buchstabe Unterschied zählt als vergeben");
+  assert.equal(v["Rumpelshopzchen"].genau, false, "als ähnlich gekennzeichnet, nicht als exakter Treffer");
+  assert.equal(v["Rumpelshopzchen"].nummer, 123);
+  assert.equal(v["Rumpelshopzchen"].dorf, "[123] Rumpelshoppchen");
+});
+
+test("Satzzeichen und Schreibweise machen keinen Unterschied", () => {
+  const v = N.vergebenAusListe(N.stand([
+    zeile("[001] Shop oder stirb!", 1, 1),
+    zeile("[002] shoppy   birthday", 2, 2)
+  ].join("\n")).doerfer, DATEN);
+  assert.ok(v["Shop oder stirb"] && v["Shop oder stirb"].genau, "Ausrufezeichen zählt nicht");
+  assert.ok(v["Shoppy Birthday"] && v["Shoppy Birthday"].genau, "Groß- und Kleinschreibung und doppelte Leerzeichen zählen nicht");
+});
+
+test("Bei zwei gleich nahen Vorratsnamen bleibt der Name frei", () => {
+  // Kaufpino und Kaufmino liegen beide einen Buchstaben entfernt: lieber kein Treffer als der falsche
+  const v = N.vergebenAusListe(N.stand(zeile("[005] Kaufnino", 5, 5)).doerfer, DATEN);
+  assert.deepEqual(v, {}, "mehrdeutig, also nichts streichen");
+  // ein echter Treffer bleibt davon unberührt
+  const w = N.vergebenAusListe(N.stand(zeile("[004] Kaufpino", 4, 4)).doerfer, DATEN);
+  assert.ok(w["Kaufpino"] && w["Kaufpino"].genau);
+});
+
+test("Fremde Dorfnamen lösen keinen Treffer aus", () => {
+  const v = N.vergebenAusListe(N.stand([
+    zeile("Barbarendorf", 1, 1),
+    zeile("[009] Völlig anderer Name", 2, 2),
+    zeile("[010] Bonus Dorf", 3, 3)
+  ].join("\n")).doerfer, DATEN);
+  assert.deepEqual(v, {});
+});
+
+test("Editierdistanz und Schwelle", () => {
+  assert.equal(N.distanz("rumpelshoppchen", "rumpelshopzchen"), 1);
+  assert.equal(N.distanz("abc", "abc"), 0);
+  assert.equal(N.distanz("", "abc"), 3);
+  assert.equal(N.distanz("kurz", "voellig anders", 2), 3, "bricht an der Grenze ab");
+  assert.equal(N.aehnlichSchwelle(6), 1);
+  assert.equal(N.aehnlichSchwelle(15), 2);
+  assert.equal(N.aehnlichSchwelle(25), 3);
+  assert.equal(N.normName("  Shop ODER stirb!  "), "shop oder stirb");
+});
+
+test("Der Vorrat selbst bleibt eindeutig genug", () => {
+  // Paare, die innerhalb der Schwelle liegen, machen beide Namen mehrdeutig; das darf die Ausnahme bleiben
+  const alle = [];
+  DATEN.forEach(k => k.gruppen.forEach(g => g.n.forEach(n => alle.push(N.normName(n)))));
+  let paare = 0;
+  for (let i = 0; i < alle.length; i++) {
+    for (let j = i + 1; j < alle.length; j++) {
+      const g = N.aehnlichSchwelle(Math.min(alle[i].length, alle[j].length));
+      if (Math.abs(alle[i].length - alle[j].length) > g) continue;
+      if (N.distanz(alle[i], alle[j], g) <= g) paare++;
+    }
+  }
+  assert.ok(paare <= 12, "zu viele ähnliche Namen im Vorrat: " + paare);
 });
