@@ -8,13 +8,13 @@
   }
  },
  "counts": {
-  "allies": 373,
-  "conquers_total": 69406,
+  "allies": 372,
+  "conquers_total": 69487,
   "players": 3758,
   "villages": 50210
  },
- "data_last_modified": "Tue, 24 Nov 2026 11:06:03 GMT",
- "duration_s": 108.6,
+ "data_last_modified": "Tue, 24 Nov 2026 12:15:22 GMT",
+ "duration_s": 108.4,
  "errors": [],
  "history_since_utc": "2026-09-11T18:49:35+00:00",
  "inaday": {
@@ -47,8 +47,8 @@
   "world": 8
  },
  "result": "neu",
- "run_local": "2026-11-24T12:55:00+01:00",
- "run_utc": "2026-11-24T11:55:00+00:00",
+ "run_local": "2026-11-24T13:55:01+01:00",
+ "run_utc": "2026-11-24T12:55:01+00:00",
  "tribe_ids": [
   456
  ],
@@ -56,63 +56,63 @@
  "world": {
   "changed": true,
   "counts": {
-   "allies": 373,
-   "conquers_total": 69406,
+   "allies": 372,
+   "conquers_total": 69487,
    "players": 3758,
    "villages": 50210
   },
-  "dorfverluste": 58,
+  "dorfverluste": 90,
   "downloads": [
    {
-    "bytes": 66851,
+    "bytes": 66835,
     "file": "player",
-    "last_modified": "Tue, 24 Nov 2026 11:06:03 GMT",
+    "last_modified": "Tue, 24 Nov 2026 12:15:22 GMT",
     "status": 200
    },
    {
-    "bytes": 8633,
+    "bytes": 8614,
     "file": "ally",
-    "last_modified": "Tue, 24 Nov 2026 11:15:22 GMT",
+    "last_modified": "Tue, 24 Nov 2026 12:15:22 GMT",
     "status": 200
    },
    {
-    "bytes": 748459,
+    "bytes": 748364,
     "file": "village",
-    "last_modified": "Tue, 24 Nov 2026 11:15:23 GMT",
+    "last_modified": "Tue, 24 Nov 2026 12:15:22 GMT",
     "status": 200
    },
    {
-    "bytes": 21421,
+    "bytes": 21415,
     "file": "kill_att",
-    "last_modified": "Tue, 24 Nov 2026 11:15:23 GMT",
+    "last_modified": "Tue, 24 Nov 2026 12:15:23 GMT",
     "status": 200
    },
    {
-    "bytes": 29056,
+    "bytes": 29126,
     "file": "kill_def",
-    "last_modified": "Tue, 24 Nov 2026 11:06:03 GMT",
+    "last_modified": "Tue, 24 Nov 2026 12:06:02 GMT",
     "status": 200
    },
    {
     "bytes": 13524,
     "file": "kill_sup",
-    "last_modified": "Tue, 24 Nov 2026 11:32:55 GMT",
+    "last_modified": "Tue, 24 Nov 2026 12:32:54 GMT",
     "status": 200
    },
    {
-    "bytes": 30121,
+    "bytes": 30144,
     "file": "kill_all",
-    "last_modified": "Tue, 24 Nov 2026 11:06:03 GMT",
+    "last_modified": "Tue, 24 Nov 2026 12:15:23 GMT",
     "status": 200
    },
    {
-    "bytes": 703095,
+    "bytes": 703921,
     "file": "conquer",
-    "last_modified": "Tue, 24 Nov 2026 11:15:23 GMT",
+    "last_modified": "Tue, 24 Nov 2026 12:32:54 GMT",
     "status": 200
    }
   ],
-  "new_conquers": 42,
+  "new_conquers": 81,
   "note": null
  }
 }
