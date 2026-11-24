@@ -3,7 +3,8 @@
    legt „[156] Fluch der Kriegskasse“ in die Zwischenablage, merkt den Namen als vergeben und zählt hoch.
    Der zweite Knopf kopiert denselben Namen ohne Nummer.
    Vergeben ist ein Name aus zwei Gründen (Dennis 24.11.2026): er steht als Dorfname in der eingefügten Liste, oder
-   er wurde hier kopiert. Die Liste ist die verlässlichere Quelle, weil sie den echten Stand im Spiel zeigt; sie wird
+   er wurde hier kopiert. Ein zweiter Klick auf einen selbst kopierten Namen nimmt die Vergabe zurück und gibt die
+   Nummer wieder frei (Dennis 24.11.2026 18:15); bei Namen aus der Dorfliste geht das nicht, die stehen im Spiel. Die Liste ist die verlässlichere Quelle, weil sie den echten Stand im Spiel zeigt; sie wird
    bei jedem Einlesen neu ausgewertet, während die kopierten im localStorage bleiben.
    Gespeichert wird nur im localStorage dieses Browsers: eingefügte Liste, nächste Nummer, kopierte Namen. */
 (function () {
@@ -174,10 +175,20 @@ function zeile(name) {
     z.appendChild(el("span", "len", name.length));
   }
   // Mit Nummer: genau das, was in das Dorfnamenfeld im Spiel gehört
-  const bNr = el("button", "na-kop nr", "[Nr]");
+  const selbstVergeben = !ausListe[name] && S.vergeben[name] != null;
+  const bNr = el("button", "na-kop nr", selbstVergeben ? "↩" : "[Nr]");
   bNr.type = "button";
-  bNr.title = "Mit Nummer kopieren: " + C.mitNummer(name, S.nr, S.stellen);
-  bNr.addEventListener("click", () => kopieren(bNr, C.mitNummer(name, S.nr, S.stellen), name, true));
+  if (selbstVergeben) {
+    bNr.title = "Vergabe zurücknehmen und " + C.formatNummer(S.vergeben[name], S.stellen) + " wieder freigeben";
+    bNr.setAttribute("aria-label", "Vergabe von " + name + " zurücknehmen");
+    bNr.addEventListener("click", () => zuruecknehmen(bNr, name));
+  } else if (ausListe[name]) {
+    bNr.title = "Steht laut deiner Dorfliste schon im Spiel. Kopiert trotzdem, ohne die Nummer weiterzuzählen.";
+    bNr.addEventListener("click", () => kopieren(bNr, C.mitNummer(name, S.nr, S.stellen), name, true));
+  } else {
+    bNr.title = "Mit Nummer kopieren: " + C.mitNummer(name, S.nr, S.stellen);
+    bNr.addEventListener("click", () => kopieren(bNr, C.mitNummer(name, S.nr, S.stellen), name, true));
+  }
   z.appendChild(bNr);
   // Nur der Name, ohne Nummer
   const bPur = el("button", "na-kop");
@@ -200,8 +211,24 @@ async function kopieren(knopf, text, name, mitNr) {
   knopf.classList.add("ok");
   setTimeout(() => knopf.classList.remove("ok"), 900);
   if (!mitNr) return;
+  if (ausListe[name]) return;                             // steht laut Dorfliste im Spiel: Vergabe steuert die Liste
   S.vergeben[name] = S.nr;                                // der Name ist jetzt im Spiel, nicht mehr anbieten
   if ($("auto").checked) S.nr = C.naechsteFreie(S.nr + 1, belegteNummern());
+  nummerAnzeigen();
+  zeichnen();
+  sichern();
+}
+
+/** Zweiter Klick auf einen selbst kopierten Namen: Vergabe zurücknehmen, Nummer wieder freigeben. */
+function zuruecknehmen(knopf, name) {
+  const frei = S.vergeben[name];
+  delete S.vergeben[name];
+  knopf.classList.add("zurueck");
+  setTimeout(() => knopf.classList.remove("zurueck"), 900);
+  /* Nummer frisch aus dem Stand bestimmen statt nur um eins zurück: wer zweimal auf denselben Namen geklickt hat,
+     hat eine Nummer übersprungen, die sonst verloren bliebe (Dennis 24.11.2026 18:16). */
+  const ab = stand && stand.anzahl ? stand.naechste : 1;
+  S.nr = C.naechsteFreie(Math.min(S.nr, Number.isFinite(+frei) ? +frei : S.nr, ab), belegteNummern());
   nummerAnzeigen();
   zeichnen();
   sichern();
