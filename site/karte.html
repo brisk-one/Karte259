@@ -1749,6 +1749,7 @@ const UNIT_SHORT={spear:"Speer", sword:"Schwert", axe:"Axt", archer:"Bogen", spy
                   marcher:"BBogen", heavy:"SKav", ram:"Ramme", catapult:"Kata", knight:"Paladin",
                   snob:"Adelsgeschlecht", militia:"Miliz"};
 let selA=-1, selB=-1, distTimer=0;
+let SNOB_MAX=35;   // Reichweite Adelsgeschlecht in Feldern (snob.max_dist aus data/angriff.json)
 
 function fieldsBetween(i,j){ return Math.hypot(vx[i]-vx[j], vy[i]-vy[j]); }
 function dauerText(min){
@@ -1808,9 +1809,9 @@ function renderDist(){
   const gruppen=new Map();
   UNITS.units.forEach(u=>{
     const k=u.min_per_field.toFixed(4);
-    if(!gruppen.has(k)) gruppen.set(k,{min:u.min_per_field, namen:[], voll:[]});
+    if(!gruppen.has(k)) gruppen.set(k,{min:u.min_per_field, namen:[], voll:[], ids:[]});
     const g=gruppen.get(k);
-    g.namen.push(UNIT_SHORT[u.id]||u.name); g.voll.push(u.name);
+    g.namen.push(UNIT_SHORT[u.id]||u.name); g.voll.push(u.name); g.ids.push(u.id);
   });
   const reihen=[...gruppen.values()].sort((a,b)=>a.min-b.min);
   const t=document.createElement("table");
@@ -1826,6 +1827,12 @@ function renderDist(){
     c1.title=g.voll.join(", ")+" · "+nf1.format(g.min)+" Minuten je Feld";
     c1.textContent=g.namen.join(", ");
     const c2=document.createElement("td"); c2.className="t"; c2.textContent=dauerText(min);
+    // Adelsgeschlecht: grün bis zur Reichweite (35 Felder, 20:25:00), darüber rot (Dennis 27.11.2026)
+    if(g.ids.includes("snob")){
+      const weit=felder>SNOB_MAX+1e-9;
+      c2.classList.add(weit? "down" : "up");
+      c2.title=(weit? "Außerhalb" : "Innerhalb")+" der Reichweite des Adelsgeschlechts: höchstens "+SNOB_MAX+" Felder, "+dauerText(SNOB_MAX*g.min)+" Laufzeit";
+    }
     const c3=document.createElement("td"); c3.className="arr"; c3.textContent=a.text;
     if(a.nacht){ const m=el("span","moon"," ☾"); m.title="Ankunft im Nachtbonus"+(UNITS.night.def_factor? " (Verteidigung ×"+nf1.format(UNITS.night.def_factor)+")" : ""); c3.appendChild(m); }
     tr.append(c1,c2,c3); tb.appendChild(tr);
@@ -1833,6 +1840,7 @@ function renderDist(){
   t.appendChild(tb); body.appendChild(t);
   const hinweise=["Abschickzeit jetzt, Rückweg dauert genauso lang.",
                   "Ein Angriff ist so langsam wie seine langsamste Einheit (letzte Zeile).",
+                  "Adelsgeschlecht grün bis "+SNOB_MAX+" Felder ("+dauerText(SNOB_MAX*((UNITS.units.find(u=>u.id==="snob")||{}).min_per_field||35))+"), darüber rot: weiter reicht kein AG.",
                   "Klick auf ein weiteres Dorf setzt ein neues Ziel, Klick auf das Startdorf oder Escape hebt die Auswahl auf."];
   if(UNITS.night && UNITS.night.active) hinweise.splice(1, 0, "☾ heißt Ankunft im Nachtbonus ("+UNITS.night.start_hour+" bis "+UNITS.night.end_hour+" Uhr).");
   body.appendChild(el("p","note", hinweise.join(" ")));
@@ -2073,7 +2081,8 @@ const menge = v => v>=1e6? nfMio.format(v/1e6)+" Mio." : nf.format(v);
 const sFarbe = id => tribeColorOf(id) || C_OTHER;
 const sTag = (k,j) => tagOf.get(k.s[j]) || k.tags[j];
 function tageSeit(iso){ return Math.floor((Date.now()-Date.parse(iso))/864e5); }
-function dauerText(t){ return t<1? "seit heute" : t===1? "1 Tag" : t+" Tage"; }
+// eigener Name: hieß früher wie dauerText der Laufzeitmessung und überschrieb sie („397 Tage“ statt 06:37:00, Dennis 27.11.2026)
+function kriegDauerText(t){ return t<1? "seit heute" : t===1? "1 Tag" : t+" Tage"; }
 /** Kriege zur gewählten Mindest-Stärke (krieg_<stärke>.json); ältere Seitenbauten haben nur krieg.json */
 function ladeKrieg(){
   const s=minStaerke, fertig=k=>{ kriegCache.set(s,k); if(s!==minStaerke) return; KRIEG=k; if(kriegOffen) renderKriege(); draw(); };
@@ -2121,7 +2130,7 @@ function renderKriege(){
     kt.addEventListener("click", ()=>waehleKrieg(k, true));
     box.append(kt);
     const t=tageSeit(k.seit), ruhe=tageSeit(k.letzte);
-    const meta=el("div","meta",(k.seit_mindestens? "seit mindestens " : "seit ")+dtfTag.format(new Date(k.seit))+" ("+dauerText(t)+")"
+    const meta=el("div","meta",(k.seit_mindestens? "seit mindestens " : "seit ")+dtfTag.format(new Date(k.seit))+" ("+kriegDauerText(t)+")"
       +" · "+k.kampftage+(k.kampftage===1? " Kampftag" : " Kampftage")+" · zuletzt "+dtfTag.format(new Date(k.letzte))+" "+hmf.format(new Date(k.letzte)));
     if(ruhe>=2) meta.append(el("span","ruhe"," · ruhig seit "+ruhe+" Tagen"));
     box.append(meta);
@@ -2379,6 +2388,7 @@ async function load(name){ const r=await fetch("data/"+name+".json",{cache:"no-c
 
   // Einheitendaten nur für die Laufzeiten, ihr Fehlen darf die Karte nicht aufhalten
   load("units").then(u=>{ UNITS=u; if(selB>=0) renderDist(); }).catch(()=>{ /* noch kein Abruf gelaufen */ });
+  load("angriff").then(a=>{ if(a && a.snob_max_dist>0){ SNOB_MAX=a.snob_max_dist; if(selB>=0) renderDist(); } }).catch(()=>{ /* Standard 35 Felder */ });
   // Stufennamen für die Spieler-Details, ebenfalls ohne die Karte aufzuhalten (STUFE_FALLBACK greift sonst)
   load("erfahrung").then(e=>{ ERF=e; }).catch(()=>{ /* Fallback-Namen reichen */ });
   // Kämpfe ebenfalls nachgeladen; fehlt die Datei, bleibt die Karte ohne Kampfsymbole
